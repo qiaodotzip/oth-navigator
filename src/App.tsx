@@ -11,6 +11,7 @@ import { selectRoute } from "@/routing/selectRoute";
 import { fetchNarration } from "@/narration/client";
 import { getCached, setCached } from "@/narration/cache";
 import { enqueueSegments, cancelAll } from "@/narration/ttsQueue";
+import { useSpeechRecognition } from "@/ui/useSpeechRecognition";
 import type { NarrationSegment } from "@/data/types";
 import { WaypointEditor } from "@/dev/WaypointEditor";
 
@@ -31,6 +32,8 @@ export default function App() {
 
   const [narrationText, setNarrationText] = useState("");
   const [, setSegments] = useState<NarrationSegment[]>([]);
+
+  const sr = useSpeechRecognition();
 
   useEffect(() => {
     loadDataBundle()
@@ -84,11 +87,27 @@ export default function App() {
     }
   }, [activeRoute]);
 
+  const onVoiceTap = () => {
+    if (sr.listening) sr.stop();
+    else sr.start(language === "zh" ? "zh-CN" : "en-US");
+  };
+
+  useEffect(() => {
+    if (!sr.transcript) return;
+    const lower = sr.transcript.toLowerCase();
+    const match = services.find(
+      s =>
+        lower.includes(s.nameEn.toLowerCase()) ||
+        (s.nameZh.length > 0 && s.nameZh.split("").every(ch => sr.transcript.includes(ch))),
+    );
+    if (match) onPickService(match.id);
+  }, [sr.transcript, services, onPickService]);
+
   return (
     <PhoneFrame>
       <div className="flex h-full flex-col">
         <div className="h-[8%]">
-          <TopBar onVoiceTap={() => console.log("TODO: voice")} />
+          <TopBar onVoiceTap={onVoiceTap} />
         </div>
         <div className="h-[60%] relative">
           <Scene />
