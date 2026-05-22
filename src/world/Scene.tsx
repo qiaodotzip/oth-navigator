@@ -1,7 +1,7 @@
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
 import { useEffect } from "react";
 import { Floor } from "./Floor";
+import { CameraRig } from "./CameraRig";
 import { loadDataBundle } from "@/data/loaders";
 import { useStore } from "@/store";
 
@@ -28,7 +28,7 @@ export function Scene() {
         shadow-mapSize={[2048, 2048]}
       />
       {active && <Floor data={active} />}
-      <OrbitControls maxPolarAngle={Math.PI / 2.2} />
+      <CameraRig />
     </Canvas>
   );
 }
