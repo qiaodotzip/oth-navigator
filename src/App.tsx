@@ -14,6 +14,7 @@ import { enqueueSegments, cancelAll } from "@/narration/ttsQueue";
 import { useSpeechRecognition } from "@/ui/useSpeechRecognition";
 import type { NarrationSegment } from "@/data/types";
 import { WaypointEditor } from "@/dev/WaypointEditor";
+import { SuccessCard } from "@/ui/SuccessCard";
 
 export default function App() {
   if (typeof window !== "undefined" && window.location.hash === "#waypoints") {
@@ -29,6 +30,7 @@ export default function App() {
   const startRoute = useStore(s => s.startRoute);
   const setActiveFloor = useStore(s => s.setActiveFloor);
   const activeRoute = useStore(s => s.activeRoute);
+  const endRoute = useStore(s => s.endRoute);
 
   const [narrationText, setNarrationText] = useState("");
   const [segments, setSegments] = useState<NarrationSegment[]>([]);
@@ -124,6 +126,7 @@ export default function App() {
         <div className="h-[60%] relative">
           <Scene />
           <FloorSelector />
+          <SuccessCard onDismiss={endRoute} />
         </div>
         <div className="h-[32%]">
           <PromptPanel narrationText={narrationText} onPickService={onPickService} />
