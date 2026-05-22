@@ -8,6 +8,8 @@ import { useStore } from "@/store";
 import { GuideAgent } from "@/agents/GuideAgent";
 import { useWaypointWalk } from "@/agents/useWaypointWalk";
 import { FootstepBreadcrumb } from "@/agents/FootstepBreadcrumb";
+import { AnalyticsAgent } from "@/agents/AnalyticsAgent";
+import { WANDER_LOOPS } from "@/agents/wanderLoops";
 import type { Floor as FloorData } from "@/data/types";
 
 export function Scene() {
@@ -34,6 +36,18 @@ export function Scene() {
         shadow-mapSize={[2048, 2048]}
       />
       {active && <Floor data={active} />}
+      {active &&
+        WANDER_LOOPS.filter(l => l.floorId === active.id).flatMap((loop, li) =>
+          Array.from({ length: 4 }).map((_, ai) => (
+            <AnalyticsAgent
+              key={`${li}-${ai}`}
+              loop={loop}
+              floor={active}
+              speed={2 + ai * 0.5}
+              phase={ai * 20}
+            />
+          )),
+        )}
       {activeRoute && <WalkingGuide floors={floors} />}
       <CameraRig />
     </Canvas>
