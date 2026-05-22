@@ -1,9 +1,8 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import * as THREE from "three";
 import { Floor } from "./Floor";
 import { CameraRig } from "./CameraRig";
-import { loadDataBundle } from "@/data/loaders";
 import { useStore } from "@/store";
 import { GuideAgent } from "@/agents/GuideAgent";
 import { useWaypointWalk } from "@/agents/useWaypointWalk";
@@ -17,13 +16,6 @@ export function Scene() {
   const floors = useStore(s => s.floors);
   const activeFloor = useStore(s => s.activeFloor);
   const activeRoute = useStore(s => s.activeRoute);
-  const setBundle = useStore(s => s.setBundle);
-
-  useEffect(() => {
-    loadDataBundle()
-      .then(setBundle)
-      .catch(e => console.warn("[Scene] loadDataBundle failed:", e));
-  }, [setBundle]);
 
   useCounterLoadSimulator();
 
