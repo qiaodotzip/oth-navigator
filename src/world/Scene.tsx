@@ -7,6 +7,7 @@ import { loadDataBundle } from "@/data/loaders";
 import { useStore } from "@/store";
 import { GuideAgent } from "@/agents/GuideAgent";
 import { useWaypointWalk } from "@/agents/useWaypointWalk";
+import { FootstepBreadcrumb } from "@/agents/FootstepBreadcrumb";
 import type { Floor as FloorData } from "@/data/types";
 
 export function Scene() {
@@ -48,8 +49,11 @@ function WalkingGuide({ floors }: { floors: FloorData[] }) {
     groupRef.current.rotation.y = pose.current.yawRad;
   });
   return (
-    <group ref={groupRef}>
-      <GuideAgent pose={{ x: 0, z: 0, yawRad: 0, bobPhase: 0 }} />
-    </group>
+    <>
+      <FootstepBreadcrumb poseRef={pose} />
+      <group ref={groupRef}>
+        <GuideAgent pose={{ x: 0, z: 0, yawRad: 0, bobPhase: 0 }} />
+      </group>
+    </>
   );
 }
