@@ -4,8 +4,12 @@ import { Scene } from "@/world/Scene";
 import { FloorSelector } from "@/ui/FloorSelector";
 import { TopBar } from "@/ui/TopBar";
 import { PromptPanel } from "@/ui/PromptPanel";
+import { WaypointEditor } from "@/dev/WaypointEditor";
 
 export default function App() {
+  if (typeof window !== "undefined" && window.location.hash === "#waypoints") {
+    return <WaypointEditor />;
+  }
   const [narration] = useState("");
   return (
     <PhoneFrame>
