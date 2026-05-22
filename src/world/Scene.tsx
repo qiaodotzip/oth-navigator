@@ -10,6 +10,7 @@ import { FootstepBreadcrumb } from "@/agents/FootstepBreadcrumb";
 import { AnalyticsAgent } from "@/agents/AnalyticsAgent";
 import { WANDER_LOOPS } from "@/agents/wanderLoops";
 import { useCounterLoadSimulator } from "@/agents/counterLoads";
+import { CounterBadges } from "./CounterBadge";
 import type { Floor as FloorData } from "@/data/types";
 
 export function Scene() {
@@ -31,6 +32,7 @@ export function Scene() {
         shadow-mapSize={[2048, 2048]}
       />
       {active && <Floor data={active} />}
+      {active && <CounterBadges floor={active} />}
       {active &&
         WANDER_LOOPS.filter(l => l.floorId === active.id).flatMap((loop, li) =>
           Array.from({ length: 4 }).map((_, ai) => (
