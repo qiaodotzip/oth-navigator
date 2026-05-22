@@ -1,4 +1,4 @@
-import { useState, useRef, ChangeEvent, MouseEvent } from "react";
+import { useState, useRef, useEffect, ChangeEvent, MouseEvent, WheelEvent } from "react";
 
 type Pt = [number, number];
 type PolyType = "room" | "corridor" | "landmark" | "void";
@@ -26,7 +26,16 @@ export function PolygonEditor() {
   const [floorId, setFloorId] = useState<"L1" | "L2">("L1");
   const [widthM, setWidthM] = useState(210);
   const [depthM, setDepthM] = useState(130);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState({ x: 0, y: 0, w: 1, h: 1 });
+  const svgRef = useRef<SVGSVGElement>(null);
+  const panStart = useRef<{ cx: number; cy: number; vx: number; vy: number } | null>(null);
+  const dragMoved = useRef(false);
+
+  useEffect(() => {
+    if (imageDims.w > 1 && imageDims.h > 1) {
+      setView({ x: 0, y: 0, w: imageDims.w, h: imageDims.h });
+    }
+  }, [imageDims]);
 
   const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -38,29 +47,73 @@ export function PolygonEditor() {
     img.src = url;
   };
 
-  const onCanvasClick = (e: MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current || !imageUrl) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const imgAspect = imageDims.w / imageDims.h;
-    const containerAspect = rect.width / rect.height;
-    let renderedW = rect.width;
-    let renderedH = rect.height;
-    let offsetX = 0;
-    let offsetY = 0;
-    if (imgAspect > containerAspect) {
-      renderedH = rect.width / imgAspect;
-      offsetY = (rect.height - renderedH) / 2;
-    } else {
-      renderedW = rect.height * imgAspect;
-      offsetX = (rect.width - renderedW) / 2;
+  function screenToSvg(clientX: number, clientY: number): Pt | null {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+    const tx = pt.matrixTransform(ctm.inverse());
+    return [tx.x, tx.y];
+  }
+
+  const onSvgMouseDown = (e: MouseEvent<SVGSVGElement>) => {
+    if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+      e.preventDefault();
+      panStart.current = {
+        cx: e.clientX,
+        cy: e.clientY,
+        vx: view.x,
+        vy: view.y,
+      };
+      dragMoved.current = false;
     }
-    const localX = e.clientX - rect.left - offsetX;
-    const localY = e.clientY - rect.top - offsetY;
-    if (localX < 0 || localX > renderedW || localY < 0 || localY > renderedH) return;
-    const px = (localX / renderedW) * imageDims.w;
-    const py = (localY / renderedH) * imageDims.h;
-    setCurrentPoints(prev => [...prev, [px, py]]);
   };
+
+  const onSvgMouseMove = (e: MouseEvent<SVGSVGElement>) => {
+    if (!panStart.current) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = view.w / rect.width;
+    const scaleY = view.h / rect.height;
+    const dx = (e.clientX - panStart.current.cx) * scaleX;
+    const dy = (e.clientY - panStart.current.cy) * scaleY;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) dragMoved.current = true;
+    setView(v => ({ ...v, x: panStart.current!.vx - dx, y: panStart.current!.vy - dy }));
+  };
+
+  const onSvgMouseUp = () => {
+    panStart.current = null;
+  };
+
+  const onSvgClick = (e: MouseEvent<SVGSVGElement>) => {
+    if (e.shiftKey || dragMoved.current) {
+      dragMoved.current = false;
+      return;
+    }
+    const pt = screenToSvg(e.clientX, e.clientY);
+    if (!pt) return;
+    if (pt[0] < 0 || pt[1] < 0 || pt[0] > imageDims.w || pt[1] > imageDims.h) return;
+    setCurrentPoints(prev => [...prev, pt]);
+  };
+
+  const onSvgWheel = (e: WheelEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    const pt = screenToSvg(e.clientX, e.clientY);
+    if (!pt) return;
+    const factor = e.deltaY < 0 ? 0.85 : 1.18;
+    setView(v => ({
+      x: pt[0] - (pt[0] - v.x) * factor,
+      y: pt[1] - (pt[1] - v.y) * factor,
+      w: v.w * factor,
+      h: v.h * factor,
+    }));
+  };
+
+  const resetView = () => setView({ x: 0, y: 0, w: imageDims.w, h: imageDims.h });
 
   const closePolygon = () => {
     if (currentPoints.length < 3) {
@@ -68,7 +121,7 @@ export function PolygonEditor() {
       return;
     }
     const id = window.prompt(
-      `Polygon ID. Examples:\n  ${floorId}-room-customer-service\n  ${floorId}-corridor-east\n  ${floorId}-landmark-atrium\n  ${floorId}-void-multistorey\n\nType is inferred from the prefix.`,
+      `Polygon ID. Examples:\n  ${floorId}-room-psc\n  ${floorId}-room-hawker\n  ${floorId}-corridor-festive-walk\n  ${floorId}-landmark-town-square\n  ${floorId}-void-atrium\n\nType is inferred from the prefix.`,
       `${floorId}-room-`,
     );
     if (!id) return;
@@ -109,7 +162,7 @@ export function PolygonEditor() {
             [
               Math.round(x * scaleX * 100) / 100,
               Math.round(y * scaleY * 100) / 100,
-            ] as [number, number],
+            ] as Pt,
         ),
       })),
     };
@@ -122,6 +175,30 @@ export function PolygonEditor() {
     URL.revokeObjectURL(url);
   };
 
+  const importJson = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    file.text().then(text => {
+      try {
+        const data = JSON.parse(text);
+        if (!Array.isArray(data.polygons)) {
+          alert("Invalid floor JSON: missing polygons array.");
+          return;
+        }
+        const scaleX = imageDims.w / (data.bounds?.width ?? widthM);
+        const scaleY = imageDims.h / (data.bounds?.depth ?? depthM);
+        const loaded: Poly[] = data.polygons.map((p: { id: string; type: PolyType; points: Pt[] }) => ({
+          id: p.id,
+          type: p.type,
+          points: p.points.map(([x, y]) => [x * scaleX, y * scaleY] as Pt),
+        }));
+        setPolygons(loaded);
+      } catch (err) {
+        alert("Failed to parse JSON: " + (err instanceof Error ? err.message : String(err)));
+      }
+    });
+  };
+
   const colorFor = (t: PolyType) =>
     t === "corridor"
       ? { fill: "rgba(217,180,80,0.45)", stroke: "#D9B450" }
@@ -131,26 +208,34 @@ export function PolygonEditor() {
       ? { fill: "rgba(160,160,160,0.35)", stroke: "#777" }
       : { fill: "rgba(0,102,179,0.30)", stroke: "#0066B3" };
 
+  const zoomPct = imageDims.w > 1 ? Math.round((imageDims.w / view.w) * 100) : 100;
+  const strokeBase = Math.max(1.5, view.w / 600);
+  const fontBase = Math.max(8, view.w / 80);
+
   return (
     <div className="grid grid-cols-[2fr_1fr] h-screen bg-neutral-100">
-      <div
-        ref={containerRef}
-        className="relative bg-neutral-200 overflow-hidden cursor-crosshair"
-        onClick={onCanvasClick}
-      >
+      <div className="relative bg-neutral-200 overflow-hidden">
         {imageUrl ? (
           <>
-            <img
-              src={imageUrl}
-              className="w-full h-full object-contain pointer-events-none select-none"
-              alt="floor plan"
-              draggable={false}
-            />
             <svg
-              className="absolute inset-0 w-full h-full pointer-events-none"
-              viewBox={`0 0 ${imageDims.w} ${imageDims.h}`}
+              ref={svgRef}
+              viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+              className="absolute inset-0 w-full h-full cursor-crosshair"
+              onMouseDown={onSvgMouseDown}
+              onMouseMove={onSvgMouseMove}
+              onMouseUp={onSvgMouseUp}
+              onMouseLeave={onSvgMouseUp}
+              onClick={onSvgClick}
+              onWheel={onSvgWheel}
               preserveAspectRatio="xMidYMid meet"
             >
+              <image
+                href={imageUrl}
+                x={0}
+                y={0}
+                width={imageDims.w}
+                height={imageDims.h}
+              />
               {polygons.map((p, i) => {
                 const c = colorFor(p.type);
                 const cx = p.points.reduce((a, [x]) => a + x, 0) / p.points.length;
@@ -161,16 +246,17 @@ export function PolygonEditor() {
                       points={p.points.map(([x, y]) => `${x},${y}`).join(" ")}
                       fill={c.fill}
                       stroke={c.stroke}
-                      strokeWidth={Math.max(2, imageDims.w / 600)}
+                      strokeWidth={strokeBase}
                     />
                     <text
                       x={cx}
                       y={cy}
-                      fontSize={Math.max(12, imageDims.w / 120)}
+                      fontSize={fontBase}
                       textAnchor="middle"
                       dominantBaseline="middle"
                       fill="#111"
                       fontFamily="system-ui"
+                      style={{ pointerEvents: "none" }}
                     >
                       {p.id.replace(`${floorId}-`, "")}
                     </text>
@@ -182,8 +268,8 @@ export function PolygonEditor() {
                   points={currentPoints.map(([x, y]) => `${x},${y}`).join(" ")}
                   fill="rgba(242,163,60,0.20)"
                   stroke="#F2A33C"
-                  strokeWidth={Math.max(2, imageDims.w / 500)}
-                  strokeDasharray="8,5"
+                  strokeWidth={strokeBase * 1.2}
+                  strokeDasharray={`${strokeBase * 4},${strokeBase * 3}`}
                 />
               )}
               {currentPoints.map(([x, y], i) => (
@@ -191,13 +277,25 @@ export function PolygonEditor() {
                   key={i}
                   cx={x}
                   cy={y}
-                  r={Math.max(4, imageDims.w / 350)}
+                  r={Math.max(3, view.w / 300)}
                   fill="#F2A33C"
                   stroke="#fff"
-                  strokeWidth={2}
+                  strokeWidth={strokeBase * 0.8}
                 />
               ))}
             </svg>
+            <div className="absolute bottom-3 left-3 bg-white/90 rounded-lg shadow px-3 py-2 text-xs space-y-1 pointer-events-none">
+              <div>
+                <span className="font-mono">{zoomPct}%</span> zoom
+              </div>
+              <div>scroll to zoom · shift+drag to pan</div>
+            </div>
+            <button
+              onClick={resetView}
+              className="absolute top-3 left-3 bg-white/90 hover:bg-white rounded-lg shadow px-3 py-1.5 text-xs font-semibold"
+            >
+              Reset zoom
+            </button>
           </>
         ) : (
           <div className="grid place-items-center h-full text-neutral-500">
@@ -212,7 +310,6 @@ export function PolygonEditor() {
                 type="file"
                 accept="image/*"
                 onChange={onFile}
-                onClick={e => e.stopPropagation()}
                 className="block mx-auto"
               />
             </div>
@@ -238,7 +335,6 @@ export function PolygonEditor() {
               type="file"
               accept="image/*"
               onChange={onFile}
-              onClick={e => e.stopPropagation()}
               className="block w-full mt-1 text-xs"
             />
           </label>
@@ -324,41 +420,53 @@ export function PolygonEditor() {
         >
           Download {floorId}.json
         </button>
+        <label className="block mt-2 text-xs font-semibold text-neutral-700">
+          Import existing {floorId}.json (resume work)
+          <input
+            type="file"
+            accept="application/json"
+            onChange={importJson}
+            className="block w-full mt-1 text-xs"
+          />
+        </label>
 
-        <details className="mt-4 text-xs text-neutral-600">
+        <details className="mt-4 text-xs text-neutral-600" open>
           <summary className="cursor-pointer font-semibold">How to use</summary>
-          <ol className="list-decimal pl-4 mt-2 space-y-1">
-            <li>Pick a floor (L1 or L2) from the dropdown.</li>
+          <ul className="list-disc pl-4 mt-2 space-y-1">
             <li>
-              Click the file input and pick the JPG from <code>images/</code>{" "}
-              (<code>1st-Storey…jpg</code> for L1, <code>2nd-Storey…jpg</code> for L2).
+              <strong>Scroll wheel</strong> on the image to zoom in/out (zooms to your cursor)
             </li>
             <li>
-              Set the metres width × depth. OTH is ~210m × 130m by default. Tune later
-              if needed.
+              <strong>Shift + click and drag</strong> to pan around when zoomed in
             </li>
             <li>
-              Click corners on the floor plan to define a polygon. Polygons are room
-              outlines (walls / counters), corridors, landmarks (atrium, lifts), or
-              voids (multi-storey openings).
+              <strong>Click</strong> (without shift) to add a corner point
             </li>
             <li>
-              Click <strong>Close polygon</strong> when you've placed all corners.
-              Give it an ID like <code>L1-room-customer-service</code>. The type is
-              inferred from the prefix (<code>-room-</code>, <code>-corridor-</code>,{" "}
-              <code>-landmark-</code>, <code>-void-</code>).
+              <strong>Close polygon</strong> when you've placed all corners; enter an ID
             </li>
-            <li>Repeat for every room / corridor / landmark.</li>
             <li>
-              Click <strong>Download {floorId}.json</strong> and drop the downloaded
-              file into <code>public/data/floors/</code>.
+              Polygon type is inferred from the prefix in the ID:
+              <ul className="list-[circle] pl-4">
+                <li>
+                  <code>-room-</code> → indoor space (counter, shop, library)
+                </li>
+                <li>
+                  <code>-corridor-</code> → walkway / passage
+                </li>
+                <li>
+                  <code>-landmark-</code> → atrium / town square / lift core (taller extrusion)
+                </li>
+                <li>
+                  <code>-void-</code> → multi-storey opening (thin slab)
+                </li>
+              </ul>
             </li>
-            <li>Switch to L2 and do it again with the L2 image.</li>
-          </ol>
-          <p className="mt-2">
-            Aim for 20-40 polygons per floor. Be approximate — for the demo, polygons
-            don't need to be pixel-perfect to the floor plan.
-          </p>
+            <li>
+              Use the legend printed on the floor plan! For L1: zone 5 is the Public
+              Service Centre, zone 6 is the Hawker Centre, etc.
+            </li>
+          </ul>
         </details>
       </div>
     </div>
