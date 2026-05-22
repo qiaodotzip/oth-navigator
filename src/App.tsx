@@ -14,11 +14,13 @@ import { enqueueSegments, cancelAll } from "@/narration/ttsQueue";
 import { useSpeechRecognition } from "@/ui/useSpeechRecognition";
 import type { NarrationSegment } from "@/data/types";
 import { WaypointEditor } from "@/dev/WaypointEditor";
+import { PolygonEditor } from "@/dev/PolygonEditor";
 import { SuccessCard } from "@/ui/SuccessCard";
 
 export default function App() {
-  if (typeof window !== "undefined" && window.location.hash === "#waypoints") {
-    return <WaypointEditor />;
+  if (typeof window !== "undefined") {
+    if (window.location.hash === "#waypoints") return <WaypointEditor />;
+    if (window.location.hash === "#polygon-editor") return <PolygonEditor />;
   }
 
   const setBundle = useStore(s => s.setBundle);
