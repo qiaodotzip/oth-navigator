@@ -4,6 +4,7 @@ import { Floor } from "./Floor";
 import { CameraRig } from "./CameraRig";
 import { loadDataBundle } from "@/data/loaders";
 import { useStore } from "@/store";
+import { GuideAgent } from "@/agents/GuideAgent";
 
 export function Scene() {
   const floors = useStore(s => s.floors);
@@ -28,6 +29,7 @@ export function Scene() {
         shadow-mapSize={[2048, 2048]}
       />
       {active && <Floor data={active} />}
+      <GuideAgent pose={{ x: 0, z: 0, yawRad: 0, bobPhase: 0 }} />
       <CameraRig />
     </Canvas>
   );
