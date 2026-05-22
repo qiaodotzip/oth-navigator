@@ -1,14 +1,18 @@
-import { Canvas } from "@react-three/fiber";
-import { useEffect } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { useEffect, useRef } from "react";
+import * as THREE from "three";
 import { Floor } from "./Floor";
 import { CameraRig } from "./CameraRig";
 import { loadDataBundle } from "@/data/loaders";
 import { useStore } from "@/store";
 import { GuideAgent } from "@/agents/GuideAgent";
+import { useWaypointWalk } from "@/agents/useWaypointWalk";
+import type { Floor as FloorData } from "@/data/types";
 
 export function Scene() {
   const floors = useStore(s => s.floors);
   const activeFloor = useStore(s => s.activeFloor);
+  const activeRoute = useStore(s => s.activeRoute);
   const setBundle = useStore(s => s.setBundle);
 
   useEffect(() => {
@@ -29,8 +33,23 @@ export function Scene() {
         shadow-mapSize={[2048, 2048]}
       />
       {active && <Floor data={active} />}
-      <GuideAgent pose={{ x: 0, z: 0, yawRad: 0, bobPhase: 0 }} />
+      {activeRoute && <WalkingGuide floors={floors} />}
       <CameraRig />
     </Canvas>
+  );
+}
+
+function WalkingGuide({ floors }: { floors: FloorData[] }) {
+  const pose = useWaypointWalk(floors);
+  const groupRef = useRef<THREE.Group>(null!);
+  useFrame(() => {
+    if (!groupRef.current) return;
+    groupRef.current.position.set(pose.current.x, 0, pose.current.z);
+    groupRef.current.rotation.y = pose.current.yawRad;
+  });
+  return (
+    <group ref={groupRef}>
+      <GuideAgent pose={{ x: 0, z: 0, yawRad: 0, bobPhase: 0 }} />
+    </group>
   );
 }
