@@ -10,6 +10,7 @@ import { useWaypointWalk } from "@/agents/useWaypointWalk";
 import { FootstepBreadcrumb } from "@/agents/FootstepBreadcrumb";
 import { AnalyticsAgent } from "@/agents/AnalyticsAgent";
 import { WANDER_LOOPS } from "@/agents/wanderLoops";
+import { useCounterLoadSimulator } from "@/agents/counterLoads";
 import type { Floor as FloorData } from "@/data/types";
 
 export function Scene() {
@@ -23,6 +24,8 @@ export function Scene() {
       .then(setBundle)
       .catch(e => console.warn("[Scene] loadDataBundle failed:", e));
   }, [setBundle]);
+
+  useCounterLoadSimulator();
 
   const active = floors.find(f => f.id === activeFloor);
 
