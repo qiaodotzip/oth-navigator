@@ -31,7 +31,7 @@ export default function App() {
   const activeRoute = useStore(s => s.activeRoute);
 
   const [narrationText, setNarrationText] = useState("");
-  const [, setSegments] = useState<NarrationSegment[]>([]);
+  const [segments, setSegments] = useState<NarrationSegment[]>([]);
 
   const sr = useSpeechRecognition();
 
@@ -86,6 +86,18 @@ export default function App() {
       setSegments([]);
     }
   }, [activeRoute]);
+
+  useEffect(() => {
+    const route = useStore.getState().activeRoute;
+    if (!route || segments.length === 0) return;
+    const remaining = segments.slice(route.currentWaypointIndex);
+    cancelAll();
+    enqueueSegments(remaining, language, key => {
+      const seg = segments.find(s => s.key === key);
+      if (seg) setNarrationText(language === "zh" ? seg.zh : seg.en);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
 
   const onVoiceTap = () => {
     if (sr.listening) sr.stop();
