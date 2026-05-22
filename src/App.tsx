@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { PhoneFrame } from "@/ui/PhoneFrame";
 import { Scene } from "@/world/Scene";
 import { FloorSelector } from "@/ui/FloorSelector";
 import { TopBar } from "@/ui/TopBar";
+import { PromptPanel } from "@/ui/PromptPanel";
 
 export default function App() {
+  const [narration] = useState("");
   return (
     <PhoneFrame>
       <div className="flex h-full flex-col">
@@ -14,8 +17,11 @@ export default function App() {
           <Scene />
           <FloorSelector />
         </div>
-        <div className="h-[32%] bg-oth-paper border-t border-neutral-300 grid place-items-center text-neutral-700">
-          PromptPanel
+        <div className="h-[32%]">
+          <PromptPanel
+            narrationText={narration}
+            onPickService={id => console.log("TODO: pick", id)}
+          />
         </div>
       </div>
     </PhoneFrame>
