@@ -1,0 +1,37 @@
+{
+  "name": "oth-2_5d-navigation",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "vercel-dev": "vercel dev"
+  },
+  "dependencies": {
+    "@react-three/drei": "^9.108.0",
+    "@react-three/fiber": "^8.16.0",
+    "noisejs": "^2.1.0",
+    "openai": "^4.55.0",
+    "phosphor-react": "^1.4.1",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "three": "^0.165.0",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/noisejs": "^2.1.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.165.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.3.0",
+    "vitest": "^1.6.0"
+  }
+}
