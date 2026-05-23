@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Canvas, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, SoftShadows } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
@@ -40,8 +41,31 @@ export function Scene() {
   };
 
   const preset = TIME_PRESETS[timeOfDay];
-  const groundW = active?.bounds.width ?? 210;
-  const groundD = active?.bounds.depth ?? 148;
+
+  // Size the ground to the actual building footprint (bbox of polygons),
+  // centred on the cluster — not the whole floor bounds.
+  const ground = useMemo(() => {
+    if (!active || active.polygons.length === 0) {
+      return { w: 120, d: 120, cx: 0, cz: 0 };
+    }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of active.polygons) {
+      for (const [x, y] of p.points) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+    const W = active.bounds.width;
+    const D = active.bounds.depth;
+    return {
+      w: maxX - minX,
+      d: maxY - minY,
+      cx: (minX + maxX) / 2 - W / 2,
+      cz: (minY + maxY) / 2 - D / 2,
+    };
+  }, [active]);
 
   return (
     <Canvas
@@ -72,7 +96,13 @@ export function Scene() {
         shadow-camera-top={160}
         shadow-camera-bottom={-160}
       />
-      <GroundPlane width={groundW} depth={groundD} color={preset.groundColor} />
+      <GroundPlane
+        width={ground.w}
+        depth={ground.d}
+        centerX={ground.cx}
+        centerZ={ground.cz}
+        color={preset.groundColor}
+      />
       {active && <Floor data={active} />}
       {active && <FloorDetails floor={active} />}
       {active && showLabels && <PolygonLabels floor={active} />}

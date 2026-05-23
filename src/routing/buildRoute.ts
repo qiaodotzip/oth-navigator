@@ -8,6 +8,7 @@ import type {
   Waypoint,
 } from "@/data/types";
 import { findPath, smoothPath } from "./pathfinder";
+import { checkSegment } from "./pathChecks";
 
 // Default start when the user hasn't set a location: Town Square on L1.
 export const DEFAULT_START: { floorId: FloorId; point: Pt } = {
@@ -37,12 +38,25 @@ export function serviceLocation(
   return { floorId: service.floorId, point: polygonCenter(poly.points) };
 }
 
+function legBlocked(pts: Pt[], floor: Floor, destRoom?: string): boolean {
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (checkSegment(pts[i], pts[i + 1], floor, destRoom).blocked) return true;
+  }
+  return false;
+}
+
 function legPath(from: Pt, to: Pt, floor: Floor, destRoom?: string): Pt[] {
   const path = findPath(from, to, floor, destRoom);
   if (!path || path.length < 2) return [from, to];
   // Line-of-sight smoothing keeps each segment wall-clean (unlike a purely
   // geometric collinear simplify, which can cut corners through rooms).
-  return smoothPath(path, floor, destRoom);
+  const smoothed = smoothPath(path, floor, destRoom);
+  // Safety net: smoothing should never reintroduce a crossing, but if it does,
+  // fall back to the raw grid path (adjacent walkable cells — clean by build).
+  if (legBlocked(smoothed, floor, destRoom) && !legBlocked(path, floor, destRoom)) {
+    return path;
+  }
+  return smoothed;
 }
 
 /**

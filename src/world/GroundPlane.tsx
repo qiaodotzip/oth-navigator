@@ -27,23 +27,33 @@ function makeFloorTexture(): THREE.Texture {
 export function GroundPlane({
   width,
   depth,
+  centerX = 0,
+  centerZ = 0,
+  margin = 14,
   color = "#FAFBFC",
 }: {
   width: number;
   depth: number;
+  centerX?: number;
+  centerZ?: number;
+  margin?: number;
   color?: string;
 }) {
   const tileSizeM = useStore(s => s.tileSizeM);
-  // Plane snug to the floor footprint plus a small margin; fog fades the edge.
-  const w = width + 24;
-  const d = depth + 24;
+  // Plane snug to the building footprint plus a small margin; fog fades the edge.
+  const w = width + margin * 2;
+  const d = depth + margin * 2;
   const tex = useMemo(() => {
     const t = makeFloorTexture();
     t.repeat.set(w / tileSizeM, d / tileSizeM);
     return t;
   }, [w, d, tileSizeM]);
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0]} receiveShadow>
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[centerX, -0.06, centerZ]}
+      receiveShadow
+    >
       <planeGeometry args={[w, d]} />
       <meshStandardMaterial map={tex} color={color} />
     </mesh>

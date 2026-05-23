@@ -99,9 +99,13 @@ export function findPath(
         if (!p) break;
         cur = p;
       }
+      // Anchor to the real start/end only when those points are themselves
+      // walkable for this leg. If the caller passed a point inside a blocked
+      // room (e.g. "You" dropped inside the stadium), keep the snapped cell
+      // centre instead so the leg doesn't knife out through the wall.
       if (path.length > 0) {
-        path[0] = start;
-        path[path.length - 1] = end;
+        if (isPointWalkable(start, floor, destRoom)) path[0] = start;
+        if (isPointWalkable(end, floor, destRoom)) path[path.length - 1] = end;
       }
       return path;
     }
