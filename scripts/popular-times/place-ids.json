@@ -1,0 +1,9 @@
+{
+  "_note": "Google Place IDs for OTH services. Find each on Google Maps: search the venue, click marker, Share -> Embed a map. Copy the segment after !1s from the embed URL. Keys here must match service IDs in public/data/services.json.",
+  "psc": "REPLACE_WITH_PLACE_ID",
+  "hawker": "REPLACE_WITH_PLACE_ID",
+  "community-centre": "REPLACE_WITH_PLACE_ID",
+  "library": "REPLACE_WITH_PLACE_ID",
+  "hdb": "REPLACE_WITH_PLACE_ID",
+  "theatre": "REPLACE_WITH_PLACE_ID"
+}

@@ -10,7 +10,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "start": "NODE_ENV=production tsx server/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "scrape:popular-times": "python scripts/popular-times/scrape.py"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.3",
