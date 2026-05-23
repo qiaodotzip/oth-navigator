@@ -57,7 +57,7 @@ function pointInRect(pt: Pt, rect: [Pt, Pt], margin = 0): boolean {
  * CAN walk across, so they are not here. Barriers (gates/fences) and sports
  * courts block.
  */
-const ROUTE_BLOCKING_DETAILS = new Set(["barrier", "court"]);
+const ROUTE_BLOCKING_DETAILS = new Set(["barrier", "court", "wall"]);
 
 // Inflate barrier hit-tests so thin gate strips reliably block the A* grid
 // (cell centres are 1.2m apart; a 0.5m-thin gate could otherwise be stepped over).

@@ -302,6 +302,7 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
     const courts: OrientedItem[] = [];
     const booths: OrientedItem[] = [];
     const shops: OrientedItem[] = [];
+    const walls: OrientedItem[] = [];
     const serviceCentres: { points: [number, number][]; variant: "psc" | "family" }[] = [];
     const flatRect = (rect: [Pt, Pt]): OrientedItem => {
       const b = rectBounds(rect);
@@ -356,6 +357,8 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
         booths.push(flatRect(d.rect));
       } else if (d.type === "shop-block") {
         shops.push(flatRect(d.rect));
+      } else if (d.type === "wall") {
+        walls.push(flatRect(d.rect));
       } else if (d.type === "service-centre") {
         const W = floor.bounds.width;
         const H = floor.bounds.depth;
@@ -385,6 +388,7 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       courts,
       booths,
       shops,
+      walls,
       serviceCentres,
     };
   }, [floor]);
@@ -549,6 +553,17 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
           width={it.width}
           depth={it.depth}
         />
+      ))}
+      {layout.walls.map((it, i) => (
+        <mesh
+          key={`wall${i}`}
+          position={[it.pos[0] - width / 2, SLAB_Y + 0.55, it.pos[1] - depth / 2]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[it.width, 1.1, it.depth]} />
+          <meshStandardMaterial color="#9AA1A9" />
+        </mesh>
       ))}
       {layout.serviceCentres.map((sc, i) => (
         <ServiceCentreMesh key={`sc${i}`} points={sc.points} variant={sc.variant} />

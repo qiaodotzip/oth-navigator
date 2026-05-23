@@ -2,6 +2,7 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Floor } from "@/data/types";
+import { isInBarrier } from "@/routing/pathChecks";
 import type { WanderLoop } from "./wanderLoops";
 
 export function AnalyticsAgent({
@@ -30,11 +31,12 @@ export function AnalyticsAgent({
     return arr;
   }, [loop]);
   const yawRef = useRef(0);
+  const dir = useRef(1);
 
   useFrame((_, dt) => {
-    t.current += speed * dt;
     const totalLen = offsets[offsets.length - 1];
-    const u = ((t.current % totalLen) + totalLen) % totalLen;
+    const nextT = t.current + dir.current * speed * dt;
+    const u = ((nextT % totalLen) + totalLen) % totalLen;
     let segIdx = 0;
     while (segIdx < offsets.length - 1 && offsets[segIdx + 1] < u) segIdx++;
     const segStart = offsets[segIdx];
@@ -42,10 +44,20 @@ export function AnalyticsAgent({
     const segT = (u - segStart) / Math.max(0.001, segEnd - segStart);
     const p = loop.points[segIdx % loop.points.length];
     const q = loop.points[(segIdx + 1) % loop.points.length];
-    const x = p[0] + (q[0] - p[0]) * segT - floor.bounds.width / 2;
-    const z = (p[1] + (q[1] - p[1]) * segT) - floor.bounds.depth / 2;
-    const dx = q[0] - p[0];
-    const dy = q[1] - p[1];
+    const mxMetres = p[0] + (q[0] - p[0]) * segT;
+    const myMetres = p[1] + (q[1] - p[1]) * segT;
+
+    // Bounce off walls/barriers/courts (not rooms — loops visit room centres).
+    if (isInBarrier([mxMetres, myMetres], floor)) {
+      dir.current *= -1;
+      return;
+    }
+    t.current = nextT;
+
+    const x = mxMetres - floor.bounds.width / 2;
+    const z = myMetres - floor.bounds.depth / 2;
+    const dx = (q[0] - p[0]) * dir.current;
+    const dy = (q[1] - p[1]) * dir.current;
     const targetYaw = Math.atan2(dx, -dy);
     yawRef.current += (targetYaw - yawRef.current) * Math.min(1, dt * 6);
     const bob = Math.sin(t.current * 8) * 0.05;

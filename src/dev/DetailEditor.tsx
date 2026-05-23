@@ -22,6 +22,7 @@ type Tool =
   | "court"
   | "event-booth"
   | "shop-block"
+  | "wall"
   | "psc"
   | "family-centre";
 
@@ -30,7 +31,7 @@ const POLYGON_TOOLS = new Set<Tool>(["psc", "family-centre"]);
 
 const TOOL_CATEGORIES: { name: string; tools: Tool[] }[] = [
   { name: "Hawker", tools: ["stall-row", "stall-island", "bench-rows", "round-table", "cleaning"] },
-  { name: "Standard", tools: ["landscape-island", "greenery-row", "toilet", "barrier"] },
+  { name: "Standard", tools: ["landscape-island", "greenery-row", "toilet", "barrier", "wall"] },
   { name: "Circulation", tools: ["escalator-up", "escalator-down", "lift-block", "staircase"] },
   { name: "Stage", tools: ["stage", "seating-block"] },
   { name: "Sports", tools: ["football", "court"] },
@@ -77,6 +78,7 @@ const TOOL_LABELS: Record<Tool, string> = {
   court: "Sports court (blocks)",
   "event-booth": "Event booth",
   "shop-block": "Shop block",
+  wall: "Wall (blocks routing + agents)",
   psc: "Public Service Centre",
   "family-centre": "Family Centre",
 };
@@ -101,6 +103,7 @@ const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
   court: "#E07B39",
   "event-booth": "#C2185B",
   "shop-block": "#5D4037",
+  wall: "#6B7280",
   psc: "#0E7C7B",
   "family-centre": "#D96BA0",
 };
@@ -384,6 +387,9 @@ export function DetailEditor() {
           break;
         case "shop-block":
           newDetail = { id, type: "shop-block", rect: r };
+          break;
+        case "wall":
+          newDetail = { id, type: "wall", rect: r };
           break;
         default:
           newDetail = { id, type: "bench-rows", rect: r };
