@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import * as THREE from "three";
-import type { Floor as FloorData, Polygon } from "@/data/types";
-import { getDecorator } from "./decorators";
+import type { Detail, Floor as FloorData, Polygon, Pt } from "@/data/types";
 
 function polygonToShape(p: Polygon, depth: number): THREE.Shape {
   const shape = new THREE.Shape();
@@ -21,41 +20,61 @@ const COLORS: Record<Polygon["type"], string> = {
   void: "#A0A0A0",
 };
 
-const DECORATED_SLAB_COLOR = "#C9B98A";
-const DECORATED_SLAB_HEIGHT = 0.12;
+const DETAILED_SLAB_COLOR = "#C9B98A";
+const DETAILED_SLAB_HEIGHT = 0.12;
+
+function pointInPolygon(px: number, py: number, polygon: Pt[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    const intersect =
+      yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function detailCenter(d: Detail): Pt {
+  if (d.type === "round-table") return d.point;
+  const [a, b] = d.rect;
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+}
+
+function polygonHasAnyDetail(p: Polygon, details: Detail[]): boolean {
+  for (const d of details) {
+    const [cx, cy] = detailCenter(d);
+    if (pointInPolygon(cx, cy, p.points)) return true;
+  }
+  return false;
+}
 
 export function Floor({ data, yOffset = 0 }: { data: FloorData; yOffset?: number }) {
-  const items = useMemo(
-    () =>
-      data.polygons.map(p => {
-        const Decorator = getDecorator(p);
-        const slabHeight = Decorator ? DECORATED_SLAB_HEIGHT : p.heightMeters;
-        const shape = polygonToShape(p, data.bounds.depth);
-        const geometry = new THREE.ExtrudeGeometry(shape, {
-          depth: slabHeight,
-          bevelEnabled: false,
-        });
-        geometry.rotateX(-Math.PI / 2);
-        return {
-          id: p.id,
-          geometry,
-          color: Decorator ? DECORATED_SLAB_COLOR : COLORS[p.type],
-          Decorator,
-          polygon: p,
-        };
-      }),
-    [data],
-  );
+  const items = useMemo(() => {
+    const details = data.details ?? [];
+    return data.polygons.map(p => {
+      const detailed = details.length > 0 && polygonHasAnyDetail(p, details);
+      const slabHeight = detailed ? DETAILED_SLAB_HEIGHT : p.heightMeters;
+      const shape = polygonToShape(p, data.bounds.depth);
+      const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: slabHeight,
+        bevelEnabled: false,
+      });
+      geometry.rotateX(-Math.PI / 2);
+      return {
+        id: p.id,
+        geometry,
+        color: detailed ? DETAILED_SLAB_COLOR : COLORS[p.type],
+      };
+    });
+  }, [data]);
 
   return (
     <group position={[-data.bounds.width / 2, yOffset, data.bounds.depth / 2]}>
       {items.map(m => (
-        <group key={m.id}>
-          <mesh geometry={m.geometry} castShadow receiveShadow>
-            <meshStandardMaterial color={m.color} />
-          </mesh>
-          {m.Decorator && <m.Decorator polygon={m.polygon} depth={data.bounds.depth} />}
-        </group>
+        <mesh key={m.id} geometry={m.geometry} castShadow receiveShadow>
+          <meshStandardMaterial color={m.color} />
+        </mesh>
       ))}
     </group>
   );

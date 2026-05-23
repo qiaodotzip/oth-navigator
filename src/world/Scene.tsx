@@ -1,6 +1,7 @@
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Floor } from "./Floor";
+import { FloorDetails } from "./FloorDetails";
 import { CameraRig } from "./CameraRig";
 import { PolygonLabels } from "./PolygonLabels";
 import { RouteArrow } from "./RouteArrow";
@@ -30,6 +31,7 @@ export function Scene() {
         shadow-mapSize={[2048, 2048]}
       />
       {active && <Floor data={active} />}
+      {active && <FloorDetails floor={active} />}
       {active && showLabels && <PolygonLabels floor={active} />}
       {active && <RouteArrow floor={active} />}
       {active && <UserBlob floor={active} />}

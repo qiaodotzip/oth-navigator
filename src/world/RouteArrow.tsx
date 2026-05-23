@@ -3,9 +3,11 @@ import { useRef } from "react";
 import * as THREE from "three";
 import type { Floor } from "@/data/types";
 import { useStore } from "@/store";
+import { checkSegment } from "@/routing/pathChecks";
 
 export function RouteArrow({ floor }: { floor: Floor }) {
   const activeRoute = useStore(s => s.activeRoute);
+  const services = useStore(s => s.services);
   const groupRef = useRef<THREE.Group>(null!);
 
   useFrame(({ clock }) => {
@@ -21,6 +23,11 @@ export function RouteArrow({ floor }: { floor: Floor }) {
   const next = steps[i + 1];
   if (!current || !next) return null;
   if (current.floorId !== floor.id || next.floorId !== floor.id) return null;
+
+  const svc = services.find(s => s.id === activeRoute.variant.serviceId);
+  const destinationRoomId = svc && svc.floorId === floor.id ? svc.roomId : undefined;
+  const block = checkSegment(current.point, next.point, floor, destinationRoomId);
+  const color = block.blocked ? "#DC2626" : "#E91E63";
 
   const ax = current.point[0] - floor.bounds.width / 2;
   const az = floor.bounds.depth / 2 - current.point[1];
@@ -38,11 +45,11 @@ export function RouteArrow({ floor }: { floor: Floor }) {
     <group ref={groupRef} position={[mx, 0.2, mz]} rotation={[0, yaw, 0]}>
       <mesh position={[0, 0, 0]}>
         <boxGeometry args={[1.4, 0.15, Math.max(2, dist - 2)]} />
-        <meshBasicMaterial color="#E91E63" transparent opacity={0.7} />
+        <meshBasicMaterial color={color} transparent opacity={0.7} />
       </mesh>
       <mesh position={[0, 0.05, dist / 2 - 1]} rotation={[-Math.PI / 2, 0, 0]}>
         <coneGeometry args={[1.5, 2.5, 4]} />
-        <meshBasicMaterial color="#E91E63" transparent opacity={0.85} />
+        <meshBasicMaterial color={color} transparent opacity={0.85} />
       </mesh>
     </group>
   );

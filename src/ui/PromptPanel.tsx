@@ -1,6 +1,7 @@
 import { useStore } from "@/store";
 import { ServiceTiles } from "./ServiceTiles";
-import { ArrowRight, Check } from "phosphor-react";
+import { ArrowRight, Check, Warning } from "phosphor-react";
+import { checkSegment } from "@/routing/pathChecks";
 
 const WALK_SPEED_MPS = 1.2;
 
@@ -15,6 +16,7 @@ export function PromptPanel({
 }) {
   const route = useStore(s => s.activeRoute);
   const services = useStore(s => s.services);
+  const floors = useStore(s => s.floors);
   const language = useStore(s => s.language);
   const endRoute = useStore(s => s.endRoute);
 
@@ -43,6 +45,17 @@ export function PromptPanel({
   const walkSec = Math.max(1, Math.round(distance / WALK_SPEED_MPS));
   const floorChange = !!(next && next.floorId !== current.floorId);
 
+  let blockedRooms: string[] = [];
+  if (next && !floorChange) {
+    const floor = floors.find(f => f.id === current.floorId);
+    if (floor) {
+      const destRoomId =
+        svc && svc.floorId === floor.id ? svc.roomId : undefined;
+      blockedRooms = checkSegment(current.point, next.point, floor, destRoomId)
+        .blockingRoomIds;
+    }
+  }
+
   return (
     <div className="h-full bg-oth-paper border-t border-neutral-300 overflow-hidden p-4 flex flex-col">
       <div className="flex items-center justify-between mb-2">
@@ -61,7 +74,7 @@ export function PromptPanel({
       </p>
 
       {!isLast && (
-        <div className="flex items-center gap-2 mb-3 text-xs text-neutral-600">
+        <div className="flex items-center gap-2 mb-2 text-xs text-neutral-600">
           {floorChange ? (
             <span className="font-semibold text-oth-primary">
               Take the {current.segmentKey === "lift" ? "lift" : "escalator"} to {next!.floorId}
@@ -73,6 +86,16 @@ export function PromptPanel({
               <span>{walkSec}s walk</span>
             </>
           )}
+        </div>
+      )}
+
+      {blockedRooms.length > 0 && (
+        <div className="mb-3 flex items-start gap-1.5 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+          <Warning size={14} weight="fill" className="flex-shrink-0 mt-0.5" />
+          <span>
+            Path crosses {blockedRooms.length === 1 ? "room" : "rooms"}:{" "}
+            <span className="font-mono">{blockedRooms.join(", ")}</span>. Adjust waypoints to walk around.
+          </span>
         </div>
       )}
 
