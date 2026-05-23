@@ -35,10 +35,12 @@ export function PolygonEditor() {
   const [currentPoints, setCurrentPoints] = useState<Pt[]>([]);
   const [floorId, setFloorId] = useState<"L1" | "L2">("L1");
   const [widthM, setWidthM] = useState(210);
-  const [depthM, setDepthM] = useState(130);
+  // depth matches the 3000x2121 image aspect at 0.07 m/px so traces aren't squished
+  const [depthM, setDepthM] = useState(148.47);
   const [view, setView] = useState({ x: 0, y: 0, w: 1, h: 1 });
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [restoredCount, setRestoredCount] = useState<number | null>(null);
+  const [reuseId, setReuseId] = useState("");
   const svgRef = useRef<SVGSVGElement>(null);
   const panStart = useRef<{ cx: number; cy: number; vx: number; vy: number } | null>(null);
   const dragMoved = useRef(false);
@@ -180,25 +182,34 @@ export function PolygonEditor() {
 
   const resetView = () => setView({ x: 0, y: 0, w: imageDims.w, h: imageDims.h });
 
-  const closePolygon = () => {
+  const closePolygon = (explicitId?: string) => {
     if (currentPoints.length < 3) {
       alert("Need at least 3 points before closing a polygon.");
       return;
     }
-    const id = window.prompt(
-      `Polygon ID. Examples:\n  ${floorId}-room-psc\n  ${floorId}-room-hawker\n  ${floorId}-corridor-festive-walk\n  ${floorId}-landmark-town-square\n  ${floorId}-void-atrium\n\nType is inferred from the prefix.`,
-      `${floorId}-room-`,
-    );
-    if (!id) return;
+    let id = explicitId;
+    if (!id) {
+      const input = window.prompt(
+        `Polygon ID. Examples:\n  ${floorId}-room-psc\n  ${floorId}-room-hawker\n  ${floorId}-corridor-festive-walk\n  ${floorId}-landmark-town-square\n  ${floorId}-void-atrium\n\nType is inferred from the prefix.\nReuse an existing ID to add another piece to the same zone.`,
+        `${floorId}-room-`,
+      );
+      if (!input) return;
+      id = input;
+    }
     if (!id.startsWith(`${floorId}-`)) {
       alert(`ID must start with "${floorId}-".`);
       return;
     }
-    if (polygons.some(p => p.id === id)) {
-      alert(`Polygon with ID "${id}" already exists.`);
-      return;
+    // Duplicate IDs are allowed (multi-piece zones). When typed manually, confirm
+    // so it isn't an accidental typo; when chosen from the reuse picker, skip the prompt.
+    if (!explicitId && polygons.some(p => p.id === id)) {
+      const ok = window.confirm(
+        `ID "${id}" already exists. Add this as another piece of the same zone?`,
+      );
+      if (!ok) return;
     }
-    setPolygons(prev => [...prev, { id, type: inferType(id), points: currentPoints }]);
+    const finalId = id;
+    setPolygons(prev => [...prev, { id: finalId, type: inferType(finalId), points: currentPoints }]);
     setCurrentPoints([]);
   };
 
@@ -219,8 +230,10 @@ export function PolygonEditor() {
       return;
     }
     if (polygons.some((p, idx) => idx !== i && p.id === next)) {
-      alert(`Polygon with ID "${next}" already exists.`);
-      return;
+      const ok = window.confirm(
+        `ID "${next}" already exists. Merge this polygon into that zone (they'll share the ID)?`,
+      );
+      if (!ok) return;
     }
     setPolygons(prev =>
       prev.map((p, idx) =>
@@ -301,6 +314,15 @@ export function PolygonEditor() {
   const zoomPct = imageDims.w > 1 ? Math.round((imageDims.w / view.w) * 100) : 100;
   const strokeBase = Math.max(1.5, view.w / 600);
   const fontBase = Math.max(8, view.w / 80);
+
+  const existingIds = Array.from(new Set(polygons.map(p => p.id))).sort();
+  const idCounts: Record<string, number> = {};
+  for (const p of polygons) idCounts[p.id] = (idCounts[p.id] || 0) + 1;
+  const pieceSeen: Record<string, number> = {};
+  const polyMeta = polygons.map(p => {
+    pieceSeen[p.id] = (pieceSeen[p.id] || 0) + 1;
+    return { pieceNum: pieceSeen[p.id], total: idCounts[p.id] };
+  });
 
   return (
     <div className="grid grid-cols-[2fr_1fr] h-screen bg-neutral-100">
@@ -462,7 +484,7 @@ export function PolygonEditor() {
 
         <div className="flex flex-col gap-2 mb-4">
           <button
-            onClick={closePolygon}
+            onClick={() => closePolygon()}
             disabled={currentPoints.length < 3}
             className="px-3 py-2 rounded bg-oth-primary text-white text-sm font-semibold disabled:opacity-40"
           >
@@ -484,6 +506,34 @@ export function PolygonEditor() {
               Cancel
             </button>
           </div>
+          {existingIds.length > 0 && (
+            <div className="flex gap-2 items-stretch">
+              <select
+                value={reuseId}
+                onChange={e => setReuseId(e.target.value)}
+                className="flex-1 min-w-0 px-2 py-1 rounded border border-neutral-300 text-xs font-mono"
+              >
+                <option value="">…or add piece to existing ID</option>
+                {existingIds.map(id => (
+                  <option key={id} value={id}>
+                    {id.replace(`${floorId}-`, "")} ({idCounts[id]})
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  if (reuseId) {
+                    closePolygon(reuseId);
+                    setReuseId("");
+                  }
+                }}
+                disabled={!reuseId || currentPoints.length < 3}
+                className="px-3 py-1 rounded bg-oth-warm text-oth-ink text-xs font-semibold disabled:opacity-40 whitespace-nowrap"
+              >
+                Add piece
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="mb-4">
@@ -505,6 +555,11 @@ export function PolygonEditor() {
                   title="Click to rename"
                 >
                   {p.id}
+                  {polyMeta[i].total > 1 && (
+                    <span className="ml-1 text-oth-primary font-sans not-italic">
+                      ·pc {polyMeta[i].pieceNum}/{polyMeta[i].total}
+                    </span>
+                  )}
                 </button>
                 <span className="text-neutral-500 text-[10px] uppercase">{p.type}</span>
                 <button

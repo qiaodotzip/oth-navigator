@@ -71,8 +71,8 @@ export function Floor({ data, yOffset = 0 }: { data: FloorData; yOffset?: number
 
   return (
     <group position={[-data.bounds.width / 2, yOffset, data.bounds.depth / 2]}>
-      {items.map(m => (
-        <mesh key={m.id} geometry={m.geometry} castShadow receiveShadow>
+      {items.map((m, i) => (
+        <mesh key={`${m.id}-${i}`} geometry={m.geometry} castShadow receiveShadow>
           <meshStandardMaterial color={m.color} />
         </mesh>
       ))}

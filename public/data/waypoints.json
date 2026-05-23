@@ -4,8 +4,24 @@
     "profile": "default",
     "counterId": "psc-1",
     "steps": [
-      { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [99, 53],  "decisionPoint": false, "segmentKey": "arrived" }
+      {
+        "floorId": "L1",
+        "point": [
+          128,
+          83.37
+        ],
+        "decisionPoint": false,
+        "segmentKey": "start"
+      },
+      {
+        "floorId": "L1",
+        "point": [
+          99,
+          60.53
+        ],
+        "decisionPoint": false,
+        "segmentKey": "arrived"
+      }
     ]
   },
   {
@@ -13,8 +29,24 @@
     "profile": "stepFree",
     "counterId": "psc-2",
     "steps": [
-      { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [99, 53],  "decisionPoint": false, "segmentKey": "arrived" }
+      {
+        "floorId": "L1",
+        "point": [
+          128,
+          83.37
+        ],
+        "decisionPoint": false,
+        "segmentKey": "start"
+      },
+      {
+        "floorId": "L1",
+        "point": [
+          99,
+          60.53
+        ],
+        "decisionPoint": false,
+        "segmentKey": "arrived"
+      }
     ]
   },
   {
@@ -22,8 +54,24 @@
     "profile": "default",
     "counterId": "hawker-info",
     "steps": [
-      { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [97, 38],  "decisionPoint": false, "segmentKey": "arrived" }
+      {
+        "floorId": "L1",
+        "point": [
+          128,
+          83.37
+        ],
+        "decisionPoint": false,
+        "segmentKey": "start"
+      },
+      {
+        "floorId": "L1",
+        "point": [
+          97,
+          43.4
+        ],
+        "decisionPoint": false,
+        "segmentKey": "arrived"
+      }
     ]
   },
   {
@@ -31,8 +79,24 @@
     "profile": "default",
     "counterId": "cc-1",
     "steps": [
-      { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [84, 57],  "decisionPoint": false, "segmentKey": "arrived" }
+      {
+        "floorId": "L1",
+        "point": [
+          128,
+          83.37
+        ],
+        "decisionPoint": false,
+        "segmentKey": "start"
+      },
+      {
+        "floorId": "L1",
+        "point": [
+          84,
+          65.1
+        ],
+        "decisionPoint": false,
+        "segmentKey": "arrived"
+      }
     ]
   },
   {
@@ -40,10 +104,42 @@
     "profile": "default",
     "counterId": "lib-1",
     "steps": [
-      { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [130, 70], "decisionPoint": true,  "segmentKey": "escalator" },
-      { "floorId": "L2", "point": [130, 70], "decisionPoint": true,  "segmentKey": "level2" },
-      { "floorId": "L2", "point": [145, 79], "decisionPoint": false, "segmentKey": "arrived" }
+      {
+        "floorId": "L1",
+        "point": [
+          128,
+          83.37
+        ],
+        "decisionPoint": false,
+        "segmentKey": "start"
+      },
+      {
+        "floorId": "L1",
+        "point": [
+          130,
+          79.95
+        ],
+        "decisionPoint": true,
+        "segmentKey": "escalator"
+      },
+      {
+        "floorId": "L2",
+        "point": [
+          130,
+          79.95
+        ],
+        "decisionPoint": true,
+        "segmentKey": "level2"
+      },
+      {
+        "floorId": "L2",
+        "point": [
+          145,
+          90.22
+        ],
+        "decisionPoint": false,
+        "segmentKey": "arrived"
+      }
     ]
   },
   {
@@ -51,10 +147,42 @@
     "profile": "stepFree",
     "counterId": "lib-2",
     "steps": [
-      { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [130, 75], "decisionPoint": true,  "segmentKey": "lift" },
-      { "floorId": "L2", "point": [130, 75], "decisionPoint": true,  "segmentKey": "level2" },
-      { "floorId": "L2", "point": [145, 79], "decisionPoint": false, "segmentKey": "arrived" }
+      {
+        "floorId": "L1",
+        "point": [
+          128,
+          83.37
+        ],
+        "decisionPoint": false,
+        "segmentKey": "start"
+      },
+      {
+        "floorId": "L1",
+        "point": [
+          130,
+          85.66
+        ],
+        "decisionPoint": true,
+        "segmentKey": "lift"
+      },
+      {
+        "floorId": "L2",
+        "point": [
+          130,
+          85.66
+        ],
+        "decisionPoint": true,
+        "segmentKey": "level2"
+      },
+      {
+        "floorId": "L2",
+        "point": [
+          145,
+          90.22
+        ],
+        "decisionPoint": false,
+        "segmentKey": "arrived"
+      }
     ]
   },
   {
@@ -62,10 +190,42 @@
     "profile": "default",
     "counterId": "hdb-1",
     "steps": [
-      { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [130, 70], "decisionPoint": true,  "segmentKey": "escalator" },
-      { "floorId": "L2", "point": [130, 70], "decisionPoint": true,  "segmentKey": "level2" },
-      { "floorId": "L2", "point": [128, 37], "decisionPoint": false, "segmentKey": "arrived" }
+      {
+        "floorId": "L1",
+        "point": [
+          128,
+          83.37
+        ],
+        "decisionPoint": false,
+        "segmentKey": "start"
+      },
+      {
+        "floorId": "L1",
+        "point": [
+          130,
+          79.95
+        ],
+        "decisionPoint": true,
+        "segmentKey": "escalator"
+      },
+      {
+        "floorId": "L2",
+        "point": [
+          130,
+          79.95
+        ],
+        "decisionPoint": true,
+        "segmentKey": "level2"
+      },
+      {
+        "floorId": "L2",
+        "point": [
+          128,
+          42.26
+        ],
+        "decisionPoint": false,
+        "segmentKey": "arrived"
+      }
     ]
   },
   {
@@ -73,10 +233,42 @@
     "profile": "default",
     "counterId": "theatre-info",
     "steps": [
-      { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [130, 75], "decisionPoint": true,  "segmentKey": "escalator" },
-      { "floorId": "L2", "point": [130, 75], "decisionPoint": true,  "segmentKey": "level2" },
-      { "floorId": "L2", "point": [134, 97], "decisionPoint": false, "segmentKey": "arrived" }
+      {
+        "floorId": "L1",
+        "point": [
+          128,
+          83.37
+        ],
+        "decisionPoint": false,
+        "segmentKey": "start"
+      },
+      {
+        "floorId": "L1",
+        "point": [
+          130,
+          85.66
+        ],
+        "decisionPoint": true,
+        "segmentKey": "escalator"
+      },
+      {
+        "floorId": "L2",
+        "point": [
+          130,
+          85.66
+        ],
+        "decisionPoint": true,
+        "segmentKey": "level2"
+      },
+      {
+        "floorId": "L2",
+        "point": [
+          134,
+          110.78
+        ],
+        "decisionPoint": false,
+        "segmentKey": "arrived"
+      }
     ]
   }
 ]

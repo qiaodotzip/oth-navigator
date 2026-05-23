@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { Floor } from "@/data/types";
 import { useStore } from "@/store";
 
-const TOWN_SQUARE_M: [number, number] = [128, 73];
+const TOWN_SQUARE_M: [number, number] = [128, 83.37];
 const WALK_SPEED = 16; // scene units per second
 
 function metresToScene(point: [number, number], floor: Floor): [number, number] {
