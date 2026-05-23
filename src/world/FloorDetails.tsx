@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Detail, Facing, Floor as FloorData, Pt } from "@/data/types";
 import {
+  BarrierMesh,
   BenchMesh,
   BENCH_CLUSTER_DEPTH,
   BENCH_SPACING,
@@ -475,14 +476,12 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
         />
       ))}
       {layout.barriers.map((it, i) => (
-        <mesh
+        <BarrierMesh
           key={`barrier${i}`}
-          position={[it.pos[0] - width / 2, SLAB_Y + 0.5, it.pos[1] - depth / 2]}
-          castShadow
-        >
-          <boxGeometry args={[it.width, 1.0, it.depth]} />
-          <meshStandardMaterial color="#B0202A" />
-        </mesh>
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+        />
       ))}
     </group>
   );

@@ -258,10 +258,10 @@ export function PolygonEditor() {
     setRestoredCount(null);
   };
 
-  const exportJson = () => {
+  const buildFloorData = () => {
     const scaleX = widthM / imageDims.w;
     const scaleY = depthM / imageDims.h;
-    const data = {
+    return {
       id: floorId,
       bounds: { width: widthM, depth: depthM },
       polygons: polygons.map(p => ({
@@ -277,13 +277,38 @@ export function PolygonEditor() {
         ),
       })),
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  };
+
+  const exportJson = () => {
+    const blob = new Blob([JSON.stringify(buildFloorData(), null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `${floorId}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const updateSaved = async () => {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const res = await fetch("/api/save-floor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ floorId, kind: "floor", data: buildFloorData() }),
+      });
+      const j = await res.json();
+      setSaveMsg(res.ok ? `✓ Saved ${j.file}` : `✗ ${j.error ?? "save failed"}`);
+    } catch (e) {
+      setSaveMsg(`✗ ${e instanceof Error ? e.message : "save failed"} (is the server running?)`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const importJson = (e: ChangeEvent<HTMLInputElement>) => {
@@ -643,11 +668,23 @@ export function PolygonEditor() {
         </div>
 
         <button
+          onClick={updateSaved}
+          disabled={polygons.length === 0 || saving}
+          className="w-full px-3 py-2 rounded bg-oth-primary text-white text-sm font-semibold disabled:opacity-40"
+        >
+          {saving ? "Saving…" : `Update saved ${floorId}.json`}
+        </button>
+        {saveMsg && (
+          <p className={`mt-1 text-xs ${saveMsg.startsWith("✓") ? "text-green-700" : "text-red-600"}`}>
+            {saveMsg}
+          </p>
+        )}
+        <button
           onClick={exportJson}
           disabled={polygons.length === 0}
-          className="w-full px-3 py-2 rounded bg-green-600 text-white text-sm font-semibold disabled:opacity-40"
+          className="w-full mt-2 px-3 py-2 rounded bg-neutral-200 text-oth-ink text-sm font-semibold disabled:opacity-40"
         >
-          Download {floorId}.json
+          Download {floorId}.json (manual)
         </button>
         <label className="block mt-2 text-xs font-semibold text-neutral-700">
           Import existing {floorId}.json (resume work)

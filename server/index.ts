@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -45,6 +47,49 @@ const app = new Hono();
 app.use("*", cors());
 
 app.get("/api/health", c => c.json({ ok: true }));
+
+// Dev-only: write editor output straight into public/data/floors so the
+// download-and-replace dance isn't needed. Disabled in production.
+app.post("/api/save-floor", async c => {
+  if (process.env.NODE_ENV === "production") {
+    return c.json({ error: "disabled in production" }, 403);
+  }
+  const body = await c.req.json().catch(() => null);
+  const floorId = body?.floorId;
+  const kind = body?.kind; // "floor" | "details"
+  const data = body?.data;
+  if (!["L1", "L2"].includes(floorId) || !data) {
+    return c.json({ error: "bad floorId or missing data" }, 400);
+  }
+  const dir = resolve(process.cwd(), "public/data/floors");
+  try {
+    if (kind === "details") {
+      const path = resolve(dir, `${floorId}-details.json`);
+      await writeFile(path, JSON.stringify(data, null, 2));
+      return c.json({ ok: true, file: `${floorId}-details.json` });
+    }
+    // kind === "floor": write id/bounds/polygons but PRESERVE existing inline details.
+    const path = resolve(dir, `${floorId}.json`);
+    let existingDetails: unknown[] | undefined;
+    try {
+      const cur = JSON.parse((await readFile(path, "utf8")).replace(/^﻿/, ""));
+      if (Array.isArray(cur.details)) existingDetails = cur.details;
+    } catch {
+      /* file may not exist yet */
+    }
+    const out = {
+      id: data.id ?? floorId,
+      bounds: data.bounds,
+      polygons: data.polygons,
+      ...(existingDetails ? { details: existingDetails } : {}),
+    };
+    await writeFile(path, JSON.stringify(out, null, 2));
+    return c.json({ ok: true, file: `${floorId}.json` });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 500);
+  }
+});
 
 app.post("/api/narrate", async c => {
   const body = await c.req.json();

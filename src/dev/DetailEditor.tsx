@@ -112,6 +112,8 @@ export function DetailEditor() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState({ x: 0, y: 0, w: 1, h: 1 });
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const panStart = useRef<{ cx: number; cy: number; vx: number; vy: number } | null>(null);
   const dragMoved = useRef(false);
@@ -400,7 +402,7 @@ export function DetailEditor() {
     setSavedAt(null);
   };
 
-  const exportJson = () => {
+  const buildDetailsData = () => {
     const sx = widthM / imageDims.w;
     const sy = depthM / imageDims.h;
     const r = (n: number) => Math.round(n * 100) / 100;
@@ -409,14 +411,37 @@ export function DetailEditor() {
       if (d.type === "round-table") return { ...d, point: conv(d.point) };
       return { ...d, rect: [conv(d.rect[0]), conv(d.rect[1])] as [Pt, Pt] };
     });
-    const data = { id: floorId, details: exported };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    return { id: floorId, details: exported };
+  };
+
+  const exportJson = () => {
+    const blob = new Blob([JSON.stringify(buildDetailsData(), null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `${floorId}-details.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const updateSaved = async () => {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const res = await fetch("/api/save-floor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ floorId, kind: "details", data: buildDetailsData() }),
+      });
+      const j = await res.json();
+      setSaveMsg(res.ok ? `✓ Saved ${j.file}` : `✗ ${j.error ?? "save failed"}`);
+    } catch (e) {
+      setSaveMsg(`✗ ${e instanceof Error ? e.message : "save failed"} (is the server running?)`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const importJson = (e: ChangeEvent<HTMLInputElement>) => {
@@ -797,11 +822,23 @@ export function DetailEditor() {
         </div>
 
         <button
+          onClick={updateSaved}
+          disabled={details.length === 0 || saving}
+          className="w-full px-3 py-2 rounded bg-oth-primary text-white text-sm font-semibold disabled:opacity-40"
+        >
+          {saving ? "Saving…" : `Update saved ${floorId}-details.json`}
+        </button>
+        {saveMsg && (
+          <p className={`mt-1 text-xs ${saveMsg.startsWith("✓") ? "text-green-700" : "text-red-600"}`}>
+            {saveMsg}
+          </p>
+        )}
+        <button
           onClick={exportJson}
           disabled={details.length === 0}
-          className="w-full px-3 py-2 rounded bg-green-600 text-white text-sm font-semibold disabled:opacity-40"
+          className="w-full mt-2 px-3 py-2 rounded bg-neutral-200 text-oth-ink text-sm font-semibold disabled:opacity-40"
         >
-          Download {floorId}-details.json
+          Download {floorId}-details.json (manual)
         </button>
         <label className="block mt-2 text-xs font-semibold text-neutral-700">
           Import JSON (floor or details)

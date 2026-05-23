@@ -640,6 +640,37 @@ export function ChairMesh({
   );
 }
 
+const BARRIER_COLOR = "#B0202A";
+
+export function BarrierMesh({
+  position,
+  width,
+  depth,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+}) {
+  const H = 0.95;
+  const T = 0.12;
+  const rails: { pos: [number, number, number]; size: [number, number, number] }[] = [
+    { pos: [0, H / 2, depth / 2], size: [width, H, T] },
+    { pos: [0, H / 2, -depth / 2], size: [width, H, T] },
+    { pos: [width / 2, H / 2, 0], size: [T, H, depth] },
+    { pos: [-width / 2, H / 2, 0], size: [T, H, depth] },
+  ];
+  return (
+    <group position={position}>
+      {rails.map((r, i) => (
+        <mesh key={i} position={r.pos} castShadow>
+          <boxGeometry args={r.size} />
+          <meshStandardMaterial color={BARRIER_COLOR} transparent opacity={0.55} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 export function SeatingBlockMesh({
   position,
   width,
