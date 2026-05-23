@@ -3,18 +3,29 @@ export type PolygonType = "room" | "corridor" | "landmark" | "void";
 export type AccessibilityProfile = "default" | "stepFree";
 export type Language = "en" | "zh";
 
+export type Pt = [number, number];
+
 export type Polygon = {
   id: string;
-  points: [number, number][];
+  points: Pt[];
   heightMeters: number;
   type: PolygonType;
   label?: { en: string; zh: string };
 };
 
+export type Facing = "N" | "S" | "E" | "W";
+
+export type Detail =
+  | { id: string; type: "stall-row"; rect: [Pt, Pt]; facing: Facing }
+  | { id: string; type: "stall-island"; rect: [Pt, Pt] }
+  | { id: string; type: "bench-rows"; rect: [Pt, Pt] }
+  | { id: string; type: "round-table"; point: Pt };
+
 export type Floor = {
   id: FloorId;
   bounds: { width: number; depth: number };
   polygons: Polygon[];
+  details?: Detail[];
 };
 
 export type Service = {
