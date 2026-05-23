@@ -701,3 +701,231 @@ export function SeatingBlockMesh({
     </group>
   );
 }
+
+// ---------- Sports / venue primitives ----------
+
+const PITCH_COLOR = "#2E7D32";
+const LINE_COLOR = "#EFEFEF";
+const COURT_COLOR = "#B5651D";
+const COURT_LINE = "#F4F4F4";
+const GLASS_COLOR = "#A8C8E0";
+const BOOTH_CANOPY = ["#D9534F", "#F2A33C", "#4F8A40", "#5E81AC"];
+
+// Football pitch: field runs along local Z (depth); goals at ±depth/2.
+export function FootballMesh({
+  position,
+  width,
+  depth,
+  rotY,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+}) {
+  const halfW = width / 2;
+  const halfL = depth / 2;
+  const lt = 0.14;
+  const lineY = 0.13;
+  const circleR = Math.min(width, depth) * 0.14;
+  const gw = Math.min(width * 0.4, 6);
+  const gh = 1.8;
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh position={[0, 0.06, 0]} receiveShadow>
+        <boxGeometry args={[width, 0.12, depth]} />
+        <meshStandardMaterial color={PITCH_COLOR} />
+      </mesh>
+      {[
+        [0, lineY, halfL - lt, width - lt * 2, lt],
+        [0, lineY, -halfL + lt, width - lt * 2, lt],
+        [0, lineY, 0, width - lt * 2, lt],
+        [halfW - lt, lineY, 0, lt, depth - lt * 2],
+        [-halfW + lt, lineY, 0, lt, depth - lt * 2],
+      ].map(([x, y, z, sw, sd], i) => (
+        <mesh key={i} position={[x, y, z]}>
+          <boxGeometry args={[sw, 0.02, sd]} />
+          <meshStandardMaterial color={LINE_COLOR} />
+        </mesh>
+      ))}
+      <mesh position={[0, lineY, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[circleR, lt * 0.4, 6, 28]} />
+        <meshStandardMaterial color={LINE_COLOR} />
+      </mesh>
+      {[halfL, -halfL].map((z, i) => {
+        const sign = z > 0 ? -1 : 1;
+        return (
+          <group key={i} position={[0, 0.12, z + sign * 0.25]}>
+            <mesh position={[gw / 2, gh / 2, 0]} castShadow>
+              <boxGeometry args={[0.1, gh, 0.1]} />
+              <meshStandardMaterial color={LINE_COLOR} />
+            </mesh>
+            <mesh position={[-gw / 2, gh / 2, 0]} castShadow>
+              <boxGeometry args={[0.1, gh, 0.1]} />
+              <meshStandardMaterial color={LINE_COLOR} />
+            </mesh>
+            <mesh position={[0, gh, 0]} castShadow>
+              <boxGeometry args={[gw, 0.1, 0.1]} />
+              <meshStandardMaterial color={LINE_COLOR} />
+            </mesh>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+// Sports court: surface runs along local Z; backboards at ±depth/2.
+export function CourtMesh({
+  position,
+  width,
+  depth,
+  rotY,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+}) {
+  const halfW = width / 2;
+  const halfL = depth / 2;
+  const lt = 0.1;
+  const lineY = 0.13;
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh position={[0, 0.06, 0]} receiveShadow>
+        <boxGeometry args={[width, 0.12, depth]} />
+        <meshStandardMaterial color={COURT_COLOR} />
+      </mesh>
+      {[
+        [0, lineY, halfL - lt, width - lt * 2, lt],
+        [0, lineY, -halfL + lt, width - lt * 2, lt],
+        [0, lineY, 0, width - lt * 2, lt],
+        [halfW - lt, lineY, 0, lt, depth - lt * 2],
+        [-halfW + lt, lineY, 0, lt, depth - lt * 2],
+      ].map(([x, y, z, sw, sd], i) => (
+        <mesh key={i} position={[x, y, z]}>
+          <boxGeometry args={[sw, 0.02, sd]} />
+          <meshStandardMaterial color={COURT_LINE} />
+        </mesh>
+      ))}
+      <mesh position={[0, lineY, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[Math.min(width, depth) * 0.12, lt * 0.4, 6, 24]} />
+        <meshStandardMaterial color={COURT_LINE} />
+      </mesh>
+      {[halfL, -halfL].map((z, i) => (
+        <group key={i} position={[0, 0.12, z]}>
+          <mesh position={[0, 1.5, 0]} castShadow>
+            <cylinderGeometry args={[0.07, 0.07, 3, 6]} />
+            <meshStandardMaterial color="#555" />
+          </mesh>
+          <mesh position={[0, 2.8, z > 0 ? -0.35 : 0.35]} castShadow>
+            <boxGeometry args={[1.2, 0.7, 0.05]} />
+            <meshStandardMaterial color={COURT_LINE} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// Event booths: fills the rect with a grid of little market tents.
+export function EventBoothMesh({
+  position,
+  width,
+  depth,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+}) {
+  const spacing = 3.0;
+  const cols = Math.max(1, Math.floor(width / spacing));
+  const rows = Math.max(1, Math.floor(depth / spacing));
+  const cstep = width / cols;
+  const rstep = depth / rows;
+  const booths: [number, number, number][] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      booths.push([-width / 2 + (c + 0.5) * cstep, -depth / 2 + (r + 0.5) * rstep, r + c]);
+    }
+  }
+  return (
+    <group position={position}>
+      {booths.map(([x, z, k], i) => (
+        <group key={i} position={[x, 0, z]}>
+          <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
+            <boxGeometry args={[1.6, 0.9, 0.8]} />
+            <meshStandardMaterial color="#C9A06A" />
+          </mesh>
+          {[
+            [0.8, 0.4],
+            [-0.8, 0.4],
+            [0.8, -0.4],
+            [-0.8, -0.4],
+          ].map(([px, pz], j) => (
+            <mesh key={j} position={[px, 1.1, pz]}>
+              <boxGeometry args={[0.06, 2.2, 0.06]} />
+              <meshStandardMaterial color="#8C8C8C" />
+            </mesh>
+          ))}
+          <mesh position={[0, 2.3, 0]} castShadow>
+            <boxGeometry args={[1.9, 0.18, 1.1]} />
+            <meshStandardMaterial color={BOOTH_CANOPY[k % BOOTH_CANOPY.length]} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// Shop block: glass perimeter walls + a translucent roof + interior eateries.
+export function ShopBlockMesh({
+  position,
+  width,
+  depth,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+}) {
+  const H = 3.0;
+  const T = 0.1;
+  const walls: { pos: [number, number, number]; size: [number, number, number] }[] = [
+    { pos: [0, H / 2, depth / 2], size: [width, H, T] },
+    { pos: [0, H / 2, -depth / 2], size: [width, H, T] },
+    { pos: [width / 2, H / 2, 0], size: [T, H, depth] },
+    { pos: [-width / 2, H / 2, 0], size: [T, H, depth] },
+  ];
+  const tableCols = Math.max(1, Math.floor((width - 1) / 2.2));
+  const tableXs = Array.from({ length: tableCols }, (_, i) =>
+    -width / 2 + (width / tableCols) * (i + 0.5),
+  );
+  return (
+    <group position={position}>
+      {walls.map((w, i) => (
+        <mesh key={i} position={w.pos}>
+          <boxGeometry args={w.size} />
+          <meshStandardMaterial color={GLASS_COLOR} transparent opacity={0.22} />
+        </mesh>
+      ))}
+      <mesh position={[0, H, 0]}>
+        <boxGeometry args={[width, 0.1, depth]} />
+        <meshStandardMaterial color="#DCDCDC" transparent opacity={0.45} />
+      </mesh>
+      {/* eatery counter along the back wall */}
+      <mesh position={[0, 0.55, -depth / 2 + 0.6]} castShadow receiveShadow>
+        <boxGeometry args={[width * 0.7, 1.1, 0.6]} />
+        <meshStandardMaterial color="#6B4A2A" />
+      </mesh>
+      {/* a few dining tables */}
+      {tableXs.map((tx, i) => (
+        <mesh key={i} position={[tx, 0.37, depth / 4]} castShadow>
+          <cylinderGeometry args={[0.4, 0.4, 0.74, 12]} />
+          <meshStandardMaterial color={TABLE_TOP} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+

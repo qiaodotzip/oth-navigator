@@ -7,6 +7,10 @@ import {
   BENCH_SPACING,
   BushMesh,
   BUSH_SPACING,
+  CourtMesh,
+  EventBoothMesh,
+  FootballMesh,
+  ShopBlockMesh,
   CleaningBlockMesh,
   CubicleMesh,
   CUBICLE_D,
@@ -293,6 +297,19 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
     const stages: OrientedItem[] = [];
     const seatings: OrientedItem[] = [];
     const barriers: OrientedItem[] = [];
+    const footballs: OrientedItem[] = [];
+    const courts: OrientedItem[] = [];
+    const booths: OrientedItem[] = [];
+    const shops: OrientedItem[] = [];
+    const flatRect = (rect: [Pt, Pt]): OrientedItem => {
+      const b = rectBounds(rect);
+      return {
+        pos: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2],
+        width: b.w,
+        depth: b.h,
+        rotY: 0,
+      };
+    };
     for (const d of floor.details ?? []) {
       if (d.type === "stall-row") stalls.push(...planStallRow(d));
       else if (d.type === "stall-island") stalls.push(...planStallIsland(d));
@@ -328,13 +345,15 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       } else if (d.type === "seating-block") {
         seatings.push(orientedFromRect(d.rect, d.facing));
       } else if (d.type === "barrier") {
-        const b = rectBounds(d.rect);
-        barriers.push({
-          pos: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2],
-          width: b.w,
-          depth: b.h,
-          rotY: 0,
-        });
+        barriers.push(flatRect(d.rect));
+      } else if (d.type === "football") {
+        footballs.push(orientedAlongLong(d.rect, "S"));
+      } else if (d.type === "court") {
+        courts.push(orientedAlongLong(d.rect, "S"));
+      } else if (d.type === "event-booth") {
+        booths.push(flatRect(d.rect));
+      } else if (d.type === "shop-block") {
+        shops.push(flatRect(d.rect));
       }
     }
     return {
@@ -353,6 +372,10 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       stages,
       seatings,
       barriers,
+      footballs,
+      courts,
+      booths,
+      shops,
     };
   }, [floor]);
 
@@ -478,6 +501,40 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       {layout.barriers.map((it, i) => (
         <BarrierMesh
           key={`barrier${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+        />
+      ))}
+      {layout.footballs.map((it, i) => (
+        <FootballMesh
+          key={`fb${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
+        />
+      ))}
+      {layout.courts.map((it, i) => (
+        <CourtMesh
+          key={`court${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
+        />
+      ))}
+      {layout.booths.map((it, i) => (
+        <EventBoothMesh
+          key={`booth${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+        />
+      ))}
+      {layout.shops.map((it, i) => (
+        <ShopBlockMesh
+          key={`shop${i}`}
           position={toLocal(it.pos[0], it.pos[1])}
           width={it.width}
           depth={it.depth}

@@ -52,10 +52,15 @@ function pointInRect(pt: Pt, rect: [Pt, Pt]): boolean {
   );
 }
 
-/** Barrier details (gates/fences) block movement even inside walkable landmarks. */
+/** Detail types you cannot walk through (gates/fences, sports pitches, courts). */
+const ROUTE_BLOCKING_DETAILS = new Set(["barrier", "football", "court"]);
+
+/** Blocking details cut movement even inside walkable landmarks. */
 export function isInBarrier(pt: Pt, floor: Floor): boolean {
   for (const d of floor.details ?? []) {
-    if (d.type === "barrier" && pointInRect(pt, d.rect)) return true;
+    if (ROUTE_BLOCKING_DETAILS.has(d.type) && "rect" in d && pointInRect(pt, d.rect)) {
+      return true;
+    }
   }
   return false;
 }

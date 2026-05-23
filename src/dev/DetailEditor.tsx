@@ -17,13 +17,19 @@ type Tool =
   | "staircase"
   | "stage"
   | "seating-block"
-  | "barrier";
+  | "barrier"
+  | "football"
+  | "court"
+  | "event-booth"
+  | "shop-block";
 
 const TOOL_CATEGORIES: { name: string; tools: Tool[] }[] = [
   { name: "Hawker", tools: ["stall-row", "stall-island", "bench-rows", "round-table", "cleaning"] },
   { name: "Standard", tools: ["landscape-island", "greenery-row", "toilet", "barrier"] },
   { name: "Circulation", tools: ["escalator-up", "escalator-down", "lift-block", "staircase"] },
   { name: "Stage", tools: ["stage", "seating-block"] },
+  { name: "Sports", tools: ["football", "court"] },
+  { name: "Retail", tools: ["event-booth", "shop-block"] },
 ];
 
 const STORAGE_KEY = (fid: string) => `oth-detail-editor:${fid}`;
@@ -61,6 +67,10 @@ const TOOL_LABELS: Record<Tool, string> = {
   stage: "Stage",
   "seating-block": "Seating block",
   barrier: "Barrier (blocks routing)",
+  football: "Football pitch (blocks)",
+  court: "Sports court (blocks)",
+  "event-booth": "Event booth",
+  "shop-block": "Shop block",
 };
 
 const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
@@ -79,6 +89,10 @@ const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
   stage: "#7E57C2",
   "seating-block": "#90A4AE",
   barrier: "#B0202A",
+  football: "#2E7D32",
+  court: "#E07B39",
+  "event-booth": "#C2185B",
+  "shop-block": "#5D4037",
 };
 
 const FACING_ARROW: Record<Facing, [number, number]> = {
@@ -341,6 +355,18 @@ export function DetailEditor() {
           break;
         case "barrier":
           newDetail = { id, type: "barrier", rect: r };
+          break;
+        case "football":
+          newDetail = { id, type: "football", rect: r };
+          break;
+        case "court":
+          newDetail = { id, type: "court", rect: r };
+          break;
+        case "event-booth":
+          newDetail = { id, type: "event-booth", rect: r };
+          break;
+        case "shop-block":
+          newDetail = { id, type: "shop-block", rect: r };
           break;
         default:
           newDetail = { id, type: "bench-rows", rect: r };

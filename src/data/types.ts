@@ -30,7 +30,11 @@ export type Detail =
   | { id: string; type: "staircase"; rect: [Pt, Pt]; facing: Facing }
   | { id: string; type: "stage"; rect: [Pt, Pt]; facing: Facing }
   | { id: string; type: "seating-block"; rect: [Pt, Pt]; facing: Facing }
-  | { id: string; type: "barrier"; rect: [Pt, Pt] };
+  | { id: string; type: "barrier"; rect: [Pt, Pt] }
+  | { id: string; type: "football"; rect: [Pt, Pt] }
+  | { id: string; type: "court"; rect: [Pt, Pt] }
+  | { id: string; type: "event-booth"; rect: [Pt, Pt] }
+  | { id: string; type: "shop-block"; rect: [Pt, Pt] };
 
 export type Floor = {
   id: FloorId;
