@@ -99,6 +99,12 @@ export function PolygonEditor() {
   const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const lower = file.name.toLowerCase();
+    if (lower.includes("2nd") || lower.includes("level2") || lower.includes("l2")) {
+      setFloorId("L2");
+    } else if (lower.includes("1st") || lower.includes("level1") || lower.includes("l1")) {
+      setFloorId("L1");
+    }
     const url = URL.createObjectURL(file);
     setImageUrl(url);
     const img = new Image();
@@ -493,8 +499,22 @@ export function PolygonEditor() {
                 key={i}
                 className="flex items-center justify-between gap-2 p-1 rounded hover:bg-neutral-200"
               >
-                <span className="font-mono truncate flex-1">{p.id}</span>
+                <button
+                  onClick={() => renamePoly(i)}
+                  className="font-mono truncate flex-1 text-left hover:underline cursor-pointer"
+                  title="Click to rename"
+                >
+                  {p.id}
+                </button>
                 <span className="text-neutral-500 text-[10px] uppercase">{p.type}</span>
+                <button
+                  onClick={() => renamePoly(i)}
+                  className="text-neutral-500 hover:text-neutral-800 text-xs"
+                  aria-label="Rename polygon"
+                  title="Rename"
+                >
+                  ✎
+                </button>
                 <button
                   onClick={() => deletePoly(i)}
                   className="text-red-600 text-base leading-none"
