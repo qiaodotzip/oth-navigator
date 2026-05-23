@@ -18,6 +18,16 @@ function inferType(id: string): PolyType {
   return "room";
 }
 
+const STORAGE_KEY = (fid: string) => `oth-polygon-editor:${fid}`;
+
+type Stored = {
+  polygons: Poly[];
+  widthM: number;
+  depthM: number;
+  imageDims: { w: number; h: number };
+  savedAt: number;
+};
+
 export function PolygonEditor() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageDims, setImageDims] = useState<{ w: number; h: number }>({ w: 1, h: 1 });
@@ -27,15 +37,64 @@ export function PolygonEditor() {
   const [widthM, setWidthM] = useState(210);
   const [depthM, setDepthM] = useState(130);
   const [view, setView] = useState({ x: 0, y: 0, w: 1, h: 1 });
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [restoredCount, setRestoredCount] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const panStart = useRef<{ cx: number; cy: number; vx: number; vy: number } | null>(null);
   const dragMoved = useRef(false);
+  const restoring = useRef(true);
 
   useEffect(() => {
     if (imageDims.w > 1 && imageDims.h > 1) {
       setView({ x: 0, y: 0, w: imageDims.w, h: imageDims.h });
     }
   }, [imageDims]);
+
+  useEffect(() => {
+    restoring.current = true;
+    const raw = localStorage.getItem(STORAGE_KEY(floorId));
+    if (raw) {
+      try {
+        const data = JSON.parse(raw) as Stored;
+        setPolygons(data.polygons || []);
+        if (typeof data.widthM === "number") setWidthM(data.widthM);
+        if (typeof data.depthM === "number") setDepthM(data.depthM);
+        if (data.imageDims && data.imageDims.w > 1) setImageDims(data.imageDims);
+        setRestoredCount((data.polygons || []).length);
+        setSavedAt(data.savedAt || null);
+      } catch (e) {
+        console.warn("[PolygonEditor] restore failed:", e);
+        setPolygons([]);
+        setRestoredCount(null);
+        setSavedAt(null);
+      }
+    } else {
+      setPolygons([]);
+      setRestoredCount(null);
+      setSavedAt(null);
+    }
+    setCurrentPoints([]);
+    Promise.resolve().then(() => {
+      restoring.current = false;
+    });
+  }, [floorId]);
+
+  useEffect(() => {
+    if (restoring.current) return;
+    const data: Stored = {
+      polygons,
+      widthM,
+      depthM,
+      imageDims,
+      savedAt: Date.now(),
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY(floorId), JSON.stringify(data));
+      setSavedAt(data.savedAt);
+    } catch (e) {
+      console.warn("[PolygonEditor] autosave failed:", e);
+    }
+  }, [polygons, widthM, depthM, imageDims, floorId]);
 
   const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -142,9 +201,12 @@ export function PolygonEditor() {
   const deletePoly = (i: number) =>
     setPolygons(prev => prev.filter((_, idx) => idx !== i));
   const clearAll = () => {
-    if (!window.confirm("Delete all polygons?")) return;
+    if (!window.confirm("Delete all polygons AND clear autosave for this floor?")) return;
     setPolygons([]);
     setCurrentPoints([]);
+    localStorage.removeItem(STORAGE_KEY(floorId));
+    setSavedAt(null);
+    setRestoredCount(null);
   };
 
   const exportJson = () => {
@@ -339,6 +401,16 @@ export function PolygonEditor() {
             />
           </label>
         </div>
+        {savedAt && (
+          <div className="mb-3 px-2 py-1.5 rounded bg-green-50 border border-green-200 text-xs text-green-800 flex items-center justify-between">
+            <span>
+              ✓ Auto-saved {new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {restoredCount !== null && restoredCount > 0 && (
+                <span className="ml-1 text-green-700">({restoredCount} restored)</span>
+              )}
+            </span>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2 mb-4">
           <label className="text-xs font-semibold text-neutral-700">
             Width (m)
