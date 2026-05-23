@@ -45,13 +45,25 @@ export type Floor = {
   details?: Detail[];
 };
 
+export type ServiceCategory =
+  | "government"
+  | "healthcare"
+  | "community"
+  | "retail"
+  | "lifestyle";
+
 export type Service = {
   id: string;
   nameEn: string;
   nameZh: string;
   providerName: string;
-  floorId: FloorId;
-  roomId: string;
+  category: ServiceCategory;
+  /** true iff on a modeled floor (L1/L2) with a roomId that maps to a polygon */
+  routable: boolean;
+  /** real human floor label for display, e.g. "L1".."L8" */
+  displayFloor: string;
+  floorId?: FloorId;
+  roomId?: string;
   counterIds?: string[];
   accessibility: {
     liftAccess: boolean;
@@ -107,4 +119,15 @@ export type PopularTimesEntry = {
   currentPopularity?: number;
   /** true when the curve is heuristic (category-based), not scraped from Google. */
   estimated?: boolean;
+};
+
+export type JourneyStop = {
+  serviceId: string;
+  order: number;
+  reason?: { en: string; zh: string };
+};
+
+export type Journey = {
+  id: string;
+  stops: JourneyStop[];
 };

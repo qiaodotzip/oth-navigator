@@ -7,7 +7,7 @@ import type {
   Service,
   Waypoint,
 } from "@/data/types";
-import { findPath, simplifyCollinear } from "./pathfinder";
+import { findPath, smoothPath } from "./pathfinder";
 
 // Default start when the user hasn't set a location: Town Square on L1.
 export const DEFAULT_START: { floorId: FloorId; point: Pt } = {
@@ -27,7 +27,9 @@ function polygonCenter(points: Pt[]): Pt {
 function legPath(from: Pt, to: Pt, floor: Floor, destRoom?: string): Pt[] {
   const path = findPath(from, to, floor, destRoom);
   if (!path || path.length < 2) return [from, to];
-  return simplifyCollinear(path);
+  // Line-of-sight smoothing keeps each segment wall-clean (unlike a purely
+  // geometric collinear simplify, which can cut corners through rooms).
+  return smoothPath(path, floor, destRoom);
 }
 
 /**
@@ -41,6 +43,7 @@ export function buildRoute(
   profile: AccessibilityProfile,
   floors: Floor[],
 ): RouteVariant | null {
+  if (!service.floorId) return null;
   const floorById = new Map(floors.map(f => [f.id, f]));
   const destFloor = floorById.get(service.floorId);
   if (!destFloor) return null;
