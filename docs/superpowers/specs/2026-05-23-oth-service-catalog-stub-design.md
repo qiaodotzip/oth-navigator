@@ -65,22 +65,40 @@ public/data/services.json        server/serviceCatalog.ts          src/data/load
 
 ## 5. Data shape
 
-Extend the existing `Service` type (in `src/data/types.ts`) with:
+Extend the existing `Service` type (in `src/data/types.ts`):
 
 ```ts
 export type ServiceCategory =
   | "government" | "healthcare" | "community" | "retail" | "lifestyle";
 
 export type Service = {
-  // ...existing fields unchanged...
-  category: ServiceCategory;
-  /** true when floor/room geometry is approximate (real floor not modeled). */
-  approxLocation?: boolean;
+  id: string;
+  nameEn: string;
+  nameZh: string;
+  providerName: string;
+  category: ServiceCategory;        // NEW (required)
+  routable: boolean;                // NEW: true iff on a modeled floor (L1/L2)
+                                    //      with a roomId that maps to a polygon
+  displayFloor: string;             // NEW: real human floor label, "L1".."L8"
+  floorId?: FloorId;                // NOW OPTIONAL: present iff routable
+  roomId?: string;                  // NOW OPTIONAL: present iff routable
+  counterIds?: string[];
+  accessibility: { liftAccess: boolean; stepFreeRoute: boolean; notes?: string };
+  sourceUrl: string;
+  iconKey: string;
 };
 ```
 
-No other field changes. `floorId`, `roomId`, `counterIds`, `accessibility`,
-`sourceUrl` already exist and already feed routing.
+Key change: `floorId`/`roomId` become **optional** because non-routable
+services live on unmodeled floors (L3–L8) where `FloorId` (only `"L1" | "L2"`)
+can't represent them and no polygon exists. `displayFloor` is the source of
+truth for *showing* a floor; `floorId` is only used by `buildRoute` and is set
+only when `routable` is true.
+
+`buildRoute` is called only for routable services. It already returns `null`
+when it can't resolve a floor, so optional `floorId` needs only light guarding.
+The UI renders a "coming soon" hint for `routable: false` services from
+`displayFloor` (e.g. EN *"On Level 4 — routing coming soon"*, ZH *"四楼 — 路线即将推出"*).
 
 ## 6. Endpoint contract
 
@@ -98,48 +116,57 @@ Empty filter = full catalog. Unknown category value = empty array (not an error)
 
 ## 7. Catalog contents
 
-All entries carry a real `sourceUrl`. Floors/units are real (web-sourced).
-Polygon mapping is ours; flagged `approxLocation: true` when the real floor isn't
-modeled. Representative set (final list compiled during implementation):
+All entries carry a real `sourceUrl`; floors/units are real (web-sourced). A
+service is **routable only if it sits on a modeled floor (L1/L2) and maps to a
+real polygon**. Everything on L3–L8 is catalogued honestly as `routable: false`
+with its real `displayFloor` and a "coming soon" hint — **no fake coordinates,
+no proxy placement.** Representative set (final list compiled during
+implementation):
 
-| Service | Category | Real location | Routable polygon | approx? |
+| Service | Category | Real floor | routable | roomId / status |
 |---|---|---|---|---|
-| ServiceSG Centre | government | L1 #01-21 | `L1-room-psc` | no |
-| HDB Tampines Branch | government | L1 #01-21 (in ServiceSG) | `L2-room-hdb-office` (existing demo) | flag |
-| CPF services (via ServiceSG) | government | L1 #01-21 | `L1-room-psc` | no |
-| Town Council | government | L1 | `L1-room-commercial` (proxy) | flag |
-| Tampines Family Medicine Clinic | healthcare | L3 #03-34 | L2 proxy (e.g. `L2-room-enrichment`) | flag |
-| Family Nexus @ OTH | healthcare/community | L3 | L2 proxy | flag |
-| Health screening | healthcare | L3 | L2 proxy | flag |
-| Community Club (OTH CC) | community | L1/L4 | `L1-room-community-space` **→ fix to a real polygon** | flag |
-| Family Service Centre (MSF) | community | L3 | L2 proxy | flag |
-| Active Ageing / Silver Zone | community | L4 | L2 proxy | flag |
-| NE CDC | community | L1 | `L1-room-commercial` (proxy) | flag |
-| Tampines Regional Library | community/lifestyle | L2 | `L2-room-library` | no |
+| ServiceSG Centre | government | L1 #01-21 | ✅ | `L1-room-psc` |
+| CPF services (via ServiceSG) | government | L1 #01-21 | ✅ | `L1-room-psc` |
+| HDB Branch Office | government | L2 (existing demo) | ✅ | `L2-room-hdb-office` |
+| Public Service Centre (existing) | government | L1 | ✅ | `L1-room-psc` |
+| Tampines Regional Library | community | L2 | ✅ | `L2-room-library` |
+| Festive Arts Theatre (existing) | lifestyle | L2 | ✅ | `L2-room-theatre` |
+| Hawker Centre (existing) | retail | L1 | ✅ | `L1-room-hawker` |
+| Tampines Family Medicine Clinic | healthcare | L3 #03-34 | ⏳ | "On Level 3 — soon" |
+| Family Nexus @ OTH | healthcare | L3 | ⏳ | "On Level 3 — soon" |
+| Health screening | healthcare | L3 | ⏳ | "On Level 3 — soon" |
+| Family Service Centre (MSF) | community | L3 | ⏳ | "On Level 3 — soon" |
+| Community Club (OTH CC) | community | **L4** | ⏳ | "On Level 4 — soon" |
+| Active Ageing / Silver Zone | community | L4 | ⏳ | "On Level 4 — soon" |
+| NE CDC | community | L4 | ⏳ | "On Level 4 — soon" |
 
-> **Bug fix folded in:** the existing `community-centre` entry references
-> `L1-room-community-space`, which is **not** a polygon in `L1.json`. `buildRoute`
-> silently falls back to the start point for it today. We re-map it to a real
-> polygon and add a validation test so this class of bug fails loudly.
+> **`community-centre` reclassified, not "fixed":** the existing entry mapped to
+> `L1-room-community-space` (no such polygon) because the CC is actually on **L4**,
+> which isn't modeled. We mark it `routable: false`, `displayFloor: "L4"`, drop
+> its `floorId`/`roomId`, and the UI shows "On Level 4 — routing coming soon."
+> Its demo tile stops silently routing to nowhere.
 
-Proxy placements spread destinations across L1 and L2 so multi-stop ordering has
-a real spatial mix to optimize over.
+**Consequence (accepted):** routable multi-stop destinations are the L1/L2 set
+above — government + library + theatre + hawker. Healthcare is entirely
+"coming soon" until L3 is modeled. The multi-stop *ordering* logic is still fully
+exercisable over the routable set.
 
 ## 8. Data sourcing
 
 Web search for the real OTH tenant list per category (names, floors, units,
 providers), same honest pattern as the popular-times work. Each catalog entry
 keeps `sourceUrl`. What's real: service existence, floor, unit, provider. What's
-ours: the routable polygon mapping (flagged when approximate).
+ours: only the routable-polygon mapping for the L1/L2 services. Nothing is
+proxy-placed or invented.
 
 ## 9. Error handling
 
 - Endpoint: if catalog JSON fails to parse → 500 `{ error }`, logged server-side.
 - Client `loadServices()`: on non-200 or network error → fall back to static
   `/data/services.json`. App never hard-fails on a missing server.
-- Catalog builder: a service whose `roomId` resolves to no polygon **and** is not
-  flagged `approxLocation` is a data error caught by a test (see §10), not a
-  silent runtime fallback.
+- Catalog invariant (enforced by test, not runtime): `routable === true` iff
+  `floorId` and `roomId` are present and `roomId` resolves to a polygon. A
+  routable service that doesn't resolve is a data error, not a silent fallback.
 
 ## 10. Testing
 
@@ -147,19 +174,25 @@ ours: the routable polygon mapping (flagged when approximate).
   - returns full catalog when no filter
   - `?category=government` returns only government services
   - comma-separated categories OR correctly
-  - `floor` + `category` AND correctly
+  - `floor` + `category` AND correctly (floor filter applies to routable services)
   - unknown category → `[]`
 - **Catalog integrity test** (`src/data/serviceCatalog.integrity.test.ts`):
-  - every catalog entry's `roomId` exists as a polygon in its `floorId` file,
-    **or** the entry is flagged `approxLocation: true`
+  - **routable** entries: `floorId` + `roomId` present, and `roomId` exists as a
+    polygon in that floor's JSON
+  - **non-routable** entries: `floorId`/`roomId` absent, `displayFloor` present
   - every entry has a non-empty `category` and `sourceUrl`
-  - This is the guard that catches the `community-space` bug.
+  - This guard catches the `community-space` class of mistake (claiming a route
+    to a polygon that doesn't exist).
 
 ## 11. Out of scope (explicit)
 
 Multi-stop ordering, route optimization (TSP/nearest-neighbor), journey-builder
-UI, changing the existing 6 demo tiles, live queue data, L3–L8 geometry. The
-catalog stops at "categorized, routable services with building info."
+UI, live queue data, L3–L8 geometry. The catalog stops at "categorized services
+with building info; routable ones carry a polygon, the rest say coming soon."
+
+The existing demo tiles are left as-is **except** `community-centre`, which
+becomes non-routable (real floor L4) and shows "coming soon" instead of its
+current silent route-to-nowhere.
 
 ## 12. Open questions
 
