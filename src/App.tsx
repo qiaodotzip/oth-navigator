@@ -15,6 +15,8 @@ import { useSpeechRecognition } from "@/ui/useSpeechRecognition";
 import type { NarrationSegment } from "@/data/types";
 import { WaypointEditor } from "@/dev/WaypointEditor";
 import { PolygonEditor } from "@/dev/PolygonEditor";
+
+const TTS_ENABLED = false;
 import { DetailEditor } from "@/dev/DetailEditor";
 import { SuccessCard } from "@/ui/SuccessCard";
 
@@ -95,8 +97,9 @@ export default function App() {
     }
     const text = language === "zh" ? seg.zh : seg.en;
     setNarrationText(text);
+    // TTS audio disabled for now — narration shows as text only.
     cancelAll();
-    enqueueSegments([seg], language, () => {});
+    if (TTS_ENABLED) enqueueSegments([seg], language, () => {});
   }, [activeRoute?.currentWaypointIndex, segments, language, activeRoute]);
 
   // Cleanup when route ends
