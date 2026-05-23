@@ -11,6 +11,7 @@ import { WANDER_LOOPS } from "@/agents/wanderLoops";
 import { useCounterLoadSimulator } from "@/agents/counterLoads";
 import { UserBlob } from "@/agents/UserBlob";
 import { GroundPlane } from "./GroundPlane";
+import { TIME_PRESETS } from "./timePresets";
 import type { Floor as FloorData } from "@/data/types";
 
 export function Scene() {
@@ -21,6 +22,7 @@ export function Scene() {
   const pickingLocation = useStore(s => s.pickingLocation);
   const setUserLocation = useStore(s => s.setUserLocation);
   const setPickingLocation = useStore(s => s.setPickingLocation);
+  const timeOfDay = useStore(s => s.timeOfDay);
 
   useCounterLoadSimulator();
 
@@ -34,16 +36,28 @@ export function Scene() {
     setPickingLocation(false);
   };
 
+  const preset = TIME_PRESETS[timeOfDay];
+  const groundW = active?.bounds.width ?? 210;
+  const groundD = active?.bounds.depth ?? 148;
+
   return (
     <Canvas shadows camera={{ position: [0, 180, 80], fov: 35 }}>
-      <ambientLight intensity={0.6} />
+      <color attach="background" args={[preset.bg]} />
+      <fog attach="fog" args={[preset.bg, preset.fog[0], preset.fog[1]]} />
+      <ambientLight color={preset.ambient.color} intensity={preset.ambient.intensity} />
+      <hemisphereLight
+        color={preset.hemi.sky}
+        groundColor={preset.hemi.ground}
+        intensity={preset.hemi.intensity}
+      />
       <directionalLight
-        position={[80, 200, 60]}
-        intensity={1}
+        position={preset.dir.pos}
+        color={preset.dir.color}
+        intensity={preset.dir.intensity}
         castShadow
         shadow-mapSize={[2048, 2048]}
       />
-      <GroundPlane />
+      <GroundPlane width={groundW} depth={groundD} color={preset.groundColor} />
       {active && <Floor data={active} />}
       {active && <FloorDetails floor={active} />}
       {active && showLabels && <PolygonLabels floor={active} />}

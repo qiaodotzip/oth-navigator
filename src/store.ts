@@ -17,6 +17,7 @@ type ActiveRoute = {
 };
 
 export type UserLocation = { floorId: FloorId; point: Pt };
+export type TimeOfDay = "morning" | "evening" | "night";
 
 type State = {
   language: Language;
@@ -32,6 +33,7 @@ type State = {
   showLabels: boolean;
   userLocation: UserLocation | null;
   pickingLocation: boolean;
+  timeOfDay: TimeOfDay;
 
   setLanguage: (l: Language) => void;
   setProfile: (p: AccessibilityProfile) => void;
@@ -46,6 +48,7 @@ type State = {
   toggleLabels: () => void;
   setUserLocation: (loc: UserLocation) => void;
   setPickingLocation: (v: boolean) => void;
+  cycleTimeOfDay: () => void;
 };
 
 export const useStore = create<State>(set => ({
@@ -62,6 +65,7 @@ export const useStore = create<State>(set => ({
   showLabels: true,
   userLocation: null,
   pickingLocation: false,
+  timeOfDay: "morning",
 
   setLanguage: l => set({ language: l }),
   setProfile: p => set({ profile: p }),
@@ -94,4 +98,13 @@ export const useStore = create<State>(set => ({
   toggleLabels: () => set(s => ({ showLabels: !s.showLabels })),
   setUserLocation: loc => set({ userLocation: loc, activeFloor: loc.floorId }),
   setPickingLocation: v => set({ pickingLocation: v }),
+  cycleTimeOfDay: () =>
+    set(s => ({
+      timeOfDay:
+        s.timeOfDay === "morning"
+          ? "evening"
+          : s.timeOfDay === "evening"
+          ? "night"
+          : "morning",
+    })),
 }));

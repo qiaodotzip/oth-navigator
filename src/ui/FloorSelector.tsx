@@ -1,7 +1,13 @@
 import { useStore } from "@/store";
-import { Tag, ArrowsClockwise } from "phosphor-react";
+import { Tag, ArrowsClockwise, Sun, SunHorizon, MoonStars } from "phosphor-react";
 
 const FLOORS = ["L1", "L2"] as const;
+
+const TIME_ICON = {
+  morning: { Icon: Sun, label: "Morning" },
+  evening: { Icon: SunHorizon, label: "Evening" },
+  night: { Icon: MoonStars, label: "Night" },
+} as const;
 
 export function FloorSelector() {
   const activeFloor = useStore(s => s.activeFloor);
@@ -10,6 +16,9 @@ export function FloorSelector() {
   const showLabels = useStore(s => s.showLabels);
   const toggleInspectMode = useStore(s => s.toggleInspectMode);
   const toggleLabels = useStore(s => s.toggleLabels);
+  const timeOfDay = useStore(s => s.timeOfDay);
+  const cycleTimeOfDay = useStore(s => s.cycleTimeOfDay);
+  const TimeIcon = TIME_ICON[timeOfDay].Icon;
 
   return (
     <div className="absolute right-2 top-2 z-30 flex flex-col gap-1">
@@ -45,6 +54,14 @@ export function FloorSelector() {
         }`}
       >
         <Tag size={18} weight="bold" />
+      </button>
+      <button
+        onClick={cycleTimeOfDay}
+        title={`Time: ${TIME_ICON[timeOfDay].label} (tap to change)`}
+        aria-label="Cycle time of day"
+        className="w-10 h-10 rounded-full grid place-items-center bg-white/80 text-oth-ink"
+      >
+        <TimeIcon size={18} weight="bold" />
       </button>
     </div>
   );
