@@ -72,7 +72,8 @@ export function DetailEditor() {
   const [floorId, setFloorId] = useState<"L1" | "L2">("L1");
   const [widthM, setWidthM] = useState(210);
   const [depthM, setDepthM] = useState(130);
-  const [polygons, setPolygons] = useState<Array<{ id: string; points: Pt[] }>>([]);
+  const [overlayMeters, setOverlayMeters] = useState<Array<{ id: string; points: Pt[] }>>([]);
+  const [overlaySource, setOverlaySource] = useState<"json" | "localStorage" | "none">("none");
   const [details, setDetails] = useState<Detail[]>([]);
   const [tool, setTool] = useState<Tool>("select");
   const [firstCorner, setFirstCorner] = useState<Pt | null>(null);
@@ -92,20 +93,58 @@ export function DetailEditor() {
 
   useEffect(() => {
     restoring.current = true;
-    const polyRaw = localStorage.getItem(POLY_STORAGE_KEY(floorId));
-    if (polyRaw) {
-      try {
-        const pdata = JSON.parse(polyRaw) as PolyStored;
-        setPolygons((pdata.polygons || []).map(p => ({ id: p.id, points: p.points })));
-        if (typeof pdata.widthM === "number") setWidthM(pdata.widthM);
-        if (typeof pdata.depthM === "number") setDepthM(pdata.depthM);
-        if (pdata.imageDims && pdata.imageDims.w > 1) setImageDims(pdata.imageDims);
-      } catch (e) {
-        console.warn("[DetailEditor] polygon overlay load failed:", e);
-      }
-    } else {
-      setPolygons([]);
-    }
+    let cancelled = false;
+    fetch(`/data/floors/${floorId}.json`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled) return;
+        if (data && Array.isArray(data.polygons)) {
+          setOverlayMeters(
+            data.polygons
+              .filter((p: { id?: string; points?: Pt[] }) => Array.isArray(p?.points))
+              .map((p: { id: string; points: Pt[] }) => ({ id: p.id, points: p.points })),
+          );
+          setOverlaySource("json");
+          if (typeof data.bounds?.width === "number") setWidthM(data.bounds.width);
+          if (typeof data.bounds?.depth === "number") setDepthM(data.bounds.depth);
+          return;
+        }
+        // Fall back to polygon-editor localStorage (in pixels — convert to meters)
+        const polyRaw = localStorage.getItem(POLY_STORAGE_KEY(floorId));
+        if (polyRaw) {
+          try {
+            const pdata = JSON.parse(polyRaw) as PolyStored;
+            const w = typeof pdata.widthM === "number" ? pdata.widthM : widthM;
+            const d = typeof pdata.depthM === "number" ? pdata.depthM : depthM;
+            const idim = pdata.imageDims && pdata.imageDims.w > 1 ? pdata.imageDims : imageDims;
+            const sx = w / idim.w;
+            const sy = d / idim.h;
+            setOverlayMeters(
+              (pdata.polygons || []).map(p => ({
+                id: p.id,
+                points: p.points.map(([x, y]) => [x * sx, y * sy] as Pt),
+              })),
+            );
+            setOverlaySource("localStorage");
+            if (typeof pdata.widthM === "number") setWidthM(pdata.widthM);
+            if (typeof pdata.depthM === "number") setDepthM(pdata.depthM);
+          } catch (e) {
+            console.warn("[DetailEditor] polygon overlay load failed:", e);
+            setOverlayMeters([]);
+            setOverlaySource("none");
+          }
+        } else {
+          setOverlayMeters([]);
+          setOverlaySource("none");
+        }
+      })
+      .catch(e => {
+        if (!cancelled) {
+          console.warn("[DetailEditor] floor JSON fetch failed:", e);
+          setOverlayMeters([]);
+          setOverlaySource("none");
+        }
+      });
     const raw = localStorage.getItem(STORAGE_KEY(floorId));
     if (raw) {
       try {
@@ -125,6 +164,9 @@ export function DetailEditor() {
     Promise.resolve().then(() => {
       restoring.current = false;
     });
+    return () => {
+      cancelled = true;
+    };
   }, [floorId]);
 
   useEffect(() => {
@@ -326,30 +368,32 @@ export function DetailEditor() {
 
         const sx = imageDims.w / fileWidth;
         const sy = imageDims.h / fileDepth;
-        const conv = ([x, y]: Pt): Pt => [x * sx, y * sy];
+        const convToPixels = ([x, y]: Pt): Pt => [x * sx, y * sy];
 
         let didSomething = false;
 
         if (Array.isArray(data.polygons)) {
+          // File polygons are in meters; store overlay in meters
           const polys = data.polygons
             .filter((p: { id?: string; points?: Pt[] }) => Array.isArray(p?.points))
             .map((p: { id: string; points: Pt[] }) => ({
               id: p.id,
-              points: p.points.map(conv) as Pt[],
+              points: p.points as Pt[],
             }));
-          setPolygons(polys);
+          setOverlayMeters(polys);
+          setOverlaySource("json");
           didSomething = true;
         }
 
         if (Array.isArray(data.details)) {
           const loaded: Detail[] = data.details.map((d: Detail) => {
             if (d.type === "round-table") {
-              return { ...d, id: d.id ?? uid(), point: conv(d.point) };
+              return { ...d, id: d.id ?? uid(), point: convToPixels(d.point) };
             }
             return {
               ...d,
               id: d.id ?? uid(),
-              rect: [conv(d.rect[0]), conv(d.rect[1])] as [Pt, Pt],
+              rect: [convToPixels(d.rect[0]), convToPixels(d.rect[1])] as [Pt, Pt],
             };
           });
           setDetails(loaded);
@@ -395,17 +439,21 @@ export function DetailEditor() {
               preserveAspectRatio="xMidYMid meet"
             >
               <image href={imageUrl} x={0} y={0} width={imageDims.w} height={imageDims.h} />
-              {polygons.map(p => (
-                <polygon
-                  key={p.id}
-                  points={p.points.map(([x, y]) => `${x},${y}`).join(" ")}
-                  fill="rgba(0,102,179,0.05)"
-                  stroke="rgba(0,102,179,0.45)"
-                  strokeWidth={strokeBase * 0.6}
-                  strokeDasharray={`${strokeBase * 2},${strokeBase * 2}`}
-                  pointerEvents="none"
-                />
-              ))}
+              {overlayMeters.map(p => {
+                const sx = imageDims.w / widthM;
+                const sy = imageDims.h / depthM;
+                return (
+                  <polygon
+                    key={p.id}
+                    points={p.points.map(([x, y]) => `${x * sx},${y * sy}`).join(" ")}
+                    fill="rgba(0,102,179,0.05)"
+                    stroke="rgba(0,102,179,0.45)"
+                    strokeWidth={strokeBase * 0.6}
+                    strokeDasharray={`${strokeBase * 2},${strokeBase * 2}`}
+                    pointerEvents="none"
+                  />
+                );
+              })}
               {details.map(d => (
                 <DetailShape
                   key={d.id}
@@ -482,7 +530,7 @@ export function DetailEditor() {
           </label>
         </div>
         {savedAt && (
-          <div className="mb-3 px-2 py-1.5 rounded bg-green-50 border border-green-200 text-xs text-green-800">
+          <div className="mb-2 px-2 py-1.5 rounded bg-green-50 border border-green-200 text-xs text-green-800">
             ✓ Auto-saved{" "}
             {new Date(savedAt).toLocaleTimeString([], {
               hour: "2-digit",
@@ -491,6 +539,16 @@ export function DetailEditor() {
             ({details.length} details)
           </div>
         )}
+        <div className="mb-3 px-2 py-1.5 rounded bg-neutral-100 border border-neutral-200 text-[11px] text-neutral-700">
+          Overlay source:{" "}
+          <span className="font-semibold">
+            {overlaySource === "json"
+              ? `${floorId}.json (${overlayMeters.length} polygons)`
+              : overlaySource === "localStorage"
+                ? `polygon-editor localStorage (${overlayMeters.length} polygons)`
+                : "none — no polygons found"}
+          </span>
+        </div>
         <div className="grid grid-cols-2 gap-2 mb-4">
           <label className="text-xs font-semibold text-neutral-700">
             Width (m)

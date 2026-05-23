@@ -1,7 +1,9 @@
 import { useStore } from "@/store";
-import { Microphone, PersonSimpleWalk, GlobeHemisphereWest } from "phosphor-react";
+import { PersonSimpleWalk, GlobeHemisphereWest } from "phosphor-react";
 
-export function TopBar({ onVoiceTap }: { onVoiceTap: () => void }) {
+const VOICE_INPUT_ENABLED = false;
+
+export function TopBar({ onVoiceTap: _onVoiceTap }: { onVoiceTap: () => void }) {
   const language = useStore(s => s.language);
   const profile = useStore(s => s.profile);
   const setLanguage = useStore(s => s.setLanguage);
@@ -26,13 +28,7 @@ export function TopBar({ onVoiceTap }: { onVoiceTap: () => void }) {
         <PersonSimpleWalk size={20} weight="bold" />
         <span className="text-xs font-semibold">Step-free</span>
       </button>
-      <button
-        onClick={onVoiceTap}
-        className="p-2 rounded-full bg-white/15"
-        aria-label="Voice input"
-      >
-        <Microphone size={22} weight="bold" />
-      </button>
+      {VOICE_INPUT_ENABLED ? null : <span aria-hidden="true" className="w-9" />}
     </div>
   );
 }

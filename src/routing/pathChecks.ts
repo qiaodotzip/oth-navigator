@@ -80,7 +80,7 @@ export function checkSegment(
   floor: Floor,
   destinationRoomId?: string,
 ): BlockReport {
-  const SAMPLES = 30;
+  const SAMPLES = 80;
   const blocking = new Set<string>();
   for (let i = 0; i <= SAMPLES; i++) {
     const t = i / SAMPLES;

@@ -46,7 +46,9 @@ export default function App() {
     loadDataBundle()
       .then(b => {
         setBundle(b);
-        prewarmAll(b.services, b.routes);
+        // prewarmAll disabled to save OpenAI tokens — narration fetched on-demand
+        // when a service tile is tapped (and cached for subsequent taps).
+        void prewarmAll;
       })
       .catch(e => console.warn("[App] loadDataBundle failed:", e));
   }, [setBundle]);
