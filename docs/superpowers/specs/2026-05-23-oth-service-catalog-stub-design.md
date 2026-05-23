@@ -184,19 +184,82 @@ proxy-placed or invented.
   - This guard catches the `community-space` class of mistake (claiming a route
     to a polygon that doesn't exist).
 
-## 11. Out of scope (explicit)
+## 11. Demo journey harness
 
-Multi-stop ordering, route optimization (TSP/nearest-neighbor), journey-builder
-UI, live queue data, L3–L8 geometry. The catalog stops at "categorized services
-with building info; routable ones carry a polygon, the rest say coming soon."
+A button-activated demo that simulates the teammates' backend handing us a
+**pre-ordered multi-stop journey**, which the frontend then walks **stop by
+stop**. This proves the multi-destination consumption flow end-to-end against
+the catalog, before the real backend exists. It does **not** order or optimize —
+it plays back the order the mock "backend" gives.
+
+### Mock endpoint
+```
+GET /api/demo-journey
+→ 200  Journey
+```
+Returns a hardcoded, ordered journey built from **routable** catalog services,
+e.g. ServiceSG (L1) → Library (L2) → Festive Arts Theatre (L2). Lives in
+`server/index.ts`, sourced from a small constant in `server/serviceCatalog.ts`.
+
+### Types (in `src/data/types.ts`)
+```ts
+export type JourneyStop = {
+  serviceId: string;
+  order: number;        // 0-based position in the journey
+  reason?: { en: string; zh: string };  // why this stop (shown in the panel)
+};
+export type Journey = {
+  id: string;
+  stops: JourneyStop[];
+};
+```
+
+### Store additions (`src/store.ts`)
+```ts
+activeJourney: { journey: Journey; currentStopIndex: number } | null;
+startJourney: (j: Journey) => void;     // sets index 0, builds route to stop 0
+advanceJourney: () => void;             // index+1, builds route to next stop
+endJourney: () => void;
+```
+
+### Flow (full journey, manual advance — chosen)
+1. User taps **"Demo journey"** button (in `PromptPanel`).
+2. Frontend `fetch("/api/demo-journey")` → full ordered `Journey`.
+3. `startJourney` resolves stop 0's service from the catalog, calls the existing
+   `buildRoute(start, service, profile, floors)`, and starts that route.
+4. The existing per-waypoint **Next** mechanic walks the user to the stop.
+5. On arrival (route's last waypoint), the panel shows **"Next stop →"** instead
+   of the success dismiss. Tapping it calls `advanceJourney`: build a route from
+   the just-reached stop to the next stop's service, start it.
+6. After the final stop, show a journey-complete state; `endJourney` clears it.
+7. A small progress indicator: **"Stop 2 of 3 · Library"**.
+
+### Reuse, not rebuild
+- Per-stop pathfinding = existing `buildRoute` + A*. No new routing math.
+- Per-waypoint walking = existing `advanceRoute`/Next. The journey layer sits
+  *above* the single-route layer and just feeds it the next destination.
+- Start of stop *n+1* = the location of stop *n* (its arrival waypoint), so legs
+  chain naturally.
+
+### Out of scope for the harness
+Optimal ordering (the mock journey is hand-ordered), editing the journey in-app,
+persisting journeys. The harness is a playback of a backend-supplied sequence.
+
+## 12. Out of scope (overall)
+
+Multi-stop **ordering / optimization** (TSP/nearest-neighbor — that's our
+separate work; the harness only plays a given order), journey-*builder* UI, live
+queue data, L3–L8 geometry. The catalog stops at "categorized services with
+building info; routable ones carry a polygon, the rest say coming soon."
 
 The existing demo tiles are left as-is **except** `community-centre`, which
 becomes non-routable (real floor L4) and shows "coming soon" instead of its
 current silent route-to-nowhere.
 
-## 12. Open questions
+## 13. Open questions
 
 1. Final exhaustive service list — compiled during implementation via web search;
    the table in §7 is the representative seed.
-2. When teammates publish their real contract, confirm field names match (esp.
-   how they express location) so the swap stays zero-change.
+2. When teammates publish their real contract, confirm field names match — both
+   the service catalog and the `Journey`/`JourneyStop` shape — so the swap stays
+   zero-change.
