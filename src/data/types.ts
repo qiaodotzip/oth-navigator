@@ -29,7 +29,8 @@ export type Detail =
   | { id: string; type: "lift-block"; rect: [Pt, Pt]; facing: Facing }
   | { id: string; type: "staircase"; rect: [Pt, Pt]; facing: Facing }
   | { id: string; type: "stage"; rect: [Pt, Pt]; facing: Facing }
-  | { id: string; type: "seating-block"; rect: [Pt, Pt]; facing: Facing };
+  | { id: string; type: "seating-block"; rect: [Pt, Pt]; facing: Facing }
+  | { id: string; type: "barrier"; rect: [Pt, Pt] };
 
 export type Floor = {
   id: FloorId;

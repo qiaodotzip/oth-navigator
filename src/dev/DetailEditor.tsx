@@ -16,22 +16,12 @@ type Tool =
   | "lift-block"
   | "staircase"
   | "stage"
-  | "seating-block";
-
-// Rect tools whose detail carries a `facing` direction.
-const FACING_TOOLS = new Set<Tool>([
-  "stall-row",
-  "escalator-up",
-  "escalator-down",
-  "lift-block",
-  "staircase",
-  "stage",
-  "seating-block",
-]);
+  | "seating-block"
+  | "barrier";
 
 const TOOL_CATEGORIES: { name: string; tools: Tool[] }[] = [
   { name: "Hawker", tools: ["stall-row", "stall-island", "bench-rows", "round-table", "cleaning"] },
-  { name: "Standard", tools: ["landscape-island", "greenery-row", "toilet"] },
+  { name: "Standard", tools: ["landscape-island", "greenery-row", "toilet", "barrier"] },
   { name: "Circulation", tools: ["escalator-up", "escalator-down", "lift-block", "staircase"] },
   { name: "Stage", tools: ["stage", "seating-block"] },
 ];
@@ -70,6 +60,7 @@ const TOOL_LABELS: Record<Tool, string> = {
   staircase: "Staircase ↑",
   stage: "Stage",
   "seating-block": "Seating block",
+  barrier: "Barrier (blocks routing)",
 };
 
 const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
@@ -87,6 +78,7 @@ const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
   staircase: "#B8BEC6",
   stage: "#7E57C2",
   "seating-block": "#90A4AE",
+  barrier: "#B0202A",
 };
 
 const FACING_ARROW: Record<Facing, [number, number]> = {
@@ -117,6 +109,7 @@ export function DetailEditor() {
   const [tool, setTool] = useState<Tool>("select");
   const [firstCorner, setFirstCorner] = useState<Pt | null>(null);
   const [hoverPoint, setHoverPoint] = useState<Pt | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState({ x: 0, y: 0, w: 1, h: 1 });
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -200,6 +193,7 @@ export function DetailEditor() {
     }
     setFirstCorner(null);
     setHoverPoint(null);
+    setSelectedId(null);
     Promise.resolve().then(() => {
       restoring.current = false;
     });
@@ -343,6 +337,9 @@ export function DetailEditor() {
         case "seating-block":
           newDetail = { id, type: "seating-block", rect: r, facing: "S" };
           break;
+        case "barrier":
+          newDetail = { id, type: "barrier", rect: r };
+          break;
         default:
           newDetail = { id, type: "bench-rows", rect: r };
       }
@@ -384,8 +381,10 @@ export function DetailEditor() {
     setHoverPoint(null);
   };
 
-  const deleteDetail = (id: string) =>
+  const deleteDetail = (id: string) => {
     setDetails(prev => prev.filter(d => d.id !== id));
+    setSelectedId(cur => (cur === id ? null : cur));
+  };
 
   const rotateFacing = (id: string) =>
     setDetails(prev =>
@@ -506,19 +505,35 @@ export function DetailEditor() {
               preserveAspectRatio="xMidYMid meet"
             >
               <image href={imageUrl} x={0} y={0} width={imageDims.w} height={imageDims.h} />
-              {overlayMeters.map(p => {
+              {overlayMeters.map((p, pi) => {
                 const sx = imageDims.w / widthM;
                 const sy = imageDims.h / depthM;
+                const cx = (p.points.reduce((a, [x]) => a + x, 0) / p.points.length) * sx;
+                const cy = (p.points.reduce((a, [, y]) => a + y, 0) / p.points.length) * sy;
+                const tag = p.id.replace(`${floorId}-`, "");
                 return (
-                  <polygon
-                    key={p.id}
-                    points={p.points.map(([x, y]) => `${x * sx},${y * sy}`).join(" ")}
-                    fill="rgba(0,102,179,0.05)"
-                    stroke="rgba(0,102,179,0.45)"
-                    strokeWidth={strokeBase * 0.6}
-                    strokeDasharray={`${strokeBase * 2},${strokeBase * 2}`}
-                    pointerEvents="none"
-                  />
+                  <g key={`${p.id}-${pi}`} pointerEvents="none">
+                    <polygon
+                      points={p.points.map(([x, y]) => `${x * sx},${y * sy}`).join(" ")}
+                      fill="rgba(0,102,179,0.05)"
+                      stroke="rgba(0,102,179,0.45)"
+                      strokeWidth={strokeBase * 0.6}
+                      strokeDasharray={`${strokeBase * 2},${strokeBase * 2}`}
+                    />
+                    <text
+                      x={cx}
+                      y={cy}
+                      fontSize={fontBase * 0.9}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill="#0066B3"
+                      fontFamily="system-ui"
+                      fontWeight={600}
+                      opacity={0.75}
+                    >
+                      {tag}
+                    </text>
+                  </g>
                 );
               })}
               {details.map(d => (
@@ -527,6 +542,9 @@ export function DetailEditor() {
                   detail={d}
                   strokeBase={strokeBase}
                   fontBase={fontBase}
+                  selected={d.id === selectedId}
+                  selectable={tool === "select"}
+                  onSelect={() => setSelectedId(prev => (prev === d.id ? null : d.id))}
                 />
               ))}
               {firstCorner && hoverPoint && tool !== "select" && tool !== "round-table" && (
@@ -549,6 +567,9 @@ export function DetailEditor() {
                 <span className="font-semibold">{TOOL_LABELS[tool]}</span>
               </div>
               <div>scroll = zoom · shift+drag = pan · ESC = cancel</div>
+              {tool === "select" && (
+                <div className="text-pink-700">Click a detail to select / highlight it</div>
+              )}
               {firstCorner && (
                 <div className="text-orange-700">Click second corner to finish</div>
               )}
@@ -559,6 +580,36 @@ export function DetailEditor() {
             >
               Reset zoom
             </button>
+            {(() => {
+              const sel = details.find(d => d.id === selectedId);
+              if (!sel) return null;
+              return (
+                <div className="absolute top-3 right-3 bg-white rounded-lg shadow-lg px-3 py-2 text-xs flex items-center gap-3 border border-pink-300">
+                  <span className="font-mono uppercase">{sel.type}</span>
+                  {"facing" in sel && (
+                    <button
+                      onClick={() => rotateFacing(sel.id)}
+                      className="px-1.5 py-0.5 rounded bg-neutral-200 hover:bg-neutral-300 font-mono"
+                      title="Cycle facing N/E/S/W"
+                    >
+                      {sel.facing}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => deleteDetail(sel.id)}
+                    className="px-2 py-0.5 rounded bg-red-600 text-white font-semibold"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => setSelectedId(null)}
+                    className="text-neutral-500 hover:text-neutral-800"
+                  >
+                    Deselect
+                  </button>
+                </div>
+              );
+            })()}
           </>
         ) : (
           <div className="grid place-items-center h-full text-neutral-500">
@@ -639,28 +690,52 @@ export function DetailEditor() {
 
         <div className="mb-4">
           <h3 className="font-semibold text-sm mb-2">Tool</h3>
-          <div className="grid grid-cols-2 gap-1.5">
-            {(Object.keys(TOOL_LABELS) as Tool[]).map(t => (
-              <button
-                key={t}
-                onClick={() => {
-                  setTool(t);
-                  cancelCurrent();
-                }}
-                className={`px-2 py-1.5 rounded text-xs font-semibold border ${
-                  tool === t
-                    ? "bg-oth-primary text-white border-oth-primary"
-                    : "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100"
-                }`}
-              >
-                {TOOL_LABELS[t]}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={() => {
+              setTool("select");
+              cancelCurrent();
+            }}
+            className={`w-full mb-2 px-2 py-1.5 rounded text-xs font-semibold border ${
+              tool === "select"
+                ? "bg-oth-primary text-white border-oth-primary"
+                : "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100"
+            }`}
+          >
+            Select
+          </button>
+          {TOOL_CATEGORIES.map(cat => (
+            <div key={cat.name} className="mb-2">
+              <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-1">
+                {cat.name}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {cat.tools.map(t => (
+                  <button
+                    key={t}
+                    onClick={() => {
+                      setTool(t);
+                      cancelCurrent();
+                    }}
+                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs font-semibold border text-left ${
+                      tool === t
+                        ? "bg-oth-primary text-white border-oth-primary"
+                        : "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100"
+                    }`}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                      style={{ backgroundColor: TOOL_COLORS[t as Exclude<Tool, "select">] }}
+                    />
+                    <span className="truncate">{TOOL_LABELS[t]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
           {firstCorner && (
             <button
               onClick={cancelCurrent}
-              className="mt-2 w-full px-2 py-1 rounded bg-neutral-200 text-xs"
+              className="mt-1 w-full px-2 py-1 rounded bg-neutral-200 text-xs"
             >
               Cancel current rectangle
             </button>
@@ -678,7 +753,11 @@ export function DetailEditor() {
             {details.map(d => (
               <li
                 key={d.id}
-                className="flex items-center gap-2 p-1 rounded hover:bg-neutral-200"
+                className={`flex items-center gap-2 p-1 rounded ${
+                  d.id === selectedId
+                    ? "bg-pink-100 ring-1 ring-pink-400"
+                    : "hover:bg-neutral-200"
+                }`}
               >
                 <span
                   className="w-3 h-3 rounded-sm flex-shrink-0"
@@ -689,7 +768,13 @@ export function DetailEditor() {
                         : TOOL_COLORS[d.type],
                   }}
                 />
-                <span className="font-mono text-[10px] uppercase flex-1">{d.type}</span>
+                <button
+                  onClick={() => setSelectedId(prev => (prev === d.id ? null : d.id))}
+                  className="font-mono text-[10px] uppercase flex-1 text-left cursor-pointer"
+                  title="Click to select/highlight on map"
+                >
+                  {d.type}
+                </button>
                 {"facing" in d && (
                   <button
                     onClick={() => rotateFacing(d.id)}
@@ -772,20 +857,33 @@ function DetailShape({
   detail,
   strokeBase,
   fontBase,
+  selected,
+  selectable,
+  onSelect,
 }: {
   detail: Detail;
   strokeBase: number;
   fontBase: number;
+  selected: boolean;
+  selectable: boolean;
+  onSelect: () => void;
 }) {
+  const events = selectable ? "auto" : "none";
+  const handleClick = (e: MouseEvent<SVGElement>) => {
+    if (!selectable || e.shiftKey) return;
+    e.stopPropagation();
+    onSelect();
+  };
+  const HILITE = "#E91E63";
   if (detail.type === "round-table") {
     const [x, y] = detail.point;
     return (
-      <g pointerEvents="none">
+      <g pointerEvents={events} onClick={handleClick} style={{ cursor: selectable ? "pointer" : "default" }}>
         <circle
           cx={x}
           cy={y}
-          r={Math.max(3, strokeBase * 2)}
-          fill={TOOL_COLORS["round-table"]}
+          r={Math.max(3, strokeBase * 2) * (selected ? 1.6 : 1)}
+          fill={selected ? HILITE : TOOL_COLORS["round-table"]}
           stroke="#fff"
           strokeWidth={strokeBase * 0.5}
         />
@@ -800,17 +898,17 @@ function DetailShape({
   const color = TOOL_COLORS[detail.type];
   const horizontal = w >= h;
   return (
-    <g pointerEvents="none">
+    <g pointerEvents={events} onClick={handleClick} style={{ cursor: selectable ? "pointer" : "default" }}>
       <rect
         x={minX}
         y={minY}
         width={w}
         height={h}
-        fill={`${color}30`}
-        stroke={color}
-        strokeWidth={strokeBase}
+        fill={selected ? `${HILITE}45` : `${color}30`}
+        stroke={selected ? HILITE : color}
+        strokeWidth={selected ? strokeBase * 2 : strokeBase}
       />
-      {detail.type === "stall-row" && (
+      {"facing" in detail && (
         <FacingArrow
           cx={minX + w / 2}
           cy={minY + h / 2}

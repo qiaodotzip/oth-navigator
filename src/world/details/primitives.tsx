@@ -337,23 +337,41 @@ export function PalmTreeMesh({
   position: [number, number, number];
   scale?: number;
 }) {
+  const N = 9;
+  const crownY = 3.4;
   return (
     <group position={position} scale={scale}>
-      <mesh position={[0, 1.5, 0]} castShadow>
-        <cylinderGeometry args={[0.13, 0.2, 3.0, 7]} />
+      <mesh position={[0, 1.7, 0]} castShadow>
+        <cylinderGeometry args={[0.1, 0.18, 3.4, 7]} />
         <meshStandardMaterial color={TRUNK_COLOR} flatShading />
       </mesh>
-      {Array.from({ length: 7 }).map((_, i) => {
-        const a = (i / 7) * Math.PI * 2;
+      <mesh position={[0, crownY, 0]} castShadow>
+        <icosahedronGeometry args={[0.22, 0]} />
+        <meshStandardMaterial color={FROND_COLOR} flatShading />
+      </mesh>
+      {/* drooping fronds radiating from the crown */}
+      {Array.from({ length: N }).map((_, i) => {
+        const a = (i / N) * Math.PI * 2;
+        return (
+          <group key={i} position={[0, crownY, 0]} rotation={[0, a, 0]}>
+            <mesh position={[0.65, -0.12, 0]} rotation={[0, 0, -0.55]} castShadow>
+              <boxGeometry args={[1.4, 0.05, 0.3]} />
+              <meshStandardMaterial color={i % 2 ? FROND_COLOR : "#4F8A40"} flatShading />
+            </mesh>
+          </group>
+        );
+      })}
+      {/* coconuts */}
+      {[0, 1, 2].map(i => {
+        const a = (i / 3) * Math.PI * 2;
         return (
           <mesh
-            key={i}
-            position={[Math.cos(a) * 0.55, 3.0, Math.sin(a) * 0.55]}
-            rotation={[0.6, -a, 0]}
+            key={`c${i}`}
+            position={[Math.cos(a) * 0.18, crownY - 0.1, Math.sin(a) * 0.18]}
             castShadow
           >
-            <coneGeometry args={[0.16, 1.7, 4]} />
-            <meshStandardMaterial color={FROND_COLOR} flatShading />
+            <sphereGeometry args={[0.1, 8, 8]} />
+            <meshStandardMaterial color="#6B4A2A" />
           </mesh>
         );
       })}
@@ -453,26 +471,30 @@ export function EscalatorMesh({
   rotY: number;
   up: boolean;
 }) {
-  // Local: travels along +z. "up" => high end at +z; "down" => low end at +z.
+  // You board at the -z (near) end at floor level and travel toward +z.
+  //   up   => far (+z) end RISES to +rise (climbs to the floor above).
+  //   down => far (+z) end DESCENDS to -rise (drops to the floor below).
   const run = depth;
   const rise = ESC_RISE;
   const rampLen = Math.hypot(run, rise);
   const incline = Math.atan2(rise, run);
-  const tilt = up ? -incline : incline;
+  const farY = up ? rise : -rise; // y of the far (+z) end
+  const centerY = farY / 2;
+  const tilt = up ? -incline : incline; // rotX: tilts the +z end up (up) or down (down)
   const rampW = Math.min(width, 2.2);
   const color = up ? ESC_UP_COLOR : ESC_DOWN_COLOR;
   const nSteps = Math.max(4, Math.round(run / 0.7));
   return (
     <group position={position} rotation={[0, rotY, 0]}>
-      <mesh position={[0, rise / 2, 0]} rotation={[tilt, 0, 0]} castShadow receiveShadow>
+      <mesh position={[0, centerY, 0]} rotation={[tilt, 0, 0]} castShadow receiveShadow>
         <boxGeometry args={[rampW, 0.18, rampLen]} />
         <meshStandardMaterial color={color} />
       </mesh>
-      {/* step ridges */}
+      {/* step ridges, from floor level (-z) toward the far end */}
       {Array.from({ length: nSteps }).map((_, i) => {
-        const t = (i + 0.5) / nSteps; // 0..1 from -z to +z
+        const t = (i + 0.5) / nSteps; // 0 at -z (floor) .. 1 at +z (far)
         const z = (t - 0.5) * run;
-        const y = (up ? t : 1 - t) * rise + 0.12;
+        const y = t * farY + 0.12 * Math.cos(tilt);
         return (
           <mesh key={i} position={[0, y, z]} rotation={[tilt, 0, 0]}>
             <boxGeometry args={[rampW - 0.1, 0.06, 0.12]} />
@@ -482,13 +504,16 @@ export function EscalatorMesh({
       })}
       {/* side rails */}
       {[rampW / 2 + 0.08, -rampW / 2 - 0.08].map((x, i) => (
-        <mesh key={i} position={[x, rise / 2 + 0.5, 0]} rotation={[tilt, 0, 0]} castShadow>
+        <mesh key={i} position={[x, centerY + 0.5, 0]} rotation={[tilt, 0, 0]} castShadow>
           <boxGeometry args={[0.1, 0.5, rampLen]} />
           <meshStandardMaterial color={ESC_RAIL_COLOR} />
         </mesh>
       ))}
-      {/* direction arrow at the +z (travel) end */}
-      <mesh position={[0, (up ? rise : 0) + 0.4, run / 2 + 0.4]} rotation={[Math.PI / 2, 0, 0]}>
+      {/* direction arrow at the boarding (-z) end, angled up/down along travel */}
+      <mesh
+        position={[0, 0.6, -run / 2 - 0.2]}
+        rotation={[up ? Math.PI / 2 - incline : Math.PI / 2 + incline, 0, 0]}
+      >
         <coneGeometry args={[0.5, 1.0, 4]} />
         <meshStandardMaterial color={color} />
       </mesh>

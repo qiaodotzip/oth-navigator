@@ -77,6 +77,27 @@ function orientedFromRect(rect: [Pt, Pt], facing: Facing): OrientedItem {
   };
 }
 
+// Linear circulation (escalators, stairs) always runs along the rect's LONG axis;
+// `facing` only chooses which end is "forward" (the up-exit / descent / ascent dir).
+function orientedAlongLong(rect: [Pt, Pt], facing: Facing): OrientedItem {
+  const b = rectBounds(rect);
+  const horizontal = b.w >= b.h; // long axis is image-x
+  let rotY: number;
+  if (horizontal) {
+    // travel along ±x; default east (+x). facing W flips to -x.
+    rotY = facing === "W" ? -Math.PI / 2 : Math.PI / 2;
+  } else {
+    // travel along ±y; default south (+y). facing N flips to -y.
+    rotY = facing === "N" ? Math.PI : 0;
+  }
+  return {
+    pos: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2],
+    width: horizontal ? b.h : b.w,
+    depth: horizontal ? b.w : b.h,
+    rotY,
+  };
+}
+
 function planStallRow(detail: Extract<Detail, { type: "stall-row" }>): StallItem[] {
   const b = rectBounds(detail.rect);
   const horizontal = b.w >= b.h;
@@ -270,6 +291,7 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
     const stairs: OrientedItem[] = [];
     const stages: OrientedItem[] = [];
     const seatings: OrientedItem[] = [];
+    const barriers: OrientedItem[] = [];
     for (const d of floor.details ?? []) {
       if (d.type === "stall-row") stalls.push(...planStallRow(d));
       else if (d.type === "stall-island") stalls.push(...planStallIsland(d));
@@ -293,17 +315,25 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
           rotY: 0,
         });
       } else if (d.type === "escalator-up") {
-        escalators.push({ ...orientedFromRect(d.rect, d.facing), up: true });
+        escalators.push({ ...orientedAlongLong(d.rect, d.facing), up: true });
       } else if (d.type === "escalator-down") {
-        escalators.push({ ...orientedFromRect(d.rect, d.facing), up: false });
+        escalators.push({ ...orientedAlongLong(d.rect, d.facing), up: false });
       } else if (d.type === "lift-block") {
         lifts.push(orientedFromRect(d.rect, d.facing));
       } else if (d.type === "staircase") {
-        stairs.push(orientedFromRect(d.rect, d.facing));
+        stairs.push(orientedAlongLong(d.rect, d.facing));
       } else if (d.type === "stage") {
         stages.push(orientedFromRect(d.rect, d.facing));
       } else if (d.type === "seating-block") {
         seatings.push(orientedFromRect(d.rect, d.facing));
+      } else if (d.type === "barrier") {
+        const b = rectBounds(d.rect);
+        barriers.push({
+          pos: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2],
+          width: b.w,
+          depth: b.h,
+          rotY: 0,
+        });
       }
     }
     return {
@@ -321,6 +351,7 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       stairs,
       stages,
       seatings,
+      barriers,
     };
   }, [floor]);
 
@@ -442,6 +473,16 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
           depth={it.depth}
           rotY={it.rotY}
         />
+      ))}
+      {layout.barriers.map((it, i) => (
+        <mesh
+          key={`barrier${i}`}
+          position={[it.pos[0] - width / 2, SLAB_Y + 0.5, it.pos[1] - depth / 2]}
+          castShadow
+        >
+          <boxGeometry args={[it.width, 1.0, it.depth]} />
+          <meshStandardMaterial color="#B0202A" />
+        </mesh>
       ))}
     </group>
   );

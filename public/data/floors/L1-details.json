@@ -1,38 +1,990 @@
 {
   "id": "L1",
   "details": [
-    { "id": "a2dbe5e8-66ff-4b18-977b-f74edb12e5a4", "type": "stall-island", "rect": [[94.07, 37.95], [97.16, 42.47]] },
-    { "id": "f45e365d-fc9c-4485-8bba-f07d09a3e940", "type": "stall-island", "rect": [[100.09, 39.77], [103.18, 42.44]] },
-    { "id": "45afdc93-c6dc-4306-bbaa-4e3046f55c43", "type": "stall-row", "rect": [[86.57, 35.02], [102.55, 36.22]], "facing": "S" },
-    { "id": "4114717b-8262-4b51-b038-08dbea6d050c", "type": "bench-rows", "rect": [[86.87, 36.74], [102.51, 37.56]] },
-    { "id": "b587be42-cad0-4eb0-9f8d-2a9a5c2664d7", "type": "stall-island", "rect": [[83.22, 36.22], [85.42, 41.85]] },
-    { "id": "5d495c5b-3d47-489c-bee7-9a9aaa875d9b", "type": "round-table", "point": [87.24, 38.76] },
-    { "id": "107cf9b2-1c85-42fa-83fa-7340530aafce", "type": "round-table", "point": [87.2, 39.48] },
-    { "id": "4c255cc2-dfd2-49ef-b110-4d5fea28fc76", "type": "round-table", "point": [85.68, 39.74] },
-    { "id": "57a85837-cf6b-4e6e-9012-dcc7ab4d2902", "type": "round-table", "point": [85.75, 40.55] },
-    { "id": "d957515e-8b82-4b88-99a4-a2171365ce6c", "type": "round-table", "point": [85.64, 41.53] },
-    { "id": "8dd0ff6f-a33d-4368-b8d9-aa7b8a01a251", "type": "bench-rows", "rect": [[86.31, 39.8], [87.61, 41.69]] },
-    { "id": "d448fb4c-bebd-4652-ba8e-828fc3c0e1b4", "type": "bench-rows", "rect": [[83.82, 42.01], [87.57, 42.57]] },
-    { "id": "1eaa009e-eb43-4b39-977c-c110822902a1", "type": "round-table", "point": [86.72, 43.22] },
-    { "id": "04b7c312-fcf9-400f-a2d1-c4a2315543b5", "type": "bench-rows", "rect": [[84.3, 42.73], [85.75, 43.25]] },
-    { "id": "67bc85be-69e3-42e3-a39d-3b589f8cbd80", "type": "bench-rows", "rect": [[91.58, 37.91], [93.59, 42.44]] },
-    { "id": "8740980a-6089-41f6-9b2f-2c9b41faf9b8", "type": "round-table", "point": [92.55, 43.35] },
-    { "id": "2c8c6948-6972-4d00-a5ef-2022ff20c5d7", "type": "round-table", "point": [95.52, 43.25] },
-    { "id": "55b61a4f-6c41-422c-94a3-d211e15d292a", "type": "round-table", "point": [98.68, 43.32] },
-    { "id": "45895650-5610-480f-8b37-d1db15c50a50", "type": "round-table", "point": [104.33, 43.19] },
-    { "id": "73819fed-aaf9-456d-aa2a-a6d2cc697ddd", "type": "round-table", "point": [100.8, 43.32] },
-    { "id": "d1aef70b-0e6b-43d0-bdeb-17d77aad6cce", "type": "round-table", "point": [102.43, 43.25] },
-    { "id": "a4465a18-ab92-4a7d-bc6c-161f8bb1e214", "type": "bench-rows", "rect": [[97.68, 37.91], [99.65, 42.86]] },
-    { "id": "bfdfae29-8d0b-4892-9d20-124cdc568c2b", "type": "bench-rows", "rect": [[100.24, 37.85], [103.25, 39.41]] },
-    { "id": "c6f315b1-6d94-429c-b641-652c0da5ed50", "type": "bench-rows", "rect": [[103.81, 40.39], [106.3, 42.27]] },
-    { "id": "ee37e2b0-5c08-4e91-81cf-ded0d6ac3429", "type": "bench-rows", "rect": [[105.37, 42.66], [106.26, 43.09]] },
-    { "id": "a20d06c5-10c2-454d-9fed-2effecc70611", "type": "toilet", "rect": [[102.6, 32.09], [106.18, 36.29]] },
-    { "id": "1523b003-9da9-43b1-8f3d-d58321025a91", "type": "cleaning", "rect": [[104.07, 36.92], [106.32, 38.57]] },
-    { "id": "84cfe498-07fc-4e43-9020-28b80a43ccfb", "type": "stall-row", "rect": [[83.36, 34.9], [85.97, 35.88]], "facing": "S" },
-    { "id": "5f0cb362-1eb6-4c51-93c7-c732ca32579e", "type": "stall-island", "rect": [[88.09, 37.94], [91.12, 40.63]] },
-    { "id": "c8b6edc8-dc4b-461d-911d-da0bd2b72e75", "type": "cleaning", "rect": [[88.07, 40.66], [91.1, 42.45]] },
-    { "id": "d101b944-aefc-4cbc-8519-8a5e52dda8d9", "type": "greenery-row", "rect": [[87.37, 44.02], [104.03, 45.16]] },
-    { "id": "d6d044ea-9746-4665-9eea-eeda371deb07", "type": "greenery-row", "rect": [[82.96, 43.45], [85.36, 44.29]] },
-    { "id": "8ea98b27-fefc-46c7-97a5-e3e298abaf22", "type": "greenery-row", "rect": [[78.93, 40.91], [81.56, 43.34]] }
+    {
+      "id": "a2dbe5e8-66ff-4b18-977b-f74edb12e5a4",
+      "type": "stall-island",
+      "rect": [
+        [
+          94.07,
+          37.95
+        ],
+        [
+          97.16,
+          42.47
+        ]
+      ]
+    },
+    {
+      "id": "f45e365d-fc9c-4485-8bba-f07d09a3e940",
+      "type": "stall-island",
+      "rect": [
+        [
+          100.09,
+          39.77
+        ],
+        [
+          103.18,
+          42.44
+        ]
+      ]
+    },
+    {
+      "id": "45afdc93-c6dc-4306-bbaa-4e3046f55c43",
+      "type": "stall-row",
+      "rect": [
+        [
+          86.57,
+          35.02
+        ],
+        [
+          102.55,
+          36.22
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "4114717b-8262-4b51-b038-08dbea6d050c",
+      "type": "bench-rows",
+      "rect": [
+        [
+          86.87,
+          36.74
+        ],
+        [
+          102.51,
+          37.56
+        ]
+      ]
+    },
+    {
+      "id": "b587be42-cad0-4eb0-9f8d-2a9a5c2664d7",
+      "type": "stall-island",
+      "rect": [
+        [
+          83.22,
+          36.22
+        ],
+        [
+          85.42,
+          41.85
+        ]
+      ]
+    },
+    {
+      "id": "5d495c5b-3d47-489c-bee7-9a9aaa875d9b",
+      "type": "round-table",
+      "point": [
+        87.24,
+        38.76
+      ]
+    },
+    {
+      "id": "107cf9b2-1c85-42fa-83fa-7340530aafce",
+      "type": "round-table",
+      "point": [
+        87.2,
+        39.48
+      ]
+    },
+    {
+      "id": "4c255cc2-dfd2-49ef-b110-4d5fea28fc76",
+      "type": "round-table",
+      "point": [
+        85.68,
+        39.74
+      ]
+    },
+    {
+      "id": "57a85837-cf6b-4e6e-9012-dcc7ab4d2902",
+      "type": "round-table",
+      "point": [
+        85.75,
+        40.55
+      ]
+    },
+    {
+      "id": "d957515e-8b82-4b88-99a4-a2171365ce6c",
+      "type": "round-table",
+      "point": [
+        85.64,
+        41.53
+      ]
+    },
+    {
+      "id": "8dd0ff6f-a33d-4368-b8d9-aa7b8a01a251",
+      "type": "bench-rows",
+      "rect": [
+        [
+          86.31,
+          39.8
+        ],
+        [
+          87.61,
+          41.69
+        ]
+      ]
+    },
+    {
+      "id": "d448fb4c-bebd-4652-ba8e-828fc3c0e1b4",
+      "type": "bench-rows",
+      "rect": [
+        [
+          83.82,
+          42.01
+        ],
+        [
+          87.57,
+          42.57
+        ]
+      ]
+    },
+    {
+      "id": "1eaa009e-eb43-4b39-977c-c110822902a1",
+      "type": "round-table",
+      "point": [
+        86.72,
+        43.22
+      ]
+    },
+    {
+      "id": "04b7c312-fcf9-400f-a2d1-c4a2315543b5",
+      "type": "bench-rows",
+      "rect": [
+        [
+          84.3,
+          42.73
+        ],
+        [
+          85.75,
+          43.25
+        ]
+      ]
+    },
+    {
+      "id": "67bc85be-69e3-42e3-a39d-3b589f8cbd80",
+      "type": "bench-rows",
+      "rect": [
+        [
+          91.58,
+          37.91
+        ],
+        [
+          93.59,
+          42.44
+        ]
+      ]
+    },
+    {
+      "id": "8740980a-6089-41f6-9b2f-2c9b41faf9b8",
+      "type": "round-table",
+      "point": [
+        92.55,
+        43.35
+      ]
+    },
+    {
+      "id": "2c8c6948-6972-4d00-a5ef-2022ff20c5d7",
+      "type": "round-table",
+      "point": [
+        95.52,
+        43.25
+      ]
+    },
+    {
+      "id": "55b61a4f-6c41-422c-94a3-d211e15d292a",
+      "type": "round-table",
+      "point": [
+        98.68,
+        43.32
+      ]
+    },
+    {
+      "id": "45895650-5610-480f-8b37-d1db15c50a50",
+      "type": "round-table",
+      "point": [
+        104.33,
+        43.19
+      ]
+    },
+    {
+      "id": "73819fed-aaf9-456d-aa2a-a6d2cc697ddd",
+      "type": "round-table",
+      "point": [
+        100.8,
+        43.32
+      ]
+    },
+    {
+      "id": "d1aef70b-0e6b-43d0-bdeb-17d77aad6cce",
+      "type": "round-table",
+      "point": [
+        102.43,
+        43.25
+      ]
+    },
+    {
+      "id": "a4465a18-ab92-4a7d-bc6c-161f8bb1e214",
+      "type": "bench-rows",
+      "rect": [
+        [
+          97.68,
+          37.91
+        ],
+        [
+          99.65,
+          42.86
+        ]
+      ]
+    },
+    {
+      "id": "bfdfae29-8d0b-4892-9d20-124cdc568c2b",
+      "type": "bench-rows",
+      "rect": [
+        [
+          100.24,
+          37.85
+        ],
+        [
+          103.25,
+          39.41
+        ]
+      ]
+    },
+    {
+      "id": "c6f315b1-6d94-429c-b641-652c0da5ed50",
+      "type": "bench-rows",
+      "rect": [
+        [
+          103.81,
+          40.39
+        ],
+        [
+          106.3,
+          42.27
+        ]
+      ]
+    },
+    {
+      "id": "ee37e2b0-5c08-4e91-81cf-ded0d6ac3429",
+      "type": "bench-rows",
+      "rect": [
+        [
+          105.37,
+          42.66
+        ],
+        [
+          106.26,
+          43.09
+        ]
+      ]
+    },
+    {
+      "id": "a20d06c5-10c2-454d-9fed-2effecc70611",
+      "type": "toilet",
+      "rect": [
+        [
+          102.6,
+          32.09
+        ],
+        [
+          106.18,
+          36.29
+        ]
+      ]
+    },
+    {
+      "id": "1523b003-9da9-43b1-8f3d-d58321025a91",
+      "type": "cleaning",
+      "rect": [
+        [
+          104.07,
+          36.92
+        ],
+        [
+          106.32,
+          38.57
+        ]
+      ]
+    },
+    {
+      "id": "84cfe498-07fc-4e43-9020-28b80a43ccfb",
+      "type": "stall-row",
+      "rect": [
+        [
+          83.36,
+          34.9
+        ],
+        [
+          85.97,
+          35.88
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "5f0cb362-1eb6-4c51-93c7-c732ca32579e",
+      "type": "stall-island",
+      "rect": [
+        [
+          88.09,
+          37.94
+        ],
+        [
+          91.12,
+          40.63
+        ]
+      ]
+    },
+    {
+      "id": "c8b6edc8-dc4b-461d-911d-da0bd2b72e75",
+      "type": "cleaning",
+      "rect": [
+        [
+          88.07,
+          40.66
+        ],
+        [
+          91.1,
+          42.45
+        ]
+      ]
+    },
+    {
+      "id": "d101b944-aefc-4cbc-8519-8a5e52dda8d9",
+      "type": "greenery-row",
+      "rect": [
+        [
+          87.37,
+          44.02
+        ],
+        [
+          104.03,
+          45.16
+        ]
+      ]
+    },
+    {
+      "id": "4ab3d9af-1aa9-43cb-9417-308f4eea07a9",
+      "type": "landscape-island",
+      "rect": [
+        [
+          83,
+          43.66
+        ],
+        [
+          85.25,
+          45.12
+        ]
+      ]
+    },
+    {
+      "id": "9d6c9330-5ef1-4183-8bd6-bafc9c67f851",
+      "type": "landscape-island",
+      "rect": [
+        [
+          78.88,
+          40.83
+        ],
+        [
+          81.84,
+          43.31
+        ]
+      ]
+    },
+    {
+      "id": "048ac6ec-d3c3-4ba3-84ef-9e7d08c66037",
+      "type": "landscape-island",
+      "rect": [
+        [
+          78.28,
+          44.96
+        ],
+        [
+          81.73,
+          47.4
+        ]
+      ]
+    },
+    {
+      "id": "0e572ebe-1b4a-41ae-a63b-4136dc435508",
+      "type": "landscape-island",
+      "rect": [
+        [
+          83.55,
+          46.65
+        ],
+        [
+          85.38,
+          47.94
+        ]
+      ]
+    },
+    {
+      "id": "3d0c15da-bfca-4089-8f82-6dffe57c6457",
+      "type": "staircase",
+      "rect": [
+        [
+          92.69,
+          46.6
+        ],
+        [
+          95.43,
+          47.58
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "81d60c8a-ea47-41a2-940d-b655f8c5ff21",
+      "type": "escalator-down",
+      "rect": [
+        [
+          95.41,
+          46.61
+        ],
+        [
+          97.91,
+          47.69
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "d6aa9f83-4e55-4d1c-aec6-5f8de5832610",
+      "type": "lift-block",
+      "rect": [
+        [
+          108.97,
+          38.02
+        ],
+        [
+          113.34,
+          39.7
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "0600e610-f060-4d51-8f61-900517eee39e",
+      "type": "escalator-up",
+      "rect": [
+        [
+          107.95,
+          41.53
+        ],
+        [
+          112.68,
+          43
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "3fbb5fcd-4768-4702-ae5d-c8767e2c09d4",
+      "type": "greenery-row",
+      "rect": [
+        [
+          108.22,
+          41.15
+        ],
+        [
+          112.74,
+          41.5
+        ]
+      ]
+    },
+    {
+      "id": "4e8f1096-9ca7-4a21-b837-93480fbd3a4e",
+      "type": "escalator-down",
+      "rect": [
+        [
+          115.86,
+          42.28
+        ],
+        [
+          125.08,
+          43.1
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "92c4103c-a9c8-41ed-93a0-9a7e9d94a20b",
+      "type": "landscape-island",
+      "rect": [
+        [
+          115.68,
+          43.17
+        ],
+        [
+          127.02,
+          45.38
+        ]
+      ]
+    },
+    {
+      "id": "d324610f-c2dd-4de6-881f-242971164807",
+      "type": "landscape-island",
+      "rect": [
+        [
+          125.09,
+          42.27
+        ],
+        [
+          126.47,
+          43.12
+        ]
+      ]
+    },
+    {
+      "id": "9a3caea6-931d-49fc-a311-33155ed731ca",
+      "type": "landscape-island",
+      "rect": [
+        [
+          130.63,
+          43.28
+        ],
+        [
+          135.76,
+          44.27
+        ]
+      ]
+    },
+    {
+      "id": "20491dad-b5f4-473f-a44a-7f058fd41343",
+      "type": "landscape-island",
+      "rect": [
+        [
+          140.65,
+          40.64
+        ],
+        [
+          142.83,
+          42.44
+        ]
+      ]
+    },
+    {
+      "id": "e36a314c-84dd-44da-a3e6-f08f5f1192aa",
+      "type": "landscape-island",
+      "rect": [
+        [
+          138.55,
+          42.24
+        ],
+        [
+          140.48,
+          43.37
+        ]
+      ]
+    },
+    {
+      "id": "86cb98dd-3d27-4ae4-8232-d99a60ad54a9",
+      "type": "landscape-island",
+      "rect": [
+        [
+          143.68,
+          37.92
+        ],
+        [
+          147.03,
+          40.3
+        ]
+      ]
+    },
+    {
+      "id": "e3bf40bc-578c-4c12-b516-93c647470ae9",
+      "type": "escalator-down",
+      "rect": [
+        [
+          132.57,
+          46.83
+        ],
+        [
+          137.72,
+          47.79
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "14945d90-17bd-4547-9dea-be8acba56230",
+      "type": "landscape-island",
+      "rect": [
+        [
+          139.14,
+          48.37
+        ],
+        [
+          141.17,
+          49.7
+        ]
+      ]
+    },
+    {
+      "id": "417d2bc5-f6d0-4efc-aa27-879eb246c5f6",
+      "type": "landscape-island",
+      "rect": [
+        [
+          133,
+          48.43
+        ],
+        [
+          138.05,
+          49.78
+        ]
+      ]
+    },
+    {
+      "id": "a26e1b86-5931-4455-adca-506ef3a8adca",
+      "type": "landscape-island",
+      "rect": [
+        [
+          127.01,
+          48.14
+        ],
+        [
+          130.65,
+          49.27
+        ]
+      ]
+    },
+    {
+      "id": "c3393bed-7f2a-40b7-9416-f9f5565e149b",
+      "type": "landscape-island",
+      "rect": [
+        [
+          117.7,
+          48.59
+        ],
+        [
+          121.76,
+          49.62
+        ]
+      ]
+    },
+    {
+      "id": "e8fb52fe-ffde-4c59-9a9f-116e0c481c9d",
+      "type": "stage",
+      "rect": [
+        [
+          108.39,
+          43.1
+        ],
+        [
+          112.66,
+          44.18
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "11b250cd-2de3-4f21-9d92-576051e748cd",
+      "type": "seating-block",
+      "rect": [
+        [
+          105.73,
+          45.21
+        ],
+        [
+          109.99,
+          48.42
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "10aece03-11ef-4fa9-bc63-d2958c5afc12",
+      "type": "seating-block",
+      "rect": [
+        [
+          111.11,
+          45.21
+        ],
+        [
+          114.78,
+          48.46
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "61b7f0a7-b046-44e4-86e3-172519260cdb",
+      "type": "escalator-up",
+      "rect": [
+        [
+          108.51,
+          51.71
+        ],
+        [
+          109.54,
+          53.87
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "092c6b5e-8f69-448c-957e-29cd7ee615dd",
+      "type": "escalator-down",
+      "rect": [
+        [
+          108.51,
+          53.93
+        ],
+        [
+          109.53,
+          56.49
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "c2ade55b-be1a-4628-a664-32bff1d451ae",
+      "type": "lift-block",
+      "rect": [
+        [
+          110.52,
+          52.96
+        ],
+        [
+          113.76,
+          56.62
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "91dbb425-1971-43f9-82a4-3b9f2333f313",
+      "type": "lift-block",
+      "rect": [
+        [
+          98.63,
+          61.57
+        ],
+        [
+          103.44,
+          64.54
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "9dab6d1c-e5aa-41ae-b319-1a8be4b992a8",
+      "type": "lift-block",
+      "rect": [
+        [
+          82.52,
+          61.56
+        ],
+        [
+          86.32,
+          64.55
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "e1a6df37-e72f-41f4-8436-ecc8ff5c271f",
+      "type": "staircase",
+      "rect": [
+        [
+          148.06,
+          51.32
+        ],
+        [
+          149.21,
+          54.47
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "c6a7701d-fbac-4bc7-83a0-ca67c89084a7",
+      "type": "escalator-up",
+      "rect": [
+        [
+          149.19,
+          51.01
+        ],
+        [
+          150.44,
+          54.47
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "2a3f9f67-59df-4dd0-ba2d-7fc477730c28",
+      "type": "lift-block",
+      "rect": [
+        [
+          134.53,
+          92.72
+        ],
+        [
+          138.41,
+          95.72
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "bb19020f-7a0f-4976-b46e-d5c75a4d6de1",
+      "type": "lift-block",
+      "rect": [
+        [
+          138.43,
+          92.73
+        ],
+        [
+          140.79,
+          95.7
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "1faee8df-7994-470e-afc7-7538c5f6cb0c",
+      "type": "toilet",
+      "rect": [
+        [
+          125.29,
+          92.79
+        ],
+        [
+          131.75,
+          95.69
+        ]
+      ]
+    },
+    {
+      "id": "fd7f7a19-1b57-48ab-90f3-b798cfe43661",
+      "type": "toilet",
+      "rect": [
+        [
+          116.32,
+          31.38
+        ],
+        [
+          124.89,
+          35.32
+        ]
+      ]
+    },
+    {
+      "id": "9ee05576-eff6-450f-8a3d-57068f04a29a",
+      "type": "lift-block",
+      "rect": [
+        [
+          137.55,
+          31.49
+        ],
+        [
+          143.49,
+          33.22
+        ]
+      ],
+      "facing": "S"
+    },
+    {
+      "id": "c1e08565-b079-4c1d-89e6-5e5839eb535d",
+      "type": "landscape-island",
+      "rect": [
+        [
+          78.64,
+          48.98
+        ],
+        [
+          82.04,
+          57.31
+        ]
+      ]
+    },
+    {
+      "id": "84be5b4d-1cc5-41fb-8dc2-3de5e7db247a",
+      "type": "landscape-island",
+      "rect": [
+        [
+          84.81,
+          66.1
+        ],
+        [
+          101.02,
+          66.99
+        ]
+      ]
+    },
+    {
+      "id": "13e56789-557e-490e-af43-965b2adf1234",
+      "type": "greenery-row",
+      "rect": [
+        [
+          101.09,
+          66.17
+        ],
+        [
+          102.74,
+          67.15
+        ]
+      ]
+    },
+    {
+      "id": "ff8ce786-2239-4ceb-bd31-71244c2ad3d9",
+      "type": "greenery-row",
+      "rect": [
+        [
+          102.74,
+          67.07
+        ],
+        [
+          105.23,
+          72.46
+        ]
+      ]
+    },
+    {
+      "id": "cf6971da-c023-4858-93bc-2a7e72446c2e",
+      "type": "greenery-row",
+      "rect": [
+        [
+          104.08,
+          74.65
+        ],
+        [
+          105.32,
+          88.24
+        ]
+      ]
+    },
+    {
+      "id": "0a50407c-20ef-492f-8029-7e8d027f68ca",
+      "type": "greenery-row",
+      "rect": [
+        [
+          104.13,
+          89.27
+        ],
+        [
+          105.2,
+          97.8
+        ]
+      ]
+    },
+    {
+      "id": "ed06176e-cab8-41fc-8503-b43dcc81472a",
+      "type": "landscape-island",
+      "rect": [
+        [
+          107.59,
+          31.68
+        ],
+        [
+          113.77,
+          32.81
+        ]
+      ]
+    }
   ]
 }

@@ -42,6 +42,24 @@ export function isInWalkableLandmark(pt: Pt, floor: Floor): boolean {
   return false;
 }
 
+function pointInRect(pt: Pt, rect: [Pt, Pt]): boolean {
+  const [[x1, y1], [x2, y2]] = rect;
+  return (
+    pt[0] >= Math.min(x1, x2) &&
+    pt[0] <= Math.max(x1, x2) &&
+    pt[1] >= Math.min(y1, y2) &&
+    pt[1] <= Math.max(y1, y2)
+  );
+}
+
+/** Barrier details (gates/fences) block movement even inside walkable landmarks. */
+export function isInBarrier(pt: Pt, floor: Floor): boolean {
+  for (const d of floor.details ?? []) {
+    if (d.type === "barrier" && pointInRect(pt, d.rect)) return true;
+  }
+  return false;
+}
+
 export function isPointWalkable(
   pt: Pt,
   floor: Floor,
@@ -55,6 +73,8 @@ export function isPointWalkable(
   ) {
     return false;
   }
+  // Barriers block first — they cut through landmarks (e.g. gated town square).
+  if (isInBarrier(pt, floor)) return false;
   if (isInWalkableLandmark(pt, floor)) return true;
   for (const poly of floor.polygons) {
     if (poly.type !== "room") continue;
@@ -87,6 +107,10 @@ export function checkSegment(
     const x = start[0] + (end[0] - start[0]) * t;
     const y = start[1] + (end[1] - start[1]) * t;
     const pt: Pt = [x, y];
+    if (isInBarrier(pt, floor)) {
+      blocking.add("barrier");
+      continue;
+    }
     if (isInWalkableLandmark(pt, floor)) continue;
     for (const poly of floor.polygons) {
       if (poly.type !== "room") continue;
