@@ -1,3 +1,6 @@
+import { useMemo } from "react";
+import * as THREE from "three";
+
 export const STALL_W = 2.4;
 export const STALL_D = 1.7;
 export const STALL_BODY_H = 2.2;
@@ -924,6 +927,212 @@ export function ShopBlockMesh({
           <cylinderGeometry args={[0.4, 0.4, 0.74, 12]} />
           <meshStandardMaterial color={TABLE_TOP} />
         </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ---------- Public Service / Family Centre ----------
+
+const SC_FLOOR_PSC = "#ECD9BC";
+const SC_FLOOR_FAMILY = "#F0DCE4";
+const SC_GLASS = "#BCD8DA";
+const SC_COUNTER = "#A9764B";
+const SC_ACCENT_PSC = "#E08A3C";
+const SC_ACCENT_FAMILY = "#D96BA0";
+const SC_CHAIR = ["#2E8B8B", "#E08A3C", "#4F8A40"];
+const SC_KIOSK_BODY = "#2C3138";
+const SC_WALL_H = 3.0;
+const SC_FLOOR_Y = 0.14;
+
+function scPointInPoly(x: number, z: number, pts: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, zi] = pts[i];
+    const [xj, zj] = pts[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Public Service Centre / Family Centre. `points` are in scene-local coords
+ * (x, z) — already centred by the caller. Glass-walled, warm, lively interior.
+ */
+export function ServiceCentreMesh({
+  points,
+  variant,
+}: {
+  points: [number, number][];
+  variant: "psc" | "family";
+}) {
+  const accent = variant === "psc" ? SC_ACCENT_PSC : SC_ACCENT_FAMILY;
+  const floorColor = variant === "psc" ? SC_FLOOR_PSC : SC_FLOOR_FAMILY;
+
+  const floorGeom = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const g = new THREE.ShapeGeometry(shape);
+    g.rotateX(Math.PI / 2);
+    return g;
+  }, [points]);
+
+  const walls = useMemo(() => {
+    const out: { pos: [number, number, number]; len: number; rotY: number }[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      const dx = b[0] - a[0];
+      const dz = b[1] - a[1];
+      const len = Math.hypot(dx, dz);
+      if (len < 0.3) continue;
+      out.push({
+        pos: [(a[0] + b[0]) / 2, SC_FLOOR_Y + SC_WALL_H / 2, (a[1] + b[1]) / 2],
+        len,
+        rotY: Math.atan2(-dz, dx),
+      });
+    }
+    return out;
+  }, [points]);
+
+  const interior = useMemo(() => {
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
+    for (const [x, z] of points) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    }
+    const inside = (x: number, z: number) => scPointInPoly(x, z, points);
+
+    const counters: [number, number][] = [];
+    const kiosks: [number, number][] = [];
+    const chairs: { pos: [number, number]; c: string }[] = [];
+    const rooms: { pos: [number, number]; w: number; d: number }[] = [];
+    const plants: [number, number][] = [];
+
+    // Service counters along the back (minZ) edge.
+    for (let x = minX + 2; x < maxX - 1; x += 2.6) {
+      const z = minZ + 1.3;
+      if (inside(x, z)) counters.push([x, z]);
+    }
+    // Self-service kiosks just in front of the counters.
+    for (let x = minX + 2.4; x < maxX - 1; x += 2.0) {
+      const z = minZ + 3.4;
+      if (inside(x, z)) kiosks.push([x, z]);
+    }
+    // Waiting-area chairs filling the lower/central region, facing the counters.
+    let ci = 0;
+    for (let z = minZ + 5.2; z < maxZ - 1.2; z += 1.1) {
+      for (let x = minX + 1.2; x < maxX - 1.2; x += 0.75) {
+        if (inside(x, z)) {
+          chairs.push({ pos: [x, z], c: SC_CHAIR[ci % SC_CHAIR.length] });
+          ci++;
+        }
+      }
+      ci++;
+    }
+    // A couple of glass meeting rooms in the far corner.
+    const rc1: [number, number] = [maxX - 2.4, minZ + 2.2];
+    if (inside(rc1[0], rc1[1])) rooms.push({ pos: rc1, w: 3.4, d: 3.4 });
+    // Plants for liveliness near the entrance corners.
+    for (const p of [
+      [minX + 1.0, maxZ - 1.0],
+      [maxX - 1.0, maxZ - 1.0],
+    ] as [number, number][]) {
+      if (inside(p[0], p[1])) plants.push(p);
+    }
+    return { counters, kiosks, chairs, rooms, plants };
+  }, [points]);
+
+  return (
+    <group>
+      <mesh geometry={floorGeom} position={[0, SC_FLOOR_Y, 0]} receiveShadow>
+        <meshStandardMaterial color={floorColor} side={THREE.DoubleSide} />
+      </mesh>
+      {/* glass perimeter walls */}
+      {walls.map((w, i) => (
+        <mesh key={`w${i}`} position={w.pos} rotation={[0, w.rotY, 0]}>
+          <boxGeometry args={[w.len, SC_WALL_H, 0.08]} />
+          <meshStandardMaterial color={SC_GLASS} transparent opacity={0.22} />
+        </mesh>
+      ))}
+      {/* service counters with a warm accent top */}
+      {interior.counters.map(([x, z], i) => (
+        <group key={`c${i}`} position={[x, SC_FLOOR_Y, z]}>
+          <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
+            <boxGeometry args={[2.2, 1.1, 0.7]} />
+            <meshStandardMaterial color={SC_COUNTER} />
+          </mesh>
+          <mesh position={[0, 1.12, 0]}>
+            <boxGeometry args={[2.25, 0.08, 0.78]} />
+            <meshStandardMaterial color={accent} />
+          </mesh>
+        </group>
+      ))}
+      {/* self-service kiosks with glowing screens */}
+      {interior.kiosks.map(([x, z], i) => (
+        <group key={`k${i}`} position={[x, SC_FLOOR_Y, z]}>
+          <mesh position={[0, 0.75, 0]} castShadow>
+            <boxGeometry args={[0.7, 1.5, 0.5]} />
+            <meshStandardMaterial color={SC_KIOSK_BODY} />
+          </mesh>
+          <mesh position={[0, 1.05, 0.27]}>
+            <boxGeometry args={[0.5, 0.6, 0.04]} />
+            <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.5} />
+          </mesh>
+        </group>
+      ))}
+      {/* waiting-area chairs */}
+      {interior.chairs.map((ch, i) => (
+        <group key={`ch${i}`} position={[ch.pos[0], SC_FLOOR_Y, ch.pos[1]]}>
+          <mesh position={[0, 0.42, 0]} castShadow>
+            <boxGeometry args={[0.5, 0.08, 0.5]} />
+            <meshStandardMaterial color={ch.c} />
+          </mesh>
+          <mesh position={[0, 0.66, -0.22]}>
+            <boxGeometry args={[0.5, 0.42, 0.06]} />
+            <meshStandardMaterial color={ch.c} />
+          </mesh>
+        </group>
+      ))}
+      {/* glass meeting rooms */}
+      {interior.rooms.map((r, i) => (
+        <group key={`r${i}`} position={[r.pos[0], SC_FLOOR_Y, r.pos[1]]}>
+          {[
+            [0, r.d / 2, r.w, 0.06],
+            [0, -r.d / 2, r.w, 0.06],
+            [r.w / 2, 0, 0.06, r.d],
+            [-r.w / 2, 0, 0.06, r.d],
+          ].map(([px, pz, sw, sd], j) => (
+            <mesh key={j} position={[px, 1.25, pz]}>
+              <boxGeometry args={[sw, 2.5, sd]} />
+              <meshStandardMaterial color={SC_GLASS} transparent opacity={0.3} />
+            </mesh>
+          ))}
+          <mesh position={[0, 1.3, 0]}>
+            <boxGeometry args={[r.w - 0.6, 0.75, r.d - 0.6]} />
+            <meshStandardMaterial color="#C9A06A" />
+          </mesh>
+        </group>
+      ))}
+      {/* plants */}
+      {interior.plants.map(([x, z], i) => (
+        <group key={`p${i}`} position={[x, SC_FLOOR_Y, z]}>
+          <mesh position={[0, 0.25, 0]}>
+            <cylinderGeometry args={[0.22, 0.26, 0.5, 8]} />
+            <meshStandardMaterial color="#7A5230" />
+          </mesh>
+          <mesh position={[0, 0.85, 0]} castShadow>
+            <icosahedronGeometry args={[0.5, 0]} />
+            <meshStandardMaterial color="#4F8A40" flatShading />
+          </mesh>
+        </group>
       ))}
     </group>
   );

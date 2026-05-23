@@ -10,6 +10,7 @@ import {
   CourtMesh,
   EventBoothMesh,
   FootballMesh,
+  ServiceCentreMesh,
   ShopBlockMesh,
   CleaningBlockMesh,
   CubicleMesh,
@@ -301,6 +302,7 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
     const courts: OrientedItem[] = [];
     const booths: OrientedItem[] = [];
     const shops: OrientedItem[] = [];
+    const serviceCentres: { points: [number, number][]; variant: "psc" | "family" }[] = [];
     const flatRect = (rect: [Pt, Pt]): OrientedItem => {
       const b = rectBounds(rect);
       return {
@@ -354,6 +356,13 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
         booths.push(flatRect(d.rect));
       } else if (d.type === "shop-block") {
         shops.push(flatRect(d.rect));
+      } else if (d.type === "service-centre") {
+        const W = floor.bounds.width;
+        const H = floor.bounds.depth;
+        serviceCentres.push({
+          points: d.points.map(([px, py]) => [px - W / 2, py - H / 2] as [number, number]),
+          variant: d.variant,
+        });
       }
     }
     return {
@@ -376,6 +385,7 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       courts,
       booths,
       shops,
+      serviceCentres,
     };
   }, [floor]);
 
@@ -539,6 +549,9 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
           width={it.width}
           depth={it.depth}
         />
+      ))}
+      {layout.serviceCentres.map((sc, i) => (
+        <ServiceCentreMesh key={`sc${i}`} points={sc.points} variant={sc.variant} />
       ))}
     </group>
   );

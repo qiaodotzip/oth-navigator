@@ -21,7 +21,12 @@ type Tool =
   | "football"
   | "court"
   | "event-booth"
-  | "shop-block";
+  | "shop-block"
+  | "psc"
+  | "family-centre";
+
+// Tools placed by clicking N points then closing the shape (not a rectangle).
+const POLYGON_TOOLS = new Set<Tool>(["psc", "family-centre"]);
 
 const TOOL_CATEGORIES: { name: string; tools: Tool[] }[] = [
   { name: "Hawker", tools: ["stall-row", "stall-island", "bench-rows", "round-table", "cleaning"] },
@@ -30,6 +35,7 @@ const TOOL_CATEGORIES: { name: string; tools: Tool[] }[] = [
   { name: "Stage", tools: ["stage", "seating-block"] },
   { name: "Sports", tools: ["football", "court"] },
   { name: "Retail", tools: ["event-booth", "shop-block"] },
+  { name: "Civic (draw polygon)", tools: ["psc", "family-centre"] },
 ];
 
 const STORAGE_KEY = (fid: string) => `oth-detail-editor:${fid}`;
@@ -71,6 +77,8 @@ const TOOL_LABELS: Record<Tool, string> = {
   court: "Sports court (blocks)",
   "event-booth": "Event booth",
   "shop-block": "Shop block",
+  psc: "Public Service Centre",
+  "family-centre": "Family Centre",
 };
 
 const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
@@ -93,6 +101,8 @@ const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
   court: "#E07B39",
   "event-booth": "#C2185B",
   "shop-block": "#5D4037",
+  psc: "#0E7C7B",
+  "family-centre": "#D96BA0",
 };
 
 const FACING_ARROW: Record<Facing, [number, number]> = {
@@ -123,6 +133,7 @@ export function DetailEditor() {
   const [tool, setTool] = useState<Tool>("select");
   const [firstCorner, setFirstCorner] = useState<Pt | null>(null);
   const [hoverPoint, setHoverPoint] = useState<Pt | null>(null);
+  const [polyPoints, setPolyPoints] = useState<Pt[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState({ x: 0, y: 0, w: 1, h: 1 });
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -209,6 +220,7 @@ export function DetailEditor() {
     }
     setFirstCorner(null);
     setHoverPoint(null);
+    setPolyPoints([]);
     setSelectedId(null);
     Promise.resolve().then(() => {
       restoring.current = false;
@@ -309,6 +321,11 @@ export function DetailEditor() {
       return;
     }
 
+    if (POLYGON_TOOLS.has(tool)) {
+      setPolyPoints(prev => [...prev, pt]);
+      return;
+    }
+
     if (!firstCorner) {
       setFirstCorner(pt);
       setHoverPoint(pt);
@@ -395,6 +412,7 @@ export function DetailEditor() {
       if (e.key === "Escape") {
         setFirstCorner(null);
         setHoverPoint(null);
+        setPolyPoints([]);
         setTool("select");
       }
     };
@@ -407,6 +425,17 @@ export function DetailEditor() {
   const cancelCurrent = () => {
     setFirstCorner(null);
     setHoverPoint(null);
+    setPolyPoints([]);
+  };
+
+  const closePolyShape = () => {
+    if (polyPoints.length < 3) return;
+    const variant = tool === "family-centre" ? "family" : "psc";
+    setDetails(prev => [
+      ...prev,
+      { id: uid(), type: "service-centre", points: polyPoints, variant },
+    ]);
+    setPolyPoints([]);
   };
 
   const deleteDetail = (id: string) => {
@@ -435,6 +464,7 @@ export function DetailEditor() {
     const conv = ([x, y]: Pt): Pt => [r(x * sx), r(y * sy)];
     const exported = details.map(d => {
       if (d.type === "round-table") return { ...d, point: conv(d.point) };
+      if (d.type === "service-centre") return { ...d, points: d.points.map(conv) };
       return { ...d, rect: [conv(d.rect[0]), conv(d.rect[1])] as [Pt, Pt] };
     });
     return { id: floorId, details: exported };
@@ -515,6 +545,9 @@ export function DetailEditor() {
           const loaded: Detail[] = data.details.map((d: Detail) => {
             if (d.type === "round-table") {
               return { ...d, id: d.id ?? uid(), point: convToPixels(d.point) };
+            }
+            if (d.type === "service-centre") {
+              return { ...d, id: d.id ?? uid(), points: d.points.map(convToPixels) };
             }
             return {
               ...d,
@@ -620,6 +653,28 @@ export function DetailEditor() {
                   pointerEvents="none"
                 />
               )}
+              {polyPoints.length > 0 && POLYGON_TOOLS.has(tool) && (
+                <g pointerEvents="none">
+                  <polyline
+                    points={polyPoints.map(([x, y]) => `${x},${y}`).join(" ")}
+                    fill={`${TOOL_COLORS[tool as Exclude<Tool, "select">]}22`}
+                    stroke={TOOL_COLORS[tool as Exclude<Tool, "select">]}
+                    strokeWidth={strokeBase * 1.2}
+                    strokeDasharray={`${strokeBase * 3},${strokeBase * 2}`}
+                  />
+                  {polyPoints.map(([x, y], i) => (
+                    <circle
+                      key={i}
+                      cx={x}
+                      cy={y}
+                      r={Math.max(3, view.w / 300)}
+                      fill={TOOL_COLORS[tool as Exclude<Tool, "select">]}
+                      stroke="#fff"
+                      strokeWidth={strokeBase * 0.8}
+                    />
+                  ))}
+                </g>
+              )}
             </svg>
             <div className="absolute bottom-3 left-3 bg-white/90 rounded-lg shadow px-3 py-2 text-xs space-y-1 pointer-events-none">
               <div>
@@ -632,6 +687,11 @@ export function DetailEditor() {
               )}
               {firstCorner && (
                 <div className="text-orange-700">Click second corner to finish</div>
+              )}
+              {POLYGON_TOOLS.has(tool) && (
+                <div className="text-teal-700">
+                  Click to drop points ({polyPoints.length}) · use "Close shape" when done
+                </div>
               )}
             </div>
             <button
@@ -800,6 +860,29 @@ export function DetailEditor() {
               Cancel current rectangle
             </button>
           )}
+          {POLYGON_TOOLS.has(tool) && polyPoints.length > 0 && (
+            <div className="mt-1 flex gap-2">
+              <button
+                onClick={closePolyShape}
+                disabled={polyPoints.length < 3}
+                className="flex-1 px-2 py-1 rounded bg-oth-primary text-white text-xs font-semibold disabled:opacity-40"
+              >
+                Close shape ({polyPoints.length} pts)
+              </button>
+              <button
+                onClick={() => setPolyPoints(prev => prev.slice(0, -1))}
+                className="px-2 py-1 rounded bg-neutral-200 text-xs"
+              >
+                Undo pt
+              </button>
+              <button
+                onClick={() => setPolyPoints([])}
+                className="px-2 py-1 rounded bg-neutral-200 text-xs"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="mb-4">
@@ -823,8 +906,10 @@ export function DetailEditor() {
                   className="w-3 h-3 rounded-sm flex-shrink-0"
                   style={{
                     backgroundColor:
-                      d.type === "round-table"
-                        ? TOOL_COLORS["round-table"]
+                      d.type === "service-centre"
+                        ? d.variant === "family"
+                          ? TOOL_COLORS["family-centre"]
+                          : TOOL_COLORS["psc"]
                         : TOOL_COLORS[d.type],
                   }}
                 />
@@ -959,6 +1044,34 @@ function DetailShape({
           stroke="#fff"
           strokeWidth={strokeBase * 0.5}
         />
+      </g>
+    );
+  }
+  if (detail.type === "service-centre") {
+    const scColor =
+      detail.variant === "family" ? TOOL_COLORS["family-centre"] : TOOL_COLORS["psc"];
+    const cx = detail.points.reduce((s, [x]) => s + x, 0) / detail.points.length;
+    const cy = detail.points.reduce((s, [, y]) => s + y, 0) / detail.points.length;
+    return (
+      <g pointerEvents={events} onClick={handleClick} style={{ cursor: selectable ? "pointer" : "default" }}>
+        <polygon
+          points={detail.points.map(([x, y]) => `${x},${y}`).join(" ")}
+          fill={selected ? `${HILITE}45` : `${scColor}33`}
+          stroke={selected ? HILITE : scColor}
+          strokeWidth={selected ? strokeBase * 2 : strokeBase}
+        />
+        <text
+          x={cx}
+          y={cy}
+          fontSize={fontBase}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#111"
+          fontFamily="system-ui"
+          fontWeight={600}
+        >
+          {detail.variant === "family" ? "family centre" : "PSC"}
+        </text>
       </g>
     );
   }

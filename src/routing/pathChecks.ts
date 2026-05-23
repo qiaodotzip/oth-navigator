@@ -42,23 +42,35 @@ export function isInWalkableLandmark(pt: Pt, floor: Floor): boolean {
   return false;
 }
 
-function pointInRect(pt: Pt, rect: [Pt, Pt]): boolean {
+function pointInRect(pt: Pt, rect: [Pt, Pt], margin = 0): boolean {
   const [[x1, y1], [x2, y2]] = rect;
   return (
-    pt[0] >= Math.min(x1, x2) &&
-    pt[0] <= Math.max(x1, x2) &&
-    pt[1] >= Math.min(y1, y2) &&
-    pt[1] <= Math.max(y1, y2)
+    pt[0] >= Math.min(x1, x2) - margin &&
+    pt[0] <= Math.max(x1, x2) + margin &&
+    pt[1] >= Math.min(y1, y2) - margin &&
+    pt[1] <= Math.max(y1, y2) + margin
   );
 }
 
-/** Detail types you cannot walk through (gates/fences, sports pitches, courts). */
-const ROUTE_BLOCKING_DETAILS = new Set(["barrier", "football", "court"]);
+/**
+ * Detail types you cannot walk through. Football pitches are open fields you
+ * CAN walk across, so they are not here. Barriers (gates/fences) and sports
+ * courts block.
+ */
+const ROUTE_BLOCKING_DETAILS = new Set(["barrier", "court"]);
+
+// Inflate barrier hit-tests so thin gate strips reliably block the A* grid
+// (cell centres are 1.2m apart; a 0.5m-thin gate could otherwise be stepped over).
+const BARRIER_MARGIN = 0.9;
 
 /** Blocking details cut movement even inside walkable landmarks. */
 export function isInBarrier(pt: Pt, floor: Floor): boolean {
   for (const d of floor.details ?? []) {
-    if (ROUTE_BLOCKING_DETAILS.has(d.type) && "rect" in d && pointInRect(pt, d.rect)) {
+    if (
+      ROUTE_BLOCKING_DETAILS.has(d.type) &&
+      "rect" in d &&
+      pointInRect(pt, d.rect, BARRIER_MARGIN)
+    ) {
       return true;
     }
   }

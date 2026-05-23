@@ -10,6 +10,7 @@ import { AnalyticsAgent } from "@/agents/AnalyticsAgent";
 import { WANDER_LOOPS } from "@/agents/wanderLoops";
 import { useCounterLoadSimulator } from "@/agents/counterLoads";
 import { UserBlob } from "@/agents/UserBlob";
+import { GroundPlane } from "./GroundPlane";
 import type { Floor as FloorData } from "@/data/types";
 
 export function Scene() {
@@ -42,6 +43,7 @@ export function Scene() {
         castShadow
         shadow-mapSize={[2048, 2048]}
       />
+      <GroundPlane />
       {active && <Floor data={active} />}
       {active && <FloorDetails floor={active} />}
       {active && showLabels && <PolygonLabels floor={active} />}

@@ -408,29 +408,6 @@
       ]
     },
     {
-      "id": "L1-room-escalator-all",
-      "type": "room",
-      "heightMeters": 3.5,
-      "points": [
-        [
-          108.66,
-          51.69
-        ],
-        [
-          109.72,
-          51.92
-        ],
-        [
-          109,
-          56.51
-        ],
-        [
-          107.77,
-          56.36
-        ]
-      ]
-    },
-    {
       "id": "L1-room-theatre",
       "type": "room",
       "heightMeters": 3.5,

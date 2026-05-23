@@ -37,6 +37,12 @@ function pointInPolygon(px: number, py: number, polygon: Pt[]): boolean {
 
 function detailCenter(d: Detail): Pt {
   if (d.type === "round-table") return d.point;
+  if (d.type === "service-centre") {
+    const n = d.points.length;
+    const sx = d.points.reduce((s, [x]) => s + x, 0) / n;
+    const sy = d.points.reduce((s, [, y]) => s + y, 0) / n;
+    return [sx, sy];
+  }
   const [a, b] = d.rect;
   return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 }

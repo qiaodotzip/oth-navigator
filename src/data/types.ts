@@ -34,7 +34,8 @@ export type Detail =
   | { id: string; type: "football"; rect: [Pt, Pt] }
   | { id: string; type: "court"; rect: [Pt, Pt] }
   | { id: string; type: "event-booth"; rect: [Pt, Pt] }
-  | { id: string; type: "shop-block"; rect: [Pt, Pt] };
+  | { id: string; type: "shop-block"; rect: [Pt, Pt] }
+  | { id: string; type: "service-centre"; points: Pt[]; variant: "psc" | "family" };
 
 export type Floor = {
   id: FloorId;
