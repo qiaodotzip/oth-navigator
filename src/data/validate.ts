@@ -16,7 +16,7 @@ export function validateBundle(
   const servicesById = new Map(services.map(s => [s.id, s]));
 
   for (const s of services) {
-    if (!polygonIds.has(s.roomId)) {
+    if (s.roomId && !polygonIds.has(s.roomId)) {
       errors.push(`service "${s.id}" references unknown roomId "${s.roomId}"`);
     }
     if (!s.sourceUrl?.startsWith("http")) {
