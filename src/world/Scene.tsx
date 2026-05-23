@@ -1,5 +1,5 @@
 import { Canvas, ThreeEvent } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, SoftShadows } from "@react-three/drei";
 import { Floor } from "./Floor";
 import { FloorDetails } from "./FloorDetails";
 import { CameraRig } from "./CameraRig";
@@ -41,7 +41,12 @@ export function Scene() {
   const groundD = active?.bounds.depth ?? 148;
 
   return (
-    <Canvas shadows camera={{ position: [0, 180, 80], fov: 35 }}>
+    <Canvas
+      shadows
+      camera={{ position: [0, 180, 80], fov: 35 }}
+      gl={{ antialias: true }}
+    >
+      <SoftShadows size={28} samples={12} focus={0.7} />
       <color attach="background" args={[preset.bg]} />
       <fog attach="fog" args={[preset.bg, preset.fog[0], preset.fog[1]]} />
       <ambientLight color={preset.ambient.color} intensity={preset.ambient.intensity} />
@@ -56,6 +61,13 @@ export function Scene() {
         intensity={preset.dir.intensity}
         castShadow
         shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0004}
+        shadow-camera-near={1}
+        shadow-camera-far={600}
+        shadow-camera-left={-160}
+        shadow-camera-right={160}
+        shadow-camera-top={160}
+        shadow-camera-bottom={-160}
       />
       <GroundPlane width={groundW} depth={groundD} color={preset.groundColor} />
       {active && <Floor data={active} />}

@@ -34,6 +34,7 @@ type State = {
   userLocation: UserLocation | null;
   pickingLocation: boolean;
   timeOfDay: TimeOfDay;
+  tileSizeM: number;
 
   setLanguage: (l: Language) => void;
   setProfile: (p: AccessibilityProfile) => void;
@@ -49,7 +50,15 @@ type State = {
   setUserLocation: (loc: UserLocation) => void;
   setPickingLocation: (v: boolean) => void;
   cycleTimeOfDay: () => void;
+  setTileSize: (m: number) => void;
 };
+
+const TILE_KEY = "oth-ground-tile-m";
+const initialTile = (() => {
+  if (typeof localStorage === "undefined") return 1.2;
+  const v = parseFloat(localStorage.getItem(TILE_KEY) ?? "");
+  return Number.isFinite(v) && v > 0 ? v : 1.2;
+})();
 
 export const useStore = create<State>(set => ({
   language: "en",
@@ -66,6 +75,7 @@ export const useStore = create<State>(set => ({
   userLocation: null,
   pickingLocation: false,
   timeOfDay: "morning",
+  tileSizeM: initialTile,
 
   setLanguage: l => set({ language: l }),
   setProfile: p => set({ profile: p }),
@@ -107,4 +117,13 @@ export const useStore = create<State>(set => ({
           ? "night"
           : "morning",
     })),
+  setTileSize: m => {
+    const v = Math.max(0.3, Math.min(20, m));
+    try {
+      localStorage.setItem(TILE_KEY, String(v));
+    } catch {
+      /* ignore */
+    }
+    set({ tileSizeM: v });
+  },
 }));

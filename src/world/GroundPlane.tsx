@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import * as THREE from "three";
-
-const TILE_M = 2.5; // metres per tile
+import { useStore } from "@/store";
 
 function makeFloorTexture(): THREE.Texture {
   const size = 128;
@@ -34,14 +33,15 @@ export function GroundPlane({
   depth: number;
   color?: string;
 }) {
+  const tileSizeM = useStore(s => s.tileSizeM);
   // Plane snug to the floor footprint plus a small margin; fog fades the edge.
   const w = width + 24;
   const d = depth + 24;
   const tex = useMemo(() => {
     const t = makeFloorTexture();
-    t.repeat.set(w / TILE_M, d / TILE_M);
+    t.repeat.set(w / tileSizeM, d / tileSizeM);
     return t;
-  }, [w, d]);
+  }, [w, d, tileSizeM]);
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0]} receiveShadow>
       <planeGeometry args={[w, d]} />
