@@ -85,4 +85,6 @@ export type PopularTimesEntry = {
   placeId: string;
   weekday: PopularTimesHour[][];
   currentPopularity?: number;
+  /** true when the curve is heuristic (category-based), not scraped from Google. */
+  estimated?: boolean;
 };

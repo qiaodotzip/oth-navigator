@@ -1,0 +1,18 @@
+# Our Tampines Hub services — real metadata (web-sourced May 2026).
+# Opening hours and floors are REAL (see sourceUrl). Busyness curves are
+# NOT in this file — they are generated heuristically by category in
+# build-curves.ts and clamped to these openHour/closeHour values.
+# closedDays: pipe-separated day numbers, 0=Sun .. 6=Sat (blank = open daily).
+# openHour/closeHour: 24h integers. A 0-24 venue is treated as always open.
+serviceId,name,category,floor,openHour,closeHour,closedDays,sourceUrl
+psc,ServiceSG Centre,government,L1,9,18,0,https://www.pa.gov.sg/our-network/our-tampines-hub/
+hawker,Hawker Centre,food,L1,6,22,,https://tampines.net/guide/our-tampines-hub/
+community-centre,Our Tampines Hub CC,community,L4,9,22,,https://www.onepa.gov.sg/cc/our-tampines-hub
+library,Tampines Regional Library,library,L2,10,21,,https://tampines.net/guide/our-tampines-hub/
+hdb,HDB Branch / Town Council,government,L1,8,17,0,https://www.tampines.org.sg/
+theatre,Festive Arts Theatre,theatre,L2,12,22,,https://tampines.net/guide/our-tampines-hub/
+gym,ActiveSG Gymnasium,gym,L7,7,22,,https://tampines.net/guide/our-tampines-hub/
+pool,Swimming Complex,pool,L6,8,21,2,https://tampines.net/guide/our-tampines-hub/
+supermarket,NTUC FairPrice,supermarket,B1,0,24,,https://tampines.net/guide/our-tampines-hub/
+arena,Arena @ OTH,sports,L1,0,24,,https://tampines.net/guide/our-tampines-hub/
+mcdonalds,McDonald's,food,L1,0,24,,https://tampines.net/guide/our-tampines-hub/

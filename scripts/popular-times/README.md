@@ -1,55 +1,52 @@
-# Popular Times Scrape (one-shot)
+# Popular Times data for OTH services
 
-Grab Google Popular Times curves for each OTH service once and write them to `public/data/popular-times.json`. The app reads that JSON at runtime — no live API calls during normal use.
+The app shows per-service "busyness" by hour and uses it to pick the less-busy
+counter (`src/routing/selectRoute.ts`). Two ways to produce the data file
+`public/data/popular-times.json`:
 
-## When to run
+## Primary: heuristic curves from real opening hours (free, reliable)
 
-- Once before the hackathon demo, after `place-ids.json` is filled in.
-- Re-run if you add new services or want a fresher curve (Popular Times changes slowly; monthly is plenty).
+`build-curves.ts` reads `oth-services.csv` — **real, web-sourced** service
+metadata (names, floors, opening hours, source URLs) — and expands a
+category-based busyness profile into a 7-day × 24-hour curve per service,
+**clamped to the real opening hours**.
 
-## Setup
+```
+npm run build:popular-times
+```
 
-From the repo root, create a Python virtual environment and install deps.
+What's real vs. estimated:
 
-**Windows PowerShell:**
+- ✅ **Real:** which services exist, their floors, and their opening hours
+  (each row has a `sourceUrl`). Closed hours are 0 — that's real info.
+- ⚠️ **Estimated:** the *shape* within opening hours (lunch/dinner peaks for
+  food, evening peak for gym, etc.). Every entry is marked `"estimated": true`
+  so the app and any reviewer know it's a category model, not scraped data.
+
+This is the path currently used. It's free, has zero runtime dependencies, and
+can't break on demo day. To tune a curve, edit the category profiles in
+`build-curves.ts` or move a service to a different category in the CSV, then
+re-run.
+
+To add a service: add a row to `oth-services.csv` (serviceId must match an `id`
+in `public/data/services.json` for it to affect that service's counters) and
+re-run `npm run build:popular-times`.
+
+## Optional: scrape real Google Popular Times (`scrape.py`)
+
+If you later want the *actual* Google curve, `scrape.py` uses the `populartimes`
+Python lib. Note: the lib is unmaintained (last release 2021) and Google has
+changed its internal data shape since, so this may return empty or error. Treat
+it as a stretch option, not the demo path.
+
 ```powershell
 python -m venv scripts/popular-times/.venv
 scripts/popular-times/.venv/Scripts/Activate.ps1
 pip install -r scripts/popular-times/requirements.txt
-```
-
-**macOS / Linux:**
-```bash
-python3 -m venv scripts/popular-times/.venv
-source scripts/popular-times/.venv/bin/activate
-pip install -r scripts/popular-times/requirements.txt
-```
-
-## Fill in place IDs
-
-Open `scripts/popular-times/place-ids.json` and replace each `REPLACE_WITH_PLACE_ID`. To find a place ID without a Google API key:
-
-1. Open Google Maps, search the venue (e.g. "Tampines Regional Library").
-2. Click the venue marker, then **Share -> Embed a map**.
-3. In the embed URL, find `!1s` followed by an alphanumeric ID like `0x31da3d77a1aae34d:0xa3...`. That's the place ID. Copy it.
-
-Service ID keys must match `id` fields in `public/data/services.json` (currently: `psc`, `hawker`, `community-centre`, `library`, `hdb`, `theatre`).
-
-## Run the scrape
-
-```
+# fill in scripts/popular-times/place-ids.json first
 npm run scrape:popular-times
 ```
 
-Or directly:
-```
-python scripts/popular-times/scrape.py
-```
-
-Output: `public/data/popular-times.json`. Commit the file.
-
-## Gotchas
-
-- If `populartimes` fails with HTML parse errors, Google likely changed their internal endpoint. Pin a newer commit in `requirements.txt` or check the lib's issue tracker.
-- The lib does **not** need a Google API key for `get_populartimes_for_id` — only for the `get_id` variant.
-- Some venues have no Popular Times data at all (Google hasn't collected enough). Those will appear with empty `weekday` arrays — the runtime mapper falls back to Perlin noise.
+Place IDs (no Google API key needed): on Google Maps, search the venue, click
+the marker, **Share → Embed a map**, and copy the `!1s...` segment from the
+embed URL into `place-ids.json`.
