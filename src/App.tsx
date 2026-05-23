@@ -12,7 +12,7 @@ import { fetchNarration } from "@/narration/client";
 import { getCached, setCached } from "@/narration/cache";
 import { enqueueSegments, cancelAll } from "@/narration/ttsQueue";
 import { useSpeechRecognition } from "@/ui/useSpeechRecognition";
-import type { NarrationSegment } from "@/data/types";
+import type { NarrationSegment, PopularTimesEntry } from "@/data/types";
 import { WaypointEditor } from "@/dev/WaypointEditor";
 import { PolygonEditor } from "@/dev/PolygonEditor";
 
@@ -54,6 +54,13 @@ export default function App() {
       })
       .catch(e => console.warn("[App] loadDataBundle failed:", e));
   }, [setBundle]);
+
+  useEffect(() => {
+    fetch("/data/popular-times.json")
+      .then(r => r.json())
+      .then((entries: PopularTimesEntry[]) => useStore.getState().setPopularTimes(entries))
+      .catch(e => console.warn("[App] popular-times load failed:", e));
+  }, []);
 
   const onPickService = useCallback(
     async (serviceId: string) => {
