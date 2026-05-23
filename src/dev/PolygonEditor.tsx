@@ -302,8 +302,17 @@ export function PolygonEditor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ floorId, kind: "floor", data: buildFloorData() }),
       });
-      const j = await res.json();
-      setSaveMsg(res.ok ? `✓ Saved ${j.file}` : `✗ ${j.error ?? "save failed"}`);
+      const text = await res.text();
+      if (!res.ok) {
+        setSaveMsg(
+          res.status === 404
+            ? "✗ Endpoint missing — restart the server (npm run dev:full)"
+            : `✗ ${res.status}: ${text.slice(0, 80)}`,
+        );
+        return;
+      }
+      const j = JSON.parse(text);
+      setSaveMsg(`✓ Saved ${j.file}`);
     } catch (e) {
       setSaveMsg(`✗ ${e instanceof Error ? e.message : "save failed"} (is the server running?)`);
     } finally {
