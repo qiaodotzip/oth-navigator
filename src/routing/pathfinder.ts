@@ -1,18 +1,43 @@
 import type { Floor } from "@/data/types";
-import { pointInPolygon, checkSegment, type Pt } from "./pathChecks";
+import { checkSegment, isPointWalkable, type Pt } from "./pathChecks";
 
-const CELL_SIZE = 1.5;
+const CELL_SIZE = 1.2;
 
 function cellWalkable(cx: number, cy: number, floor: Floor, destRoom?: string): boolean {
   const x = cx * CELL_SIZE + CELL_SIZE / 2;
   const y = cy * CELL_SIZE + CELL_SIZE / 2;
-  if (x < 0 || y < 0 || x > floor.bounds.width || y > floor.bounds.depth) return false;
-  for (const p of floor.polygons) {
-    if (p.type !== "room") continue;
-    if (p.id === destRoom) continue;
-    if (pointInPolygon([x, y], p.points)) return false;
+  return isPointWalkable([x, y], floor, destRoom);
+}
+
+function snapToWalkableCell(
+  point: Pt,
+  floor: Floor,
+  destRoom?: string,
+): [number, number] | null {
+  const start: [number, number] = [
+    Math.floor(point[0] / CELL_SIZE),
+    Math.floor(point[1] / CELL_SIZE),
+  ];
+  if (cellWalkable(start[0], start[1], floor, destRoom)) return start;
+  // BFS outward up to ~30 cells (~36m)
+  const MAX = 30;
+  const visited = new Set<string>();
+  visited.add(`${start[0]},${start[1]}`);
+  let queue: Array<[number, number, number]> = [[start[0], start[1], 0]];
+  while (queue.length > 0) {
+    const [cx, cy, d] = queue.shift()!;
+    if (d > MAX) break;
+    if (cellWalkable(cx, cy, floor, destRoom)) return [cx, cy];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      queue.push([nx, ny, d + 1]);
+    }
   }
-  return true;
+  return null;
 }
 
 const DIRS: Array<[number, number, number]> = [
@@ -27,10 +52,11 @@ export function findPath(
   floor: Floor,
   destRoom?: string,
 ): Pt[] | null {
-  const sx = Math.floor(start[0] / CELL_SIZE);
-  const sy = Math.floor(start[1] / CELL_SIZE);
-  const ex = Math.floor(end[0] / CELL_SIZE);
-  const ey = Math.floor(end[1] / CELL_SIZE);
+  const startCell = snapToWalkableCell(start, floor, destRoom);
+  const endCell = snapToWalkableCell(end, floor, destRoom);
+  if (!startCell || !endCell) return null;
+  const [sx, sy] = startCell;
+  const [ex, ey] = endCell;
 
   if (sx === ex && sy === ey) return [start, end];
 
@@ -47,7 +73,7 @@ export function findPath(
   open.set(startK, heuristic(sx, sy));
 
   let iter = 0;
-  const MAX_ITER = 50000;
+  const MAX_ITER = 80000;
 
   while (open.size > 0 && iter++ < MAX_ITER) {
     let bestKey = "";

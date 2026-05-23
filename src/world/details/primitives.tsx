@@ -30,6 +30,21 @@ export const SINK_W = 0.6;
 export const SINK_D = 0.4;
 export const SINK_H = 0.85;
 
+export const CLEANING_H = 1.6;
+export const CLEANING_BAND_H = 0.45;
+export const CLEANING_BODY = "#5C6068";
+export const CLEANING_ACCENT = "#3A3D42";
+export const CLEANING_WINDOW = "#2A2C30";
+export const CLEANING_BIN_COLOR = "#8C8F95";
+
+export const BUSH_R = 0.42;
+export const BUSH_SPACING = 0.85;
+export const PLANTER_W = 0.72;
+export const PLANTER_D = 0.55;
+export const PLANTER_H = 0.38;
+export const PLANTER_COLOR = "#4A3A2A";
+export const BUSH_GREENS = ["#4F7A3A", "#5C8B47", "#3E6A30"];
+
 export const STALL_COLORS = [
   "#D9534F",
   "#F2A33C",
@@ -188,6 +203,83 @@ export function SinkMesh({
       <mesh position={[0, SINK_H + 0.18, 0.05]} castShadow>
         <boxGeometry args={[0.05, 0.3, 0.05]} />
         <meshStandardMaterial color="#7C8590" />
+      </mesh>
+    </group>
+  );
+}
+
+export function CleaningBlockMesh({
+  position,
+  size,
+  rotY,
+}: {
+  position: [number, number, number];
+  size: [number, number];
+  rotY: number;
+}) {
+  const [longSize, shortSize] = size;
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh position={[0, CLEANING_H / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[longSize, CLEANING_H, shortSize]} />
+        <meshStandardMaterial color={CLEANING_BODY} />
+      </mesh>
+      <mesh position={[0, CLEANING_H + 0.05, 0]} castShadow>
+        <boxGeometry args={[longSize + 0.15, 0.1, shortSize + 0.15]} />
+        <meshStandardMaterial color={CLEANING_ACCENT} />
+      </mesh>
+      <mesh position={[0, 0.85, shortSize / 2 + 0.01]}>
+        <boxGeometry args={[longSize - 0.2, CLEANING_BAND_H, 0.06]} />
+        <meshStandardMaterial color={CLEANING_WINDOW} />
+      </mesh>
+      <mesh position={[0, 0.85, -shortSize / 2 - 0.01]}>
+        <boxGeometry args={[longSize - 0.2, CLEANING_BAND_H, 0.06]} />
+        <meshStandardMaterial color={CLEANING_WINDOW} />
+      </mesh>
+      <mesh
+        position={[longSize / 2 - 0.4, CLEANING_H + 0.4, 0]}
+        castShadow
+        receiveShadow
+      >
+        <cylinderGeometry args={[0.22, 0.26, 0.6, 12]} />
+        <meshStandardMaterial color={CLEANING_BIN_COLOR} />
+      </mesh>
+      <mesh
+        position={[-longSize / 2 + 0.4, CLEANING_H + 0.4, 0]}
+        castShadow
+        receiveShadow
+      >
+        <cylinderGeometry args={[0.22, 0.26, 0.6, 12]} />
+        <meshStandardMaterial color={CLEANING_BIN_COLOR} />
+      </mesh>
+    </group>
+  );
+}
+
+export function BushMesh({
+  position,
+  variant,
+}: {
+  position: [number, number, number];
+  variant: number;
+}) {
+  const green = BUSH_GREENS[variant % BUSH_GREENS.length];
+  return (
+    <group position={position}>
+      <mesh position={[0, PLANTER_H / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[PLANTER_W, PLANTER_H, PLANTER_D]} />
+        <meshStandardMaterial color={PLANTER_COLOR} />
+      </mesh>
+      <mesh position={[0, PLANTER_H + BUSH_R * 0.75, 0]} castShadow receiveShadow>
+        <icosahedronGeometry args={[BUSH_R, 0]} />
+        <meshStandardMaterial color={green} flatShading />
+      </mesh>
+      <mesh
+        position={[BUSH_R * 0.4, PLANTER_H + BUSH_R * 1.05, -BUSH_R * 0.3]}
+        castShadow
+      >
+        <icosahedronGeometry args={[BUSH_R * 0.6, 0]} />
+        <meshStandardMaterial color={green} flatShading />
       </mesh>
     </group>
   );

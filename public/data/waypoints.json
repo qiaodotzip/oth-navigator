@@ -5,7 +5,6 @@
     "counterId": "psc-1",
     "steps": [
       { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [110, 60], "decisionPoint": true,  "segmentKey": "corridor" },
       { "floorId": "L1", "point": [99, 53],  "decisionPoint": false, "segmentKey": "arrived" }
     ]
   },
@@ -15,7 +14,6 @@
     "counterId": "psc-2",
     "steps": [
       { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [115, 60], "decisionPoint": true,  "segmentKey": "lift" },
       { "floorId": "L1", "point": [99, 53],  "decisionPoint": false, "segmentKey": "arrived" }
     ]
   },
@@ -25,7 +23,6 @@
     "counterId": "hawker-info",
     "steps": [
       { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [110, 50], "decisionPoint": true,  "segmentKey": "turn" },
       { "floorId": "L1", "point": [97, 38],  "decisionPoint": false, "segmentKey": "arrived" }
     ]
   },
@@ -35,7 +32,6 @@
     "counterId": "cc-1",
     "steps": [
       { "floorId": "L1", "point": [128, 73], "decisionPoint": false, "segmentKey": "start" },
-      { "floorId": "L1", "point": [105, 65], "decisionPoint": true,  "segmentKey": "corridor" },
       { "floorId": "L1", "point": [84, 57],  "decisionPoint": false, "segmentKey": "arrived" }
     ]
   },

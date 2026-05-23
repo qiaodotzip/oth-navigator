@@ -1,7 +1,15 @@
 import { useState, useRef, useEffect, ChangeEvent, MouseEvent, WheelEvent } from "react";
 import type { Detail, Facing, Pt } from "@/data/types";
 
-type Tool = "select" | "stall-row" | "stall-island" | "bench-rows" | "round-table" | "toilet";
+type Tool =
+  | "select"
+  | "stall-row"
+  | "stall-island"
+  | "bench-rows"
+  | "round-table"
+  | "toilet"
+  | "cleaning"
+  | "greenery-row";
 
 const STORAGE_KEY = (fid: string) => `oth-detail-editor:${fid}`;
 const POLY_STORAGE_KEY = (fid: string) => `oth-polygon-editor:${fid}`;
@@ -28,6 +36,8 @@ const TOOL_LABELS: Record<Tool, string> = {
   "bench-rows": "Bench rows",
   "round-table": "Round table",
   toilet: "Toilet",
+  cleaning: "Cleaning block",
+  "greenery-row": "Greenery row",
 };
 
 const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
@@ -36,6 +46,8 @@ const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
   "bench-rows": "#8C6A47",
   "round-table": "#D8B57C",
   toilet: "#5E81AC",
+  cleaning: "#3A3D42",
+  "greenery-row": "#4F7A3A",
 };
 
 const FACING_ARROW: Record<Facing, [number, number]> = {
@@ -218,6 +230,10 @@ export function DetailEditor() {
         newDetail = { id: uid(), type: "stall-island", rect: r };
       } else if (tool === "toilet") {
         newDetail = { id: uid(), type: "toilet", rect: r };
+      } else if (tool === "cleaning") {
+        newDetail = { id: uid(), type: "cleaning", rect: r };
+      } else if (tool === "greenery-row") {
+        newDetail = { id: uid(), type: "greenery-row", rect: r };
       } else {
         newDetail = { id: uid(), type: "bench-rows", rect: r };
       }

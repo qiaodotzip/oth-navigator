@@ -24,20 +24,44 @@ export function segmentsIntersect(p1: Pt, p2: Pt, p3: Pt, p4: Pt): boolean {
   const d2 = ccw(p3, p4, p2);
   const d3 = ccw(p1, p2, p3);
   const d4 = ccw(p1, p2, p4);
-  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
-      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+  if (
+    ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+    ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+  ) {
     return true;
   }
   return false;
 }
 
-export function segmentCrossesPolygon(start: Pt, end: Pt, polygon: Pt[]): boolean {
-  for (let i = 0; i < polygon.length; i++) {
-    const a = polygon[i];
-    const b = polygon[(i + 1) % polygon.length];
-    if (segmentsIntersect(start, end, a, b)) return true;
+export function isInWalkableLandmark(pt: Pt, floor: Floor): boolean {
+  for (const p of floor.polygons) {
+    if (p.type === "landmark" || p.type === "corridor" || p.type === "void") {
+      if (pointInPolygon(pt, p.points)) return true;
+    }
   }
   return false;
+}
+
+export function isPointWalkable(
+  pt: Pt,
+  floor: Floor,
+  destRoomId?: string,
+): boolean {
+  if (
+    pt[0] < 0 ||
+    pt[1] < 0 ||
+    pt[0] > floor.bounds.width ||
+    pt[1] > floor.bounds.depth
+  ) {
+    return false;
+  }
+  if (isInWalkableLandmark(pt, floor)) return true;
+  for (const poly of floor.polygons) {
+    if (poly.type !== "room") continue;
+    if (poly.id === destRoomId) continue;
+    if (pointInPolygon(pt, poly.points)) return false;
+  }
+  return true;
 }
 
 export type BlockReport = {
@@ -46,9 +70,9 @@ export type BlockReport = {
 };
 
 /**
- * Checks if a line segment from `start` to `end` passes through any room
- * polygon on the floor, *excluding* the room with `destinationRoomId`
- * (the route's intended end). Landmarks, corridors, and voids are walkable.
+ * Checks if a straight line from `start` to `end` ever passes through a
+ * non-destination room polygon. Landmarks override rooms (the same cell can
+ * sit inside both an overlapping landmark and a room — landmark wins).
  */
 export function checkSegment(
   start: Pt,
@@ -56,16 +80,21 @@ export function checkSegment(
   floor: Floor,
   destinationRoomId?: string,
 ): BlockReport {
-  const blocking: string[] = [];
-  for (const poly of floor.polygons) {
-    if (poly.type !== "room") continue;
-    if (poly.id === destinationRoomId) continue;
-    const crossesEdge = segmentCrossesPolygon(start, end, poly.points);
-    const startInside = pointInPolygon(start, poly.points);
-    const endInside = pointInPolygon(end, poly.points);
-    if (crossesEdge || startInside || endInside) {
-      blocking.push(poly.id);
+  const SAMPLES = 30;
+  const blocking = new Set<string>();
+  for (let i = 0; i <= SAMPLES; i++) {
+    const t = i / SAMPLES;
+    const x = start[0] + (end[0] - start[0]) * t;
+    const y = start[1] + (end[1] - start[1]) * t;
+    const pt: Pt = [x, y];
+    if (isInWalkableLandmark(pt, floor)) continue;
+    for (const poly of floor.polygons) {
+      if (poly.type !== "room") continue;
+      if (poly.id === destinationRoomId) continue;
+      if (pointInPolygon(pt, poly.points)) {
+        blocking.add(poly.id);
+      }
     }
   }
-  return { blocked: blocking.length > 0, blockingRoomIds: blocking };
+  return { blocked: blocking.size > 0, blockingRoomIds: Array.from(blocking) };
 }

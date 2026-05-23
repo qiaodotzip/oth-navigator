@@ -20,7 +20,9 @@ export type Detail =
   | { id: string; type: "stall-island"; rect: [Pt, Pt] }
   | { id: string; type: "bench-rows"; rect: [Pt, Pt] }
   | { id: string; type: "round-table"; point: Pt }
-  | { id: string; type: "toilet"; rect: [Pt, Pt] };
+  | { id: string; type: "toilet"; rect: [Pt, Pt] }
+  | { id: string; type: "cleaning"; rect: [Pt, Pt] }
+  | { id: string; type: "greenery-row"; rect: [Pt, Pt] };
 
 export type Floor = {
   id: FloorId;

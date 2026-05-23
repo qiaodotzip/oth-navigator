@@ -4,6 +4,9 @@ import {
   BenchMesh,
   BENCH_CLUSTER_DEPTH,
   BENCH_SPACING,
+  BushMesh,
+  BUSH_SPACING,
+  CleaningBlockMesh,
   CubicleMesh,
   CUBICLE_D,
   RoundClusterMesh,
@@ -24,6 +27,8 @@ type RoundItem = { pos: [number, number] };
 type CubicleItem = { pos: [number, number]; rotY: number };
 type SinkItem = { pos: [number, number]; rotY: number };
 type ToiletSlab = { pos: [number, number]; size: [number, number] };
+type CleaningItem = { pos: [number, number]; size: [number, number]; rotY: number };
+type BushItem = { pos: [number, number]; variant: number };
 
 function rectBounds(rect: [Pt, Pt]) {
   const minX = Math.min(rect[0][0], rect[1][0]);
@@ -186,6 +191,43 @@ function planToilet(detail: Extract<Detail, { type: "toilet" }>): {
   return { slab, cubicles, sinks };
 }
 
+function planGreeneryRow(detail: Extract<Detail, { type: "greenery-row" }>): BushItem[] {
+  const b = rectBounds(detail.rect);
+  const horizontal = b.w >= b.h;
+  const longSpan = horizontal ? b.w : b.h;
+  const shortSpan = horizontal ? b.h : b.w;
+  const longMin = horizontal ? b.minX : b.minY;
+  const shortMin = horizontal ? b.minY : b.minX;
+  const nCols = Math.max(1, Math.floor((longSpan - 0.1) / BUSH_SPACING));
+  const colStart = longMin + (longSpan - nCols * BUSH_SPACING) / 2 + BUSH_SPACING / 2;
+  const nRows = Math.max(1, Math.floor(shortSpan / BUSH_SPACING));
+  const rowStep = shortSpan / nRows;
+  const items: BushItem[] = [];
+  for (let r = 0; r < nRows; r++) {
+    const shortPos = shortMin + (r + 0.5) * rowStep;
+    for (let c = 0; c < nCols; c++) {
+      const longPos = colStart + c * BUSH_SPACING;
+      items.push({
+        pos: horizontal ? [longPos, shortPos] : [shortPos, longPos],
+        variant: (r * 7 + c * 3) % 3,
+      });
+    }
+  }
+  return items;
+}
+
+function planCleaning(detail: Extract<Detail, { type: "cleaning" }>): CleaningItem {
+  const b = rectBounds(detail.rect);
+  const horizontal = b.w >= b.h;
+  const longSize = horizontal ? b.w : b.h;
+  const shortSize = horizontal ? b.h : b.w;
+  return {
+    pos: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2],
+    size: [longSize, shortSize],
+    rotY: horizontal ? 0 : Math.PI / 2,
+  };
+}
+
 export function FloorDetails({ floor }: { floor: FloorData }) {
   const layout = useMemo(() => {
     const stalls: StallItem[] = [];
@@ -194,6 +236,8 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
     const cubicles: CubicleItem[] = [];
     const sinks: SinkItem[] = [];
     const toiletSlabs: ToiletSlab[] = [];
+    const cleanings: CleaningItem[] = [];
+    const bushes: BushItem[] = [];
     for (const d of floor.details ?? []) {
       if (d.type === "stall-row") stalls.push(...planStallRow(d));
       else if (d.type === "stall-island") stalls.push(...planStallIsland(d));
@@ -204,9 +248,13 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
         toiletSlabs.push(t.slab);
         cubicles.push(...t.cubicles);
         sinks.push(...t.sinks);
+      } else if (d.type === "cleaning") {
+        cleanings.push(planCleaning(d));
+      } else if (d.type === "greenery-row") {
+        bushes.push(...planGreeneryRow(d));
       }
     }
-    return { stalls, benches, rounds, cubicles, sinks, toiletSlabs };
+    return { stalls, benches, rounds, cubicles, sinks, toiletSlabs, cleanings, bushes };
   }, [floor]);
 
   const depth = floor.bounds.depth;
@@ -256,6 +304,21 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
           key={`sink${i}`}
           position={toLocal(s.pos[0], s.pos[1])}
           rotY={s.rotY}
+        />
+      ))}
+      {layout.cleanings.map((c, i) => (
+        <CleaningBlockMesh
+          key={`clean${i}`}
+          position={toLocal(c.pos[0], c.pos[1])}
+          size={c.size}
+          rotY={c.rotY}
+        />
+      ))}
+      {layout.bushes.map((b, i) => (
+        <BushMesh
+          key={`bush${i}`}
+          position={toLocal(b.pos[0], b.pos[1])}
+          variant={b.variant}
         />
       ))}
     </group>
