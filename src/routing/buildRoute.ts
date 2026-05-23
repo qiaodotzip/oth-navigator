@@ -24,6 +24,19 @@ function polygonCenter(points: Pt[]): Pt {
   return [cx, cy];
 }
 
+/** The routable location of a service: the center of its room polygon. */
+export function serviceLocation(
+  service: Service,
+  floors: Floor[],
+): { floorId: FloorId; point: Pt } | null {
+  if (!service.floorId || !service.roomId) return null;
+  const floor = floors.find(f => f.id === service.floorId);
+  if (!floor) return null;
+  const poly = floor.polygons.find(p => p.id === service.roomId);
+  if (!poly) return null;
+  return { floorId: service.floorId, point: polygonCenter(poly.points) };
+}
+
 function legPath(from: Pt, to: Pt, floor: Floor, destRoom?: string): Pt[] {
   const path = findPath(from, to, floor, destRoom);
   if (!path || path.length < 2) return [from, to];
@@ -47,8 +60,8 @@ export function buildRoute(
   const floorById = new Map(floors.map(f => [f.id, f]));
   const destFloor = floorById.get(service.floorId);
   if (!destFloor) return null;
-  const roomPoly = destFloor.polygons.find(p => p.id === service.roomId);
-  const dest = roomPoly ? polygonCenter(roomPoly.points) : start.point;
+  const loc = serviceLocation(service, floors);
+  const dest = loc ? loc.point : start.point;
 
   const steps: Waypoint[] = [
     { floorId: start.floorId, point: start.point, decisionPoint: false, segmentKey: "start" },
