@@ -77,3 +77,12 @@ export type NarrationResponse = {
   serviceId: string;
   segments: NarrationSegment[];
 };
+
+export type PopularTimesHour = { hour: number; busyness: number };
+
+export type PopularTimesEntry = {
+  serviceId: string;
+  placeId: string;
+  weekday: PopularTimesHour[][];
+  currentPopularity?: number;
+};

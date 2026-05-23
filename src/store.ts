@@ -4,6 +4,7 @@ import type {
   Floor,
   FloorId,
   Language,
+  PopularTimesEntry,
   RouteVariant,
   Service,
 } from "@/data/types";
@@ -22,6 +23,7 @@ type State = {
   services: Service[];
   routes: RouteVariant[];
   counterLoads: Record<string, number>;
+  popularTimes: PopularTimesEntry[];
   activeRoute: ActiveRoute | null;
   inspectMode: boolean;
   showLabels: boolean;
@@ -31,6 +33,7 @@ type State = {
   setActiveFloor: (f: FloorId) => void;
   setBundle: (data: { floors: Floor[]; services: Service[]; routes: RouteVariant[] }) => void;
   setLoad: (counterId: string, load: number) => void;
+  setPopularTimes: (entries: PopularTimesEntry[]) => void;
   startRoute: (v: RouteVariant) => void;
   advanceRoute: () => void;
   endRoute: () => void;
@@ -46,6 +49,7 @@ export const useStore = create<State>(set => ({
   services: [],
   routes: [],
   counterLoads: {},
+  popularTimes: [],
   activeRoute: null,
   inspectMode: true,
   showLabels: true,
@@ -56,6 +60,7 @@ export const useStore = create<State>(set => ({
   setBundle: ({ floors, services, routes }) => set({ floors, services, routes }),
   setLoad: (counterId, load) =>
     set(s => ({ counterLoads: { ...s.counterLoads, [counterId]: load } })),
+  setPopularTimes: entries => set({ popularTimes: entries }),
   startRoute: v =>
     set({ activeRoute: { variant: v, startedAt: Date.now(), currentWaypointIndex: 0 } }),
   advanceRoute: () =>
