@@ -23,6 +23,8 @@ type State = {
   routes: RouteVariant[];
   counterLoads: Record<string, number>;
   activeRoute: ActiveRoute | null;
+  inspectMode: boolean;
+  showLabels: boolean;
 
   setLanguage: (l: Language) => void;
   setProfile: (p: AccessibilityProfile) => void;
@@ -32,6 +34,8 @@ type State = {
   startRoute: (v: RouteVariant) => void;
   advanceRoute: () => void;
   endRoute: () => void;
+  toggleInspectMode: () => void;
+  toggleLabels: () => void;
 };
 
 export const useStore = create<State>(set => ({
@@ -43,6 +47,8 @@ export const useStore = create<State>(set => ({
   routes: [],
   counterLoads: {},
   activeRoute: null,
+  inspectMode: true,
+  showLabels: true,
 
   setLanguage: l => set({ language: l }),
   setProfile: p => set({ profile: p }),
@@ -64,4 +70,6 @@ export const useStore = create<State>(set => ({
         : {},
     ),
   endRoute: () => set({ activeRoute: null }),
+  toggleInspectMode: () => set(s => ({ inspectMode: !s.inspectMode })),
+  toggleLabels: () => set(s => ({ showLabels: !s.showLabels })),
 }));

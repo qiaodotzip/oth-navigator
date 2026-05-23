@@ -1,8 +1,10 @@
 import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
 import { useRef } from "react";
 import * as THREE from "three";
 import { Floor } from "./Floor";
 import { CameraRig } from "./CameraRig";
+import { PolygonLabels } from "./PolygonLabels";
 import { useStore } from "@/store";
 import { GuideAgent } from "@/agents/GuideAgent";
 import { useWaypointWalk } from "@/agents/useWaypointWalk";
@@ -17,6 +19,8 @@ export function Scene() {
   const floors = useStore(s => s.floors);
   const activeFloor = useStore(s => s.activeFloor);
   const activeRoute = useStore(s => s.activeRoute);
+  const inspectMode = useStore(s => s.inspectMode);
+  const showLabels = useStore(s => s.showLabels);
 
   useCounterLoadSimulator();
 
@@ -32,6 +36,7 @@ export function Scene() {
         shadow-mapSize={[2048, 2048]}
       />
       {active && <Floor data={active} />}
+      {active && showLabels && <PolygonLabels floor={active} />}
       {active && <CounterBadges floor={active} />}
       {active &&
         WANDER_LOOPS.filter(l => l.floorId === active.id).flatMap((loop, li) =>
@@ -46,7 +51,17 @@ export function Scene() {
           )),
         )}
       {activeRoute && <WalkingGuide floors={floors} />}
-      <CameraRig />
+      {inspectMode ? (
+        <OrbitControls
+          enablePan
+          enableZoom
+          enableRotate
+          maxPolarAngle={Math.PI / 2.05}
+          target={[0, 0, 0]}
+        />
+      ) : (
+        <CameraRig />
+      )}
     </Canvas>
   );
 }

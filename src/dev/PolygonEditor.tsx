@@ -200,6 +200,28 @@ export function PolygonEditor() {
   const cancelCurrent = () => setCurrentPoints([]);
   const deletePoly = (i: number) =>
     setPolygons(prev => prev.filter((_, idx) => idx !== i));
+  const renamePoly = (i: number) => {
+    const current = polygons[i];
+    if (!current) return;
+    const next = window.prompt(
+      `Rename polygon. Type is re-inferred from the prefix.\nMust start with "${floorId}-".`,
+      current.id,
+    );
+    if (!next || next === current.id) return;
+    if (!next.startsWith(`${floorId}-`)) {
+      alert(`ID must start with "${floorId}-".`);
+      return;
+    }
+    if (polygons.some((p, idx) => idx !== i && p.id === next)) {
+      alert(`Polygon with ID "${next}" already exists.`);
+      return;
+    }
+    setPolygons(prev =>
+      prev.map((p, idx) =>
+        idx === i ? { ...p, id: next, type: inferType(next) } : p,
+      ),
+    );
+  };
   const clearAll = () => {
     if (!window.confirm("Delete all polygons AND clear autosave for this floor?")) return;
     setPolygons([]);

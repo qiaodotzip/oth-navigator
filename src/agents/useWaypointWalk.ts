@@ -27,9 +27,9 @@ export function useWaypointWalk(floors: Floor[]) {
     const floor = floors.find(f => f.id === a.floorId);
     if (!floor) return;
     const ax = a.point[0] - floor.bounds.width / 2;
-    const az = a.point[1] - floor.bounds.depth / 2;
+    const az = floor.bounds.depth / 2 - a.point[1];
     const bx = b.point[0] - floor.bounds.width / 2;
-    const bz = b.point[1] - floor.bounds.depth / 2;
+    const bz = floor.bounds.depth / 2 - b.point[1];
     const dx = bx - ax;
     const dz = bz - az;
     const segLen = Math.hypot(dx, dz);
