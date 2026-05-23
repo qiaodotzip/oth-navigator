@@ -1,3 +1,8 @@
+import "dotenv/config";
+import { Hono } from "hono";
+import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { cors } from "hono/cors";
 import OpenAI from "openai";
 
 const SYSTEM_PROMPT = `You are a wayfinding assistant inside One Tampines Hub (OTH) in Singapore.
@@ -36,15 +41,22 @@ const SCHEMA = {
   },
 } as const;
 
-export const config = { runtime: "nodejs" };
+const app = new Hono();
+app.use("*", cors());
 
-export default async function handler(req: Request) {
-  if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
-  const body = await req.json();
+app.get("/api/health", c => c.json({ ok: true }));
+
+app.post("/api/narrate", async c => {
+  const body = await c.req.json();
   const { query, profile, services, segmentKeys } = body ?? {};
-  if (!query || !services) return new Response("missing fields", { status: 400 });
-
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!query || !services) {
+    return c.json({ error: "missing fields" }, 400);
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return c.json({ error: "OPENAI_API_KEY not set" }, 500);
+  }
+  const client = new OpenAI({ apiKey });
   try {
     const completion = await client.chat.completions.create({
       model: process.env.OPENAI_MODEL ?? "gpt-4o",
@@ -53,12 +65,7 @@ export default async function handler(req: Request) {
         { role: "system", content: SYSTEM_PROMPT },
         {
           role: "user",
-          content: JSON.stringify({
-            query,
-            profile,
-            services,
-            segmentKeys,
-          }),
+          content: JSON.stringify({ query, profile, services, segmentKeys }),
         },
       ],
     });
@@ -67,11 +74,19 @@ export default async function handler(req: Request) {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  } catch (err: unknown) {
+  } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    console.error("[narrate] OpenAI error:", msg);
+    return c.json({ error: msg }, 500);
   }
+});
+
+if (process.env.NODE_ENV === "production") {
+  app.use("/*", serveStatic({ root: "./dist" }));
+  app.get("/*", serveStatic({ path: "./dist/index.html" }));
 }
+
+const port = Number(process.env.PORT ?? 3000);
+serve({ fetch: app.fetch, port }, info => {
+  console.log(`[server] listening on http://localhost:${info.port}`);
+});

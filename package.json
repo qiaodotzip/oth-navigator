@@ -4,15 +4,20 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n vite,server -c blue,green \"vite\" \"npm:dev:server\"",
+    "dev:vite": "vite",
+    "dev:server": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "vercel-dev": "vercel dev"
+    "start": "NODE_ENV=production tsx server/index.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hono/node-server": "^2.0.3",
     "@react-three/drei": "^9.108.0",
     "@react-three/fiber": "^8.16.0",
+    "dotenv": "^17.4.2",
+    "hono": "^4.12.22",
     "noisejs": "^2.1.0",
     "openai": "^4.55.0",
     "phosphor-react": "^1.4.1",
@@ -28,6 +33,7 @@
     "@types/three": "^0.165.0",
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.19",
+    "concurrently": "^9.2.1",
     "postcss": "^8.4.38",
     "svgson": "^5.3.1",
     "tailwindcss": "^3.4.0",
