@@ -1,5 +1,11 @@
 import { useMemo } from "react";
 import * as THREE from "three";
+import { useStore } from "@/store";
+
+/** True at night — used to make greenery/shops/hawker stalls emissive so they glow under Bloom. */
+export function useNightGlow(): boolean {
+  return useStore(s => s.timeOfDay === "night");
+}
 
 export const STALL_W = 2.4;
 export const STALL_D = 1.7;
@@ -70,11 +76,12 @@ export function StallMesh({
   rotY: number;
   color: string;
 }) {
+  const night = useNightGlow();
   return (
     <group position={position} rotation={[0, rotY, 0]}>
       <mesh position={[0, STALL_BODY_H / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[STALL_W, STALL_BODY_H, STALL_D]} />
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={night ? 0.45 : 0} />
       </mesh>
       <mesh
         position={[0, STALL_BODY_H + ROOF_H / 2, 0]}
@@ -93,7 +100,7 @@ export function StallMesh({
         <meshStandardMaterial
           color="#F6ECCB"
           emissive="#FFE9A8"
-          emissiveIntensity={0.25}
+          emissiveIntensity={night ? 1.6 : 0.25}
         />
       </mesh>
     </group>
@@ -267,6 +274,7 @@ export function BushMesh({
   variant: number;
 }) {
   const green = BUSH_GREENS[variant % BUSH_GREENS.length];
+  const night = useNightGlow();
   return (
     <group position={position}>
       <mesh position={[0, PLANTER_H / 2, 0]} castShadow receiveShadow>
@@ -275,14 +283,24 @@ export function BushMesh({
       </mesh>
       <mesh position={[0, PLANTER_H + BUSH_R * 0.75, 0]} castShadow receiveShadow>
         <icosahedronGeometry args={[BUSH_R, 0]} />
-        <meshStandardMaterial color={green} flatShading />
+        <meshStandardMaterial
+          color={green}
+          flatShading
+          emissive={green}
+          emissiveIntensity={night ? 0.7 : 0}
+        />
       </mesh>
       <mesh
         position={[BUSH_R * 0.4, PLANTER_H + BUSH_R * 1.05, -BUSH_R * 0.3]}
         castShadow
       >
         <icosahedronGeometry args={[BUSH_R * 0.6, 0]} />
-        <meshStandardMaterial color={green} flatShading />
+        <meshStandardMaterial
+          color={green}
+          flatShading
+          emissive={green}
+          emissiveIntensity={night ? 0.7 : 0}
+        />
       </mesh>
     </group>
   );
@@ -904,6 +922,7 @@ export function ShopBlockMesh({
   const tableXs = Array.from({ length: tableCols }, (_, i) =>
     -width / 2 + (width / tableCols) * (i + 0.5),
   );
+  const night = useNightGlow();
   return (
     <group position={position}>
       {walls.map((w, i) => (
@@ -915,6 +934,17 @@ export function ShopBlockMesh({
       <mesh position={[0, H, 0]}>
         <boxGeometry args={[width, 0.1, depth]} />
         <meshStandardMaterial color="#DCDCDC" transparent opacity={0.45} />
+      </mesh>
+      {/* interior light slab — glows warm at night so the shop reads as 'open' */}
+      <mesh position={[0, H - 0.2, 0]}>
+        <boxGeometry args={[width * 0.85, 0.08, depth * 0.85]} />
+        <meshStandardMaterial
+          color="#FFF1D0"
+          emissive="#FFD98A"
+          emissiveIntensity={night ? 1.8 : 0}
+          transparent
+          opacity={night ? 0.95 : 0.0}
+        />
       </mesh>
       {/* eatery counter along the back wall */}
       <mesh position={[0, 0.55, -depth / 2 + 0.6]} castShadow receiveShadow>

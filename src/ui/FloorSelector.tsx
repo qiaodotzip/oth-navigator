@@ -1,5 +1,12 @@
 import { useStore } from "@/store";
-import { Tag, ArrowsClockwise, Sun, SunHorizon, MoonStars } from "phosphor-react";
+import {
+  Tag,
+  ArrowsClockwise,
+  Sun,
+  SunHorizon,
+  MoonStars,
+  PersonSimpleWalk,
+} from "phosphor-react";
 
 const FLOORS = ["L1", "L2"] as const;
 
@@ -13,14 +20,17 @@ export function FloorSelector() {
   const activeFloor = useStore(s => s.activeFloor);
   const setActiveFloor = useStore(s => s.setActiveFloor);
   const inspectMode = useStore(s => s.inspectMode);
+  const firstPerson = useStore(s => s.firstPerson);
   const showLabels = useStore(s => s.showLabels);
   const toggleInspectMode = useStore(s => s.toggleInspectMode);
+  const toggleFirstPerson = useStore(s => s.toggleFirstPerson);
   const toggleLabels = useStore(s => s.toggleLabels);
   const timeOfDay = useStore(s => s.timeOfDay);
   const cycleTimeOfDay = useStore(s => s.cycleTimeOfDay);
   const TimeIcon = TIME_ICON[timeOfDay].Icon;
 
   return (
+    <>
     <div className="absolute right-2 top-2 z-30 flex flex-col gap-1">
       {FLOORS.map(f => (
         <button
@@ -63,6 +73,22 @@ export function FloorSelector() {
       >
         <TimeIcon size={18} weight="bold" />
       </button>
+      <button
+        onClick={toggleFirstPerson}
+        title={firstPerson ? "Exit walk mode" : "Walk in first person"}
+        aria-label="Toggle first-person walk mode"
+        className={`w-10 h-10 rounded-full grid place-items-center ${
+          firstPerson ? "bg-oth-primary text-white" : "bg-white/80 text-oth-ink"
+        }`}
+      >
+        <PersonSimpleWalk size={18} weight="bold" />
+      </button>
     </div>
+    {firstPerson && (
+      <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
+        Click to look · WASD move · Shift sprint · Esc to exit
+      </div>
+    )}
+    </>
   );
 }

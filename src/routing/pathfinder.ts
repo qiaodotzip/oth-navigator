@@ -112,6 +112,17 @@ export function findPath(
       const nk = key(nx, ny);
       if (closed.has(nk)) continue;
       if (!cellWalkable(nx, ny, floor, destRoom)) continue;
+      // No diagonal corner-cutting: a diagonal step is only allowed when both
+      // orthogonally-adjacent cells are also walkable, so the path can't squeeze
+      // through the corner of a wall/room.
+      if (dx !== 0 && dy !== 0) {
+        if (
+          !cellWalkable(cx + dx, cy, floor, destRoom) ||
+          !cellWalkable(cx, cy + dy, floor, destRoom)
+        ) {
+          continue;
+        }
+      }
       const tentative = (gScore.get(bestKey) ?? 0) + cost;
       const existing = gScore.get(nk);
       if (existing === undefined || tentative < existing) {

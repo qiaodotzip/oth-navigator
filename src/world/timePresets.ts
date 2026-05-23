@@ -13,9 +13,10 @@ export const TIME_PRESETS: Record<TimeOfDay, TimePreset> = {
   morning: {
     bg: "#F4F8FC",
     fog: [180, 420],
-    ambient: { color: "#ffffff", intensity: 0.8 },
-    dir: { color: "#fff3df", intensity: 1.15, pos: [120, 210, 90] },
-    hemi: { sky: "#e4f0ff", ground: "#d7d2c6", intensity: 0.55 },
+    // Lower ambient + strong directional = brighter sun and harder shadows.
+    ambient: { color: "#ffffff", intensity: 0.42 },
+    dir: { color: "#fff7ea", intensity: 2.3, pos: [110, 230, 70] },
+    hemi: { sky: "#e4f0ff", ground: "#d7d2c6", intensity: 0.35 },
     groundColor: "#FAFBFC",
   },
   evening: {

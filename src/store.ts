@@ -30,6 +30,7 @@ type State = {
   popularTimes: PopularTimesEntry[];
   activeRoute: ActiveRoute | null;
   inspectMode: boolean;
+  firstPerson: boolean;
   showLabels: boolean;
   userLocation: UserLocation | null;
   pickingLocation: boolean;
@@ -46,6 +47,7 @@ type State = {
   advanceRoute: () => void;
   endRoute: () => void;
   toggleInspectMode: () => void;
+  toggleFirstPerson: () => void;
   toggleLabels: () => void;
   setUserLocation: (loc: UserLocation) => void;
   setPickingLocation: (v: boolean) => void;
@@ -71,6 +73,7 @@ export const useStore = create<State>(set => ({
   popularTimes: [],
   activeRoute: null,
   inspectMode: true,
+  firstPerson: false,
   showLabels: true,
   userLocation: null,
   pickingLocation: false,
@@ -105,6 +108,7 @@ export const useStore = create<State>(set => ({
     }),
   endRoute: () => set({ activeRoute: null }),
   toggleInspectMode: () => set(s => ({ inspectMode: !s.inspectMode })),
+  toggleFirstPerson: () => set(s => ({ firstPerson: !s.firstPerson })),
   toggleLabels: () => set(s => ({ showLabels: !s.showLabels })),
   setUserLocation: loc => set({ userLocation: loc, activeFloor: loc.floorId }),
   setPickingLocation: v => set({ pickingLocation: v }),

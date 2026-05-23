@@ -3,24 +3,24 @@ import * as THREE from "three";
 import { useStore } from "@/store";
 
 function makeFloorTexture(): THREE.Texture {
-  const size = 128;
+  const size = 256;
   const c = document.createElement("canvas");
   c.width = c.height = size;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = "#ffffff";
+  // Slightly off-white tile face so the grout lines read clearly.
+  ctx.fillStyle = "#F3F4F6";
   ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 120; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    ctx.fillStyle = Math.random() > 0.5 ? "rgba(0,0,0,0.02)" : "rgba(0,0,0,0.04)";
-    ctx.fillRect(x, y, 2, 2);
-  }
-  ctx.strokeStyle = "rgba(120,128,138,0.18)";
-  ctx.lineWidth = 2;
+  // Inset darker grout border (one tile per texture repeat).
+  ctx.strokeStyle = "rgba(90,100,112,0.40)";
+  ctx.lineWidth = 6;
   ctx.strokeRect(0, 0, size, size);
+  // Faint inner highlight for a polished look.
+  ctx.strokeStyle = "rgba(255,255,255,0.5)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(8, 8, size - 16, size - 16);
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   return tex;
 }
 

@@ -1,8 +1,10 @@
 import { Canvas, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, SoftShadows } from "@react-three/drei";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { Floor } from "./Floor";
 import { FloorDetails } from "./FloorDetails";
 import { CameraRig } from "./CameraRig";
+import { FirstPersonRig } from "./FirstPersonRig";
 import { PolygonLabels } from "./PolygonLabels";
 import { RouteArrow } from "./RouteArrow";
 import { useStore } from "@/store";
@@ -18,6 +20,7 @@ export function Scene() {
   const floors = useStore(s => s.floors);
   const activeFloor = useStore(s => s.activeFloor);
   const inspectMode = useStore(s => s.inspectMode);
+  const firstPerson = useStore(s => s.firstPerson);
   const showLabels = useStore(s => s.showLabels);
   const pickingLocation = useStore(s => s.pickingLocation);
   const setUserLocation = useStore(s => s.setUserLocation);
@@ -46,7 +49,7 @@ export function Scene() {
       camera={{ position: [0, 180, 80], fov: 35 }}
       gl={{ antialias: true }}
     >
-      <SoftShadows size={28} samples={12} focus={0.7} />
+      {timeOfDay !== "morning" && <SoftShadows size={28} samples={12} focus={0.7} />}
       <color attach="background" args={[preset.bg]} />
       <fog attach="fog" args={[preset.bg, preset.fog[0], preset.fog[1]]} />
       <ambientLight color={preset.ambient.color} intensity={preset.ambient.intensity} />
@@ -97,7 +100,9 @@ export function Scene() {
             />
           )),
         )}
-      {inspectMode ? (
+      {firstPerson ? (
+        <FirstPersonRig />
+      ) : inspectMode ? (
         <OrbitControls
           enablePan
           enableZoom
@@ -108,6 +113,14 @@ export function Scene() {
       ) : (
         <CameraRig />
       )}
+      <EffectComposer enabled>
+        <Bloom
+          intensity={timeOfDay === "night" ? 1.4 : 0.2}
+          luminanceThreshold={timeOfDay === "night" ? 0.18 : 0.85}
+          luminanceSmoothing={0.9}
+          mipmapBlur
+        />
+      </EffectComposer>
     </Canvas>
   );
 }
