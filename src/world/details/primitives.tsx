@@ -18,6 +18,18 @@ export const ROUND_TABLE_H = 0.75;
 export const STOOL_R = 0.18;
 export const STOOL_H = 0.45;
 
+export const TOILET_TILE_COLOR = "#D8DEE4";
+export const TOILET_FIXTURE_COLOR = "#F0F0F0";
+export const TOILET_DIVIDER_COLOR = "#A8B0B8";
+export const TOILET_PARTITION_H = 1.6;
+export const TOILET_PARTITION_T = 0.05;
+export const CUBICLE_W = 0.85;
+export const CUBICLE_D = 1.2;
+export const CUBICLE_H = 0.45;
+export const SINK_W = 0.6;
+export const SINK_D = 0.4;
+export const SINK_H = 0.85;
+
 export const STALL_COLORS = [
   "#D9534F",
   "#F2A33C",
@@ -94,6 +106,89 @@ export function BenchMesh({
           <meshStandardMaterial color={BENCH_SEAT_COLOR} />
         </mesh>
       ))}
+    </group>
+  );
+}
+
+export function ToiletSlabMesh({
+  position,
+  size,
+}: {
+  position: [number, number, number];
+  size: [number, number];
+}) {
+  const [w, d] = size;
+  return (
+    <mesh position={position} receiveShadow>
+      <boxGeometry args={[w, 0.04, d]} />
+      <meshStandardMaterial color={TOILET_TILE_COLOR} />
+    </mesh>
+  );
+}
+
+export function CubicleMesh({
+  position,
+  rotY,
+}: {
+  position: [number, number, number];
+  rotY: number;
+}) {
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh
+        position={[CUBICLE_W / 2 + TOILET_PARTITION_T / 2, TOILET_PARTITION_H / 2, 0]}
+        castShadow
+      >
+        <boxGeometry args={[TOILET_PARTITION_T, TOILET_PARTITION_H, CUBICLE_D]} />
+        <meshStandardMaterial color={TOILET_DIVIDER_COLOR} />
+      </mesh>
+      <mesh
+        position={[
+          -CUBICLE_W / 2 - TOILET_PARTITION_T / 2,
+          TOILET_PARTITION_H / 2,
+          0,
+        ]}
+        castShadow
+      >
+        <boxGeometry args={[TOILET_PARTITION_T, TOILET_PARTITION_H, CUBICLE_D]} />
+        <meshStandardMaterial color={TOILET_DIVIDER_COLOR} />
+      </mesh>
+      <mesh
+        position={[
+          0,
+          TOILET_PARTITION_H / 2,
+          -CUBICLE_D / 2 - TOILET_PARTITION_T / 2,
+        ]}
+        castShadow
+      >
+        <boxGeometry args={[CUBICLE_W, TOILET_PARTITION_H, TOILET_PARTITION_T]} />
+        <meshStandardMaterial color={TOILET_DIVIDER_COLOR} />
+      </mesh>
+      <mesh position={[0, CUBICLE_H / 2, -CUBICLE_D / 2 + 0.35]} castShadow receiveShadow>
+        <boxGeometry args={[0.45, CUBICLE_H, 0.55]} />
+        <meshStandardMaterial color={TOILET_FIXTURE_COLOR} />
+      </mesh>
+    </group>
+  );
+}
+
+export function SinkMesh({
+  position,
+  rotY,
+}: {
+  position: [number, number, number];
+  rotY: number;
+}) {
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh position={[0, SINK_H / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[SINK_W, SINK_H, SINK_D]} />
+        <meshStandardMaterial color={TOILET_FIXTURE_COLOR} />
+      </mesh>
+      <mesh position={[0, SINK_H + 0.18, 0.05]} castShadow>
+        <boxGeometry args={[0.05, 0.3, 0.05]} />
+        <meshStandardMaterial color="#7C8590" />
+      </mesh>
     </group>
   );
 }

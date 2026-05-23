@@ -4,11 +4,16 @@ import {
   BenchMesh,
   BENCH_CLUSTER_DEPTH,
   BENCH_SPACING,
+  CubicleMesh,
+  CUBICLE_D,
   RoundClusterMesh,
+  SinkMesh,
+  SINK_D,
   StallMesh,
   STALL_COLORS,
   STALL_D,
   STALL_SPACING,
+  ToiletSlabMesh,
 } from "./details/primitives";
 
 const SLAB_Y = 0.15;
@@ -16,6 +21,9 @@ const SLAB_Y = 0.15;
 type StallItem = { pos: [number, number]; rotY: number; color: string };
 type BenchItem = { pos: [number, number]; rotY: number };
 type RoundItem = { pos: [number, number] };
+type CubicleItem = { pos: [number, number]; rotY: number };
+type SinkItem = { pos: [number, number]; rotY: number };
+type ToiletSlab = { pos: [number, number]; size: [number, number] };
 
 function rectBounds(rect: [Pt, Pt]) {
   const minX = Math.min(rect[0][0], rect[1][0]);
@@ -126,18 +134,79 @@ function planBenchRows(detail: Extract<Detail, { type: "bench-rows" }>): BenchIt
   return items;
 }
 
+function planToilet(detail: Extract<Detail, { type: "toilet" }>): {
+  slab: ToiletSlab;
+  cubicles: CubicleItem[];
+  sinks: SinkItem[];
+} {
+  const b = rectBounds(detail.rect);
+  const horizontal = b.w >= b.h;
+  const longSpan = horizontal ? b.w : b.h;
+  const shortSpan = horizontal ? b.h : b.w;
+  const longMin = horizontal ? b.minX : b.minY;
+  const shortMin = horizontal ? b.minY : b.minX;
+
+  const slab: ToiletSlab = {
+    pos: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2],
+    size: [b.w, b.h],
+  };
+
+  const cubicleSpacing = 0.95;
+  const nCubicles = Math.max(1, Math.floor((longSpan - 0.2) / cubicleSpacing));
+  const cubStartLong = longMin + (longSpan - nCubicles * cubicleSpacing) / 2 + cubicleSpacing / 2;
+  const cubShort = shortMin + CUBICLE_D / 2 + 0.15;
+  const cubRotY = horizontal ? 0 : Math.PI / 2;
+
+  const cubicles: CubicleItem[] = [];
+  for (let i = 0; i < nCubicles; i++) {
+    const longPos = cubStartLong + i * cubicleSpacing;
+    cubicles.push({
+      pos: horizontal ? [longPos, cubShort] : [cubShort, longPos],
+      rotY: cubRotY,
+    });
+  }
+
+  const sinks: SinkItem[] = [];
+  const hasSinks = shortSpan > 3.0;
+  if (hasSinks) {
+    const sinkSpacing = 0.85;
+    const nSinks = Math.max(1, Math.floor((longSpan - 0.2) / sinkSpacing));
+    const sinkStartLong = longMin + (longSpan - nSinks * sinkSpacing) / 2 + sinkSpacing / 2;
+    const sinkShort = shortMin + shortSpan - SINK_D / 2 - 0.15;
+    const sinkRotY = horizontal ? Math.PI : -Math.PI / 2;
+    for (let i = 0; i < nSinks; i++) {
+      const longPos = sinkStartLong + i * sinkSpacing;
+      sinks.push({
+        pos: horizontal ? [longPos, sinkShort] : [sinkShort, longPos],
+        rotY: sinkRotY,
+      });
+    }
+  }
+
+  return { slab, cubicles, sinks };
+}
+
 export function FloorDetails({ floor }: { floor: FloorData }) {
   const layout = useMemo(() => {
     const stalls: StallItem[] = [];
     const benches: BenchItem[] = [];
     const rounds: RoundItem[] = [];
+    const cubicles: CubicleItem[] = [];
+    const sinks: SinkItem[] = [];
+    const toiletSlabs: ToiletSlab[] = [];
     for (const d of floor.details ?? []) {
       if (d.type === "stall-row") stalls.push(...planStallRow(d));
       else if (d.type === "stall-island") stalls.push(...planStallIsland(d));
       else if (d.type === "bench-rows") benches.push(...planBenchRows(d));
       else if (d.type === "round-table") rounds.push({ pos: d.point });
+      else if (d.type === "toilet") {
+        const t = planToilet(d);
+        toiletSlabs.push(t.slab);
+        cubicles.push(...t.cubicles);
+        sinks.push(...t.sinks);
+      }
     }
-    return { stalls, benches, rounds };
+    return { stalls, benches, rounds, cubicles, sinks, toiletSlabs };
   }, [floor]);
 
   const depth = floor.bounds.depth;
@@ -150,6 +219,13 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
 
   return (
     <group>
+      {layout.toiletSlabs.map((t, i) => (
+        <ToiletSlabMesh
+          key={`tslab${i}`}
+          position={[t.pos[0] - width / 2, SLAB_Y + 0.02, t.pos[1] - depth / 2]}
+          size={t.size}
+        />
+      ))}
       {layout.stalls.map((s, i) => (
         <StallMesh
           key={`s${i}`}
@@ -167,6 +243,20 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       ))}
       {layout.rounds.map((r, i) => (
         <RoundClusterMesh key={`r${i}`} position={toLocal(r.pos[0], r.pos[1])} />
+      ))}
+      {layout.cubicles.map((c, i) => (
+        <CubicleMesh
+          key={`c${i}`}
+          position={toLocal(c.pos[0], c.pos[1])}
+          rotY={c.rotY}
+        />
+      ))}
+      {layout.sinks.map((s, i) => (
+        <SinkMesh
+          key={`sink${i}`}
+          position={toLocal(s.pos[0], s.pos[1])}
+          rotY={s.rotY}
+        />
       ))}
     </group>
   );

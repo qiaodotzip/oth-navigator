@@ -19,7 +19,8 @@ export type Detail =
   | { id: string; type: "stall-row"; rect: [Pt, Pt]; facing: Facing }
   | { id: string; type: "stall-island"; rect: [Pt, Pt] }
   | { id: string; type: "bench-rows"; rect: [Pt, Pt] }
-  | { id: string; type: "round-table"; point: Pt };
+  | { id: string; type: "round-table"; point: Pt }
+  | { id: string; type: "toilet"; rect: [Pt, Pt] };
 
 export type Floor = {
   id: FloorId;
