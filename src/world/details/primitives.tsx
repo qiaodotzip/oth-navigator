@@ -307,3 +307,341 @@ export function RoundClusterMesh({ position }: { position: [number, number, numb
     </group>
   );
 }
+
+// ---------- Standard / circulation / stage primitives ----------
+
+const TRUNK_COLOR = "#8B6B4A";
+const FROND_COLOR = "#3E7A34";
+const ISLAND_SLAB_COLOR = "#6E8B4A";
+const PARK_BENCH_COLOR = "#7C5A3A";
+const ESC_UP_COLOR = "#4CAF50";
+const ESC_DOWN_COLOR = "#FF8A50";
+const ESC_RAIL_COLOR = "#9AA3AD";
+const ESC_STEP_COLOR = "#C2C8CF";
+const LIFT_BODY_COLOR = "#7E868F";
+const LIFT_DOOR_COLOR = "#2F3439";
+const STAIR_COLOR = "#B8BEC6";
+const STAGE_PLATFORM_COLOR = "#3A2C3F";
+const STAGE_SCREEN_COLOR = "#101418";
+const STAGE_SCREEN_FRAME = "#33383E";
+const CHAIR_COLOR = "#F2F2F0";
+
+export const ESC_RISE = 2.4;
+export const LIFT_H = 3.2;
+export const STAGE_PLATFORM_H = 0.9;
+
+export function PalmTreeMesh({
+  position,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  scale?: number;
+}) {
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 1.5, 0]} castShadow>
+        <cylinderGeometry args={[0.13, 0.2, 3.0, 7]} />
+        <meshStandardMaterial color={TRUNK_COLOR} flatShading />
+      </mesh>
+      {Array.from({ length: 7 }).map((_, i) => {
+        const a = (i / 7) * Math.PI * 2;
+        return (
+          <mesh
+            key={i}
+            position={[Math.cos(a) * 0.55, 3.0, Math.sin(a) * 0.55]}
+            rotation={[0.6, -a, 0]}
+            castShadow
+          >
+            <coneGeometry args={[0.16, 1.7, 4]} />
+            <meshStandardMaterial color={FROND_COLOR} flatShading />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+export function ParkBenchMesh({
+  position,
+  rotY,
+}: {
+  position: [number, number, number];
+  rotY: number;
+}) {
+  const W = 1.6;
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh position={[0, 0.42, 0]} castShadow receiveShadow>
+        <boxGeometry args={[W, 0.1, 0.45]} />
+        <meshStandardMaterial color={PARK_BENCH_COLOR} />
+      </mesh>
+      <mesh position={[0, 0.72, -0.2]} castShadow>
+        <boxGeometry args={[W, 0.5, 0.08]} />
+        <meshStandardMaterial color={PARK_BENCH_COLOR} />
+      </mesh>
+    </group>
+  );
+}
+
+export function LandscapeIslandMesh({
+  position,
+  width,
+  depth,
+  rotY,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+}) {
+  const halfW = width / 2;
+  const halfD = depth / 2;
+  const palms: [number, number][] =
+    Math.max(width, depth) > 5
+      ? [
+          [-width * 0.18, 0],
+          [width * 0.2, depth * 0.12],
+        ]
+      : [[0, 0]];
+  const bushPositions: [number, number][] = [
+    [-width * 0.28, -depth * 0.22],
+    [width * 0.3, -depth * 0.18],
+    [width * 0.05, depth * 0.28],
+    [-width * 0.22, depth * 0.25],
+  ];
+  // Park benches lined against each side, facing outward.
+  const benches: Array<{ pos: [number, number]; rotY: number }> = [
+    { pos: [0, halfD + 0.35], rotY: 0 },
+    { pos: [0, -halfD - 0.35], rotY: Math.PI },
+    { pos: [halfW + 0.35, 0], rotY: -Math.PI / 2 },
+    { pos: [-halfW - 0.35, 0], rotY: Math.PI / 2 },
+  ];
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh position={[0, 0.18, 0]} receiveShadow castShadow>
+        <boxGeometry args={[width, 0.36, depth]} />
+        <meshStandardMaterial color={ISLAND_SLAB_COLOR} />
+      </mesh>
+      {palms.map(([px, pz], i) => (
+        <PalmTreeMesh key={`palm${i}`} position={[px, 0.36, pz]} scale={0.95} />
+      ))}
+      {bushPositions
+        .filter(([bx, bz]) => Math.abs(bx) < halfW - 0.3 && Math.abs(bz) < halfD - 0.3)
+        .map(([bx, bz], i) => (
+          <mesh key={`b${i}`} position={[bx, 0.36 + 0.3, bz]} castShadow>
+            <icosahedronGeometry args={[0.4, 0]} />
+            <meshStandardMaterial color="#4F7A3A" flatShading />
+          </mesh>
+        ))}
+      {benches.map((b, i) => (
+        <ParkBenchMesh key={`pb${i}`} position={[b.pos[0], 0, b.pos[1]]} rotY={b.rotY} />
+      ))}
+    </group>
+  );
+}
+
+export function EscalatorMesh({
+  position,
+  width,
+  depth,
+  rotY,
+  up,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+  up: boolean;
+}) {
+  // Local: travels along +z. "up" => high end at +z; "down" => low end at +z.
+  const run = depth;
+  const rise = ESC_RISE;
+  const rampLen = Math.hypot(run, rise);
+  const incline = Math.atan2(rise, run);
+  const tilt = up ? -incline : incline;
+  const rampW = Math.min(width, 2.2);
+  const color = up ? ESC_UP_COLOR : ESC_DOWN_COLOR;
+  const nSteps = Math.max(4, Math.round(run / 0.7));
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh position={[0, rise / 2, 0]} rotation={[tilt, 0, 0]} castShadow receiveShadow>
+        <boxGeometry args={[rampW, 0.18, rampLen]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      {/* step ridges */}
+      {Array.from({ length: nSteps }).map((_, i) => {
+        const t = (i + 0.5) / nSteps; // 0..1 from -z to +z
+        const z = (t - 0.5) * run;
+        const y = (up ? t : 1 - t) * rise + 0.12;
+        return (
+          <mesh key={i} position={[0, y, z]} rotation={[tilt, 0, 0]}>
+            <boxGeometry args={[rampW - 0.1, 0.06, 0.12]} />
+            <meshStandardMaterial color={ESC_STEP_COLOR} />
+          </mesh>
+        );
+      })}
+      {/* side rails */}
+      {[rampW / 2 + 0.08, -rampW / 2 - 0.08].map((x, i) => (
+        <mesh key={i} position={[x, rise / 2 + 0.5, 0]} rotation={[tilt, 0, 0]} castShadow>
+          <boxGeometry args={[0.1, 0.5, rampLen]} />
+          <meshStandardMaterial color={ESC_RAIL_COLOR} />
+        </mesh>
+      ))}
+      {/* direction arrow at the +z (travel) end */}
+      <mesh position={[0, (up ? rise : 0) + 0.4, run / 2 + 0.4]} rotation={[Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[0.5, 1.0, 4]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+    </group>
+  );
+}
+
+export function LiftBlockMesh({
+  position,
+  width,
+  depth,
+  rotY,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+}) {
+  // Lifts line the long side; doors face +z (the lobby / facing side).
+  const doorCount = Math.max(1, Math.floor(width / 1.6));
+  const doorW = 0.9;
+  const gap = width / doorCount;
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh position={[0, LIFT_H / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[width, LIFT_H, depth]} />
+        <meshStandardMaterial color={LIFT_BODY_COLOR} />
+      </mesh>
+      {Array.from({ length: doorCount }).map((_, i) => {
+        const x = -width / 2 + gap * (i + 0.5);
+        return (
+          <mesh key={i} position={[x, 1.1, depth / 2 + 0.02]} castShadow>
+            <boxGeometry args={[doorW, 2.0, 0.08]} />
+            <meshStandardMaterial color={LIFT_DOOR_COLOR} metalness={0.3} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+export function StaircaseMesh({
+  position,
+  width,
+  depth,
+  rotY,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+}) {
+  // Ascends toward +z.
+  const rise = Math.min(ESC_RISE, depth * 0.6);
+  const nSteps = Math.max(5, Math.round(depth / 0.32));
+  const going = depth / nSteps;
+  const stepW = Math.min(width, 3.0);
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      {Array.from({ length: nSteps }).map((_, i) => {
+        const z = -depth / 2 + (i + 0.5) * going;
+        const h = ((i + 1) / nSteps) * rise;
+        return (
+          <mesh key={i} position={[0, h / 2, z]} castShadow receiveShadow>
+            <boxGeometry args={[stepW, h, going * 0.96]} />
+            <meshStandardMaterial color={STAIR_COLOR} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+export function StageMesh({
+  position,
+  width,
+  depth,
+  rotY,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+}) {
+  // Stage faces +z (audience). Big screen at the back (-z edge).
+  const screenW = width * 0.85;
+  const screenH = Math.min(3.4, depth * 1.2 + 1.5);
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh position={[0, STAGE_PLATFORM_H / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[width, STAGE_PLATFORM_H, depth]} />
+        <meshStandardMaterial color={STAGE_PLATFORM_COLOR} />
+      </mesh>
+      <mesh position={[0, STAGE_PLATFORM_H + screenH / 2, -depth / 2 + 0.15]} castShadow>
+        <boxGeometry args={[screenW + 0.3, screenH + 0.3, 0.25]} />
+        <meshStandardMaterial color={STAGE_SCREEN_FRAME} />
+      </mesh>
+      <mesh position={[0, STAGE_PLATFORM_H + screenH / 2, -depth / 2 + 0.29]}>
+        <boxGeometry args={[screenW, screenH, 0.08]} />
+        <meshStandardMaterial color={STAGE_SCREEN_COLOR} emissive="#1B3A6B" emissiveIntensity={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+export function ChairMesh({
+  position,
+  rotY,
+}: {
+  position: [number, number, number];
+  rotY: number;
+}) {
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      <mesh position={[0, 0.42, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.45, 0.07, 0.45]} />
+        <meshStandardMaterial color={CHAIR_COLOR} />
+      </mesh>
+      <mesh position={[0, 0.66, -0.2]} castShadow>
+        <boxGeometry args={[0.45, 0.45, 0.06]} />
+        <meshStandardMaterial color={CHAIR_COLOR} />
+      </mesh>
+    </group>
+  );
+}
+
+export function SeatingBlockMesh({
+  position,
+  width,
+  depth,
+  rotY,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+}) {
+  // Rows of white plastic chairs, all facing +z (toward a stage).
+  const cols = Math.max(1, Math.floor(width / 0.6));
+  const rows = Math.max(1, Math.floor(depth / 0.8));
+  const colStep = width / cols;
+  const rowStep = depth / rows;
+  const chairs: [number, number][] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      chairs.push([-width / 2 + (c + 0.5) * colStep, -depth / 2 + (r + 0.5) * rowStep]);
+    }
+  }
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      {chairs.map(([x, z], i) => (
+        <ChairMesh key={i} position={[x, 0, z]} rotY={0} />
+      ))}
+    </group>
+  );
+}

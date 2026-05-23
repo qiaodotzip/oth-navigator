@@ -41,6 +41,7 @@ export function PolygonEditor() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [restoredCount, setRestoredCount] = useState<number | null>(null);
   const [reuseId, setReuseId] = useState("");
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const panStart = useRef<{ cx: number; cy: number; vx: number; vy: number } | null>(null);
   const dragMoved = useRef(false);
@@ -76,6 +77,7 @@ export function PolygonEditor() {
       setSavedAt(null);
     }
     setCurrentPoints([]);
+    setSelectedIdx(null);
     Promise.resolve().then(() => {
       restoring.current = false;
     });
@@ -215,8 +217,14 @@ export function PolygonEditor() {
 
   const undoPoint = () => setCurrentPoints(prev => prev.slice(0, -1));
   const cancelCurrent = () => setCurrentPoints([]);
-  const deletePoly = (i: number) =>
+  const deletePoly = (i: number) => {
     setPolygons(prev => prev.filter((_, idx) => idx !== i));
+    setSelectedIdx(cur => {
+      if (cur === null) return null;
+      if (cur === i) return null;
+      return cur > i ? cur - 1 : cur;
+    });
+  };
   const renamePoly = (i: number) => {
     const current = polygons[i];
     if (!current) return;
@@ -352,14 +360,37 @@ export function PolygonEditor() {
                 const c = colorFor(p.type);
                 const cx = p.points.reduce((a, [x]) => a + x, 0) / p.points.length;
                 const cy = p.points.reduce((a, [, y]) => a + y, 0) / p.points.length;
+                const selected = i === selectedIdx;
                 return (
                   <g key={i}>
                     <polygon
                       points={p.points.map(([x, y]) => `${x},${y}`).join(" ")}
-                      fill={c.fill}
-                      stroke={c.stroke}
-                      strokeWidth={strokeBase}
+                      fill={selected ? "rgba(233,30,99,0.30)" : c.fill}
+                      stroke={selected ? "#E91E63" : c.stroke}
+                      strokeWidth={selected ? strokeBase * 2 : strokeBase}
+                      style={{ cursor: currentPoints.length === 0 ? "pointer" : "crosshair" }}
+                      onClick={e => {
+                        // Only select when not mid-draw; otherwise let the click
+                        // fall through to the SVG handler to add a point.
+                        if (currentPoints.length === 0) {
+                          e.stopPropagation();
+                          setSelectedIdx(prev => (prev === i ? null : i));
+                        }
+                      }}
                     />
+                    {selected &&
+                      p.points.map(([x, y], vi) => (
+                        <circle
+                          key={vi}
+                          cx={x}
+                          cy={y}
+                          r={Math.max(2, view.w / 350)}
+                          fill="#E91E63"
+                          stroke="#fff"
+                          strokeWidth={strokeBase * 0.6}
+                          style={{ pointerEvents: "none" }}
+                        />
+                      ))}
                     <text
                       x={cx}
                       y={cy}
@@ -408,6 +439,30 @@ export function PolygonEditor() {
             >
               Reset zoom
             </button>
+            {selectedIdx !== null && polygons[selectedIdx] && (
+              <div className="absolute top-3 right-3 bg-white rounded-lg shadow-lg px-3 py-2 text-xs flex items-center gap-3 border border-pink-300">
+                <span className="font-mono truncate max-w-[180px]">
+                  {polygons[selectedIdx].id}
+                  {polyMeta[selectedIdx].total > 1 && (
+                    <span className="ml-1 text-oth-primary">
+                      ·pc {polyMeta[selectedIdx].pieceNum}/{polyMeta[selectedIdx].total}
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={() => deletePoly(selectedIdx)}
+                  className="px-2 py-0.5 rounded bg-red-600 text-white font-semibold"
+                >
+                  Delete piece
+                </button>
+                <button
+                  onClick={() => setSelectedIdx(null)}
+                  className="text-neutral-500 hover:text-neutral-800"
+                >
+                  Deselect
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <div className="grid place-items-center h-full text-neutral-500">
@@ -547,12 +602,16 @@ export function PolygonEditor() {
             {polygons.map((p, i) => (
               <li
                 key={i}
-                className="flex items-center justify-between gap-2 p-1 rounded hover:bg-neutral-200"
+                className={`flex items-center justify-between gap-2 p-1 rounded ${
+                  i === selectedIdx
+                    ? "bg-pink-100 ring-1 ring-pink-400"
+                    : "hover:bg-neutral-200"
+                }`}
               >
                 <button
-                  onClick={() => renamePoly(i)}
-                  className="font-mono truncate flex-1 text-left hover:underline cursor-pointer"
-                  title="Click to rename"
+                  onClick={() => setSelectedIdx(prev => (prev === i ? null : i))}
+                  className="font-mono truncate flex-1 text-left cursor-pointer"
+                  title="Click to select/highlight on map"
                 >
                   {p.id}
                   {polyMeta[i].total > 1 && (
@@ -574,6 +633,7 @@ export function PolygonEditor() {
                   onClick={() => deletePoly(i)}
                   className="text-red-600 text-base leading-none"
                   aria-label="Delete polygon"
+                  title="Delete this piece"
                 >
                   ×
                 </button>

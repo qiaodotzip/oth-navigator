@@ -5,6 +5,7 @@ import type {
   FloorId,
   Language,
   PopularTimesEntry,
+  Pt,
   RouteVariant,
   Service,
 } from "@/data/types";
@@ -14,6 +15,8 @@ type ActiveRoute = {
   startedAt: number;
   currentWaypointIndex: number;
 };
+
+export type UserLocation = { floorId: FloorId; point: Pt };
 
 type State = {
   language: Language;
@@ -27,6 +30,8 @@ type State = {
   activeRoute: ActiveRoute | null;
   inspectMode: boolean;
   showLabels: boolean;
+  userLocation: UserLocation | null;
+  pickingLocation: boolean;
 
   setLanguage: (l: Language) => void;
   setProfile: (p: AccessibilityProfile) => void;
@@ -39,6 +44,8 @@ type State = {
   endRoute: () => void;
   toggleInspectMode: () => void;
   toggleLabels: () => void;
+  setUserLocation: (loc: UserLocation) => void;
+  setPickingLocation: (v: boolean) => void;
 };
 
 export const useStore = create<State>(set => ({
@@ -53,6 +60,8 @@ export const useStore = create<State>(set => ({
   activeRoute: null,
   inspectMode: true,
   showLabels: true,
+  userLocation: null,
+  pickingLocation: false,
 
   setLanguage: l => set({ language: l }),
   setProfile: p => set({ profile: p }),
@@ -83,4 +92,6 @@ export const useStore = create<State>(set => ({
   endRoute: () => set({ activeRoute: null }),
   toggleInspectMode: () => set(s => ({ inspectMode: !s.inspectMode })),
   toggleLabels: () => set(s => ({ showLabels: !s.showLabels })),
+  setUserLocation: loc => set({ userLocation: loc, activeFloor: loc.floorId }),
+  setPickingLocation: v => set({ pickingLocation: v }),
 }));

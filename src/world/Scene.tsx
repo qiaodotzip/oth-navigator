@@ -1,4 +1,4 @@
-import { Canvas } from "@react-three/fiber";
+import { Canvas, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Floor } from "./Floor";
 import { FloorDetails } from "./FloorDetails";
@@ -10,16 +10,28 @@ import { AnalyticsAgent } from "@/agents/AnalyticsAgent";
 import { WANDER_LOOPS } from "@/agents/wanderLoops";
 import { useCounterLoadSimulator } from "@/agents/counterLoads";
 import { UserBlob } from "@/agents/UserBlob";
+import type { Floor as FloorData } from "@/data/types";
 
 export function Scene() {
   const floors = useStore(s => s.floors);
   const activeFloor = useStore(s => s.activeFloor);
   const inspectMode = useStore(s => s.inspectMode);
   const showLabels = useStore(s => s.showLabels);
+  const pickingLocation = useStore(s => s.pickingLocation);
+  const setUserLocation = useStore(s => s.setUserLocation);
+  const setPickingLocation = useStore(s => s.setPickingLocation);
 
   useCounterLoadSimulator();
 
   const active = floors.find(f => f.id === activeFloor);
+
+  const onPickGround = (e: ThreeEvent<MouseEvent>, floor: FloorData) => {
+    e.stopPropagation();
+    const mx = e.point.x + floor.bounds.width / 2;
+    const my = e.point.z + floor.bounds.depth / 2;
+    setUserLocation({ floorId: floor.id, point: [mx, my] });
+    setPickingLocation(false);
+  };
 
   return (
     <Canvas shadows camera={{ position: [0, 180, 80], fov: 35 }}>
@@ -35,6 +47,16 @@ export function Scene() {
       {active && showLabels && <PolygonLabels floor={active} />}
       {active && <RouteArrow floor={active} />}
       {active && <UserBlob floor={active} />}
+      {active && pickingLocation && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, 0.02, 0]}
+          onClick={e => onPickGround(e, active)}
+        >
+          <planeGeometry args={[active.bounds.width * 1.2, active.bounds.depth * 1.2]} />
+          <meshBasicMaterial transparent opacity={0.12} color="#0066B3" />
+        </mesh>
+      )}
       {active &&
         WANDER_LOOPS.filter(l => l.floorId === active.id).flatMap((loop, li) =>
           Array.from({ length: 4 }).map((_, ai) => (

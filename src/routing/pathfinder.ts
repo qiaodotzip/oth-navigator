@@ -125,6 +125,21 @@ export function findPath(
   return null;
 }
 
+/** Remove points that lie on a straight line between their neighbours. */
+export function simplifyCollinear(path: Pt[]): Pt[] {
+  if (path.length < 3) return path;
+  const result: Pt[] = [path[0]];
+  for (let i = 1; i < path.length - 1; i++) {
+    const a = result[result.length - 1];
+    const b = path[i];
+    const c = path[i + 1];
+    const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    if (Math.abs(cross) > 0.5) result.push(b);
+  }
+  result.push(path[path.length - 1]);
+  return result;
+}
+
 export function smoothPath(path: Pt[], floor: Floor, destRoom?: string): Pt[] {
   if (path.length < 3) return path;
   const result: Pt[] = [path[0]];

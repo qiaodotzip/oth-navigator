@@ -12,7 +12,7 @@ export function FloorSelector() {
   const toggleLabels = useStore(s => s.toggleLabels);
 
   return (
-    <div className="absolute right-2 top-2 flex flex-col gap-1">
+    <div className="absolute right-2 top-2 z-30 flex flex-col gap-1">
       {FLOORS.map(f => (
         <button
           key={f}

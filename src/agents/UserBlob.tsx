@@ -14,24 +14,38 @@ function metresToScene(point: [number, number], floor: Floor): [number, number] 
 
 export function UserBlob({ floor }: { floor: Floor }) {
   const activeRoute = useStore(s => s.activeRoute);
+  const userLocation = useStore(s => s.userLocation);
 
   let visible = false;
   let label = "You are here";
+  let staticPoint: [number, number] | null = null;
   if (activeRoute) {
     const wp = activeRoute.variant.steps[activeRoute.currentWaypointIndex];
     if (wp && wp.floorId === floor.id) {
       visible = true;
       label = "You";
     }
-  } else if (floor.id === "L1") {
-    visible = true;
+  } else {
+    const loc = userLocation ?? { floorId: "L1" as const, point: TOWN_SQUARE_M };
+    if (loc.floorId === floor.id) {
+      visible = true;
+      staticPoint = loc.point;
+    }
   }
 
   if (!visible) return null;
-  return <BlobMesh floor={floor} label={label} />;
+  return <BlobMesh floor={floor} label={label} staticPoint={staticPoint} />;
 }
 
-function BlobMesh({ floor, label }: { floor: Floor; label: string }) {
+function BlobMesh({
+  floor,
+  label,
+  staticPoint,
+}: {
+  floor: Floor;
+  label: string;
+  staticPoint: [number, number] | null;
+}) {
   const activeRoute = useStore(s => s.activeRoute);
   const groupRef = useRef<THREE.Group>(null!);
   const yawRef = useRef(0);
@@ -43,7 +57,7 @@ function BlobMesh({ floor, label }: { floor: Floor; label: string }) {
   // Scene-space polyline for the current leg (previous waypoint -> current).
   const legPath = useMemo<THREE.Vector3[]>(() => {
     if (!step) {
-      const [x, z] = metresToScene(TOWN_SQUARE_M, floor);
+      const [x, z] = metresToScene(staticPoint ?? TOWN_SQUARE_M, floor);
       return [new THREE.Vector3(x, 0, z)];
     }
     const raw =
@@ -54,7 +68,7 @@ function BlobMesh({ floor, label }: { floor: Floor; label: string }) {
       const [x, z] = metresToScene([mx, my], floor);
       return new THREE.Vector3(x, 0, z);
     });
-  }, [step, floor]);
+  }, [step, floor, staticPoint]);
 
   const segLengths = useMemo(() => {
     const lens: number[] = [];
@@ -115,7 +129,7 @@ function BlobMesh({ floor, label }: { floor: Floor; label: string }) {
         <sphereGeometry args={[0.32, 24, 24]} />
         <meshStandardMaterial color="#F2C5A0" />
       </mesh>
-      <Html position={[0, 2.4, 0]} center distanceFactor={70}>
+      <Html position={[0, 2.4, 0]} center distanceFactor={70} zIndexRange={[20, 0]}>
         <div className="pointer-events-none whitespace-nowrap rounded-full bg-pink-600 px-2 py-0.5 text-[10px] font-semibold text-white shadow-md">
           {label}
         </div>

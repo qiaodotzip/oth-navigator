@@ -9,9 +9,15 @@ import {
   CleaningBlockMesh,
   CubicleMesh,
   CUBICLE_D,
+  EscalatorMesh,
+  LandscapeIslandMesh,
+  LiftBlockMesh,
   RoundClusterMesh,
+  SeatingBlockMesh,
   SinkMesh,
   SINK_D,
+  StaircaseMesh,
+  StageMesh,
   StallMesh,
   STALL_COLORS,
   STALL_D,
@@ -29,6 +35,13 @@ type SinkItem = { pos: [number, number]; rotY: number };
 type ToiletSlab = { pos: [number, number]; size: [number, number] };
 type CleaningItem = { pos: [number, number]; size: [number, number]; rotY: number };
 type BushItem = { pos: [number, number]; variant: number };
+type OrientedItem = {
+  pos: [number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+};
+type EscalatorItem = OrientedItem & { up: boolean };
 
 function rectBounds(rect: [Pt, Pt]) {
   const minX = Math.min(rect[0][0], rect[1][0]);
@@ -49,6 +62,19 @@ function facingToRotY(facing: Facing): number {
     case "W":
       return Math.PI / 2;
   }
+}
+
+// For a rect + facing: the mesh's local +z aligns with the facing axis. When the
+// facing is N/S, that axis is image-y, so depth = rect height; for E/W it's image-x.
+function orientedFromRect(rect: [Pt, Pt], facing: Facing): OrientedItem {
+  const b = rectBounds(rect);
+  const vertical = facing === "N" || facing === "S";
+  return {
+    pos: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2],
+    width: vertical ? b.w : b.h,
+    depth: vertical ? b.h : b.w,
+    rotY: facingToRotY(facing),
+  };
 }
 
 function planStallRow(detail: Extract<Detail, { type: "stall-row" }>): StallItem[] {
@@ -238,6 +264,12 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
     const toiletSlabs: ToiletSlab[] = [];
     const cleanings: CleaningItem[] = [];
     const bushes: BushItem[] = [];
+    const islands: OrientedItem[] = [];
+    const escalators: EscalatorItem[] = [];
+    const lifts: OrientedItem[] = [];
+    const stairs: OrientedItem[] = [];
+    const stages: OrientedItem[] = [];
+    const seatings: OrientedItem[] = [];
     for (const d of floor.details ?? []) {
       if (d.type === "stall-row") stalls.push(...planStallRow(d));
       else if (d.type === "stall-island") stalls.push(...planStallIsland(d));
@@ -252,9 +284,44 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
         cleanings.push(planCleaning(d));
       } else if (d.type === "greenery-row") {
         bushes.push(...planGreeneryRow(d));
+      } else if (d.type === "landscape-island") {
+        const b = rectBounds(d.rect);
+        islands.push({
+          pos: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2],
+          width: b.w,
+          depth: b.h,
+          rotY: 0,
+        });
+      } else if (d.type === "escalator-up") {
+        escalators.push({ ...orientedFromRect(d.rect, d.facing), up: true });
+      } else if (d.type === "escalator-down") {
+        escalators.push({ ...orientedFromRect(d.rect, d.facing), up: false });
+      } else if (d.type === "lift-block") {
+        lifts.push(orientedFromRect(d.rect, d.facing));
+      } else if (d.type === "staircase") {
+        stairs.push(orientedFromRect(d.rect, d.facing));
+      } else if (d.type === "stage") {
+        stages.push(orientedFromRect(d.rect, d.facing));
+      } else if (d.type === "seating-block") {
+        seatings.push(orientedFromRect(d.rect, d.facing));
       }
     }
-    return { stalls, benches, rounds, cubicles, sinks, toiletSlabs, cleanings, bushes };
+    return {
+      stalls,
+      benches,
+      rounds,
+      cubicles,
+      sinks,
+      toiletSlabs,
+      cleanings,
+      bushes,
+      islands,
+      escalators,
+      lifts,
+      stairs,
+      stages,
+      seatings,
+    };
   }, [floor]);
 
   const depth = floor.bounds.depth;
@@ -319,6 +386,61 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
           key={`bush${i}`}
           position={toLocal(b.pos[0], b.pos[1])}
           variant={b.variant}
+        />
+      ))}
+      {layout.islands.map((it, i) => (
+        <LandscapeIslandMesh
+          key={`isl${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
+        />
+      ))}
+      {layout.escalators.map((it, i) => (
+        <EscalatorMesh
+          key={`esc${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
+          up={it.up}
+        />
+      ))}
+      {layout.lifts.map((it, i) => (
+        <LiftBlockMesh
+          key={`lift${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
+        />
+      ))}
+      {layout.stairs.map((it, i) => (
+        <StaircaseMesh
+          key={`stair${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
+        />
+      ))}
+      {layout.stages.map((it, i) => (
+        <StageMesh
+          key={`stage${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
+        />
+      ))}
+      {layout.seatings.map((it, i) => (
+        <SeatingBlockMesh
+          key={`seat${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
         />
       ))}
     </group>

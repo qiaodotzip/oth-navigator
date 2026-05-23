@@ -22,7 +22,14 @@ export type Detail =
   | { id: string; type: "round-table"; point: Pt }
   | { id: string; type: "toilet"; rect: [Pt, Pt] }
   | { id: string; type: "cleaning"; rect: [Pt, Pt] }
-  | { id: string; type: "greenery-row"; rect: [Pt, Pt] };
+  | { id: string; type: "greenery-row"; rect: [Pt, Pt] }
+  | { id: string; type: "landscape-island"; rect: [Pt, Pt] }
+  | { id: string; type: "escalator-up"; rect: [Pt, Pt]; facing: Facing }
+  | { id: string; type: "escalator-down"; rect: [Pt, Pt]; facing: Facing }
+  | { id: string; type: "lift-block"; rect: [Pt, Pt]; facing: Facing }
+  | { id: string; type: "staircase"; rect: [Pt, Pt]; facing: Facing }
+  | { id: string; type: "stage"; rect: [Pt, Pt]; facing: Facing }
+  | { id: string; type: "seating-block"; rect: [Pt, Pt]; facing: Facing };
 
 export type Floor = {
   id: FloorId;

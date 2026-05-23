@@ -16,7 +16,7 @@ export function SuccessCard({ onDismiss }: { onDismiss: () => void }) {
   const load = counterId ? Math.round((counterLoads[counterId] ?? 0) * 10) : null;
 
   return (
-    <div className="absolute inset-x-3 bottom-3 rounded-2xl bg-oth-primary text-white shadow-xl p-4 z-10">
+    <div className="absolute inset-x-3 bottom-3 rounded-2xl bg-oth-primary text-white shadow-xl p-4 z-30">
       <div className="flex items-start gap-3">
         <CheckCircle size={28} weight="fill" />
         <div className="flex-1">

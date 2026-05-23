@@ -7,12 +7,13 @@ import { PromptPanel } from "@/ui/PromptPanel";
 import { useStore } from "@/store";
 import { loadDataBundle } from "@/data/loaders";
 import { prewarmAll } from "@/narration/prewarm";
-import { selectRoute } from "@/routing/selectRoute";
+import { buildRoute, DEFAULT_START } from "@/routing/buildRoute";
 import { fetchNarration } from "@/narration/client";
 import { getCached, setCached } from "@/narration/cache";
 import { enqueueSegments, cancelAll } from "@/narration/ttsQueue";
 import { useSpeechRecognition } from "@/ui/useSpeechRecognition";
 import type { NarrationSegment, PopularTimesEntry } from "@/data/types";
+import { SetLocationControl } from "@/ui/SetLocationControl";
 import { WaypointEditor } from "@/dev/WaypointEditor";
 import { PolygonEditor } from "@/dev/PolygonEditor";
 
@@ -29,10 +30,8 @@ export default function App() {
 
   const setBundle = useStore(s => s.setBundle);
   const services = useStore(s => s.services);
-  const routes = useStore(s => s.routes);
   const profile = useStore(s => s.profile);
   const language = useStore(s => s.language);
-  const counterLoads = useStore(s => s.counterLoads);
   const startRoute = useStore(s => s.startRoute);
   const advanceRoute = useStore(s => s.advanceRoute);
   const setActiveFloor = useStore(s => s.setActiveFloor);
@@ -64,15 +63,17 @@ export default function App() {
 
   const onPickService = useCallback(
     async (serviceId: string) => {
-      const variant = selectRoute(serviceId, profile, counterLoads, routes);
+      const svc = services.find(s => s.id === serviceId);
+      if (!svc) return;
+      const start = useStore.getState().userLocation ?? DEFAULT_START;
+      const floors = useStore.getState().floors;
+      const variant = buildRoute(start, svc, profile, floors);
       if (!variant) return;
       setActiveFloor(variant.steps[0].floorId);
       startRoute(variant);
 
       let narr = getCached(serviceId, profile);
       if (!narr) {
-        const svc = services.find(s => s.id === serviceId);
-        if (!svc) return;
         try {
           narr = await fetchNarration({
             query: svc.nameEn,
@@ -88,7 +89,7 @@ export default function App() {
       }
       setSegments(narr.segments);
     },
-    [profile, counterLoads, routes, services, startRoute, setActiveFloor],
+    [profile, services, startRoute, setActiveFloor],
   );
 
   // Play the segment for the current waypoint whenever the index changes
@@ -147,6 +148,7 @@ export default function App() {
         <div className="h-[60%] relative">
           <Scene />
           <FloorSelector />
+          <SetLocationControl />
           <SuccessCard onDismiss={endRoute} />
         </div>
         <div className="h-[32%]">

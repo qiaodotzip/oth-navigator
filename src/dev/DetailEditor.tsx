@@ -9,7 +9,32 @@ type Tool =
   | "round-table"
   | "toilet"
   | "cleaning"
-  | "greenery-row";
+  | "greenery-row"
+  | "landscape-island"
+  | "escalator-up"
+  | "escalator-down"
+  | "lift-block"
+  | "staircase"
+  | "stage"
+  | "seating-block";
+
+// Rect tools whose detail carries a `facing` direction.
+const FACING_TOOLS = new Set<Tool>([
+  "stall-row",
+  "escalator-up",
+  "escalator-down",
+  "lift-block",
+  "staircase",
+  "stage",
+  "seating-block",
+]);
+
+const TOOL_CATEGORIES: { name: string; tools: Tool[] }[] = [
+  { name: "Hawker", tools: ["stall-row", "stall-island", "bench-rows", "round-table", "cleaning"] },
+  { name: "Standard", tools: ["landscape-island", "greenery-row", "toilet"] },
+  { name: "Circulation", tools: ["escalator-up", "escalator-down", "lift-block", "staircase"] },
+  { name: "Stage", tools: ["stage", "seating-block"] },
+];
 
 const STORAGE_KEY = (fid: string) => `oth-detail-editor:${fid}`;
 const POLY_STORAGE_KEY = (fid: string) => `oth-polygon-editor:${fid}`;
@@ -38,6 +63,13 @@ const TOOL_LABELS: Record<Tool, string> = {
   toilet: "Toilet",
   cleaning: "Cleaning block",
   "greenery-row": "Greenery row",
+  "landscape-island": "Landscape island",
+  "escalator-up": "Escalator ↑",
+  "escalator-down": "Escalator ↓",
+  "lift-block": "Lift block",
+  staircase: "Staircase ↑",
+  stage: "Stage",
+  "seating-block": "Seating block",
 };
 
 const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
@@ -48,6 +80,13 @@ const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
   toilet: "#5E81AC",
   cleaning: "#3A3D42",
   "greenery-row": "#4F7A3A",
+  "landscape-island": "#6E8B4A",
+  "escalator-up": "#4CAF50",
+  "escalator-down": "#FF8A50",
+  "lift-block": "#7E868F",
+  staircase: "#B8BEC6",
+  stage: "#7E57C2",
+  "seating-block": "#90A4AE",
 };
 
 const FACING_ARROW: Record<Facing, [number, number]> = {
@@ -265,19 +304,47 @@ export function DetailEditor() {
       setHoverPoint(pt);
     } else {
       const r: [Pt, Pt] = [firstCorner, pt];
+      const id = uid();
       let newDetail: Detail;
-      if (tool === "stall-row") {
-        newDetail = { id: uid(), type: "stall-row", rect: r, facing: "S" };
-      } else if (tool === "stall-island") {
-        newDetail = { id: uid(), type: "stall-island", rect: r };
-      } else if (tool === "toilet") {
-        newDetail = { id: uid(), type: "toilet", rect: r };
-      } else if (tool === "cleaning") {
-        newDetail = { id: uid(), type: "cleaning", rect: r };
-      } else if (tool === "greenery-row") {
-        newDetail = { id: uid(), type: "greenery-row", rect: r };
-      } else {
-        newDetail = { id: uid(), type: "bench-rows", rect: r };
+      switch (tool) {
+        case "stall-row":
+          newDetail = { id, type: "stall-row", rect: r, facing: "S" };
+          break;
+        case "stall-island":
+          newDetail = { id, type: "stall-island", rect: r };
+          break;
+        case "toilet":
+          newDetail = { id, type: "toilet", rect: r };
+          break;
+        case "cleaning":
+          newDetail = { id, type: "cleaning", rect: r };
+          break;
+        case "greenery-row":
+          newDetail = { id, type: "greenery-row", rect: r };
+          break;
+        case "landscape-island":
+          newDetail = { id, type: "landscape-island", rect: r };
+          break;
+        case "escalator-up":
+          newDetail = { id, type: "escalator-up", rect: r, facing: "S" };
+          break;
+        case "escalator-down":
+          newDetail = { id, type: "escalator-down", rect: r, facing: "S" };
+          break;
+        case "lift-block":
+          newDetail = { id, type: "lift-block", rect: r, facing: "S" };
+          break;
+        case "staircase":
+          newDetail = { id, type: "staircase", rect: r, facing: "S" };
+          break;
+        case "stage":
+          newDetail = { id, type: "stage", rect: r, facing: "S" };
+          break;
+        case "seating-block":
+          newDetail = { id, type: "seating-block", rect: r, facing: "S" };
+          break;
+        default:
+          newDetail = { id, type: "bench-rows", rect: r };
       }
       setDetails(prev => [...prev, newDetail]);
       setFirstCorner(null);
@@ -323,7 +390,7 @@ export function DetailEditor() {
   const rotateFacing = (id: string) =>
     setDetails(prev =>
       prev.map(d =>
-        d.id === id && d.type === "stall-row" ? { ...d, facing: nextFacing(d.facing) } : d,
+        d.id === id && "facing" in d ? { ...d, facing: nextFacing(d.facing) } : d,
       ),
     );
 
@@ -623,7 +690,7 @@ export function DetailEditor() {
                   }}
                 />
                 <span className="font-mono text-[10px] uppercase flex-1">{d.type}</span>
-                {d.type === "stall-row" && (
+                {"facing" in d && (
                   <button
                     onClick={() => rotateFacing(d.id)}
                     className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-200 hover:bg-neutral-300 font-mono"

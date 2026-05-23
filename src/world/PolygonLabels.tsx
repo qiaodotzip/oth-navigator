@@ -33,6 +33,7 @@ export function PolygonLabels({ floor }: { floor: Floor }) {
             center
             distanceFactor={70}
             occlude={false}
+            zIndexRange={[15, 0]}
           >
             <div className="pointer-events-none whitespace-nowrap rounded bg-white/95 px-1.5 py-0.5 text-[10px] font-mono text-oth-ink shadow-md border border-neutral-300">
               {label}
