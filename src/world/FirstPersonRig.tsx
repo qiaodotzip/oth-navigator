@@ -4,9 +4,12 @@ import { PointerLockControls } from "@react-three/drei";
 import * as THREE from "three";
 import { useStore } from "@/store";
 
-const EYE_HEIGHT = 1.7; // metres
+const EYE_HEIGHT = 1.4; // metres (a shorter walker)
 const WALK_SPEED = 6; // m/s
 const SPRINT_SPEED = 12; // m/s
+const BOB_AMP = 0.07; // vertical head-bob amplitude in metres
+const BOB_CADENCE = 1.6; // bob phase advance per metre travelled (radians)
+const BOB_DAMP = 7; // how fast the bob eases in/out when you start/stop
 
 /**
  * First-person walk mode: pointer-lock mouse-look plus WASD movement across the
@@ -25,6 +28,9 @@ export function FirstPersonRig() {
   const forward = useRef(new THREE.Vector3());
   const right = useRef(new THREE.Vector3());
   const move = useRef(new THREE.Vector3());
+  // Head-bob state: phase advances while walking, amplitude eases in/out.
+  const bobPhase = useRef(0);
+  const bobAmp = useRef(0);
 
   // Spawn the camera once when this rig mounts.
   useLayoutEffect(() => {
@@ -61,25 +67,44 @@ export function FirstPersonRig() {
     const k = keys.current;
     const fwdInput = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0);
     const rightInput = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
-    if (fwdInput === 0 && rightInput === 0) return;
+    const sprinting = !!(k.ShiftLeft || k.ShiftRight);
+    const speed = sprinting ? SPRINT_SPEED : WALK_SPEED;
+    let moving = false;
 
-    // Camera forward flattened onto the XZ plane.
-    camera.getWorldDirection(forward.current);
-    forward.current.y = 0;
-    forward.current.normalize();
-    // Right = forward × up.
-    right.current.crossVectors(forward.current, camera.up).normalize();
+    if (fwdInput !== 0 || rightInput !== 0) {
+      // Camera forward flattened onto the XZ plane.
+      camera.getWorldDirection(forward.current);
+      forward.current.y = 0;
+      forward.current.normalize();
+      // Right = forward × up.
+      right.current.crossVectors(forward.current, camera.up).normalize();
 
-    move.current
-      .set(0, 0, 0)
-      .addScaledVector(forward.current, fwdInput)
-      .addScaledVector(right.current, rightInput);
-    if (move.current.lengthSq() === 0) return;
-    move.current.normalize();
+      move.current
+        .set(0, 0, 0)
+        .addScaledVector(forward.current, fwdInput)
+        .addScaledVector(right.current, rightInput);
+      if (move.current.lengthSq() > 0) {
+        move.current.normalize();
+        camera.position.addScaledVector(move.current, speed * dt);
+        moving = true;
+      }
+    }
 
-    const speed = k.ShiftLeft || k.ShiftRight ? SPRINT_SPEED : WALK_SPEED;
-    camera.position.addScaledVector(move.current, speed * dt);
-    camera.position.y = EYE_HEIGHT; // stay grounded
+    // Head bob: advance the phase by distance travelled while walking, ease the
+    // amplitude toward its target so it starts/stops smoothly. The eye height is
+    // set absolutely each frame, so the bob never drifts.
+    if (moving) {
+      bobPhase.current += speed * dt * BOB_CADENCE;
+      bobAmp.current = THREE.MathUtils.damp(
+        bobAmp.current,
+        sprinting ? BOB_AMP * 1.5 : BOB_AMP,
+        BOB_DAMP,
+        dt,
+      );
+    } else {
+      bobAmp.current = THREE.MathUtils.damp(bobAmp.current, 0, BOB_DAMP, dt);
+    }
+    camera.position.y = EYE_HEIGHT + Math.sin(bobPhase.current) * bobAmp.current;
   });
 
   return <PointerLockControls />;

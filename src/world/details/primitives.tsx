@@ -592,16 +592,28 @@ export function StaircaseMesh({
   const nSteps = Math.max(5, Math.round(depth / 0.32));
   const going = depth / nSteps;
   const stepW = Math.min(width, 3.0);
+  const night = useNightGlow();
   return (
     <group position={position} rotation={[0, rotY, 0]}>
       {Array.from({ length: nSteps }).map((_, i) => {
         const z = -depth / 2 + (i + 0.5) * going;
         const h = ((i + 1) / nSteps) * rise;
         return (
-          <mesh key={i} position={[0, h / 2, z]} castShadow receiveShadow>
-            <boxGeometry args={[stepW, h, going * 0.96]} />
-            <meshStandardMaterial color={STAIR_COLOR} />
-          </mesh>
+          <group key={i}>
+            <mesh position={[0, h / 2, z]} castShadow receiveShadow>
+              <boxGeometry args={[stepW, h, going * 0.96]} />
+              <meshStandardMaterial color={STAIR_COLOR} />
+            </mesh>
+            {/* glowing step-edge strip lights up at night */}
+            <mesh position={[0, h + 0.02, z + going * 0.45]}>
+              <boxGeometry args={[stepW, 0.04, 0.06]} />
+              <meshStandardMaterial
+                color="#FFE9A8"
+                emissive="#FFE08A"
+                emissiveIntensity={night ? 2.0 : 0}
+              />
+            </mesh>
+          </group>
         );
       })}
     </group>
@@ -622,6 +634,7 @@ export function StageMesh({
   // Stage faces +z (audience). Big screen at the back (-z edge).
   const screenW = width * 0.85;
   const screenH = Math.min(3.4, depth * 1.2 + 1.5);
+  const night = useNightGlow();
   return (
     <group position={position} rotation={[0, rotY, 0]}>
       <mesh position={[0, STAGE_PLATFORM_H / 2, 0]} castShadow receiveShadow>
@@ -634,7 +647,11 @@ export function StageMesh({
       </mesh>
       <mesh position={[0, STAGE_PLATFORM_H + screenH / 2, -depth / 2 + 0.29]}>
         <boxGeometry args={[screenW, screenH, 0.08]} />
-        <meshStandardMaterial color={STAGE_SCREEN_COLOR} emissive="#1B3A6B" emissiveIntensity={0.4} />
+        <meshStandardMaterial
+          color={STAGE_SCREEN_COLOR}
+          emissive="#2E6BD6"
+          emissiveIntensity={night ? 1.8 : 0.4}
+        />
       </mesh>
     </group>
   );
@@ -812,11 +829,16 @@ export function CourtMesh({
   const halfL = depth / 2;
   const lt = 0.1;
   const lineY = 0.13;
+  const night = useNightGlow();
   return (
     <group position={position} rotation={[0, rotY, 0]}>
       <mesh position={[0, 0.06, 0]} receiveShadow>
         <boxGeometry args={[width, 0.12, depth]} />
-        <meshStandardMaterial color={COURT_COLOR} />
+        <meshStandardMaterial
+          color={COURT_COLOR}
+          emissive={COURT_COLOR}
+          emissiveIntensity={night ? 0.5 : 0}
+        />
       </mesh>
       {[
         [0, lineY, halfL - lt, width - lt * 2, lt],
@@ -871,13 +893,18 @@ export function EventBoothMesh({
       booths.push([-width / 2 + (c + 0.5) * cstep, -depth / 2 + (r + 0.5) * rstep, r + c]);
     }
   }
+  const night = useNightGlow();
   return (
     <group position={position}>
       {booths.map(([x, z, k], i) => (
         <group key={i} position={[x, 0, z]}>
           <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
             <boxGeometry args={[1.6, 0.9, 0.8]} />
-            <meshStandardMaterial color="#C9A06A" />
+            <meshStandardMaterial
+              color="#C9A06A"
+              emissive="#FFCC66"
+              emissiveIntensity={night ? 1.1 : 0}
+            />
           </mesh>
           {[
             [0.8, 0.4],
@@ -1080,10 +1107,16 @@ export function ServiceCentreMesh({
     return { counters, kiosks, chairs, rooms, plants };
   }, [points]);
 
+  const night = useNightGlow();
   return (
     <group>
       <mesh geometry={floorGeom} position={[0, SC_FLOOR_Y, 0]} receiveShadow>
-        <meshStandardMaterial color={floorColor} side={THREE.DoubleSide} />
+        <meshStandardMaterial
+          color={floorColor}
+          side={THREE.DoubleSide}
+          emissive={accent}
+          emissiveIntensity={night ? 0.7 : 0}
+        />
       </mesh>
       {/* glass perimeter walls */}
       {walls.map((w, i) => (

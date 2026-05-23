@@ -27,6 +27,7 @@ export function Scene() {
   const setUserLocation = useStore(s => s.setUserLocation);
   const setPickingLocation = useStore(s => s.setPickingLocation);
   const timeOfDay = useStore(s => s.timeOfDay);
+  const effectsEnabled = useStore(s => s.effectsEnabled);
 
   useCounterLoadSimulator();
 
@@ -70,10 +71,13 @@ export function Scene() {
   return (
     <Canvas
       shadows
+      dpr={[1, effectsEnabled ? 1.75 : 1]}
       camera={{ position: [0, 180, 80], fov: 35 }}
-      gl={{ antialias: true }}
+      gl={{ antialias: true, powerPreference: "high-performance" }}
     >
-      {timeOfDay !== "morning" && <SoftShadows size={28} samples={12} focus={0.7} />}
+      {effectsEnabled && timeOfDay !== "morning" && (
+        <SoftShadows size={26} samples={8} focus={0.7} />
+      )}
       <color attach="background" args={[preset.bg]} />
       <fog attach="fog" args={[preset.bg, preset.fog[0], preset.fog[1]]} />
       <ambientLight color={preset.ambient.color} intensity={preset.ambient.intensity} />
@@ -86,8 +90,8 @@ export function Scene() {
         position={preset.dir.pos}
         color={preset.dir.color}
         intensity={preset.dir.intensity}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
+        castShadow={effectsEnabled}
+        shadow-mapSize={effectsEnabled ? [2048, 2048] : [1024, 1024]}
         shadow-bias={-0.0004}
         shadow-camera-near={1}
         shadow-camera-far={600}
@@ -143,14 +147,16 @@ export function Scene() {
       ) : (
         <CameraRig />
       )}
-      <EffectComposer enabled>
-        <Bloom
-          intensity={timeOfDay === "night" ? 1.4 : 0.2}
-          luminanceThreshold={timeOfDay === "night" ? 0.18 : 0.85}
-          luminanceSmoothing={0.9}
-          mipmapBlur
-        />
-      </EffectComposer>
+      {effectsEnabled && (
+        <EffectComposer>
+          <Bloom
+            intensity={timeOfDay === "night" ? 1.4 : 0.2}
+            luminanceThreshold={timeOfDay === "night" ? 0.18 : 0.85}
+            luminanceSmoothing={0.9}
+            mipmapBlur
+          />
+        </EffectComposer>
+      )}
     </Canvas>
   );
 }

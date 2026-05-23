@@ -456,6 +456,26 @@ export function DetailEditor() {
       ),
     );
 
+  // Rotate a rect detail 90° about its center (swaps width/height). Escalators
+  // and stairs derive their orientation from the rect's long axis, so this turns
+  // them a true 90°. Only the selected detail changes.
+  const rotateRect90 = (id: string) =>
+    setDetails(prev =>
+      prev.map(d => {
+        if (d.id !== id || !("rect" in d)) return d;
+        const [a, b] = d.rect;
+        const cx = (a[0] + b[0]) / 2;
+        const cy = (a[1] + b[1]) / 2;
+        const hw = Math.abs(b[0] - a[0]) / 2;
+        const hh = Math.abs(b[1] - a[1]) / 2;
+        const rect: [Pt, Pt] = [
+          [cx - hh, cy - hw],
+          [cx + hh, cy + hw],
+        ];
+        return { ...d, rect };
+      }),
+    );
+
   const clearAll = () => {
     if (!window.confirm("Delete all details AND clear autosave for this floor?")) return;
     setDetails([]);
@@ -721,6 +741,15 @@ export function DetailEditor() {
                       {sel.facing}
                     </button>
                   )}
+                  {"rect" in sel && (
+                    <button
+                      onClick={() => rotateRect90(sel.id)}
+                      className="px-1.5 py-0.5 rounded bg-neutral-200 hover:bg-neutral-300 font-mono"
+                      title="Rotate footprint 90°"
+                    >
+                      ⟳ 90°
+                    </button>
+                  )}
                   <button
                     onClick={() => deleteDetail(sel.id)}
                     className="px-2 py-0.5 rounded bg-red-600 text-white font-semibold"
@@ -933,6 +962,15 @@ export function DetailEditor() {
                     title="Cycle facing N/E/S/W"
                   >
                     {d.facing}
+                  </button>
+                )}
+                {"rect" in d && (
+                  <button
+                    onClick={() => rotateRect90(d.id)}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-200 hover:bg-neutral-300 font-mono"
+                    title="Rotate footprint 90°"
+                  >
+                    ⟳90°
                   </button>
                 )}
                 <button

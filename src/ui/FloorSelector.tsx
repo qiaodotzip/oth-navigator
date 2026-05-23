@@ -6,6 +6,7 @@ import {
   SunHorizon,
   MoonStars,
   PersonSimpleWalk,
+  Sparkle,
 } from "phosphor-react";
 
 const FLOORS = ["L1", "L2"] as const;
@@ -27,6 +28,8 @@ export function FloorSelector() {
   const toggleLabels = useStore(s => s.toggleLabels);
   const timeOfDay = useStore(s => s.timeOfDay);
   const cycleTimeOfDay = useStore(s => s.cycleTimeOfDay);
+  const effectsEnabled = useStore(s => s.effectsEnabled);
+  const toggleEffects = useStore(s => s.toggleEffects);
   const TimeIcon = TIME_ICON[timeOfDay].Icon;
 
   return (
@@ -72,6 +75,16 @@ export function FloorSelector() {
         className="w-10 h-10 rounded-full grid place-items-center bg-white/80 text-oth-ink"
       >
         <TimeIcon size={18} weight="bold" />
+      </button>
+      <button
+        onClick={toggleEffects}
+        title={effectsEnabled ? "Effects on (tap for performance mode)" : "Performance mode (tap for effects)"}
+        aria-label="Toggle visual effects"
+        className={`w-10 h-10 rounded-full grid place-items-center ${
+          effectsEnabled ? "bg-oth-warm text-oth-ink" : "bg-white/80 text-neutral-400"
+        }`}
+      >
+        <Sparkle size={18} weight={effectsEnabled ? "fill" : "bold"} />
       </button>
       <button
         onClick={toggleFirstPerson}

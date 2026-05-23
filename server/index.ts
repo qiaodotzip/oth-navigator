@@ -6,6 +6,8 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { cors } from "hono/cors";
 import OpenAI from "openai";
+import { getCatalog, DEMO_JOURNEY } from "./serviceCatalog";
+import type { FloorId, ServiceCategory } from "../src/data/types";
 
 const SYSTEM_PROMPT = `You are a wayfinding assistant inside One Tampines Hub (OTH) in Singapore.
 You help elderly visitors find counters. Tone: warm, concise, Singapore-English-aware.
@@ -125,6 +127,24 @@ app.post("/api/narrate", async c => {
     return c.json({ error: msg }, 500);
   }
 });
+
+app.get("/api/services", c => {
+  const categoryParam = c.req.query("category");
+  const floorParam = c.req.query("floor");
+  try {
+    const category = categoryParam
+      ? (categoryParam.split(",").map(s => s.trim()) as ServiceCategory[])
+      : undefined;
+    const floor = floorParam ? (floorParam as FloorId) : undefined;
+    return c.json(getCatalog({ category, floor }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[services] catalog error:", msg);
+    return c.json({ error: msg }, 500);
+  }
+});
+
+app.get("/api/demo-journey", c => c.json(DEMO_JOURNEY));
 
 if (process.env.NODE_ENV === "production") {
   app.use("/*", serveStatic({ root: "./dist" }));

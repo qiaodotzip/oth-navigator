@@ -36,6 +36,7 @@ type State = {
   pickingLocation: boolean;
   timeOfDay: TimeOfDay;
   tileSizeM: number;
+  effectsEnabled: boolean;
 
   setLanguage: (l: Language) => void;
   setProfile: (p: AccessibilityProfile) => void;
@@ -53,6 +54,7 @@ type State = {
   setPickingLocation: (v: boolean) => void;
   cycleTimeOfDay: () => void;
   setTileSize: (m: number) => void;
+  toggleEffects: () => void;
 };
 
 const TILE_KEY = "oth-ground-tile-m";
@@ -79,6 +81,7 @@ export const useStore = create<State>(set => ({
   pickingLocation: false,
   timeOfDay: "morning",
   tileSizeM: initialTile,
+  effectsEnabled: true,
 
   setLanguage: l => set({ language: l }),
   setProfile: p => set({ profile: p }),
@@ -130,4 +133,5 @@ export const useStore = create<State>(set => ({
     }
     set({ tileSizeM: v });
   },
+  toggleEffects: () => set(s => ({ effectsEnabled: !s.effectsEnabled })),
 }));
