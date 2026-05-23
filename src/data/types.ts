@@ -53,6 +53,12 @@ export type Waypoint = {
   point: [number, number];
   decisionPoint: boolean;
   segmentKey: string;
+  /**
+   * Wall-avoiding polyline (in floor metres) from the previous waypoint to
+   * this one, populated by expandRoutes via A*. The blob walks along this.
+   * Absent on the first step or for cross-floor (lift/escalator) hops.
+   */
+  pathFromPrev?: [number, number][];
 };
 
 export type RouteVariant = {

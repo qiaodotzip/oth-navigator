@@ -26,7 +26,7 @@ export function CameraRig() {
     const floor = floors.find(f => f.id === wp.floorId);
     if (!floor) return;
     const x = wp.point[0] - floor.bounds.width / 2;
-    const z = floor.bounds.depth / 2 - wp.point[1];
+    const z = wp.point[1] - floor.bounds.depth / 2;
     if (wp.decisionPoint) {
       targetPos.current.set(x + 18, 28, z + 18);
       targetLook.current.set(x, 2, z);

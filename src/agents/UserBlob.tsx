@@ -1,79 +1,109 @@
 import { Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Floor } from "@/data/types";
 import { useStore } from "@/store";
 
 const TOWN_SQUARE_M: [number, number] = [128, 73];
+const WALK_SPEED = 16; // scene units per second
 
-function metresToScene(point: [number, number], floor: Floor) {
-  return [point[0] - floor.bounds.width / 2, floor.bounds.depth / 2 - point[1]] as const;
+function metresToScene(point: [number, number], floor: Floor): [number, number] {
+  return [point[0] - floor.bounds.width / 2, point[1] - floor.bounds.depth / 2];
 }
 
 export function UserBlob({ floor }: { floor: Floor }) {
   const activeRoute = useStore(s => s.activeRoute);
 
-  let target: [number, number] | null = null;
+  let visible = false;
   let label = "You are here";
   if (activeRoute) {
     const wp = activeRoute.variant.steps[activeRoute.currentWaypointIndex];
     if (wp && wp.floorId === floor.id) {
-      target = wp.point;
+      visible = true;
       label = "You";
     }
   } else if (floor.id === "L1") {
-    target = TOWN_SQUARE_M;
+    visible = true;
   }
 
-  if (!target) return null;
-  return <BlobMesh target={target} floor={floor} label={label} />;
+  if (!visible) return null;
+  return <BlobMesh floor={floor} label={label} />;
 }
 
-function BlobMesh({
-  target,
-  floor,
-  label,
-}: {
-  target: [number, number];
-  floor: Floor;
-  label: string;
-}) {
+function BlobMesh({ floor, label }: { floor: Floor; label: string }) {
+  const activeRoute = useStore(s => s.activeRoute);
   const groupRef = useRef<THREE.Group>(null!);
   const yawRef = useRef(0);
-  const [tx, tz] = metresToScene(target, floor);
-  const targetVec = useRef(new THREE.Vector3(tx, 0, tz));
-  const lastTargetKey = useRef("");
-  const lastPos = useRef(new THREE.Vector3(tx, 0, tz));
+  const progress = useRef(0);
 
-  useEffect(() => {
-    targetVec.current.set(tx, 0, tz);
-  }, [tx, tz]);
+  const idx = activeRoute?.currentWaypointIndex ?? -1;
+  const step = idx >= 0 ? activeRoute?.variant.steps[idx] : undefined;
 
-  useEffect(() => {
-    if (groupRef.current) {
-      groupRef.current.position.set(tx, 0, tz);
-      lastPos.current.set(tx, 0, tz);
+  // Scene-space polyline for the current leg (previous waypoint -> current).
+  const legPath = useMemo<THREE.Vector3[]>(() => {
+    if (!step) {
+      const [x, z] = metresToScene(TOWN_SQUARE_M, floor);
+      return [new THREE.Vector3(x, 0, z)];
     }
-  }, []);
+    const raw =
+      step.pathFromPrev && step.pathFromPrev.length >= 2
+        ? step.pathFromPrev
+        : [step.point];
+    return raw.map(([mx, my]) => {
+      const [x, z] = metresToScene([mx, my], floor);
+      return new THREE.Vector3(x, 0, z);
+    });
+  }, [step, floor]);
+
+  const segLengths = useMemo(() => {
+    const lens: number[] = [];
+    for (let i = 1; i < legPath.length; i++) {
+      lens.push(legPath[i].distanceTo(legPath[i - 1]));
+    }
+    return lens;
+  }, [legPath]);
+  const totalLen = segLengths.reduce((a, b) => a + b, 0);
+
+  // Reset the walk whenever the leg changes; snap to the leg start.
+  useEffect(() => {
+    progress.current = 0;
+    if (groupRef.current && legPath.length > 0) {
+      groupRef.current.position.copy(legPath[0]);
+    }
+  }, [legPath]);
 
   useFrame((_, dt) => {
-    if (!groupRef.current) return;
-    const rate = 1 - Math.pow(0.0005, dt);
-    groupRef.current.position.lerp(targetVec.current, rate);
+    if (!groupRef.current || legPath.length === 0) return;
 
-    const dx = targetVec.current.x - lastPos.current.x;
-    const dz = targetVec.current.z - lastPos.current.z;
-    if (Math.hypot(dx, dz) > 0.5) {
-      const targetYaw = Math.atan2(dx, -dz);
-      yawRef.current += (targetYaw - yawRef.current) * Math.min(1, dt * 6);
+    if (legPath.length === 1) {
+      groupRef.current.position.lerp(legPath[0], 1 - Math.pow(0.001, dt));
+      const bob = Math.sin(performance.now() * 0.006) * 0.04;
+      groupRef.current.position.y = bob;
+      return;
+    }
+
+    progress.current = Math.min(totalLen, progress.current + WALK_SPEED * dt);
+
+    let acc = 0;
+    let pos = legPath[legPath.length - 1].clone();
+    const dir = new THREE.Vector3();
+    for (let i = 0; i < segLengths.length; i++) {
+      if (acc + segLengths[i] >= progress.current) {
+        const t = (progress.current - acc) / Math.max(0.001, segLengths[i]);
+        pos = legPath[i].clone().lerp(legPath[i + 1], t);
+        dir.subVectors(legPath[i + 1], legPath[i]);
+        break;
+      }
+      acc += segLengths[i];
+    }
+    groupRef.current.position.set(pos.x, Math.sin(performance.now() * 0.006) * 0.04, pos.z);
+    if (dir.lengthSq() > 0.0001) {
+      const targetYaw = Math.atan2(dir.x, dir.z);
+      yawRef.current += (targetYaw - yawRef.current) * Math.min(1, dt * 8);
       groupRef.current.rotation.y = yawRef.current;
     }
-    lastPos.current.copy(groupRef.current.position);
   });
-
-  const key = `${target[0]},${target[1]}`;
-  if (key !== lastTargetKey.current) lastTargetKey.current = key;
 
   return (
     <group ref={groupRef}>

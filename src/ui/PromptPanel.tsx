@@ -36,12 +36,20 @@ export function PromptPanel({
   const svc = services.find(s => s.id === route.variant.serviceId);
   const svcName = svc ? (language === "zh" ? svc.nameZh : svc.nameEn) : "";
 
-  const distance = next
-    ? Math.hypot(
-        next.point[0] - current.point[0],
-        next.point[1] - current.point[1],
-      )
-    : 0;
+  // Distance = length of the wall-avoiding polyline to the next waypoint.
+  const legPoly =
+    next && next.pathFromPrev && next.pathFromPrev.length >= 2
+      ? next.pathFromPrev
+      : next
+      ? [current.point, next.point]
+      : [];
+  let distance = 0;
+  for (let k = 0; k < legPoly.length - 1; k++) {
+    distance += Math.hypot(
+      legPoly[k + 1][0] - legPoly[k][0],
+      legPoly[k + 1][1] - legPoly[k][1],
+    );
+  }
   const walkSec = Math.max(1, Math.round(distance / WALK_SPEED_MPS));
   const floorChange = !!(next && next.floorId !== current.floorId);
 
@@ -51,8 +59,11 @@ export function PromptPanel({
     if (floor) {
       const destRoomId =
         svc && svc.floorId === floor.id ? svc.roomId : undefined;
-      blockedRooms = checkSegment(current.point, next.point, floor, destRoomId)
-        .blockingRoomIds;
+      for (let k = 0; k < legPoly.length - 1; k++) {
+        const ids = checkSegment(legPoly[k], legPoly[k + 1], floor, destRoomId)
+          .blockingRoomIds;
+        for (const id of ids) if (!blockedRooms.includes(id)) blockedRooms.push(id);
+      }
     }
   }
 

@@ -1,55 +1,71 @@
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Floor } from "@/data/types";
 import { useStore } from "@/store";
-import { checkSegment } from "@/routing/pathChecks";
 
+/**
+ * Draws the upcoming leg as a pulsing polyline that hugs the wall-avoiding
+ * path (steps[currentIndex + 1].pathFromPrev), with an arrowhead at the end.
+ */
 export function RouteArrow({ floor }: { floor: Floor }) {
   const activeRoute = useStore(s => s.activeRoute);
-  const services = useStore(s => s.services);
   const groupRef = useRef<THREE.Group>(null!);
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
-    const pulse = 1 + Math.sin(clock.elapsedTime * 4) * 0.08;
-    groupRef.current.scale.set(pulse, pulse, pulse);
+    const pulse = 1 + Math.sin(clock.elapsedTime * 4) * 0.06;
+    groupRef.current.scale.set(1, pulse, 1);
   });
 
-  if (!activeRoute) return null;
-  const steps = activeRoute.variant.steps;
-  const i = activeRoute.currentWaypointIndex;
-  const current = steps[i];
-  const next = steps[i + 1];
-  if (!current || !next) return null;
-  if (current.floorId !== floor.id || next.floorId !== floor.id) return null;
+  const i = activeRoute?.currentWaypointIndex ?? -1;
+  const next = i >= 0 ? activeRoute?.variant.steps[i + 1] : undefined;
 
-  const svc = services.find(s => s.id === activeRoute.variant.serviceId);
-  const destinationRoomId = svc && svc.floorId === floor.id ? svc.roomId : undefined;
-  const block = checkSegment(current.point, next.point, floor, destinationRoomId);
-  const color = block.blocked ? "#DC2626" : "#E91E63";
+  const points = useMemo<THREE.Vector3[]>(() => {
+    if (!next) return [];
+    if (next.floorId !== floor.id) return [];
+    const raw =
+      next.pathFromPrev && next.pathFromPrev.length >= 2
+        ? next.pathFromPrev
+        : null;
+    const current = i >= 0 ? activeRoute?.variant.steps[i] : undefined;
+    const seq =
+      raw ??
+      (current && current.floorId === floor.id
+        ? [current.point, next.point]
+        : null);
+    if (!seq) return [];
+    return seq.map(
+      ([mx, my]) =>
+        new THREE.Vector3(
+          mx - floor.bounds.width / 2,
+          0.25,
+          my - floor.bounds.depth / 2,
+        ),
+    );
+  }, [next, i, activeRoute, floor]);
 
-  const ax = current.point[0] - floor.bounds.width / 2;
-  const az = floor.bounds.depth / 2 - current.point[1];
-  const bx = next.point[0] - floor.bounds.width / 2;
-  const bz = floor.bounds.depth / 2 - next.point[1];
-  const dx = bx - ax;
-  const dz = bz - az;
-  const dist = Math.hypot(dx, dz);
-  if (dist < 0.01) return null;
-  const mx = (ax + bx) / 2;
-  const mz = (az + bz) / 2;
-  const yaw = Math.atan2(dx, dz);
+  const tube = useMemo(() => {
+    if (points.length < 2) return null;
+    const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.2);
+    return new THREE.TubeGeometry(curve, Math.max(8, points.length * 4), 0.5, 6, false);
+  }, [points]);
+
+  if (!tube || points.length < 2) return null;
+
+  const last = points[points.length - 1];
+  const prev = points[points.length - 2];
+  const dir = new THREE.Vector3().subVectors(last, prev);
+  const yaw = Math.atan2(dir.x, dir.z);
 
   return (
-    <group ref={groupRef} position={[mx, 0.2, mz]} rotation={[0, yaw, 0]}>
-      <mesh position={[0, 0, 0]}>
-        <boxGeometry args={[1.4, 0.15, Math.max(2, dist - 2)]} />
-        <meshBasicMaterial color={color} transparent opacity={0.7} />
+    <group ref={groupRef}>
+      <mesh geometry={tube}>
+        <meshBasicMaterial color="#E91E63" transparent opacity={0.75} />
       </mesh>
-      <mesh position={[0, 0.05, dist / 2 - 1]} rotation={[-Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[1.5, 2.5, 4]} />
-        <meshBasicMaterial color={color} transparent opacity={0.85} />
+      <mesh position={[last.x, 0.25, last.z]} rotation={[Math.PI / 2, 0, -yaw]}>
+        <coneGeometry args={[1.4, 2.6, 4]} />
+        <meshBasicMaterial color="#E91E63" transparent opacity={0.9} />
       </mesh>
     </group>
   );

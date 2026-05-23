@@ -14,7 +14,7 @@ export function CounterBadges({ floor }: { floor: Floor }) {
         const cx = poly.points.reduce((a, [x]) => a + x, 0) / poly.points.length;
         const cz = poly.points.reduce((a, [, z]) => a + z, 0) / poly.points.length;
         const x = cx - floor.bounds.width / 2;
-        const z = floor.bounds.depth / 2 - cz;
+        const z = cz - floor.bounds.depth / 2;
         const ids = svc.counterIds ?? [];
         const avg =
           ids.length === 0

@@ -43,7 +43,7 @@ export function AnalyticsAgent({
     const p = loop.points[segIdx % loop.points.length];
     const q = loop.points[(segIdx + 1) % loop.points.length];
     const x = p[0] + (q[0] - p[0]) * segT - floor.bounds.width / 2;
-    const z = floor.bounds.depth / 2 - (p[1] + (q[1] - p[1]) * segT);
+    const z = (p[1] + (q[1] - p[1]) * segT) - floor.bounds.depth / 2;
     const dx = q[0] - p[0];
     const dy = q[1] - p[1];
     const targetYaw = Math.atan2(dx, -dy);

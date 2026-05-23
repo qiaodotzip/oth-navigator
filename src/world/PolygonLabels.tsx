@@ -8,7 +8,7 @@ export function PolygonLabels({ floor }: { floor: Floor }) {
         const cx = p.points.reduce((a, [x]) => a + x, 0) / p.points.length;
         const cy = p.points.reduce((a, [, y]) => a + y, 0) / p.points.length;
         const x = cx - floor.bounds.width / 2;
-        const z = floor.bounds.depth / 2 - cy;
+        const z = cy - floor.bounds.depth / 2;
         const label = p.id.startsWith(`${floor.id}-`)
           ? p.id.slice(floor.id.length + 1)
           : p.id;

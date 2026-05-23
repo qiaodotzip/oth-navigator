@@ -39,11 +39,17 @@ export function validateBundle(
       const floor = floorById.get(a.floorId);
       if (!floor) continue;
       const destRoomId = svc && svc.floorId === floor.id ? svc.roomId : undefined;
-      const report = checkSegment(a.point, b.point, floor, destRoomId);
-      if (report.blocked) {
-        warnings.push(
-          `route ${r.serviceId}/${r.profile} step ${i}->${i + 1} crosses rooms: ${report.blockingRoomIds.join(", ")}`,
-        );
+      // Validate the actual walked polyline (pathFromPrev), not the straight line.
+      const poly = b.pathFromPrev && b.pathFromPrev.length >= 2
+        ? b.pathFromPrev
+        : [a.point, b.point];
+      for (let k = 0; k < poly.length - 1; k++) {
+        const report = checkSegment(poly[k], poly[k + 1], floor, destRoomId);
+        if (report.blocked) {
+          warnings.push(
+            `route ${r.serviceId}/${r.profile} step ${i}->${i + 1} sub-seg ${k} crosses rooms: ${report.blockingRoomIds.join(", ")}`,
+          );
+        }
       }
     }
   }
