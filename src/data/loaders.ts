@@ -45,20 +45,29 @@ function expandRoutes(
         svc && svc.floorId === floor.id ? svc.roomId : undefined;
       const report = checkSegment(a.point, b.point, floor, destRoom);
 
+      console.log(
+        `[expandRoutes] ${r.serviceId}/${r.profile} step ${i}->${i + 1}: from (${a.point.join(",")}) to (${b.point.join(",")}) blocked=${report.blocked} blockedBy=[${report.blockingRoomIds.join(",")}] destRoom=${destRoom ?? "none"}`,
+      );
+
       if (!report.blocked) {
         newSteps.push(b);
         continue;
       }
 
+      const t0 = performance.now();
       const path = findPath(a.point, b.point, floor, destRoom);
+      const ms = (performance.now() - t0).toFixed(0);
       if (!path || path.length < 2) {
         console.warn(
-          `[expandRoutes] no path for ${r.serviceId}/${r.profile} step ${i}->${i + 1}; keeping direct (may phase through walls)`,
+          `[expandRoutes] A* NULL for ${r.serviceId}/${r.profile} step ${i}->${i + 1} after ${ms}ms; keeping direct (may phase through walls)`,
         );
         newSteps.push(b);
         continue;
       }
       const smoothed = smoothPath(path, floor, destRoom);
+      console.log(
+        `[expandRoutes] A* OK for ${r.serviceId}/${r.profile} step ${i}->${i + 1}: ${path.length} raw -> ${smoothed.length} smoothed cells in ${ms}ms`,
+      );
 
       for (let k = 1; k < smoothed.length - 1; k++) {
         newSteps.push({
