@@ -59,16 +59,22 @@ export const useStore = create<State>(set => ({
   startRoute: v =>
     set({ activeRoute: { variant: v, startedAt: Date.now(), currentWaypointIndex: 0 } }),
   advanceRoute: () =>
-    set(s =>
-      s.activeRoute
-        ? {
-            activeRoute: {
-              ...s.activeRoute,
-              currentWaypointIndex: s.activeRoute.currentWaypointIndex + 1,
-            },
-          }
-        : {},
-    ),
+    set(s => {
+      if (!s.activeRoute) return {};
+      const nextIdx = s.activeRoute.currentWaypointIndex + 1;
+      const nextStep = s.activeRoute.variant.steps[nextIdx];
+      const floorChange =
+        nextStep && nextStep.floorId !== s.activeFloor
+          ? { activeFloor: nextStep.floorId }
+          : {};
+      return {
+        activeRoute: {
+          ...s.activeRoute,
+          currentWaypointIndex: nextIdx,
+        },
+        ...floorChange,
+      };
+    }),
   endRoute: () => set({ activeRoute: null }),
   toggleInspectMode: () => set(s => ({ inspectMode: !s.inspectMode })),
   toggleLabels: () => set(s => ({ showLabels: !s.showLabels })),
