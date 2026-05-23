@@ -1,24 +1,18 @@
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { useRef } from "react";
-import * as THREE from "three";
 import { Floor } from "./Floor";
 import { CameraRig } from "./CameraRig";
 import { PolygonLabels } from "./PolygonLabels";
+import { RouteArrow } from "./RouteArrow";
 import { useStore } from "@/store";
-import { GuideAgent } from "@/agents/GuideAgent";
-import { useWaypointWalk } from "@/agents/useWaypointWalk";
-import { FootstepBreadcrumb } from "@/agents/FootstepBreadcrumb";
 import { AnalyticsAgent } from "@/agents/AnalyticsAgent";
 import { WANDER_LOOPS } from "@/agents/wanderLoops";
 import { useCounterLoadSimulator } from "@/agents/counterLoads";
 import { UserBlob } from "@/agents/UserBlob";
-import type { Floor as FloorData } from "@/data/types";
 
 export function Scene() {
   const floors = useStore(s => s.floors);
   const activeFloor = useStore(s => s.activeFloor);
-  const activeRoute = useStore(s => s.activeRoute);
   const inspectMode = useStore(s => s.inspectMode);
   const showLabels = useStore(s => s.showLabels);
 
@@ -37,7 +31,8 @@ export function Scene() {
       />
       {active && <Floor data={active} />}
       {active && showLabels && <PolygonLabels floor={active} />}
-      {active && !activeRoute && <UserBlob floor={active} />}
+      {active && <RouteArrow floor={active} />}
+      {active && <UserBlob floor={active} />}
       {active &&
         WANDER_LOOPS.filter(l => l.floorId === active.id).flatMap((loop, li) =>
           Array.from({ length: 4 }).map((_, ai) => (
@@ -50,7 +45,6 @@ export function Scene() {
             />
           )),
         )}
-      {activeRoute && <WalkingGuide floors={floors} />}
       {inspectMode ? (
         <OrbitControls
           enablePan
@@ -63,23 +57,5 @@ export function Scene() {
         <CameraRig />
       )}
     </Canvas>
-  );
-}
-
-function WalkingGuide({ floors }: { floors: FloorData[] }) {
-  const pose = useWaypointWalk(floors);
-  const groupRef = useRef<THREE.Group>(null!);
-  useFrame(() => {
-    if (!groupRef.current) return;
-    groupRef.current.position.set(pose.current.x, 0, pose.current.z);
-    groupRef.current.rotation.y = pose.current.yawRad;
-  });
-  return (
-    <>
-      <FootstepBreadcrumb poseRef={pose} />
-      <group ref={groupRef}>
-        <GuideAgent pose={{ x: 0, z: 0, yawRad: 0, bobPhase: 0 }} />
-      </group>
-    </>
   );
 }

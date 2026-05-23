@@ -30,6 +30,7 @@ export default function App() {
   const language = useStore(s => s.language);
   const counterLoads = useStore(s => s.counterLoads);
   const startRoute = useStore(s => s.startRoute);
+  const advanceRoute = useStore(s => s.advanceRoute);
   const setActiveFloor = useStore(s => s.setActiveFloor);
   const activeRoute = useStore(s => s.activeRoute);
   const endRoute = useStore(s => s.endRoute);
@@ -72,17 +73,25 @@ export default function App() {
           return;
         }
       }
-      const fetched = narr;
-      setSegments(fetched.segments);
-      cancelAll();
-      enqueueSegments(fetched.segments, language, key => {
-        const seg = fetched.segments.find(s => s.key === key);
-        if (seg) setNarrationText(language === "zh" ? seg.zh : seg.en);
-      });
+      setSegments(narr.segments);
     },
-    [profile, counterLoads, routes, services, language, startRoute, setActiveFloor],
+    [profile, counterLoads, routes, services, startRoute, setActiveFloor],
   );
 
+  // Play the segment for the current waypoint whenever the index changes
+  useEffect(() => {
+    if (!activeRoute || segments.length === 0) return;
+    const step = activeRoute.variant.steps[activeRoute.currentWaypointIndex];
+    if (!step) return;
+    const seg = segments.find(s => s.key === step.segmentKey);
+    if (!seg) return;
+    const text = language === "zh" ? seg.zh : seg.en;
+    setNarrationText(text);
+    cancelAll();
+    enqueueSegments([seg], language, () => {});
+  }, [activeRoute?.currentWaypointIndex, segments, language, activeRoute]);
+
+  // Cleanup when route ends
   useEffect(() => {
     if (!activeRoute) {
       setNarrationText("");
@@ -91,17 +100,9 @@ export default function App() {
     }
   }, [activeRoute]);
 
-  useEffect(() => {
-    const route = useStore.getState().activeRoute;
-    if (!route || segments.length === 0) return;
-    const remaining = segments.slice(route.currentWaypointIndex);
-    cancelAll();
-    enqueueSegments(remaining, language, key => {
-      const seg = segments.find(s => s.key === key);
-      if (seg) setNarrationText(language === "zh" ? seg.zh : seg.en);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language]);
+  const onNext = useCallback(() => {
+    advanceRoute();
+  }, [advanceRoute]);
 
   const onVoiceTap = () => {
     if (sr.listening) sr.stop();
@@ -131,7 +132,11 @@ export default function App() {
           <SuccessCard onDismiss={endRoute} />
         </div>
         <div className="h-[32%]">
-          <PromptPanel narrationText={narrationText} onPickService={onPickService} />
+          <PromptPanel
+            narrationText={narrationText}
+            onPickService={onPickService}
+            onNext={onNext}
+          />
         </div>
       </div>
     </PhoneFrame>
