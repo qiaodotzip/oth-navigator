@@ -39,6 +39,8 @@ type State = {
   intentStatus: "idle" | "resolving" | "resolved";
   inspectMode: boolean;
   firstPerson: boolean;
+  /** GPS-style: camera locks to a close, top-down view that follows the guide. */
+  cameraFollow: boolean;
   showLabels: boolean;
   userLocation: UserLocation | null;
   pickingLocation: boolean;
@@ -50,6 +52,9 @@ type State = {
   setProfile: (p: AccessibilityProfile) => void;
   setActiveFloor: (f: FloorId) => void;
   setBundle: (data: { floors: Floor[]; services: Service[]; routes: RouteVariant[] }) => void;
+  /** Merge extra services (e.g. resolved from the backend) into the catalog,
+   *  skipping ids that already exist, so the router/timeline can find them. */
+  addServices: (svcs: Service[]) => void;
   setLoad: (counterId: string, load: number) => void;
   setPopularTimes: (entries: PopularTimesEntry[]) => void;
   setJourney: (j: Journey | null) => void;
@@ -64,6 +69,7 @@ type State = {
   endRoute: () => void;
   toggleInspectMode: () => void;
   toggleFirstPerson: () => void;
+  toggleCameraFollow: () => void;
   toggleLabels: () => void;
   setUserLocation: (loc: UserLocation) => void;
   setPickingLocation: (v: boolean) => void;
@@ -96,6 +102,7 @@ export const useStore = create<State>(set => ({
   intentStatus: "idle",
   inspectMode: true,
   firstPerson: false,
+  cameraFollow: false,
   showLabels: true,
   userLocation: null,
   pickingLocation: false,
@@ -107,6 +114,12 @@ export const useStore = create<State>(set => ({
   setProfile: p => set({ profile: p }),
   setActiveFloor: f => set({ activeFloor: f }),
   setBundle: ({ floors, services, routes }) => set({ floors, services, routes }),
+  addServices: svcs =>
+    set(s => {
+      const have = new Set(s.services.map(x => x.id));
+      const add = svcs.filter(x => !have.has(x.id));
+      return add.length ? { services: [...s.services, ...add] } : {};
+    }),
   setLoad: (counterId, load) =>
     set(s => ({ counterLoads: { ...s.counterLoads, [counterId]: load } })),
   setPopularTimes: entries => set({ popularTimes: entries }),
@@ -137,9 +150,27 @@ export const useStore = create<State>(set => ({
         ...floorChange,
       };
     }),
-  endRoute: () => set({ activeRoute: null }),
-  toggleInspectMode: () => set(s => ({ inspectMode: !s.inspectMode })),
-  toggleFirstPerson: () => set(s => ({ firstPerson: !s.firstPerson })),
+  // Ending a route hands the camera back: GPS-follow has no target once routing
+  // stops, and its toggle button is hidden without an active route — so leaving
+  // it on would trap the user in a fixed view. Restore manual rotate/tilt.
+  endRoute: () =>
+    set(s =>
+      s.cameraFollow
+        ? { activeRoute: null, cameraFollow: false, inspectMode: true }
+        : { activeRoute: null },
+    ),
+  // Manually touching rotate/tilt or walk mode exits GPS-follow, so the flag
+  // never goes stale against the active camera.
+  toggleInspectMode: () => set(s => ({ inspectMode: !s.inspectMode, cameraFollow: false })),
+  toggleFirstPerson: () => set(s => ({ firstPerson: !s.firstPerson, cameraFollow: false })),
+  // Enabling follow takes over the camera (no orbit, no walk); disabling hands
+  // control back to manual rotate/tilt.
+  toggleCameraFollow: () =>
+    set(s =>
+      s.cameraFollow
+        ? { cameraFollow: false, inspectMode: true }
+        : { cameraFollow: true, inspectMode: false, firstPerson: false },
+    ),
   toggleLabels: () => set(s => ({ showLabels: !s.showLabels })),
   setUserLocation: loc => set({ userLocation: loc, activeFloor: loc.floorId }),
   setPickingLocation: v => set({ pickingLocation: v }),

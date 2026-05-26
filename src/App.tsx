@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { resolveIntent, planToJourney } from "@/intent/resolveIntent";
-import type { Plan } from "@/intent/types";
+import type { Plan, PlanStop } from "@/intent/types";
 import { PhoneFrame } from "@/ui/PhoneFrame";
 import { Scene } from "@/world/Scene";
 import { FloorSelector } from "@/ui/FloorSelector";
@@ -15,7 +15,7 @@ import { fetchNarration } from "@/narration/client";
 import { getCached, setCached } from "@/narration/cache";
 import { enqueueSegments, cancelAll } from "@/narration/ttsQueue";
 import { useSpeechRecognition } from "@/ui/useSpeechRecognition";
-import type { NarrationSegment, PopularTimesEntry } from "@/data/types";
+import type { NarrationSegment, PopularTimesEntry, Service } from "@/data/types";
 import { SetLocationControl } from "@/ui/SetLocationControl";
 import { JourneyTimeline } from "@/ui/JourneyTimeline";
 import { WaypointEditor } from "@/dev/WaypointEditor";
@@ -27,6 +27,34 @@ import { Dashboard } from "@/dashboard/Dashboard";
 import { ReportView } from "@/dashboard/ReportView";
 
 const TTS_ENABLED = false;
+
+/** Stops in a resolved plan (1 for destination/offsite/human, N for journey). */
+function planStops(plan: Plan): PlanStop[] {
+  return plan.kind === "journey" ? plan.stops : [plan.stop];
+}
+
+/** Backend stops aren't in the local catalog; synthesize Service records so the
+ *  router, timeline and narration can look them up by id like any other. */
+function stopToService(stop: PlanStop): Service {
+  return {
+    id: stop.serviceId,
+    nameEn: stop.name.en,
+    nameZh: stop.name.zh,
+    providerName: "",
+    category: "government",
+    routable: !!(stop.floorId && stop.roomId),
+    displayFloor: stop.floorId ?? "L1",
+    floorId: stop.floorId,
+    roomId: stop.roomId,
+    accessibility: {
+      liftAccess: stop.accessibility?.liftAccess ?? true,
+      stepFreeRoute: stop.accessibility?.stepFree ?? true,
+      notes: stop.accessibility?.notes,
+    },
+    sourceUrl: "",
+    iconKey: "info",
+  };
+}
 
 export default function App() {
   if (typeof window !== "undefined") {
@@ -111,6 +139,9 @@ export default function App() {
     // Typed prompts go backend-first (ask the concierge); tile taps keep the
     // instant local path. Either way, graceful local fallback if backend fails.
     const plan = await resolveIntent(query, st.services, st.floors, undefined, undefined, fromText);
+    // Register any backend stops in the catalog so onPickService / the timeline
+    // can resolve them by id (their floor/room is already on the PlanStop).
+    st.addServices(planStops(plan).map(stopToService));
     st.setPlan(plan);
     st.setIntentStatus("resolved");
   }, []);
