@@ -22,8 +22,9 @@ import { WaypointEditor } from "@/dev/WaypointEditor";
 import { PolygonEditor } from "@/dev/PolygonEditor";
 import { EntranceEditor } from "@/dev/EntranceEditor";
 
-const TTS_ENABLED = false;
 import { DetailEditor } from "@/dev/DetailEditor";
+
+const TTS_ENABLED = false;
 
 export default function App() {
   if (typeof window !== "undefined") {

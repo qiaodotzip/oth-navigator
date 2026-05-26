@@ -59,6 +59,7 @@ export function PromptPanel({
   const journey = useStore(s => s.journey);
   const profile = useStore(s => s.profile);
   const endRoute = useStore(s => s.endRoute);
+  const resetIntent = useStore(s => s.resetIntent);
 
   if (!route) {
     const shell = (inner: ReactNode) => (
@@ -221,7 +222,10 @@ export function PromptPanel({
             )}
           </div>
           <button
-            onClick={endRoute}
+            onClick={() => {
+              endRoute();
+              resetIntent(); // cancel → back to the ask box, not the result card
+            }}
             aria-label={language === "zh" ? "结束导航" : "End navigation"}
             className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full text-neutral-400 hover:bg-neutral-200"
           >
