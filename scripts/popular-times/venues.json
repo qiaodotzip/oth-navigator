@@ -1,5 +1,5 @@
 {
-  "_note": "serviceId -> BestTime venue. Address is the OTH street address; tune names if BestTime returns 'venue not found'.",
+  "_note": "serviceId -> BestTime venue. Address is the OTH street address; tune names if BestTime returns 'venue not found'. A serviceId here need not exist in the modeled popular-times.json (e.g. 'servicesg', distinct from 'psc' though both sit in L1-room-psc) — a successful fetch just adds a new forecast-tagged entry.",
   "hdb": { "name": "HDB Tampines Branch", "address": "1 Tampines Walk, Singapore 528523" },
   "library": { "name": "Tampines Regional Library", "address": "1 Tampines Walk, Singapore 528523" },
   "servicesg": { "name": "ServiceSG Centre @ Our Tampines Hub", "address": "1 Tampines Walk, Singapore 528523" },

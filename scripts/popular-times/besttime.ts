@@ -50,9 +50,12 @@ async function fetchLive(venueId: string): Promise<number | null> {
   const res = await fetch(url);
   if (!res.ok) return null;
   const data = (await res.json()) as {
-    analysis?: { venue_live_busyness?: number; venue_forecasted_busyness?: number };
+    analysis?: { venue_live_busyness?: number };
   };
-  const live = data.analysis?.venue_live_busyness ?? data.analysis?.venue_forecasted_busyness;
+  // Only a true real-time reading counts as "live". If BestTime has no live
+  // signal it returns venue_forecasted_busyness instead — we deliberately do
+  // NOT use that here, so we never label forecast data as "live now".
+  const live = data.analysis?.venue_live_busyness;
   return typeof live === "number" ? Math.max(0, Math.min(1, live / 100)) : null;
 }
 

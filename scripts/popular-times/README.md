@@ -52,6 +52,10 @@ Get free keys at besttime.app (Account -> API keys). Edit
 API shape. Government counters may not exist in BestTime's DB — those keep their
 modeled curve, which is honest and labeled "(estimated)" in the UI.
 
+The data is a build-time snapshot: the `"live now"` badge label reflects the
+reading captured when `build:popular-times:real` last ran, not a continuous feed.
+Re-run periodically (e.g. before a demo) to refresh it.
+
 ## Optional: scrape real Google Popular Times (`scrape.py`)
 
 If you later want the *actual* Google curve, `scrape.py` uses the `populartimes`
