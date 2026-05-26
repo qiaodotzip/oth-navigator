@@ -12,6 +12,7 @@
     "start": "NODE_ENV=production tsx server/index.ts",
     "typecheck": "tsc --noEmit",
     "build:popular-times": "tsx scripts/popular-times/build-curves.ts",
+    "build:popular-times:real": "tsx scripts/popular-times/besttime.ts",
     "scrape:popular-times": "python scripts/popular-times/scrape.py"
   },
   "dependencies": {

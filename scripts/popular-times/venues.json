@@ -1,0 +1,9 @@
+{
+  "_note": "serviceId -> BestTime venue. Address is the OTH street address; tune names if BestTime returns 'venue not found'.",
+  "hdb": { "name": "HDB Tampines Branch", "address": "1 Tampines Walk, Singapore 528523" },
+  "library": { "name": "Tampines Regional Library", "address": "1 Tampines Walk, Singapore 528523" },
+  "servicesg": { "name": "ServiceSG Centre @ Our Tampines Hub", "address": "1 Tampines Walk, Singapore 528523" },
+  "hawker": { "name": "Our Tampines Hub Hawker Centre", "address": "1 Tampines Walk, Singapore 528523" },
+  "community-centre": { "name": "Our Tampines Hub", "address": "1 Tampines Walk, Singapore 528523" },
+  "theatre": { "name": "Festive Arts Theatre Our Tampines Hub", "address": "1 Tampines Walk, Singapore 528523" }
+}
