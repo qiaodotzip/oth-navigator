@@ -1,30 +1,99 @@
+import type { ReactNode } from "react";
 import { useStore } from "@/store";
-import { ServiceTiles } from "./ServiceTiles";
-import { ArrowRight, Check, Warning } from "phosphor-react";
-import { checkSegment } from "@/routing/pathChecks";
+import { IntentEntry } from "./IntentEntry";
+import { ResultCard } from "./ResultCard";
+import {
+  ArrowRight,
+  Check,
+  PersonSimpleWalk,
+  ArrowUp,
+  ArrowDown,
+  MapPin,
+  X,
+} from "phosphor-react";
+import type { Language } from "@/data/types";
 
 const WALK_SPEED_MPS = 1.2;
 
+type TransitKey = "lift" | "stairs" | "escalator";
+
+function transitWord(key: string, lang: Language): string | null {
+  if (key === "lift") return lang === "zh" ? "电梯" : "lift";
+  if (key === "stairs") return lang === "zh" ? "楼梯" : "stairs";
+  if (key === "escalator") return lang === "zh" ? "扶梯" : "escalator";
+  return null;
+}
+
+function isTransit(key: string): key is TransitKey {
+  return key === "lift" || key === "stairs" || key === "escalator";
+}
+
 export function PromptPanel({
   narrationText,
-  onPickService,
+  onSubmitIntent,
+  onGuide,
+  onStartInApp,
+  onAskAgain,
   onNext,
+  onArrived,
+  onVoiceTap,
+  voiceListening,
+  voiceTranscript,
 }: {
   narrationText: string;
-  onPickService: (id: string) => void;
+  onSubmitIntent: (query: string) => void;
+  onGuide: (plan: import("@/intent/types").Plan) => void;
+  onStartInApp: (plan: Extract<import("@/intent/types").Plan, { kind: "offsite" }>) => void;
+  onAskAgain: () => void;
   onNext: () => void;
+  onArrived: () => void;
+  onVoiceTap?: () => void;
+  voiceListening?: boolean;
+  voiceTranscript?: string;
 }) {
   const route = useStore(s => s.activeRoute);
+  const activePlan = useStore(s => s.activePlan);
+  const intentStatus = useStore(s => s.intentStatus);
   const services = useStore(s => s.services);
-  const floors = useStore(s => s.floors);
   const language = useStore(s => s.language);
+  const journey = useStore(s => s.journey);
+  const profile = useStore(s => s.profile);
   const endRoute = useStore(s => s.endRoute);
 
   if (!route) {
-    return (
-      <div className="h-full bg-oth-paper border-t border-neutral-300 overflow-hidden">
-        <ServiceTiles onPick={onPickService} />
-      </div>
+    const shell = (inner: ReactNode) => (
+      <div className="h-full bg-oth-paper border-t border-neutral-300">{inner}</div>
+    );
+    if (intentStatus === "resolving") {
+      return shell(
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-oth-primary/20 border-t-oth-primary" />
+          <p className="text-base font-semibold text-oth-ink">
+            {language === "zh" ? "正在为您寻找…" : "Finding the right place…"}
+          </p>
+          <p className="text-xs text-neutral-400">
+            {language === "zh" ? "正在查询 One Tampines Hub" : "Checking One Tampines Hub"}
+          </p>
+        </div>,
+      );
+    }
+    if (activePlan) {
+      return shell(
+        <ResultCard
+          plan={activePlan}
+          onGuide={onGuide}
+          onStartInApp={onStartInApp}
+          onAskAgain={onAskAgain}
+        />,
+      );
+    }
+    return shell(
+      <IntentEntry
+        onSubmit={onSubmitIntent}
+        onVoiceTap={onVoiceTap}
+        voiceListening={voiceListening}
+        voiceTranscript={voiceTranscript}
+      />,
     );
   }
 
@@ -36,13 +105,38 @@ export function PromptPanel({
   const svc = services.find(s => s.id === route.variant.serviceId);
   const svcName = svc ? (language === "zh" ? svc.nameZh : svc.nameEn) : "";
 
+  // Journey progress: which stop (of how many) is this service?
+  const stopProgress = (() => {
+    if (!journey || journey.stops.length === 0) return null;
+    const sorted = [...journey.stops].sort((a, b) => a.order - b.order);
+    const i = sorted.findIndex(s => s.serviceId === route.variant.serviceId);
+    return i >= 0 ? { n: i + 1, total: sorted.length } : null;
+  })();
+
+  // The next journey stop after the one we're arriving at (for the chain prompt).
+  const nextStop = (() => {
+    if (!journey) return null;
+    const cur = journey.stops.find(s => s.serviceId === route.variant.serviceId);
+    return (
+      journey.stops
+        .filter(s => s.order > (cur?.order ?? -1))
+        .sort((a, b) => a.order - b.order)[0] ?? null
+    );
+  })();
+  const nextStopName = nextStop
+    ? (() => {
+        const s = services.find(x => x.id === nextStop.serviceId);
+        return s ? (language === "zh" ? s.nameZh : s.nameEn) : nextStop.serviceId;
+      })()
+    : null;
+
   // Distance = length of the wall-avoiding polyline to the next waypoint.
   const legPoly =
     next && next.pathFromPrev && next.pathFromPrev.length >= 2
       ? next.pathFromPrev
       : next
-      ? [current.point, next.point]
-      : [];
+        ? [current.point, next.point]
+        : [];
   let distance = 0;
   for (let k = 0; k < legPoly.length - 1; k++) {
     distance += Math.hypot(
@@ -51,78 +145,153 @@ export function PromptPanel({
     );
   }
   const walkSec = Math.max(1, Math.round(distance / WALK_SPEED_MPS));
+  const eta = walkSec < 60 ? `${walkSec}${language === "zh" ? "秒" : "s"}` : `${Math.round(walkSec / 60)} ${language === "zh" ? "分钟" : "min"}`;
   const floorChange = !!(next && next.floorId !== current.floorId);
+  const goingUp = floorChange && next!.floorId > current.floorId; // "L2" > "L1"
 
-  let blockedRooms: string[] = [];
-  if (next && !floorChange) {
-    const floor = floors.find(f => f.id === current.floorId);
-    if (floor) {
-      const destRoomId =
-        svc && svc.floorId === floor.id ? svc.roomId : undefined;
-      for (let k = 0; k < legPoly.length - 1; k++) {
-        const ids = checkSegment(legPoly[k], legPoly[k + 1], floor, destRoomId)
-          .blockingRoomIds;
-        for (const id of ids) if (!blockedRooms.includes(id)) blockedRooms.push(id);
-      }
+  // Build the headline instruction for this step.
+  const instruction = (() => {
+    if (isLast) {
+      return {
+        kind: "arrived" as const,
+        title: language === "zh" ? "您已到达" : "You've arrived",
+        sub: language === "zh" ? `${svcName} 就在这里。` : `${svcName} is right here.`,
+      };
     }
-  }
+    if (floorChange) {
+      const word = transitWord(current.segmentKey, language) ?? (language === "zh" ? "电梯" : "lift");
+      return {
+        kind: "transit" as const,
+        title:
+          language === "zh"
+            ? `乘${word}前往 ${next!.floorId}`
+            : `Take the ${word} ${goingUp ? "up" : "down"} to ${next!.floorId}`,
+        sub:
+          language === "zh"
+            ? `${word}就在前方，跟着指示牌走。`
+            : `The ${word} is just ahead — follow the signs.`,
+      };
+    }
+    const nextWord = next && isTransit(next.segmentKey) ? transitWord(next.segmentKey, language) : null;
+    const title = nextWord
+      ? language === "zh" ? `步行前往${nextWord}` : `Walk to the ${nextWord}`
+      : language === "zh" ? `步行前往 ${svcName}` : `Walk to ${svcName}`;
+    const sub = nextWord
+      ? language === "zh"
+        ? `继续往前走，${nextWord}就在附近。`
+        : `Head straight ahead — the ${nextWord} is nearby.`
+      : language === "zh"
+        ? `继续往前走，${svcName} 就在前方。`
+        : `Keep going straight — ${svcName} is just ahead.`;
+    return { kind: "walk" as const, title, sub: `${sub}  ·  ${Math.round(distance)}m · ${eta}` };
+  })();
+
+  const progressPct = steps.length > 1 ? (idx / (steps.length - 1)) * 100 : 100;
+
+  const HeroIcon =
+    instruction.kind === "arrived"
+      ? MapPin
+      : instruction.kind === "transit"
+        ? goingUp
+          ? ArrowUp
+          : ArrowDown
+        : PersonSimpleWalk;
+  const heroTone =
+    instruction.kind === "arrived"
+      ? "bg-green-600"
+      : "bg-oth-primary";
 
   return (
-    <div className="h-full bg-oth-paper border-t border-neutral-300 overflow-hidden p-4 flex flex-col">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[10px] uppercase tracking-wider text-neutral-500 font-semibold">
-          Step {idx + 1} of {steps.length}
-        </p>
-        {svcName && (
-          <p className="text-[10px] font-semibold text-oth-primary truncate ml-2">
-            → {svcName}
-          </p>
+    <div className="h-full bg-oth-paper border-t border-neutral-300 flex flex-col">
+      {/* Header: journey progress + step counter + exit */}
+      <div className="flex-shrink-0 px-4 pt-3">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {stopProgress && (
+              <span className="rounded-full bg-oth-primary/10 px-2.5 py-0.5 text-xs font-bold text-oth-primary">
+                {language === "zh"
+                  ? `第 ${stopProgress.n}/${stopProgress.total} 站`
+                  : `Stop ${stopProgress.n} of ${stopProgress.total}`}
+              </span>
+            )}
+            {svcName && (
+              <span className="truncate text-sm font-semibold text-neutral-500">
+                → {svcName}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={endRoute}
+            aria-label={language === "zh" ? "结束导航" : "End navigation"}
+            className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full text-neutral-400 hover:bg-neutral-200"
+          >
+            <X size={18} weight="bold" />
+          </button>
+        </div>
+        {/* Slim progress bar across the route's waypoints */}
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+          <div
+            className="h-full rounded-full bg-oth-primary transition-all duration-500"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Hero instruction */}
+      <div className="flex flex-1 flex-col justify-center overflow-y-auto px-4 py-3">
+        <div className="flex items-center gap-4">
+          <span
+            className={`grid h-16 w-16 flex-shrink-0 place-items-center rounded-2xl text-white shadow-md ${heroTone}`}
+          >
+            <HeroIcon size={34} weight="bold" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xl font-extrabold leading-tight text-oth-ink">
+              {instruction.title}
+            </p>
+            {instruction.sub && (
+              <p className="mt-0.5 text-sm font-semibold text-neutral-500">
+                {instruction.sub}
+              </p>
+            )}
+            {profile === "stepFree" && instruction.kind !== "arrived" && (
+              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700">
+                <Check size={13} weight="bold" />
+                {language === "zh" ? "无障碍路线" : "Step-free route"}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {narrationText && (
+          <p className="mt-3 text-sm leading-snug text-neutral-600">{narrationText}</p>
         )}
       </div>
 
-      <p className="text-base font-semibold text-oth-ink leading-snug mb-3 flex-shrink-0">
-        {narrationText || (isLast ? "You've arrived." : "…")}
-      </p>
-
-      {!isLast && (
-        <div className="flex items-center gap-2 mb-2 text-xs text-neutral-600">
-          {floorChange ? (
-            <span className="font-semibold text-oth-primary">
-              Take the {current.segmentKey === "lift" ? "lift" : "escalator"} to {next!.floorId}
-            </span>
-          ) : (
-            <>
-              <span>About {Math.round(distance)}m</span>
-              <span>•</span>
-              <span>{walkSec}s walk</span>
-            </>
-          )}
-        </div>
-      )}
-
-      {blockedRooms.length > 0 && (
-        <div className="mb-3 flex items-start gap-1.5 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
-          <Warning size={14} weight="fill" className="flex-shrink-0 mt-0.5" />
-          <span>
-            Path crosses {blockedRooms.length === 1 ? "room" : "rooms"}:{" "}
-            <span className="font-mono">{blockedRooms.join(", ")}</span>. Adjust waypoints to walk around.
-          </span>
-        </div>
-      )}
-
-      <div className="mt-auto">
+      {/* Pinned footer action */}
+      <div className="flex-shrink-0 px-4 pb-4 pt-2">
         {isLast ? (
           <button
-            onClick={endRoute}
-            className="w-full py-3 rounded-2xl bg-green-600 text-white font-semibold flex items-center justify-center gap-2 active:scale-95 transition"
+            onClick={onArrived}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-3.5 text-base font-bold text-white shadow-sm transition active:scale-95"
           >
-            <Check size={20} weight="bold" />
-            Arrived
+            {nextStopName ? (
+              <>
+                {language === "zh" ? "下一站：" : "Next stop: "}
+                {nextStopName}
+                <ArrowRight size={20} weight="bold" />
+              </>
+            ) : (
+              <>
+                <Check size={20} weight="bold" />
+                {language === "zh" ? "行程完成" : "Journey complete"}
+              </>
+            )}
           </button>
         ) : (
           <button
             onClick={onNext}
-            className="w-full py-3 rounded-2xl bg-oth-primary text-white font-semibold flex items-center justify-center gap-2 active:scale-95 transition"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-oth-primary py-3.5 text-base font-bold text-white shadow-sm transition active:scale-95"
           >
             {language === "zh" ? "我到了，下一步" : "I'm here, what's next"}
             <ArrowRight size={20} weight="bold" />

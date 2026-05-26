@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { resolveLocal, planToJourney } from "@/intent/resolveIntent";
+import type { Plan } from "@/intent/types";
 import { PhoneFrame } from "@/ui/PhoneFrame";
 import { Scene } from "@/world/Scene";
 import { FloorSelector } from "@/ui/FloorSelector";
@@ -39,6 +41,7 @@ export default function App() {
   const advanceRoute = useStore(s => s.advanceRoute);
   const setActiveFloor = useStore(s => s.setActiveFloor);
   const activeRoute = useStore(s => s.activeRoute);
+  const journey = useStore(s => s.journey);
 
   const [narrationText, setNarrationText] = useState("");
   const [segments, setSegments] = useState<NarrationSegment[]>([]);
@@ -49,7 +52,6 @@ export default function App() {
     loadDataBundle()
       .then(b => {
         setBundle(b);
-        useStore.getState().setJourney(b.journey ?? null);
         useStore.getState().setEntrances(b.entrances ?? {});
         // prewarmAll disabled to save OpenAI tokens — narration fetched on-demand
         // when a service tile is tapped (and cached for subsequent taps).
@@ -96,6 +98,33 @@ export default function App() {
     },
     [profile, services, startRoute, setActiveFloor],
   );
+
+  const onSubmitIntent = useCallback((query: string) => {
+    const st = useStore.getState();
+    st.setIntentStatus("resolving");
+    // Phase 1: synchronous local resolve. (Phase 2 will await the backend.)
+    const { plan } = resolveLocal(query, st.services);
+    st.setPlan(plan);
+    st.setIntentStatus("resolved");
+  }, []);
+
+  const onGuide = useCallback((plan: Plan) => {
+    if (plan.kind === "destination" || plan.kind === "human") {
+      onPickService(plan.stop.serviceId);
+    } else if (plan.kind === "journey") {
+      useStore.getState().setJourney(planToJourney(plan));
+      onPickService(plan.stops[0].serviceId);
+    }
+  }, [onPickService]);
+
+  const onStartInApp = useCallback((_plan: Extract<Plan, { kind: "offsite" }>) => {
+    // Phase 1 stub — Phase 2 deep-links to the teammates' app.
+    window.alert("Opening the OTH app… (handoff to be wired in Phase 2)");
+  }, []);
+
+  const onAskAgain = useCallback(() => {
+    useStore.getState().resetIntent();
+  }, []);
 
   // Play the segment for the current waypoint whenever the index changes
   useEffect(() => {
@@ -155,14 +184,8 @@ export default function App() {
 
   useEffect(() => {
     if (!sr.transcript) return;
-    const lower = sr.transcript.toLowerCase();
-    const match = services.find(
-      s =>
-        lower.includes(s.nameEn.toLowerCase()) ||
-        (s.nameZh.length > 0 && s.nameZh.split("").every(ch => sr.transcript.includes(ch))),
-    );
-    if (match) onPickService(match.id);
-  }, [sr.transcript, services, onPickService]);
+    onSubmitIntent(sr.transcript);
+  }, [sr.transcript, onSubmitIntent]);
 
   return (
     <PhoneFrame>
@@ -172,14 +195,17 @@ export default function App() {
         </div>
         <div className="h-[60%] relative">
           <Scene />
-          <JourneyTimeline onPick={onPickService} />
+          {journey && <JourneyTimeline onPick={onPickService} />}
           <FloorSelector />
           <SetLocationControl />
         </div>
         <div className="h-[32%]">
           <PromptPanel
             narrationText={narrationText}
-            onPickService={onPickService}
+            onSubmitIntent={onSubmitIntent}
+            onGuide={onGuide}
+            onStartInApp={onStartInApp}
+            onAskAgain={onAskAgain}
             onNext={onNext}
             onArrived={onArrived}
             onVoiceTap={sr.supported ? onVoiceTap : undefined}
