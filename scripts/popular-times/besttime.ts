@@ -23,6 +23,9 @@ const VENUES = path.join(ROOT, "scripts", "popular-times", "venues.json");
 const OUTPUT = path.join(ROOT, "public", "data", "popular-times.json");
 const RAW_DUMP = path.join(ROOT, "scripts", "popular-times", ".besttime-raw.json");
 
+// Off by default so we never burn BestTime credits unintentionally. Flip the
+// gate (ENABLE_REAL_DATA=true) in .env only when you actually want a live pull.
+const ENABLED = /^(1|true|yes)$/i.test(process.env.ENABLE_REAL_DATA ?? "");
 const PRIVATE = process.env.BESTTIME_API_KEY_PRIVATE;
 const PUBLIC = process.env.BESTTIME_API_KEY_PUBLIC;
 const DEBUG = process.argv.includes("--debug");
@@ -60,6 +63,13 @@ async function fetchLive(venueId: string): Promise<number | null> {
 }
 
 async function main(): Promise<number> {
+  if (!ENABLED) {
+    console.log(
+      "Real data disabled — keeping the modeled curves untouched. " +
+        "Set ENABLE_REAL_DATA=true in .env to pull live foot-traffic from BestTime.",
+    );
+    return 0;
+  }
   if (!PRIVATE) {
     console.error("BESTTIME_API_KEY_PRIVATE not set. Copy .env.example -> .env and fill it in.");
     return 1;

@@ -694,8 +694,8 @@
   },
   {
     "serviceId": "hawker",
-    "placeId": "ven_637574314a384d3575554452456a3239497867394164674a496843",
-    "placeName": "Hawker Centre @ Our Tampines Hub",
+    "placeName": "Hawker Centre",
+    "source": "modeled",
     "weekday": [
       [
         {
@@ -724,639 +724,149 @@
         },
         {
           "hour": 6,
-          "busyness": 0.2
+          "busyness": 0.13
         },
         {
           "hour": 7,
-          "busyness": 0.3
+          "busyness": 0.13
         },
         {
           "hour": 8,
-          "busyness": 0.45
+          "busyness": 0.13
         },
         {
           "hour": 9,
-          "busyness": 0.55
+          "busyness": 0.16
         },
         {
           "hour": 10,
-          "busyness": 0.7
+          "busyness": 0.29
         },
         {
           "hour": 11,
-          "busyness": 0.8
+          "busyness": 0.64
         },
         {
           "hour": 12,
-          "busyness": 0.85
-        },
-        {
-          "hour": 13,
-          "busyness": 0.8
-        },
-        {
-          "hour": 14,
-          "busyness": 0.65
-        },
-        {
-          "hour": 15,
-          "busyness": 0.6
-        },
-        {
-          "hour": 16,
-          "busyness": 0.7
-        },
-        {
-          "hour": 17,
-          "busyness": 0.85
-        },
-        {
-          "hour": 18,
-          "busyness": 0.9
-        },
-        {
-          "hour": 19,
-          "busyness": 0.8
-        },
-        {
-          "hour": 20,
-          "busyness": 0.6
-        },
-        {
-          "hour": 21,
-          "busyness": 0.4
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0.2
-        },
-        {
-          "hour": 7,
-          "busyness": 0.25
-        },
-        {
-          "hour": 8,
-          "busyness": 0.4
-        },
-        {
-          "hour": 9,
-          "busyness": 0.45
-        },
-        {
-          "hour": 10,
-          "busyness": 0.5
-        },
-        {
-          "hour": 11,
-          "busyness": 0.55
-        },
-        {
-          "hour": 12,
-          "busyness": 0.65
-        },
-        {
-          "hour": 13,
-          "busyness": 0.6
-        },
-        {
-          "hour": 14,
-          "busyness": 0.55
-        },
-        {
-          "hour": 15,
-          "busyness": 0.5
-        },
-        {
-          "hour": 16,
-          "busyness": 0.5
-        },
-        {
-          "hour": 17,
-          "busyness": 0.55
-        },
-        {
-          "hour": 18,
-          "busyness": 0.6
-        },
-        {
-          "hour": 19,
-          "busyness": 0.55
-        },
-        {
-          "hour": 20,
-          "busyness": 0.4
-        },
-        {
-          "hour": 21,
-          "busyness": 0.3
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0.15
-        },
-        {
-          "hour": 7,
-          "busyness": 0.2
-        },
-        {
-          "hour": 8,
-          "busyness": 0.3
-        },
-        {
-          "hour": 9,
-          "busyness": 0.35
-        },
-        {
-          "hour": 10,
-          "busyness": 0.4
-        },
-        {
-          "hour": 11,
-          "busyness": 0.55
-        },
-        {
-          "hour": 12,
-          "busyness": 0.65
-        },
-        {
-          "hour": 13,
-          "busyness": 0.65
-        },
-        {
-          "hour": 14,
-          "busyness": 0.5
-        },
-        {
-          "hour": 15,
-          "busyness": 0.45
-        },
-        {
-          "hour": 16,
-          "busyness": 0.45
-        },
-        {
-          "hour": 17,
-          "busyness": 0.5
-        },
-        {
-          "hour": 18,
-          "busyness": 0.55
-        },
-        {
-          "hour": 19,
-          "busyness": 0.55
-        },
-        {
-          "hour": 20,
-          "busyness": 0.4
-        },
-        {
-          "hour": 21,
-          "busyness": 0.25
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0.1
-        },
-        {
-          "hour": 7,
-          "busyness": 0.15
-        },
-        {
-          "hour": 8,
-          "busyness": 0.25
-        },
-        {
-          "hour": 9,
-          "busyness": 0.35
-        },
-        {
-          "hour": 10,
-          "busyness": 0.45
-        },
-        {
-          "hour": 11,
-          "busyness": 0.55
-        },
-        {
-          "hour": 12,
-          "busyness": 0.65
-        },
-        {
-          "hour": 13,
-          "busyness": 0.6
-        },
-        {
-          "hour": 14,
-          "busyness": 0.5
-        },
-        {
-          "hour": 15,
-          "busyness": 0.4
-        },
-        {
-          "hour": 16,
-          "busyness": 0.45
-        },
-        {
-          "hour": 17,
-          "busyness": 0.55
-        },
-        {
-          "hour": 18,
-          "busyness": 0.65
-        },
-        {
-          "hour": 19,
-          "busyness": 0.7
-        },
-        {
-          "hour": 20,
-          "busyness": 0.55
-        },
-        {
-          "hour": 21,
-          "busyness": 0.35
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0.2
-        },
-        {
-          "hour": 7,
-          "busyness": 0.25
-        },
-        {
-          "hour": 8,
-          "busyness": 0.3
-        },
-        {
-          "hour": 9,
-          "busyness": 0.35
-        },
-        {
-          "hour": 10,
-          "busyness": 0.45
-        },
-        {
-          "hour": 11,
-          "busyness": 0.6
-        },
-        {
-          "hour": 12,
-          "busyness": 0.75
-        },
-        {
-          "hour": 13,
-          "busyness": 0.75
-        },
-        {
-          "hour": 14,
-          "busyness": 0.6
-        },
-        {
-          "hour": 15,
-          "busyness": 0.5
-        },
-        {
-          "hour": 16,
-          "busyness": 0.5
-        },
-        {
-          "hour": 17,
-          "busyness": 0.55
-        },
-        {
-          "hour": 18,
-          "busyness": 0.7
-        },
-        {
-          "hour": 19,
-          "busyness": 0.7
-        },
-        {
-          "hour": 20,
-          "busyness": 0.55
-        },
-        {
-          "hour": 21,
-          "busyness": 0.3
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0.1
-        },
-        {
-          "hour": 7,
-          "busyness": 0.15
-        },
-        {
-          "hour": 8,
-          "busyness": 0.25
-        },
-        {
-          "hour": 9,
-          "busyness": 0.35
-        },
-        {
-          "hour": 10,
-          "busyness": 0.5
-        },
-        {
-          "hour": 11,
-          "busyness": 0.6
-        },
-        {
-          "hour": 12,
-          "busyness": 0.7
-        },
-        {
-          "hour": 13,
-          "busyness": 0.65
-        },
-        {
-          "hour": 14,
-          "busyness": 0.55
-        },
-        {
-          "hour": 15,
-          "busyness": 0.5
-        },
-        {
-          "hour": 16,
-          "busyness": 0.55
-        },
-        {
-          "hour": 17,
-          "busyness": 0.65
-        },
-        {
-          "hour": 18,
-          "busyness": 0.75
-        },
-        {
-          "hour": 19,
-          "busyness": 0.85
-        },
-        {
-          "hour": 20,
-          "busyness": 0.65
-        },
-        {
-          "hour": 21,
-          "busyness": 0.4
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0.15
-        },
-        {
-          "hour": 7,
-          "busyness": 0.25
-        },
-        {
-          "hour": 8,
-          "busyness": 0.5
-        },
-        {
-          "hour": 9,
-          "busyness": 0.7
-        },
-        {
-          "hour": 10,
-          "busyness": 0.85
-        },
-        {
-          "hour": 11,
           "busyness": 1
         },
         {
-          "hour": 12,
-          "busyness": 0.95
-        },
-        {
           "hour": 13,
-          "busyness": 0.9
+          "busyness": 1
         },
         {
           "hour": 14,
-          "busyness": 0.75
+          "busyness": 0.66
         },
         {
           "hour": 15,
-          "busyness": 0.7
+          "busyness": 0.37
         },
         {
           "hour": 16,
-          "busyness": 0.7
+          "busyness": 0.39
         },
         {
           "hour": 17,
-          "busyness": 0.8
+          "busyness": 0.64
+        },
+        {
+          "hour": 18,
+          "busyness": 0.93
+        },
+        {
+          "hour": 19,
+          "busyness": 1
+        },
+        {
+          "hour": 20,
+          "busyness": 0.93
+        },
+        {
+          "hour": 21,
+          "busyness": 0.64
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0.12
+        },
+        {
+          "hour": 7,
+          "busyness": 0.12
+        },
+        {
+          "hour": 8,
+          "busyness": 0.12
+        },
+        {
+          "hour": 9,
+          "busyness": 0.14
+        },
+        {
+          "hour": 10,
+          "busyness": 0.26
+        },
+        {
+          "hour": 11,
+          "busyness": 0.58
+        },
+        {
+          "hour": 12,
+          "busyness": 0.96
+        },
+        {
+          "hour": 13,
+          "busyness": 0.96
+        },
+        {
+          "hour": 14,
+          "busyness": 0.6
+        },
+        {
+          "hour": 15,
+          "busyness": 0.33
+        },
+        {
+          "hour": 16,
+          "busyness": 0.36
+        },
+        {
+          "hour": 17,
+          "busyness": 0.58
         },
         {
           "hour": 18,
@@ -1364,15 +874,505 @@
         },
         {
           "hour": 19,
-          "busyness": 0.8
+          "busyness": 0.97
         },
         {
           "hour": 20,
-          "busyness": 0.6
+          "busyness": 0.85
         },
         {
           "hour": 21,
-          "busyness": 0.35
+          "busyness": 0.58
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0.12
+        },
+        {
+          "hour": 7,
+          "busyness": 0.12
+        },
+        {
+          "hour": 8,
+          "busyness": 0.12
+        },
+        {
+          "hour": 9,
+          "busyness": 0.14
+        },
+        {
+          "hour": 10,
+          "busyness": 0.26
+        },
+        {
+          "hour": 11,
+          "busyness": 0.58
+        },
+        {
+          "hour": 12,
+          "busyness": 0.96
+        },
+        {
+          "hour": 13,
+          "busyness": 0.96
+        },
+        {
+          "hour": 14,
+          "busyness": 0.6
+        },
+        {
+          "hour": 15,
+          "busyness": 0.33
+        },
+        {
+          "hour": 16,
+          "busyness": 0.36
+        },
+        {
+          "hour": 17,
+          "busyness": 0.58
+        },
+        {
+          "hour": 18,
+          "busyness": 0.85
+        },
+        {
+          "hour": 19,
+          "busyness": 0.97
+        },
+        {
+          "hour": 20,
+          "busyness": 0.85
+        },
+        {
+          "hour": 21,
+          "busyness": 0.58
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0.12
+        },
+        {
+          "hour": 7,
+          "busyness": 0.12
+        },
+        {
+          "hour": 8,
+          "busyness": 0.12
+        },
+        {
+          "hour": 9,
+          "busyness": 0.14
+        },
+        {
+          "hour": 10,
+          "busyness": 0.26
+        },
+        {
+          "hour": 11,
+          "busyness": 0.58
+        },
+        {
+          "hour": 12,
+          "busyness": 0.96
+        },
+        {
+          "hour": 13,
+          "busyness": 0.96
+        },
+        {
+          "hour": 14,
+          "busyness": 0.6
+        },
+        {
+          "hour": 15,
+          "busyness": 0.33
+        },
+        {
+          "hour": 16,
+          "busyness": 0.36
+        },
+        {
+          "hour": 17,
+          "busyness": 0.58
+        },
+        {
+          "hour": 18,
+          "busyness": 0.85
+        },
+        {
+          "hour": 19,
+          "busyness": 0.97
+        },
+        {
+          "hour": 20,
+          "busyness": 0.85
+        },
+        {
+          "hour": 21,
+          "busyness": 0.58
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0.12
+        },
+        {
+          "hour": 7,
+          "busyness": 0.12
+        },
+        {
+          "hour": 8,
+          "busyness": 0.12
+        },
+        {
+          "hour": 9,
+          "busyness": 0.14
+        },
+        {
+          "hour": 10,
+          "busyness": 0.26
+        },
+        {
+          "hour": 11,
+          "busyness": 0.58
+        },
+        {
+          "hour": 12,
+          "busyness": 0.96
+        },
+        {
+          "hour": 13,
+          "busyness": 0.96
+        },
+        {
+          "hour": 14,
+          "busyness": 0.6
+        },
+        {
+          "hour": 15,
+          "busyness": 0.33
+        },
+        {
+          "hour": 16,
+          "busyness": 0.36
+        },
+        {
+          "hour": 17,
+          "busyness": 0.58
+        },
+        {
+          "hour": 18,
+          "busyness": 0.85
+        },
+        {
+          "hour": 19,
+          "busyness": 0.97
+        },
+        {
+          "hour": 20,
+          "busyness": 0.85
+        },
+        {
+          "hour": 21,
+          "busyness": 0.58
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0.12
+        },
+        {
+          "hour": 7,
+          "busyness": 0.12
+        },
+        {
+          "hour": 8,
+          "busyness": 0.12
+        },
+        {
+          "hour": 9,
+          "busyness": 0.14
+        },
+        {
+          "hour": 10,
+          "busyness": 0.26
+        },
+        {
+          "hour": 11,
+          "busyness": 0.58
+        },
+        {
+          "hour": 12,
+          "busyness": 0.96
+        },
+        {
+          "hour": 13,
+          "busyness": 0.96
+        },
+        {
+          "hour": 14,
+          "busyness": 0.6
+        },
+        {
+          "hour": 15,
+          "busyness": 0.33
+        },
+        {
+          "hour": 16,
+          "busyness": 0.36
+        },
+        {
+          "hour": 17,
+          "busyness": 0.58
+        },
+        {
+          "hour": 18,
+          "busyness": 0.85
+        },
+        {
+          "hour": 19,
+          "busyness": 0.97
+        },
+        {
+          "hour": 20,
+          "busyness": 0.85
+        },
+        {
+          "hour": 21,
+          "busyness": 0.58
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0.13
+        },
+        {
+          "hour": 7,
+          "busyness": 0.13
+        },
+        {
+          "hour": 8,
+          "busyness": 0.13
+        },
+        {
+          "hour": 9,
+          "busyness": 0.16
+        },
+        {
+          "hour": 10,
+          "busyness": 0.29
+        },
+        {
+          "hour": 11,
+          "busyness": 0.64
+        },
+        {
+          "hour": 12,
+          "busyness": 1
+        },
+        {
+          "hour": 13,
+          "busyness": 1
+        },
+        {
+          "hour": 14,
+          "busyness": 0.66
+        },
+        {
+          "hour": 15,
+          "busyness": 0.37
+        },
+        {
+          "hour": 16,
+          "busyness": 0.39
+        },
+        {
+          "hour": 17,
+          "busyness": 0.64
+        },
+        {
+          "hour": 18,
+          "busyness": 0.93
+        },
+        {
+          "hour": 19,
+          "busyness": 1
+        },
+        {
+          "hour": 20,
+          "busyness": 0.93
+        },
+        {
+          "hour": 21,
+          "busyness": 0.64
         },
         {
           "hour": 22,
@@ -1383,707 +1383,705 @@
           "busyness": 0
         }
       ]
-    ],
-    "source": "forecast"
+    ]
   },
   {
     "serviceId": "community-centre",
-    "placeId": "ven_59724a6e7a534b4b55466c52456a3239494259443159324a496843",
-    "placeName": "Our Tampines Hub",
+    "placeName": "Our Tampines Hub CC",
+    "source": "modeled",
     "weekday": [
       [
         {
           "hour": 0,
-          "busyness": 0.1
+          "busyness": 0
         },
         {
           "hour": 1,
-          "busyness": 0.05
+          "busyness": 0
         },
         {
           "hour": 2,
-          "busyness": 0.05
+          "busyness": 0
         },
         {
           "hour": 3,
-          "busyness": 0.05
+          "busyness": 0
         },
         {
           "hour": 4,
-          "busyness": 0.05
+          "busyness": 0
         },
         {
           "hour": 5,
-          "busyness": 0.05
+          "busyness": 0
         },
         {
           "hour": 6,
-          "busyness": 0.1
+          "busyness": 0
         },
         {
           "hour": 7,
-          "busyness": 0.15
+          "busyness": 0
         },
         {
           "hour": 8,
-          "busyness": 0.25
+          "busyness": 0
         },
         {
           "hour": 9,
-          "busyness": 0.4
+          "busyness": 0.81
         },
         {
           "hour": 10,
-          "busyness": 0.5
-        },
-        {
-          "hour": 11,
-          "busyness": 0.6
-        },
-        {
-          "hour": 12,
-          "busyness": 0.65
-        },
-        {
-          "hour": 13,
-          "busyness": 0.65
-        },
-        {
-          "hour": 14,
-          "busyness": 0.65
-        },
-        {
-          "hour": 15,
-          "busyness": 0.7
-        },
-        {
-          "hour": 16,
-          "busyness": 0.8
-        },
-        {
-          "hour": 17,
-          "busyness": 0.9
-        },
-        {
-          "hour": 18,
-          "busyness": 0.95
-        },
-        {
-          "hour": 19,
-          "busyness": 0.85
-        },
-        {
-          "hour": 20,
-          "busyness": 0.7
-        },
-        {
-          "hour": 21,
-          "busyness": 0.5
-        },
-        {
-          "hour": 22,
-          "busyness": 0.35
-        },
-        {
-          "hour": 23,
-          "busyness": 0.2
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0.1
-        },
-        {
-          "hour": 1,
-          "busyness": 0.05
-        },
-        {
-          "hour": 2,
-          "busyness": 0.05
-        },
-        {
-          "hour": 3,
-          "busyness": 0.05
-        },
-        {
-          "hour": 4,
-          "busyness": 0.05
-        },
-        {
-          "hour": 5,
-          "busyness": 0.05
-        },
-        {
-          "hour": 6,
-          "busyness": 0.1
-        },
-        {
-          "hour": 7,
-          "busyness": 0.15
-        },
-        {
-          "hour": 8,
-          "busyness": 0.25
-        },
-        {
-          "hour": 9,
-          "busyness": 0.3
-        },
-        {
-          "hour": 10,
-          "busyness": 0.4
-        },
-        {
-          "hour": 11,
-          "busyness": 0.5
-        },
-        {
-          "hour": 12,
-          "busyness": 0.55
-        },
-        {
-          "hour": 13,
-          "busyness": 0.55
-        },
-        {
-          "hour": 14,
-          "busyness": 0.5
-        },
-        {
-          "hour": 15,
-          "busyness": 0.5
-        },
-        {
-          "hour": 16,
-          "busyness": 0.55
-        },
-        {
-          "hour": 17,
-          "busyness": 0.7
-        },
-        {
-          "hour": 18,
-          "busyness": 0.8
-        },
-        {
-          "hour": 19,
-          "busyness": 0.8
-        },
-        {
-          "hour": 20,
-          "busyness": 0.65
-        },
-        {
-          "hour": 21,
-          "busyness": 0.5
-        },
-        {
-          "hour": 22,
-          "busyness": 0.3
-        },
-        {
-          "hour": 23,
-          "busyness": 0.2
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0.1
-        },
-        {
-          "hour": 1,
-          "busyness": 0.05
-        },
-        {
-          "hour": 2,
-          "busyness": 0.05
-        },
-        {
-          "hour": 3,
-          "busyness": 0.05
-        },
-        {
-          "hour": 4,
-          "busyness": 0.05
-        },
-        {
-          "hour": 5,
-          "busyness": 0.05
-        },
-        {
-          "hour": 6,
-          "busyness": 0.1
-        },
-        {
-          "hour": 7,
-          "busyness": 0.15
-        },
-        {
-          "hour": 8,
-          "busyness": 0.2
-        },
-        {
-          "hour": 9,
-          "busyness": 0.25
-        },
-        {
-          "hour": 10,
-          "busyness": 0.35
-        },
-        {
-          "hour": 11,
-          "busyness": 0.45
-        },
-        {
-          "hour": 12,
-          "busyness": 0.55
-        },
-        {
-          "hour": 13,
-          "busyness": 0.55
-        },
-        {
-          "hour": 14,
-          "busyness": 0.5
-        },
-        {
-          "hour": 15,
-          "busyness": 0.45
-        },
-        {
-          "hour": 16,
-          "busyness": 0.5
-        },
-        {
-          "hour": 17,
-          "busyness": 0.65
-        },
-        {
-          "hour": 18,
-          "busyness": 0.75
-        },
-        {
-          "hour": 19,
-          "busyness": 0.75
-        },
-        {
-          "hour": 20,
-          "busyness": 0.65
-        },
-        {
-          "hour": 21,
-          "busyness": 0.45
-        },
-        {
-          "hour": 22,
-          "busyness": 0.3
-        },
-        {
-          "hour": 23,
-          "busyness": 0.2
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0.1
-        },
-        {
-          "hour": 1,
-          "busyness": 0.05
-        },
-        {
-          "hour": 2,
-          "busyness": 0.05
-        },
-        {
-          "hour": 3,
-          "busyness": 0.05
-        },
-        {
-          "hour": 4,
-          "busyness": 0.05
-        },
-        {
-          "hour": 5,
-          "busyness": 0.05
-        },
-        {
-          "hour": 6,
-          "busyness": 0.1
-        },
-        {
-          "hour": 7,
-          "busyness": 0.15
-        },
-        {
-          "hour": 8,
-          "busyness": 0.2
-        },
-        {
-          "hour": 9,
-          "busyness": 0.3
-        },
-        {
-          "hour": 10,
-          "busyness": 0.4
-        },
-        {
-          "hour": 11,
-          "busyness": 0.45
-        },
-        {
-          "hour": 12,
-          "busyness": 0.55
-        },
-        {
-          "hour": 13,
-          "busyness": 0.55
-        },
-        {
-          "hour": 14,
-          "busyness": 0.5
-        },
-        {
-          "hour": 15,
-          "busyness": 0.5
-        },
-        {
-          "hour": 16,
-          "busyness": 0.55
-        },
-        {
-          "hour": 17,
-          "busyness": 0.7
-        },
-        {
-          "hour": 18,
-          "busyness": 0.85
-        },
-        {
-          "hour": 19,
-          "busyness": 0.85
-        },
-        {
-          "hour": 20,
-          "busyness": 0.7
-        },
-        {
-          "hour": 21,
-          "busyness": 0.55
-        },
-        {
-          "hour": 22,
-          "busyness": 0.35
-        },
-        {
-          "hour": 23,
-          "busyness": 0.2
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0.1
-        },
-        {
-          "hour": 1,
-          "busyness": 0.05
-        },
-        {
-          "hour": 2,
-          "busyness": 0.05
-        },
-        {
-          "hour": 3,
-          "busyness": 0.05
-        },
-        {
-          "hour": 4,
-          "busyness": 0.05
-        },
-        {
-          "hour": 5,
-          "busyness": 0.05
-        },
-        {
-          "hour": 6,
-          "busyness": 0.1
-        },
-        {
-          "hour": 7,
-          "busyness": 0.15
-        },
-        {
-          "hour": 8,
-          "busyness": 0.25
-        },
-        {
-          "hour": 9,
-          "busyness": 0.3
-        },
-        {
-          "hour": 10,
-          "busyness": 0.4
-        },
-        {
-          "hour": 11,
-          "busyness": 0.5
-        },
-        {
-          "hour": 12,
-          "busyness": 0.55
-        },
-        {
-          "hour": 13,
-          "busyness": 0.55
-        },
-        {
-          "hour": 14,
-          "busyness": 0.55
-        },
-        {
-          "hour": 15,
-          "busyness": 0.5
-        },
-        {
-          "hour": 16,
-          "busyness": 0.6
-        },
-        {
-          "hour": 17,
-          "busyness": 0.75
-        },
-        {
-          "hour": 18,
-          "busyness": 0.9
-        },
-        {
-          "hour": 19,
-          "busyness": 0.9
-        },
-        {
-          "hour": 20,
-          "busyness": 0.75
-        },
-        {
-          "hour": 21,
-          "busyness": 0.55
-        },
-        {
-          "hour": 22,
-          "busyness": 0.35
-        },
-        {
-          "hour": 23,
-          "busyness": 0.2
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0.15
-        },
-        {
-          "hour": 1,
-          "busyness": 0.05
-        },
-        {
-          "hour": 2,
-          "busyness": 0.05
-        },
-        {
-          "hour": 3,
-          "busyness": 0.05
-        },
-        {
-          "hour": 4,
-          "busyness": 0.05
-        },
-        {
-          "hour": 5,
-          "busyness": 0.05
-        },
-        {
-          "hour": 6,
-          "busyness": 0.1
-        },
-        {
-          "hour": 7,
-          "busyness": 0.15
-        },
-        {
-          "hour": 8,
-          "busyness": 0.25
-        },
-        {
-          "hour": 9,
-          "busyness": 0.3
-        },
-        {
-          "hour": 10,
-          "busyness": 0.4
-        },
-        {
-          "hour": 11,
-          "busyness": 0.5
-        },
-        {
-          "hour": 12,
-          "busyness": 0.6
-        },
-        {
-          "hour": 13,
-          "busyness": 0.7
-        },
-        {
-          "hour": 14,
-          "busyness": 0.7
-        },
-        {
-          "hour": 15,
-          "busyness": 0.65
-        },
-        {
-          "hour": 16,
-          "busyness": 0.65
-        },
-        {
-          "hour": 17,
-          "busyness": 0.8
-        },
-        {
-          "hour": 18,
-          "busyness": 0.9
-        },
-        {
-          "hour": 19,
-          "busyness": 0.95
-        },
-        {
-          "hour": 20,
-          "busyness": 0.85
-        },
-        {
-          "hour": 21,
-          "busyness": 0.65
-        },
-        {
-          "hour": 22,
-          "busyness": 0.45
-        },
-        {
-          "hour": 23,
-          "busyness": 0.3
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0.15
-        },
-        {
-          "hour": 1,
-          "busyness": 0.05
-        },
-        {
-          "hour": 2,
-          "busyness": 0.05
-        },
-        {
-          "hour": 3,
-          "busyness": 0.05
-        },
-        {
-          "hour": 4,
-          "busyness": 0.05
-        },
-        {
-          "hour": 5,
-          "busyness": 0.05
-        },
-        {
-          "hour": 6,
-          "busyness": 0.1
-        },
-        {
-          "hour": 7,
-          "busyness": 0.2
-        },
-        {
-          "hour": 8,
-          "busyness": 0.35
-        },
-        {
-          "hour": 9,
-          "busyness": 0.5
-        },
-        {
-          "hour": 10,
-          "busyness": 0.6
-        },
-        {
-          "hour": 11,
-          "busyness": 0.65
-        },
-        {
-          "hour": 12,
-          "busyness": 0.7
-        },
-        {
-          "hour": 13,
-          "busyness": 0.65
-        },
-        {
-          "hour": 14,
-          "busyness": 0.65
-        },
-        {
-          "hour": 15,
-          "busyness": 0.7
-        },
-        {
-          "hour": 16,
-          "busyness": 0.8
-        },
-        {
-          "hour": 17,
-          "busyness": 0.9
-        },
-        {
-          "hour": 18,
           "busyness": 1
         },
         {
+          "hour": 11,
+          "busyness": 1
+        },
+        {
+          "hour": 12,
+          "busyness": 1
+        },
+        {
+          "hour": 13,
+          "busyness": 1
+        },
+        {
+          "hour": 14,
+          "busyness": 1
+        },
+        {
+          "hour": 15,
+          "busyness": 1
+        },
+        {
+          "hour": 16,
+          "busyness": 1
+        },
+        {
+          "hour": 17,
+          "busyness": 1
+        },
+        {
+          "hour": 18,
+          "busyness": 0.85
+        },
+        {
           "hour": 19,
-          "busyness": 0.95
+          "busyness": 0.62
         },
         {
           "hour": 20,
-          "busyness": 0.8
+          "busyness": 0.43
         },
         {
           "hour": 21,
-          "busyness": 0.65
+          "busyness": 0.3
         },
         {
           "hour": 22,
-          "busyness": 0.45
+          "busyness": 0
         },
         {
           "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0.15
+        },
+        {
+          "hour": 10,
+          "busyness": 0.15
+        },
+        {
+          "hour": 11,
+          "busyness": 0.15
+        },
+        {
+          "hour": 12,
+          "busyness": 0.15
+        },
+        {
+          "hour": 13,
+          "busyness": 0.16
+        },
+        {
+          "hour": 14,
+          "busyness": 0.19
+        },
+        {
+          "hour": 15,
           "busyness": 0.25
+        },
+        {
+          "hour": 16,
+          "busyness": 0.38
+        },
+        {
+          "hour": 17,
+          "busyness": 0.57
+        },
+        {
+          "hour": 18,
+          "busyness": 0.78
+        },
+        {
+          "hour": 19,
+          "busyness": 0.93
+        },
+        {
+          "hour": 20,
+          "busyness": 0.93
+        },
+        {
+          "hour": 21,
+          "busyness": 0.78
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0.15
+        },
+        {
+          "hour": 10,
+          "busyness": 0.15
+        },
+        {
+          "hour": 11,
+          "busyness": 0.15
+        },
+        {
+          "hour": 12,
+          "busyness": 0.15
+        },
+        {
+          "hour": 13,
+          "busyness": 0.16
+        },
+        {
+          "hour": 14,
+          "busyness": 0.19
+        },
+        {
+          "hour": 15,
+          "busyness": 0.25
+        },
+        {
+          "hour": 16,
+          "busyness": 0.38
+        },
+        {
+          "hour": 17,
+          "busyness": 0.57
+        },
+        {
+          "hour": 18,
+          "busyness": 0.78
+        },
+        {
+          "hour": 19,
+          "busyness": 0.93
+        },
+        {
+          "hour": 20,
+          "busyness": 0.93
+        },
+        {
+          "hour": 21,
+          "busyness": 0.78
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0.15
+        },
+        {
+          "hour": 10,
+          "busyness": 0.15
+        },
+        {
+          "hour": 11,
+          "busyness": 0.15
+        },
+        {
+          "hour": 12,
+          "busyness": 0.15
+        },
+        {
+          "hour": 13,
+          "busyness": 0.16
+        },
+        {
+          "hour": 14,
+          "busyness": 0.19
+        },
+        {
+          "hour": 15,
+          "busyness": 0.25
+        },
+        {
+          "hour": 16,
+          "busyness": 0.38
+        },
+        {
+          "hour": 17,
+          "busyness": 0.57
+        },
+        {
+          "hour": 18,
+          "busyness": 0.78
+        },
+        {
+          "hour": 19,
+          "busyness": 0.93
+        },
+        {
+          "hour": 20,
+          "busyness": 0.93
+        },
+        {
+          "hour": 21,
+          "busyness": 0.78
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0.15
+        },
+        {
+          "hour": 10,
+          "busyness": 0.15
+        },
+        {
+          "hour": 11,
+          "busyness": 0.15
+        },
+        {
+          "hour": 12,
+          "busyness": 0.15
+        },
+        {
+          "hour": 13,
+          "busyness": 0.16
+        },
+        {
+          "hour": 14,
+          "busyness": 0.19
+        },
+        {
+          "hour": 15,
+          "busyness": 0.25
+        },
+        {
+          "hour": 16,
+          "busyness": 0.38
+        },
+        {
+          "hour": 17,
+          "busyness": 0.57
+        },
+        {
+          "hour": 18,
+          "busyness": 0.78
+        },
+        {
+          "hour": 19,
+          "busyness": 0.93
+        },
+        {
+          "hour": 20,
+          "busyness": 0.93
+        },
+        {
+          "hour": 21,
+          "busyness": 0.78
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0.15
+        },
+        {
+          "hour": 10,
+          "busyness": 0.15
+        },
+        {
+          "hour": 11,
+          "busyness": 0.15
+        },
+        {
+          "hour": 12,
+          "busyness": 0.15
+        },
+        {
+          "hour": 13,
+          "busyness": 0.16
+        },
+        {
+          "hour": 14,
+          "busyness": 0.19
+        },
+        {
+          "hour": 15,
+          "busyness": 0.25
+        },
+        {
+          "hour": 16,
+          "busyness": 0.38
+        },
+        {
+          "hour": 17,
+          "busyness": 0.57
+        },
+        {
+          "hour": 18,
+          "busyness": 0.78
+        },
+        {
+          "hour": 19,
+          "busyness": 0.93
+        },
+        {
+          "hour": 20,
+          "busyness": 0.93
+        },
+        {
+          "hour": 21,
+          "busyness": 0.78
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0.81
+        },
+        {
+          "hour": 10,
+          "busyness": 1
+        },
+        {
+          "hour": 11,
+          "busyness": 1
+        },
+        {
+          "hour": 12,
+          "busyness": 1
+        },
+        {
+          "hour": 13,
+          "busyness": 1
+        },
+        {
+          "hour": 14,
+          "busyness": 1
+        },
+        {
+          "hour": 15,
+          "busyness": 1
+        },
+        {
+          "hour": 16,
+          "busyness": 1
+        },
+        {
+          "hour": 17,
+          "busyness": 1
+        },
+        {
+          "hour": 18,
+          "busyness": 0.85
+        },
+        {
+          "hour": 19,
+          "busyness": 0.62
+        },
+        {
+          "hour": 20,
+          "busyness": 0.43
+        },
+        {
+          "hour": 21,
+          "busyness": 0.3
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
         }
       ]
-    ],
-    "source": "forecast"
+    ]
   },
   {
     "serviceId": "library",
-    "placeId": "ven_554b5f4233384b6b796a4152456a32393451594a3656384a496843",
-    "placeName": "Tampines Library",
+    "placeName": "Tampines Regional Library",
+    "source": "modeled",
     "weekday": [
       [
         {
@@ -2128,23 +2126,23 @@
         },
         {
           "hour": 10,
-          "busyness": 0.55
+          "busyness": 0.86
         },
         {
           "hour": 11,
-          "busyness": 0.75
+          "busyness": 1
         },
         {
           "hour": 12,
-          "busyness": 0.85
+          "busyness": 1
         },
         {
           "hour": 13,
-          "busyness": 0.9
+          "busyness": 1
         },
         {
           "hour": 14,
-          "busyness": 0.95
+          "busyness": 1
         },
         {
           "hour": 15,
@@ -2156,19 +2154,19 @@
         },
         {
           "hour": 17,
-          "busyness": 0.9
+          "busyness": 1
         },
         {
           "hour": 18,
-          "busyness": 0.75
+          "busyness": 1
         },
         {
           "hour": 19,
-          "busyness": 0.6
+          "busyness": 0.8
         },
         {
           "hour": 20,
-          "busyness": 0.4
+          "busyness": 0.55
         },
         {
           "hour": 21,
@@ -2226,517 +2224,27 @@
         },
         {
           "hour": 10,
-          "busyness": 0.35
+          "busyness": 0.31
         },
         {
           "hour": 11,
-          "busyness": 0.45
+          "busyness": 0.4
         },
         {
           "hour": 12,
-          "busyness": 0.5
+          "busyness": 0.54
         },
         {
           "hour": 13,
-          "busyness": 0.55
-        },
-        {
-          "hour": 14,
-          "busyness": 0.55
-        },
-        {
-          "hour": 15,
-          "busyness": 0.6
-        },
-        {
-          "hour": 16,
-          "busyness": 0.65
-        },
-        {
-          "hour": 17,
           "busyness": 0.7
         },
         {
-          "hour": 18,
-          "busyness": 0.7
-        },
-        {
-          "hour": 19,
-          "busyness": 0.6
-        },
-        {
-          "hour": 20,
-          "busyness": 0.4
-        },
-        {
-          "hour": 21,
-          "busyness": 0
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0
-        },
-        {
-          "hour": 7,
-          "busyness": 0
-        },
-        {
-          "hour": 8,
-          "busyness": 0
-        },
-        {
-          "hour": 9,
-          "busyness": 0
-        },
-        {
-          "hour": 10,
-          "busyness": 0.25
-        },
-        {
-          "hour": 11,
-          "busyness": 0.35
-        },
-        {
-          "hour": 12,
-          "busyness": 0.45
-        },
-        {
-          "hour": 13,
-          "busyness": 0.5
-        },
-        {
           "hour": 14,
-          "busyness": 0.5
+          "busyness": 0.86
         },
         {
           "hour": 15,
-          "busyness": 0.5
-        },
-        {
-          "hour": 16,
-          "busyness": 0.5
-        },
-        {
-          "hour": 17,
-          "busyness": 0.55
-        },
-        {
-          "hour": 18,
-          "busyness": 0.6
-        },
-        {
-          "hour": 19,
-          "busyness": 0.55
-        },
-        {
-          "hour": 20,
-          "busyness": 0.4
-        },
-        {
-          "hour": 21,
-          "busyness": 0
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0
-        },
-        {
-          "hour": 7,
-          "busyness": 0
-        },
-        {
-          "hour": 8,
-          "busyness": 0
-        },
-        {
-          "hour": 9,
-          "busyness": 0
-        },
-        {
-          "hour": 10,
-          "busyness": 0.3
-        },
-        {
-          "hour": 11,
-          "busyness": 0.4
-        },
-        {
-          "hour": 12,
-          "busyness": 0.5
-        },
-        {
-          "hour": 13,
-          "busyness": 0.5
-        },
-        {
-          "hour": 14,
-          "busyness": 0.55
-        },
-        {
-          "hour": 15,
-          "busyness": 0.55
-        },
-        {
-          "hour": 16,
-          "busyness": 0.6
-        },
-        {
-          "hour": 17,
-          "busyness": 0.65
-        },
-        {
-          "hour": 18,
-          "busyness": 0.65
-        },
-        {
-          "hour": 19,
-          "busyness": 0.55
-        },
-        {
-          "hour": 20,
-          "busyness": 0.4
-        },
-        {
-          "hour": 21,
-          "busyness": 0
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0
-        },
-        {
-          "hour": 7,
-          "busyness": 0
-        },
-        {
-          "hour": 8,
-          "busyness": 0
-        },
-        {
-          "hour": 9,
-          "busyness": 0
-        },
-        {
-          "hour": 10,
-          "busyness": 0.3
-        },
-        {
-          "hour": 11,
-          "busyness": 0.4
-        },
-        {
-          "hour": 12,
-          "busyness": 0.45
-        },
-        {
-          "hour": 13,
-          "busyness": 0.5
-        },
-        {
-          "hour": 14,
-          "busyness": 0.5
-        },
-        {
-          "hour": 15,
-          "busyness": 0.55
-        },
-        {
-          "hour": 16,
-          "busyness": 0.6
-        },
-        {
-          "hour": 17,
-          "busyness": 0.65
-        },
-        {
-          "hour": 18,
-          "busyness": 0.7
-        },
-        {
-          "hour": 19,
-          "busyness": 0.6
-        },
-        {
-          "hour": 20,
-          "busyness": 0.45
-        },
-        {
-          "hour": 21,
-          "busyness": 0
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0
-        },
-        {
-          "hour": 7,
-          "busyness": 0
-        },
-        {
-          "hour": 8,
-          "busyness": 0
-        },
-        {
-          "hour": 9,
-          "busyness": 0
-        },
-        {
-          "hour": 10,
-          "busyness": 0.3
-        },
-        {
-          "hour": 11,
-          "busyness": 0.4
-        },
-        {
-          "hour": 12,
-          "busyness": 0.55
-        },
-        {
-          "hour": 13,
-          "busyness": 0.6
-        },
-        {
-          "hour": 14,
-          "busyness": 0.65
-        },
-        {
-          "hour": 15,
-          "busyness": 0.65
-        },
-        {
-          "hour": 16,
-          "busyness": 0.65
-        },
-        {
-          "hour": 17,
-          "busyness": 0.7
-        },
-        {
-          "hour": 18,
-          "busyness": 0.75
-        },
-        {
-          "hour": 19,
-          "busyness": 0.7
-        },
-        {
-          "hour": 20,
-          "busyness": 0.5
-        },
-        {
-          "hour": 21,
-          "busyness": 0
-        },
-        {
-          "hour": 22,
-          "busyness": 0
-        },
-        {
-          "hour": 23,
-          "busyness": 0
-        }
-      ],
-      [
-        {
-          "hour": 0,
-          "busyness": 0
-        },
-        {
-          "hour": 1,
-          "busyness": 0
-        },
-        {
-          "hour": 2,
-          "busyness": 0
-        },
-        {
-          "hour": 3,
-          "busyness": 0
-        },
-        {
-          "hour": 4,
-          "busyness": 0
-        },
-        {
-          "hour": 5,
-          "busyness": 0
-        },
-        {
-          "hour": 6,
-          "busyness": 0
-        },
-        {
-          "hour": 7,
-          "busyness": 0
-        },
-        {
-          "hour": 8,
-          "busyness": 0
-        },
-        {
-          "hour": 9,
-          "busyness": 0
-        },
-        {
-          "hour": 10,
-          "busyness": 0.55
-        },
-        {
-          "hour": 11,
-          "busyness": 0.75
-        },
-        {
-          "hour": 12,
-          "busyness": 0.9
-        },
-        {
-          "hour": 13,
-          "busyness": 0.9
-        },
-        {
-          "hour": 14,
-          "busyness": 0.9
-        },
-        {
-          "hour": 15,
-          "busyness": 0.95
+          "busyness": 0.98
         },
         {
           "hour": 16,
@@ -2748,7 +2256,497 @@
         },
         {
           "hour": 18,
-          "busyness": 0.95
+          "busyness": 1
+        },
+        {
+          "hour": 19,
+          "busyness": 1
+        },
+        {
+          "hour": 20,
+          "busyness": 1
+        },
+        {
+          "hour": 21,
+          "busyness": 0
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0
+        },
+        {
+          "hour": 10,
+          "busyness": 0.31
+        },
+        {
+          "hour": 11,
+          "busyness": 0.4
+        },
+        {
+          "hour": 12,
+          "busyness": 0.54
+        },
+        {
+          "hour": 13,
+          "busyness": 0.7
+        },
+        {
+          "hour": 14,
+          "busyness": 0.86
+        },
+        {
+          "hour": 15,
+          "busyness": 0.98
+        },
+        {
+          "hour": 16,
+          "busyness": 1
+        },
+        {
+          "hour": 17,
+          "busyness": 1
+        },
+        {
+          "hour": 18,
+          "busyness": 1
+        },
+        {
+          "hour": 19,
+          "busyness": 1
+        },
+        {
+          "hour": 20,
+          "busyness": 1
+        },
+        {
+          "hour": 21,
+          "busyness": 0
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0
+        },
+        {
+          "hour": 10,
+          "busyness": 0.31
+        },
+        {
+          "hour": 11,
+          "busyness": 0.4
+        },
+        {
+          "hour": 12,
+          "busyness": 0.54
+        },
+        {
+          "hour": 13,
+          "busyness": 0.7
+        },
+        {
+          "hour": 14,
+          "busyness": 0.86
+        },
+        {
+          "hour": 15,
+          "busyness": 0.98
+        },
+        {
+          "hour": 16,
+          "busyness": 1
+        },
+        {
+          "hour": 17,
+          "busyness": 1
+        },
+        {
+          "hour": 18,
+          "busyness": 1
+        },
+        {
+          "hour": 19,
+          "busyness": 1
+        },
+        {
+          "hour": 20,
+          "busyness": 1
+        },
+        {
+          "hour": 21,
+          "busyness": 0
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0
+        },
+        {
+          "hour": 10,
+          "busyness": 0.31
+        },
+        {
+          "hour": 11,
+          "busyness": 0.4
+        },
+        {
+          "hour": 12,
+          "busyness": 0.54
+        },
+        {
+          "hour": 13,
+          "busyness": 0.7
+        },
+        {
+          "hour": 14,
+          "busyness": 0.86
+        },
+        {
+          "hour": 15,
+          "busyness": 0.98
+        },
+        {
+          "hour": 16,
+          "busyness": 1
+        },
+        {
+          "hour": 17,
+          "busyness": 1
+        },
+        {
+          "hour": 18,
+          "busyness": 1
+        },
+        {
+          "hour": 19,
+          "busyness": 1
+        },
+        {
+          "hour": 20,
+          "busyness": 1
+        },
+        {
+          "hour": 21,
+          "busyness": 0
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0
+        },
+        {
+          "hour": 10,
+          "busyness": 0.31
+        },
+        {
+          "hour": 11,
+          "busyness": 0.4
+        },
+        {
+          "hour": 12,
+          "busyness": 0.54
+        },
+        {
+          "hour": 13,
+          "busyness": 0.7
+        },
+        {
+          "hour": 14,
+          "busyness": 0.86
+        },
+        {
+          "hour": 15,
+          "busyness": 0.98
+        },
+        {
+          "hour": 16,
+          "busyness": 1
+        },
+        {
+          "hour": 17,
+          "busyness": 1
+        },
+        {
+          "hour": 18,
+          "busyness": 1
+        },
+        {
+          "hour": 19,
+          "busyness": 1
+        },
+        {
+          "hour": 20,
+          "busyness": 1
+        },
+        {
+          "hour": 21,
+          "busyness": 0
+        },
+        {
+          "hour": 22,
+          "busyness": 0
+        },
+        {
+          "hour": 23,
+          "busyness": 0
+        }
+      ],
+      [
+        {
+          "hour": 0,
+          "busyness": 0
+        },
+        {
+          "hour": 1,
+          "busyness": 0
+        },
+        {
+          "hour": 2,
+          "busyness": 0
+        },
+        {
+          "hour": 3,
+          "busyness": 0
+        },
+        {
+          "hour": 4,
+          "busyness": 0
+        },
+        {
+          "hour": 5,
+          "busyness": 0
+        },
+        {
+          "hour": 6,
+          "busyness": 0
+        },
+        {
+          "hour": 7,
+          "busyness": 0
+        },
+        {
+          "hour": 8,
+          "busyness": 0
+        },
+        {
+          "hour": 9,
+          "busyness": 0
+        },
+        {
+          "hour": 10,
+          "busyness": 0.86
+        },
+        {
+          "hour": 11,
+          "busyness": 1
+        },
+        {
+          "hour": 12,
+          "busyness": 1
+        },
+        {
+          "hour": 13,
+          "busyness": 1
+        },
+        {
+          "hour": 14,
+          "busyness": 1
+        },
+        {
+          "hour": 15,
+          "busyness": 1
+        },
+        {
+          "hour": 16,
+          "busyness": 1
+        },
+        {
+          "hour": 17,
+          "busyness": 1
+        },
+        {
+          "hour": 18,
+          "busyness": 1
         },
         {
           "hour": 19,
@@ -2771,8 +2769,7 @@
           "busyness": 0
         }
       ]
-    ],
-    "source": "forecast"
+    ]
   },
   {
     "serviceId": "hdb",

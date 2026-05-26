@@ -39,10 +39,14 @@ re-run `npm run build:popular-times`.
 tagging each entry `source: "forecast"` (or `"live"`). Modeled curves remain the
 fallback for any venue BestTime can't resolve.
 
+**Real data is OFF by default to avoid spending credits.** `build:popular-times:real`
+does nothing unless `ENABLE_REAL_DATA=true` is set in `.env`; until then the app
+runs entirely on the modeled (fake) curves.
+
 ```
-# 1. seed modeled curves (sets every entry source:"modeled")
+# 1. seed modeled curves (sets every entry source:"modeled") — the default state
 npm run build:popular-times
-# 2. overlay real data (needs BESTTIME_API_KEY_PRIVATE in .env)
+# 2. overlay real data — only runs when ENABLE_REAL_DATA=true (+ keys) in .env
 npm run build:popular-times:real
 ```
 
