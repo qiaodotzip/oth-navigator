@@ -120,6 +120,25 @@ describe("resolveIntent (two-tier)", () => {
     if (plan.kind === "destination") expect(plan.stop.serviceId).toBe("MSF-001");
   });
 
+  it("preferBackend skips the local fast-path even for a confident local match", async () => {
+    let called = false;
+    const fetchJourney = async (): Promise<RetrieveJourneyResponse> => {
+      called = true;
+      return okJourney([
+        {
+          service: adapted({ id: "HDB-001", nameEn: "HDB", floorId: "L2", roomId: "L2-room-hdb-office", displayFloor: "L2" }),
+          reason: "Mortgage help",
+        },
+      ]);
+    };
+    // "library" matches a routable local service at high confidence, but a typed
+    // prompt (preferBackend) must still hit the backend.
+    const plan = await resolveIntent("library", services, [], undefined, fetchJourney, true);
+    expect(called).toBe(true);
+    expect(plan.kind).toBe("destination");
+    if (plan.kind === "destination") expect(plan.stop.serviceId).toBe("HDB-001");
+  });
+
   it("builds a multi-stop journey from multiple backend stops (carrying reasons + order)", async () => {
     const fetchJourney = async (): Promise<RetrieveJourneyResponse> =>
       okJourney([

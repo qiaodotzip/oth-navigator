@@ -143,9 +143,13 @@ export async function resolveIntent(
   floors: Floor[],
   ctx?: UserContext,
   fetchJourney: typeof retrieveJourney = retrieveJourney,
+  preferBackend = false,
 ): Promise<Plan> {
   const local = resolveLocal(query, services);
-  if (local.confidence >= LOCAL_CONFIDENCE_THRESHOLD) return local.plan;
+  // Tiles / short known queries take the instant local answer. Typed free-text
+  // prompts (preferBackend) always ask the backend first — that's the point of
+  // typing a question — and fall back to local only if it can't help.
+  if (!preferBackend && local.confidence >= LOCAL_CONFIDENCE_THRESHOLD) return local.plan;
   try {
     const j = await fetchJourney(query, floors, ctx);
     if (j.confidenceLow || j.stops.length === 0) return local.plan;

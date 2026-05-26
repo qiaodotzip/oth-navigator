@@ -23,6 +23,8 @@ import { PolygonEditor } from "@/dev/PolygonEditor";
 import { EntranceEditor } from "@/dev/EntranceEditor";
 
 import { DetailEditor } from "@/dev/DetailEditor";
+import { Dashboard } from "@/dashboard/Dashboard";
+import { ReportView } from "@/dashboard/ReportView";
 
 const TTS_ENABLED = false;
 
@@ -32,6 +34,8 @@ export default function App() {
     if (window.location.hash === "#polygon-editor") return <PolygonEditor />;
     if (window.location.hash === "#detail-editor") return <DetailEditor />;
     if (window.location.hash === "#entrance-editor") return <EntranceEditor />;
+    if (window.location.hash === "#dashboard") return <Dashboard />;
+    if (window.location.hash === "#report") return <ReportView />;
   }
 
   const setBundle = useStore(s => s.setBundle);
@@ -75,7 +79,8 @@ export default function App() {
       const start = useStore.getState().userLocation ?? DEFAULT_START;
       const floors = useStore.getState().floors;
       const entrances = useStore.getState().entrances;
-      const variant = buildRoute(start, svc, profile, floors, entrances);
+      const loads = useStore.getState().counterLoads;
+      const variant = buildRoute(start, svc, profile, floors, entrances, loads);
       if (!variant) return;
       setActiveFloor(variant.steps[0].floorId);
       startRoute(variant);
@@ -100,11 +105,12 @@ export default function App() {
     [profile, services, startRoute, setActiveFloor],
   );
 
-  const onSubmitIntent = useCallback(async (query: string) => {
+  const onSubmitIntent = useCallback(async (query: string, fromText = false) => {
     const st = useStore.getState();
     st.setIntentStatus("resolving");
-    // Two-tier: local first, backend fallback (graceful if it's unreachable).
-    const plan = await resolveIntent(query, st.services, st.floors);
+    // Typed prompts go backend-first (ask the concierge); tile taps keep the
+    // instant local path. Either way, graceful local fallback if backend fails.
+    const plan = await resolveIntent(query, st.services, st.floors, undefined, undefined, fromText);
     st.setPlan(plan);
     st.setIntentStatus("resolved");
   }, []);
@@ -133,10 +139,22 @@ export default function App() {
   // the journey Plan render without the real retrieval service running.
   const onReceiveJourney = useCallback(() => {
     const st = useStore.getState();
+    // Intent: a senior's "health + errands" day. Ordered top-down to exercise
+    // cross-floor routing: start (L1) → up to the clinic on L3 → down to HDB on
+    // L2 → down to ServiceSG on L1.
     const demo: { id: string; reason: { en: string; zh: string } }[] = [
-      { id: "servicesg", reason: { en: "Renew your documents", zh: "更新您的证件" } },
-      { id: "library", reason: { en: "Pick up your reserved books", zh: "领取预订的书籍" } },
-      { id: "hawker", reason: { en: "Grab lunch before you leave", zh: "离开前用餐" } },
+      {
+        id: "family-medicine-clinic",
+        reason: { en: "See the doctor for your health check", zh: "看医生做健康检查" },
+      },
+      {
+        id: "hdb",
+        reason: { en: "Settle your flat matter at the HDB branch", zh: "在建屋局分行处理组屋事务" },
+      },
+      {
+        id: "servicesg",
+        reason: { en: "Renew your documents on the way out", zh: "离开前更新您的证件" },
+      },
     ];
     const stops = demo
       .map(d => {
@@ -157,7 +175,11 @@ export default function App() {
       })
       .filter((s): s is NonNullable<typeof s> => s !== null);
     if (stops.length === 0) return;
-    const plan: Plan = { kind: "journey", title: { en: "Your visit plan", zh: "您的行程" }, stops };
+    const plan: Plan = {
+      kind: "journey",
+      title: { en: "Your visit today: health & errands", zh: "今日行程：看诊与办事" },
+      stops,
+    };
     st.setIntentStatus("resolving");
     st.setPlan(plan);
     st.setIntentStatus("resolved");
@@ -227,8 +249,13 @@ export default function App() {
   return (
     <PhoneFrame>
       <div className="flex h-full flex-col">
-        <div className="h-[8%] flex-shrink-0">
-          <TopBar onVoiceTap={onVoiceTap} />
+        <div className="flex-shrink-0">
+          <TopBar
+            onSubmitIntent={onSubmitIntent}
+            onVoiceTap={sr.supported ? onVoiceTap : undefined}
+            voiceListening={sr.listening}
+            voiceTranscript={sr.transcript}
+          />
         </div>
         {/* Body: stacked on mobile (map above panel); side-by-side on tablet+
             (panel on the LEFT, map on the right) via flex-row-reverse. */}
@@ -238,17 +265,17 @@ export default function App() {
               ignores these — the panel is a fixed-width left sidebar. */}
           <div
             className={`relative min-h-0 md:h-full md:flex-1 ${
-              activeRoute ? "h-[60%]" : "h-[45%]"
+              activeRoute ? "h-[60%]" : "h-[58%]"
             }`}
           >
-            <Scene />
+            <Scene onPickPlace={onPickService} />
             {journey && <JourneyTimeline onPick={onPickService} />}
             <FloorSelector />
             <SetLocationControl />
           </div>
           <div
             className={`min-h-0 md:h-full md:w-1/4 md:flex-none ${
-              activeRoute ? "h-[40%]" : "h-[55%]"
+              activeRoute ? "h-[40%]" : "h-[42%]"
             }`}
           >
             <PromptPanel
@@ -260,9 +287,6 @@ export default function App() {
               onAskAgain={onAskAgain}
               onNext={onNext}
               onArrived={onArrived}
-              onVoiceTap={sr.supported ? onVoiceTap : undefined}
-              voiceListening={sr.listening}
-              voiceTranscript={sr.transcript}
             />
           </div>
         </div>

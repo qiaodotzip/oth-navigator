@@ -37,21 +37,15 @@ export function PromptPanel({
   onAskAgain,
   onNext,
   onArrived,
-  onVoiceTap,
-  voiceListening,
-  voiceTranscript,
 }: {
   narrationText: string;
-  onSubmitIntent: (query: string) => void;
+  onSubmitIntent: (query: string, fromText?: boolean) => void;
   onReceiveJourney?: () => void;
   onGuide: (plan: import("@/intent/types").Plan) => void;
   onStartInApp: (plan: Extract<import("@/intent/types").Plan, { kind: "offsite" }>) => void;
   onAskAgain: () => void;
   onNext: () => void;
   onArrived: () => void;
-  onVoiceTap?: () => void;
-  voiceListening?: boolean;
-  voiceTranscript?: string;
 }) {
   const route = useStore(s => s.activeRoute);
   const activePlan = useStore(s => s.activePlan);
@@ -93,13 +87,7 @@ export function PromptPanel({
       );
     }
     return shell(
-      <IntentEntry
-        onSubmit={onSubmitIntent}
-        onReceiveJourney={onReceiveJourney}
-        onVoiceTap={onVoiceTap}
-        voiceListening={voiceListening}
-        voiceTranscript={voiceTranscript}
-      />,
+      <IntentEntry onSubmit={onSubmitIntent} onReceiveJourney={onReceiveJourney} />,
     );
   }
 
@@ -189,7 +177,7 @@ export function PromptPanel({
       : language === "zh"
         ? `继续往前走，${svcName} 就在前方。`
         : `Keep going straight — ${svcName} is just ahead.`;
-    return { kind: "walk" as const, title, sub: `${sub}  ·  ${Math.round(distance)}m · ${eta}` };
+    return { kind: "walk" as const, title, sub };
   })();
 
   const progressPct = steps.length > 1 ? (idx / (steps.length - 1)) * 100 : 100;
@@ -247,33 +235,40 @@ export function PromptPanel({
       </div>
 
       {/* Hero instruction */}
-      <div className="flex flex-1 flex-col justify-center overflow-y-auto px-4 py-3">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-1 flex-col justify-center gap-3 overflow-y-auto px-4 py-3">
+        <div className="flex items-center gap-3">
           <span
-            className={`grid h-16 w-16 flex-shrink-0 place-items-center rounded-2xl text-white shadow-md ${heroTone}`}
+            className={`grid h-12 w-12 flex-shrink-0 place-items-center rounded-2xl text-white shadow-md ${heroTone}`}
           >
-            <HeroIcon size={34} weight="bold" />
+            <HeroIcon size={26} weight="bold" />
           </span>
-          <div className="min-w-0">
-            <p className="text-xl font-extrabold leading-tight text-oth-ink">
-              {instruction.title}
-            </p>
-            {instruction.sub && (
-              <p className="mt-0.5 text-sm font-semibold text-neutral-500">
-                {instruction.sub}
-              </p>
-            )}
-            {profile === "stepFree" && instruction.kind !== "arrived" && (
-              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700">
-                <Check size={13} weight="bold" />
-                {language === "zh" ? "无障碍路线" : "Step-free route"}
-              </span>
-            )}
-          </div>
+          {instruction.kind !== "arrived" && (
+            <span className="rounded-full bg-oth-primary/10 px-3 py-1 text-sm font-bold text-oth-primary">
+              {Math.round(distance)} m · {eta}
+            </span>
+          )}
         </div>
 
+        <div>
+          <p className="text-lg font-extrabold leading-tight text-oth-ink">
+            {instruction.title}
+          </p>
+          {instruction.sub && (
+            <p className="mt-1 text-sm font-semibold leading-snug text-neutral-500">
+              {instruction.sub}
+            </p>
+          )}
+        </div>
+
+        {profile === "stepFree" && instruction.kind !== "arrived" && (
+          <span className="inline-flex w-fit items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700">
+            <Check size={13} weight="bold" />
+            {language === "zh" ? "无障碍路线" : "Step-free route"}
+          </span>
+        )}
+
         {narrationText && (
-          <p className="mt-3 text-sm leading-snug text-neutral-600">{narrationText}</p>
+          <p className="text-sm leading-snug text-neutral-600">{narrationText}</p>
         )}
       </div>
 
@@ -282,7 +277,7 @@ export function PromptPanel({
         {isLast ? (
           <button
             onClick={onArrived}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-3.5 text-base font-bold text-white shadow-sm transition active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-3 text-[15px] font-bold leading-tight text-white shadow-sm transition active:scale-95"
           >
             {nextStopName ? (
               <>
@@ -300,9 +295,9 @@ export function PromptPanel({
         ) : (
           <button
             onClick={onNext}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-oth-primary py-3.5 text-base font-bold text-white shadow-sm transition active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-oth-primary py-3 text-[15px] font-bold leading-tight text-white shadow-sm transition active:scale-95"
           >
-            {language === "zh" ? "我到了，下一步" : "I'm here, what's next"}
+            {language === "zh" ? "我到了" : "I'm here"}
             <ArrowRight size={20} weight="bold" />
           </button>
         )}

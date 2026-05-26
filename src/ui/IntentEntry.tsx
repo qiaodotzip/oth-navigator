@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { MagnifyingGlass, Microphone, DownloadSimple } from "phosphor-react";
+import { useState } from "react";
+import { MagnifyingGlass, DownloadSimple } from "phosphor-react";
 import { useStore } from "@/store";
 import { ServiceIcon } from "./iconMap";
 import { PURPOSE_TILES } from "@/intent/synonyms";
@@ -7,26 +7,18 @@ import { PURPOSE_TILES } from "@/intent/synonyms";
 export function IntentEntry({
   onSubmit,
   onReceiveJourney,
-  onVoiceTap,
-  voiceListening,
-  voiceTranscript,
 }: {
-  onSubmit: (query: string) => void;
+  // fromText=true marks a typed free-text prompt (asks the backend concierge);
+  // tile taps omit it and take the instant local path.
+  onSubmit: (query: string, fromText?: boolean) => void;
   onReceiveJourney?: () => void;
-  onVoiceTap?: () => void;
-  voiceListening?: boolean;
-  voiceTranscript?: string;
 }) {
   const language = useStore(s => s.language);
   const [query, setQuery] = useState("");
 
-  useEffect(() => {
-    if (voiceTranscript) setQuery(voiceTranscript);
-  }, [voiceTranscript]);
-
   const submit = () => {
     const q = query.trim();
-    if (q) onSubmit(q);
+    if (q) onSubmit(q, true);
   };
 
   return (
@@ -46,29 +38,15 @@ export function IntentEntry({
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder={language === "zh" ? "例如：更新护照" : "e.g. renew my passport"}
+          placeholder={
+            language === "zh"
+              ? "例如：我失业了，付不起房贷"
+              : "e.g. I lost my job and can't pay my mortgage"
+          }
           className="w-full bg-transparent text-base font-medium text-oth-ink placeholder:text-neutral-400 focus:outline-none"
           aria-label="Describe what you need"
         />
-        {onVoiceTap && (
-          <button
-            type="button"
-            onClick={onVoiceTap}
-            aria-label={voiceListening ? "Stop listening" : "Search by voice"}
-            aria-pressed={voiceListening}
-            className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-full transition ${
-              voiceListening ? "animate-pulse bg-rose-500 text-white" : "bg-oth-primary/10 text-oth-primary"
-            }`}
-          >
-            <Microphone size={22} weight="fill" />
-          </button>
-        )}
       </form>
-      {voiceListening && (
-        <p className="mt-1.5 px-1 text-xs font-semibold text-rose-500">
-          {language === "zh" ? "正在聆听…请说出需求" : "Listening… say what you need"}
-        </p>
-      )}
 
       <p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wider text-neutral-400">
         {language === "zh" ? "常见需求" : "Common needs"}
