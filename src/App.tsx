@@ -127,6 +127,40 @@ export default function App() {
     useStore.getState().resetIntent();
   }, []);
 
+  // DEMO: mimic a multi-stop journey arriving from the backend, so we can see
+  // the journey Plan render without the real retrieval service running.
+  const onReceiveJourney = useCallback(() => {
+    const st = useStore.getState();
+    const demo: { id: string; reason: { en: string; zh: string } }[] = [
+      { id: "servicesg", reason: { en: "Renew your documents", zh: "更新您的证件" } },
+      { id: "library", reason: { en: "Pick up your reserved books", zh: "领取预订的书籍" } },
+      { id: "hawker", reason: { en: "Grab lunch before you leave", zh: "离开前用餐" } },
+    ];
+    const stops = demo
+      .map(d => {
+        const svc = st.services.find(s => s.id === d.id);
+        if (!svc) return null;
+        return {
+          serviceId: svc.id,
+          name: { en: svc.nameEn, zh: svc.nameZh },
+          floorId: svc.floorId,
+          roomId: svc.roomId,
+          reason: d.reason,
+          accessibility: {
+            liftAccess: svc.accessibility.liftAccess,
+            stepFree: svc.accessibility.stepFreeRoute,
+            notes: svc.accessibility.notes,
+          },
+        };
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null);
+    if (stops.length === 0) return;
+    const plan: Plan = { kind: "journey", title: { en: "Your visit plan", zh: "您的行程" }, stops };
+    st.setIntentStatus("resolving");
+    st.setPlan(plan);
+    st.setIntentStatus("resolved");
+  }, []);
+
   // Play the segment for the current waypoint whenever the index changes
   useEffect(() => {
     if (!activeRoute || segments.length === 0) return;
@@ -191,28 +225,33 @@ export default function App() {
   return (
     <PhoneFrame>
       <div className="flex h-full flex-col">
-        <div className="h-[8%]">
+        <div className="h-[8%] flex-shrink-0">
           <TopBar onVoiceTap={onVoiceTap} />
         </div>
-        <div className="h-[60%] relative">
-          <Scene />
-          {journey && <JourneyTimeline onPick={onPickService} />}
-          <FloorSelector />
-          <SetLocationControl />
-        </div>
-        <div className="h-[32%]">
-          <PromptPanel
-            narrationText={narrationText}
-            onSubmitIntent={onSubmitIntent}
-            onGuide={onGuide}
-            onStartInApp={onStartInApp}
-            onAskAgain={onAskAgain}
-            onNext={onNext}
-            onArrived={onArrived}
-            onVoiceTap={sr.supported ? onVoiceTap : undefined}
-            voiceListening={sr.listening}
-            voiceTranscript={sr.transcript}
-          />
+        {/* Body: stacked on mobile (map above panel); side-by-side on tablet+
+            (panel on the LEFT, map on the right) via flex-row-reverse. */}
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row-reverse">
+          <div className="relative h-[55%] min-h-0 md:h-full md:flex-1">
+            <Scene />
+            {journey && <JourneyTimeline onPick={onPickService} />}
+            <FloorSelector />
+            <SetLocationControl />
+          </div>
+          <div className="h-[45%] min-h-0 md:h-full md:w-[360px] md:flex-none lg:w-[400px]">
+            <PromptPanel
+              narrationText={narrationText}
+              onSubmitIntent={onSubmitIntent}
+              onReceiveJourney={onReceiveJourney}
+              onGuide={onGuide}
+              onStartInApp={onStartInApp}
+              onAskAgain={onAskAgain}
+              onNext={onNext}
+              onArrived={onArrived}
+              onVoiceTap={sr.supported ? onVoiceTap : undefined}
+              voiceListening={sr.listening}
+              voiceTranscript={sr.transcript}
+            />
+          </div>
         </div>
       </div>
     </PhoneFrame>

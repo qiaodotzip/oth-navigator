@@ -27,7 +27,7 @@ export function ResultCard({
 
   if (plan.kind === "human") {
     return (
-      <div className="flex h-full flex-col px-4 pt-4">
+      <div className="flex flex-col px-4 py-4">
         <div className="flex items-start gap-3 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200">
           <Info size={26} weight="fill" className="mt-0.5 flex-shrink-0 text-amber-600" />
           <p className="text-base font-semibold text-oth-ink">{t(plan.message)}</p>
@@ -46,7 +46,7 @@ export function ResultCard({
 
   if (plan.kind === "offsite") {
     return (
-      <div className="flex h-full flex-col px-4 pt-4">
+      <div className="flex flex-col px-4 py-4">
         <p className="text-xs font-bold uppercase tracking-wider text-violet-500">
           {language === "zh" ? "线上服务" : "Online service"}
         </p>
@@ -68,7 +68,7 @@ export function ResultCard({
 
   if (plan.kind === "journey") {
     return (
-      <div className="flex h-full flex-col px-4 pt-4">
+      <div className="flex flex-col px-4 py-4">
         <p className="text-xs font-bold uppercase tracking-wider text-oth-primary">
           {language === "zh" ? `行程 · ${plan.stops.length} 站` : `Your plan · ${plan.stops.length} stops`}
         </p>
@@ -100,7 +100,7 @@ export function ResultCard({
   // destination
   const a11y = plan.stop.accessibility;
   return (
-    <div className="flex h-full flex-col px-4 pt-4">
+    <div className="flex flex-col px-4 py-4">
       <div className="flex items-center gap-2">
         <Check size={20} weight="bold" className="text-green-600" />
         <h2 className="text-xl font-extrabold leading-tight text-oth-ink">{t(plan.answer)}</h2>

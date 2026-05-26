@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
-import { MagnifyingGlass, Microphone } from "phosphor-react";
+import { MagnifyingGlass, Microphone, DownloadSimple } from "phosphor-react";
 import { useStore } from "@/store";
 import { ServiceIcon } from "./iconMap";
 import { PURPOSE_TILES } from "@/intent/synonyms";
 
 export function IntentEntry({
   onSubmit,
+  onReceiveJourney,
   onVoiceTap,
   voiceListening,
   voiceTranscript,
 }: {
   onSubmit: (query: string) => void;
+  onReceiveJourney?: () => void;
   onVoiceTap?: () => void;
   voiceListening?: boolean;
   voiceTranscript?: string;
@@ -28,7 +30,7 @@ export function IntentEntry({
   };
 
   return (
-    <div className="flex h-full flex-col px-4 pt-4">
+    <div className="flex flex-col px-4 py-4">
       <h2 className="mb-3 text-lg font-extrabold text-oth-ink">
         {language === "zh" ? "今天需要办理什么？" : "What do you need to do today?"}
       </h2>
@@ -87,6 +89,17 @@ export function IntentEntry({
           </button>
         ))}
       </div>
+
+      {onReceiveJourney && (
+        <button
+          type="button"
+          onClick={onReceiveJourney}
+          className="mt-4 inline-flex items-center gap-2 self-start rounded-xl border border-dashed border-oth-primary/50 bg-oth-primary/5 px-3 py-2 text-sm font-semibold text-oth-primary transition active:scale-95 hover:bg-oth-primary/10"
+        >
+          <DownloadSimple size={18} weight="bold" />
+          {language === "zh" ? "接收行程（演示）" : "Receive Journey (demo)"}
+        </button>
+      )}
     </div>
   );
 }

@@ -31,6 +31,7 @@ function isTransit(key: string): key is TransitKey {
 export function PromptPanel({
   narrationText,
   onSubmitIntent,
+  onReceiveJourney,
   onGuide,
   onStartInApp,
   onAskAgain,
@@ -42,6 +43,7 @@ export function PromptPanel({
 }: {
   narrationText: string;
   onSubmitIntent: (query: string) => void;
+  onReceiveJourney?: () => void;
   onGuide: (plan: import("@/intent/types").Plan) => void;
   onStartInApp: (plan: Extract<import("@/intent/types").Plan, { kind: "offsite" }>) => void;
   onAskAgain: () => void;
@@ -63,7 +65,9 @@ export function PromptPanel({
 
   if (!route) {
     const shell = (inner: ReactNode) => (
-      <div className="h-full bg-oth-paper border-t border-neutral-300">{inner}</div>
+      <div className="h-full overflow-y-auto bg-oth-paper border-t border-neutral-300 md:border-t-0 md:border-r">
+        {inner}
+      </div>
     );
     if (intentStatus === "resolving") {
       return shell(
@@ -91,6 +95,7 @@ export function PromptPanel({
     return shell(
       <IntentEntry
         onSubmit={onSubmitIntent}
+        onReceiveJourney={onReceiveJourney}
         onVoiceTap={onVoiceTap}
         voiceListening={voiceListening}
         voiceTranscript={voiceTranscript}
@@ -203,7 +208,7 @@ export function PromptPanel({
       : "bg-oth-primary";
 
   return (
-    <div className="h-full bg-oth-paper border-t border-neutral-300 flex flex-col">
+    <div className="h-full bg-oth-paper border-t border-neutral-300 md:border-t-0 md:border-r flex flex-col">
       {/* Header: journey progress + step counter + exit */}
       <div className="flex-shrink-0 px-4 pt-3">
         <div className="mb-2 flex items-center justify-between">
