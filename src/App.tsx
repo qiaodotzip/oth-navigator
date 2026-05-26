@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { resolveLocal, planToJourney, planFromJourneyStops } from "@/intent/resolveIntent";
-import { fetchCurrentJourney } from "@/data/retrieval";
+import { fetchCurrentJourney, locationForServiceId } from "@/data/retrieval";
 import type { Plan, PlanStop } from "@/intent/types";
 import { PhoneFrame } from "@/ui/PhoneFrame";
 import { Scene } from "@/world/Scene";
@@ -75,6 +75,7 @@ export default function App() {
   const setActiveFloor = useStore(s => s.setActiveFloor);
   const activeRoute = useStore(s => s.activeRoute);
   const journey = useStore(s => s.journey);
+  const floors = useStore(s => s.floors);
 
   const [narrationText, setNarrationText] = useState("");
   const [segments, setSegments] = useState<NarrationSegment[]>([]);
@@ -100,7 +101,9 @@ export default function App() {
 
   const onPickService = useCallback(
     async (serviceId: string) => {
-      const svc = services.find(s => s.id === serviceId);
+      // Read fresh from the store: a service may have just been registered
+      // (backend/poller/?dest handoff) in the same tick, before re-render.
+      const svc = useStore.getState().services.find(s => s.id === serviceId);
       if (!svc) return;
       const start = useStore.getState().userLocation ?? DEFAULT_START;
       const floors = useStore.getState().floors;
@@ -160,6 +163,9 @@ export default function App() {
   // send queries from here — the chatbot bar lives on the JOM side.
   const lastJourneyVersion = useRef(-1);
   useEffect(() => {
+    // In face-to-face mode (opened with ?dest) we route to that single place;
+    // the live whole-journey poll would override it, so skip polling then.
+    if (new URLSearchParams(window.location.search).get("dest")) return;
     let alive = true;
     const tick = async () => {
       const st = useStore.getState();
@@ -188,6 +194,39 @@ export default function App() {
       clearInterval(id);
     };
   }, []);
+
+  // Face-to-face handoff: JOM opens us with ?dest=<{serviceId,name}>. Resolve
+  // the service to a floor/room and route straight there (single destination).
+  const handledDest = useRef(false);
+  useEffect(() => {
+    if (handledDest.current || floors.length === 0) return;
+    const raw = new URLSearchParams(window.location.search).get("dest");
+    if (!raw) return;
+    handledDest.current = true;
+    try {
+      const { serviceId, name } = JSON.parse(decodeURIComponent(raw)) as {
+        serviceId: string;
+        name?: string;
+      };
+      if (!serviceId) return;
+      const loc = locationForServiceId(serviceId, floors);
+      const label = name ?? serviceId;
+      const stop: PlanStop = {
+        serviceId,
+        name: { en: label, zh: label },
+        floorId: loc.floorId,
+        roomId: loc.roomId,
+      };
+      const plan: Plan = { kind: "destination", answer: { en: label, zh: label }, stop };
+      const st = useStore.getState();
+      st.addServices([stopToService(stop)]);
+      st.setPlan(plan);
+      st.setIntentStatus("resolved");
+      onGuide(plan); // auto-start the route to that place
+    } catch {
+      /* malformed ?dest — ignore */
+    }
+  }, [floors, onGuide]);
 
   const onAskAgain = useCallback(() => {
     useStore.getState().resetIntent();

@@ -159,6 +159,23 @@ function resolveLocation(svc: BackendService, floors: Floor[]): Loc {
   return { ...SERVICESG_ANCHOR, iconKey: base.iconKey };
 }
 
+/**
+ * Resolve a backend service id → floor/room for the "Face to face" handoff
+ * (JOM opens us with ?dest=<{serviceId,name}>). Same map as the adapter; falls
+ * back to ServiceSG if the id is unknown or its room isn't traced yet.
+ */
+export function locationForServiceId(
+  serviceId: string,
+  floors: Floor[],
+): { floorId: FloorId; roomId: string } {
+  const base = SERVICE_LOCATION_MAP[serviceId] ?? SERVICESG_ANCHOR;
+  const floor = floors.find(f => f.id === base.floorId);
+  const roomExists = !!floor?.polygons.some(p => p.id === base.roomId);
+  return roomExists
+    ? { floorId: base.floorId, roomId: base.roomId }
+    : { floorId: SERVICESG_ANCHOR.floorId, roomId: SERVICESG_ANCHOR.roomId };
+}
+
 /** A retrieval result mapped into our app, ready for tiles + routing. */
 export type AdaptedService = Service & {
   relevanceScore: number;
