@@ -7,25 +7,28 @@ import { PromptPanel } from "@/ui/PromptPanel";
 import { useStore } from "@/store";
 import { loadDataBundle } from "@/data/loaders";
 import { prewarmAll } from "@/narration/prewarm";
-import { buildRoute, DEFAULT_START } from "@/routing/buildRoute";
+import { buildRoute, DEFAULT_START, routeArrivalLocation } from "@/routing/buildRoute";
+import { nextJourneyStopId } from "@/routing/journeyNav";
 import { fetchNarration } from "@/narration/client";
 import { getCached, setCached } from "@/narration/cache";
 import { enqueueSegments, cancelAll } from "@/narration/ttsQueue";
 import { useSpeechRecognition } from "@/ui/useSpeechRecognition";
 import type { NarrationSegment, PopularTimesEntry } from "@/data/types";
 import { SetLocationControl } from "@/ui/SetLocationControl";
+import { JourneyTimeline } from "@/ui/JourneyTimeline";
 import { WaypointEditor } from "@/dev/WaypointEditor";
 import { PolygonEditor } from "@/dev/PolygonEditor";
+import { EntranceEditor } from "@/dev/EntranceEditor";
 
 const TTS_ENABLED = false;
 import { DetailEditor } from "@/dev/DetailEditor";
-import { SuccessCard } from "@/ui/SuccessCard";
 
 export default function App() {
   if (typeof window !== "undefined") {
     if (window.location.hash === "#waypoints") return <WaypointEditor />;
     if (window.location.hash === "#polygon-editor") return <PolygonEditor />;
     if (window.location.hash === "#detail-editor") return <DetailEditor />;
+    if (window.location.hash === "#entrance-editor") return <EntranceEditor />;
   }
 
   const setBundle = useStore(s => s.setBundle);
@@ -36,7 +39,6 @@ export default function App() {
   const advanceRoute = useStore(s => s.advanceRoute);
   const setActiveFloor = useStore(s => s.setActiveFloor);
   const activeRoute = useStore(s => s.activeRoute);
-  const endRoute = useStore(s => s.endRoute);
 
   const [narrationText, setNarrationText] = useState("");
   const [segments, setSegments] = useState<NarrationSegment[]>([]);
@@ -47,6 +49,8 @@ export default function App() {
     loadDataBundle()
       .then(b => {
         setBundle(b);
+        useStore.getState().setJourney(b.journey ?? null);
+        useStore.getState().setEntrances(b.entrances ?? {});
         // prewarmAll disabled to save OpenAI tokens — narration fetched on-demand
         // when a service tile is tapped (and cached for subsequent taps).
         void prewarmAll;
@@ -67,7 +71,8 @@ export default function App() {
       if (!svc) return;
       const start = useStore.getState().userLocation ?? DEFAULT_START;
       const floors = useStore.getState().floors;
-      const variant = buildRoute(start, svc, profile, floors);
+      const entrances = useStore.getState().entrances;
+      const variant = buildRoute(start, svc, profile, floors, entrances);
       if (!variant) return;
       setActiveFloor(variant.steps[0].floorId);
       startRoute(variant);
@@ -123,6 +128,26 @@ export default function App() {
     advanceRoute();
   }, [advanceRoute]);
 
+  // Arrived at a stop: mark it done, then chain to the next journey stop (if any).
+  const onArrived = useCallback(() => {
+    const st = useStore.getState();
+    const route = st.activeRoute;
+    if (!route) return;
+    const sid = route.variant.serviceId;
+    st.markStopDone(sid);
+    st.setUserLocation(routeArrivalLocation(route.variant));
+    const journey = st.journey;
+    if (journey) {
+      const nextId = nextJourneyStopId(journey, sid);
+      if (nextId) {
+        onPickService(nextId);
+        return;
+      }
+    }
+    st.endRoute();
+    st.resetIntent();
+  }, [onPickService]);
+
   const onVoiceTap = () => {
     if (sr.listening) sr.stop();
     else sr.start(language === "zh" ? "zh-CN" : "en-US");
@@ -147,15 +172,19 @@ export default function App() {
         </div>
         <div className="h-[60%] relative">
           <Scene />
+          <JourneyTimeline onPick={onPickService} />
           <FloorSelector />
           <SetLocationControl />
-          <SuccessCard onDismiss={endRoute} />
         </div>
         <div className="h-[32%]">
           <PromptPanel
             narrationText={narrationText}
             onPickService={onPickService}
             onNext={onNext}
+            onArrived={onArrived}
+            onVoiceTap={sr.supported ? onVoiceTap : undefined}
+            voiceListening={sr.listening}
+            voiceTranscript={sr.transcript}
           />
         </div>
       </div>
