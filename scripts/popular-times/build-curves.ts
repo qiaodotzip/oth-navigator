@@ -168,8 +168,8 @@ async function main() {
     });
     return {
       serviceId: row.serviceId,
-      placeId: "estimated",
-      estimated: true,
+      placeName: row.name,
+      source: "modeled" as const,
       weekday,
     };
   });
