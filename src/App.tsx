@@ -231,13 +231,24 @@ export default function App() {
         {/* Body: stacked on mobile (map above panel); side-by-side on tablet+
             (panel on the LEFT, map on the right) via flex-row-reverse. */}
         <div className="flex min-h-0 flex-1 flex-col md:flex-row-reverse">
-          <div className="relative h-[55%] min-h-0 md:h-full md:flex-1">
+          {/* Mobile heights are state-aware: the intent panel gets more room
+              when browsing, the map takes over during navigation. Tablet (md+)
+              ignores these — the panel is a fixed-width left sidebar. */}
+          <div
+            className={`relative min-h-0 md:h-full md:flex-1 ${
+              activeRoute ? "h-[60%]" : "h-[45%]"
+            }`}
+          >
             <Scene />
             {journey && <JourneyTimeline onPick={onPickService} />}
             <FloorSelector />
             <SetLocationControl />
           </div>
-          <div className="h-[45%] min-h-0 md:h-full md:w-1/4 md:flex-none">
+          <div
+            className={`min-h-0 md:h-full md:w-1/4 md:flex-none ${
+              activeRoute ? "h-[40%]" : "h-[55%]"
+            }`}
+          >
             <PromptPanel
               narrationText={narrationText}
               onSubmitIntent={onSubmitIntent}

@@ -73,7 +73,7 @@ export function IntentEntry({
       <p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wider text-neutral-400">
         {language === "zh" ? "常见需求" : "Common needs"}
       </p>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2">
         {PURPOSE_TILES.map(t => (
           <button
             key={t.query}
