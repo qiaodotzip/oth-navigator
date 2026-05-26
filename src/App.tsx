@@ -237,7 +237,7 @@ export default function App() {
             <FloorSelector />
             <SetLocationControl />
           </div>
-          <div className="h-[45%] min-h-0 md:h-full md:w-[360px] md:flex-none lg:w-[400px]">
+          <div className="h-[45%] min-h-0 md:h-full md:w-1/4 md:flex-none">
             <PromptPanel
               narrationText={narrationText}
               onSubmitIntent={onSubmitIntent}
