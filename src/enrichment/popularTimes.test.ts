@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PopularTimesEntry } from "@/data/types";
-import { busynessNow } from "./popularTimes";
+import { busynessNow, busynessSourceFor } from "./popularTimes";
 
 function makeEntry(): PopularTimesEntry {
   const weekday = Array.from({ length: 7 }, () =>
@@ -38,5 +38,18 @@ describe("busynessNow", () => {
     };
     const v = busynessNow("library", [partial], new Date());
     expect(v).toBeNull();
+  });
+});
+
+describe("busynessSourceFor", () => {
+  it("returns the entry's source", () => {
+    const data: PopularTimesEntry[] = [
+      { serviceId: "hdb", placeId: "p1", weekday: [], source: "forecast" },
+    ];
+    expect(busynessSourceFor("hdb", data)).toBe("forecast");
+  });
+
+  it("returns null when no entry exists", () => {
+    expect(busynessSourceFor("nope", [])).toBeNull();
   });
 });

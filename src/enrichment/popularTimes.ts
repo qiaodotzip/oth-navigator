@@ -1,4 +1,4 @@
-import type { PopularTimesEntry } from "@/data/types";
+import type { BusynessSource, PopularTimesEntry } from "@/data/types";
 
 export function busynessNow(
   serviceId: string,
@@ -23,4 +23,13 @@ function clamp01(n: number): number {
   if (n < 0) return 0;
   if (n > 1) return 1;
   return n;
+}
+
+/** Provenance of a service's busyness curve, for honest UI labeling. */
+export function busynessSourceFor(
+  serviceId: string,
+  entries: PopularTimesEntry[],
+): BusynessSource | null {
+  const entry = entries.find(e => e.serviceId === serviceId);
+  return entry?.source ?? null;
 }
