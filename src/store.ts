@@ -1,8 +1,11 @@
 import { create } from "zustand";
+import type { Plan } from "@/intent/types";
 import type {
   AccessibilityProfile,
+  EntranceMap,
   Floor,
   FloorId,
+  Journey,
   Language,
   PopularTimesEntry,
   Pt,
@@ -28,7 +31,12 @@ type State = {
   routes: RouteVariant[];
   counterLoads: Record<string, number>;
   popularTimes: PopularTimesEntry[];
+  journey: Journey | null;
+  doneStops: string[];
+  entrances: EntranceMap;
   activeRoute: ActiveRoute | null;
+  activePlan: Plan | null;
+  intentStatus: "idle" | "resolving" | "resolved";
   inspectMode: boolean;
   firstPerson: boolean;
   showLabels: boolean;
@@ -44,6 +52,13 @@ type State = {
   setBundle: (data: { floors: Floor[]; services: Service[]; routes: RouteVariant[] }) => void;
   setLoad: (counterId: string, load: number) => void;
   setPopularTimes: (entries: PopularTimesEntry[]) => void;
+  setJourney: (j: Journey | null) => void;
+  markStopDone: (serviceId: string) => void;
+  setPlan: (p: Plan | null) => void;
+  setIntentStatus: (s: "idle" | "resolving" | "resolved") => void;
+  resetIntent: () => void;
+  resetJourneyProgress: () => void;
+  setEntrances: (e: EntranceMap) => void;
   startRoute: (v: RouteVariant) => void;
   advanceRoute: () => void;
   endRoute: () => void;
@@ -73,7 +88,12 @@ export const useStore = create<State>(set => ({
   routes: [],
   counterLoads: {},
   popularTimes: [],
+  journey: null,
+  doneStops: [],
+  entrances: {},
   activeRoute: null,
+  activePlan: null,
+  intentStatus: "idle",
   inspectMode: true,
   firstPerson: false,
   showLabels: true,
@@ -90,6 +110,14 @@ export const useStore = create<State>(set => ({
   setLoad: (counterId, load) =>
     set(s => ({ counterLoads: { ...s.counterLoads, [counterId]: load } })),
   setPopularTimes: entries => set({ popularTimes: entries }),
+  setJourney: j => set({ journey: j, doneStops: [] }),
+  setPlan: p => set({ activePlan: p }),
+  setIntentStatus: s => set({ intentStatus: s }),
+  resetIntent: () => set({ activePlan: null, intentStatus: "idle", journey: null }),
+  markStopDone: serviceId =>
+    set(s => (s.doneStops.includes(serviceId) ? {} : { doneStops: [...s.doneStops, serviceId] })),
+  resetJourneyProgress: () => set({ doneStops: [] }),
+  setEntrances: e => set({ entrances: e }),
   startRoute: v =>
     set({ activeRoute: { variant: v, startedAt: Date.now(), currentWaypointIndex: 0 } }),
   advanceRoute: () =>
