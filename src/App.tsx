@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
-import { resolveIntent, planToJourney } from "@/intent/resolveIntent";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { resolveLocal, planToJourney, planFromJourneyStops } from "@/intent/resolveIntent";
+import { fetchCurrentJourney } from "@/data/retrieval";
 import type { Plan, PlanStop } from "@/intent/types";
 import { PhoneFrame } from "@/ui/PhoneFrame";
 import { Scene } from "@/world/Scene";
@@ -14,7 +15,6 @@ import { nextJourneyStopId } from "@/routing/journeyNav";
 import { fetchNarration } from "@/narration/client";
 import { getCached, setCached } from "@/narration/cache";
 import { enqueueSegments, cancelAll } from "@/narration/ttsQueue";
-import { useSpeechRecognition } from "@/ui/useSpeechRecognition";
 import type { NarrationSegment, PopularTimesEntry, Service } from "@/data/types";
 import { SetLocationControl } from "@/ui/SetLocationControl";
 import { JourneyTimeline } from "@/ui/JourneyTimeline";
@@ -79,8 +79,6 @@ export default function App() {
   const [narrationText, setNarrationText] = useState("");
   const [segments, setSegments] = useState<NarrationSegment[]>([]);
 
-  const sr = useSpeechRecognition();
-
   useEffect(() => {
     loadDataBundle()
       .then(b => {
@@ -133,15 +131,11 @@ export default function App() {
     [profile, services, startRoute, setActiveFloor],
   );
 
-  const onSubmitIntent = useCallback(async (query: string, fromText = false) => {
+  // Quick-access tiles resolve LOCALLY only — tamp never sends queries; the
+  // chatbot bar lives on the JOM side. Backend journeys arrive via the poller.
+  const onSubmitIntent = useCallback((query: string) => {
     const st = useStore.getState();
-    st.setIntentStatus("resolving");
-    // Typed prompts go backend-first (ask the concierge); tile taps keep the
-    // instant local path. Either way, graceful local fallback if backend fails.
-    const plan = await resolveIntent(query, st.services, st.floors, undefined, undefined, fromText);
-    // Register any backend stops in the catalog so onPickService / the timeline
-    // can resolve them by id (their floor/room is already on the PlanStop).
-    st.addServices(planStops(plan).map(stopToService));
+    const { plan } = resolveLocal(query, st.services);
     st.setPlan(plan);
     st.setIntentStatus("resolved");
   }, []);
@@ -160,6 +154,39 @@ export default function App() {
       ?.VITE_OTH_APP_URL;
     if (url) window.open(url, "_blank", "noopener");
     else window.alert("Opening the OTH app… (set VITE_OTH_APP_URL to wire the real handoff)");
+  }, []);
+
+  // Receiver: poll the journey the JOM chatbot published and render it. We never
+  // send queries from here — the chatbot bar lives on the JOM side.
+  const lastJourneyVersion = useRef(-1);
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      const st = useStore.getState();
+      if (st.floors.length === 0) return;
+      try {
+        const { version, response } = await fetchCurrentJourney(st.floors);
+        if (!alive || version === lastJourneyVersion.current) return;
+        if (st.activeRoute) return; // don't interrupt active navigation; apply once idle
+        if (!response || response.stops.length === 0) {
+          lastJourneyVersion.current = version;
+          return;
+        }
+        lastJourneyVersion.current = version;
+        const plan = planFromJourneyStops(response);
+        st.addServices(planStops(plan).map(stopToService));
+        st.setPlan(plan);
+        st.setIntentStatus("resolved");
+      } catch {
+        /* backend not running / unreachable — keep polling quietly */
+      }
+    };
+    void tick();
+    const id = setInterval(tick, 2000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
   }, []);
 
   const onAskAgain = useCallback(() => {
@@ -267,26 +294,11 @@ export default function App() {
     st.resetIntent();
   }, [onPickService]);
 
-  const onVoiceTap = () => {
-    if (sr.listening) sr.stop();
-    else sr.start(language === "zh" ? "zh-CN" : "en-US");
-  };
-
-  useEffect(() => {
-    if (!sr.transcript) return;
-    onSubmitIntent(sr.transcript);
-  }, [sr.transcript, onSubmitIntent]);
-
   return (
     <PhoneFrame>
       <div className="flex h-full flex-col">
         <div className="flex-shrink-0">
-          <TopBar
-            onSubmitIntent={onSubmitIntent}
-            onVoiceTap={sr.supported ? onVoiceTap : undefined}
-            voiceListening={sr.listening}
-            voiceTranscript={sr.transcript}
-          />
+          <TopBar />
         </div>
         {/* Body: stacked on mobile (map above panel); side-by-side on tablet+
             (panel on the LEFT, map on the right) via flex-row-reverse. */}

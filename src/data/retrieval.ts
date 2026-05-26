@@ -209,51 +209,15 @@ export function adaptService(
   };
 }
 
-// ---------- the retrieval client ----------
+// ---------- the retrieval backend (RECEIVE-ONLY) ----------
+// tamp_hackathon is a RECEIVER. The chatbot bar lives on the JOM side; it
+// produces journeys and publishes them. We POLL GET /api/current-journey and
+// render whatever arrives. We never send queries from here.
+// Set VITE_RETRIEVAL_API (e.g. http://127.0.0.1:8000).
 
-// Where the retrieval backend lives. Set VITE_RETRIEVAL_API (e.g.
-// http://127.0.0.1:8000) or proxy /api/retrieve to it in vite.config.
 const RETRIEVAL_BASE =
   (import.meta as unknown as { env?: Record<string, string | undefined> }).env
     ?.VITE_RETRIEVAL_API ?? "";
-
-export type RetrieveResponse = {
-  services: AdaptedService[];
-  confidenceLow: boolean;
-  decomposition: string[];
-};
-
-export async function retrieveServices(
-  query: string,
-  floors: Floor[],
-  ctx?: UserContext,
-  topK = 3,
-): Promise<RetrieveResponse> {
-  const res = await fetch(`${RETRIEVAL_BASE}/api/retrieve`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query,
-      citizenship: ctx?.citizenship ?? null,
-      age: ctx?.age ?? null,
-      top_k: topK,
-    }),
-  });
-  if (!res.ok) throw new Error(`retrieve ${res.status}`);
-  const data = (await res.json()) as RetrievalResult;
-  return {
-    services: data.services.map(r =>
-      adaptService(r.service, floors, r.relevance_score, r.rerank_justification),
-    ),
-    confidenceLow: data.confidence_low,
-    decomposition: data.query_decomposition,
-  };
-}
-
-// ---------- journey (step-by-step itinerary) ----------
-// POST /api/journey → an ordered multi-stop plan (one stop per distinct counter)
-// with a per-stop `reason`. Backend mock today (see main.py); same contract the
-// real LLM-ordered endpoint will fill.
 
 type BackendJourneyResult = {
   summary: string | null;
@@ -268,30 +232,29 @@ export type RetrieveJourneyResponse = {
   stops: JourneyStopResolved[];
 };
 
-export async function retrieveJourney(
-  query: string,
-  floors: Floor[],
-  ctx?: UserContext,
-  maxStops = 3,
-): Promise<RetrieveJourneyResponse> {
-  const res = await fetch(`${RETRIEVAL_BASE}/api/journey`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query,
-      citizenship: ctx?.citizenship ?? null,
-      age: ctx?.age ?? null,
-      max_stops: maxStops,
-    }),
-  });
-  if (!res.ok) throw new Error(`journey ${res.status}`);
-  const data = (await res.json()) as BackendJourneyResult;
+export type CurrentJourney = {
+  /** Bumps every time the chatbot publishes a new journey — lets us detect a
+   *  change between polls and avoid re-rendering the same plan. */
+  version: number;
+  response: RetrieveJourneyResponse | null;
+};
+
+/** Poll the latest journey the JOM chatbot published. */
+export async function fetchCurrentJourney(floors: Floor[]): Promise<CurrentJourney> {
+  const res = await fetch(`${RETRIEVAL_BASE}/api/current-journey`);
+  if (!res.ok) throw new Error(`current-journey ${res.status}`);
+  const data = (await res.json()) as { version: number; journey: BackendJourneyResult | null };
+  if (!data.journey) return { version: data.version, response: null };
+  const j = data.journey;
   return {
-    summary: data.summary,
-    confidenceLow: data.confidence_low,
-    stops: data.stops.map(s => ({
-      service: adaptService(s.service, floors, s.relevance_score),
-      reason: s.reason,
-    })),
+    version: data.version,
+    response: {
+      summary: j.summary,
+      confidenceLow: j.confidence_low,
+      stops: j.stops.map(s => ({
+        service: adaptService(s.service, floors, s.relevance_score),
+        reason: s.reason,
+      })),
+    },
   };
 }

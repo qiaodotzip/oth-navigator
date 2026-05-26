@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Service } from "@/data/types";
 import type { AdaptedService, RetrieveJourneyResponse } from "@/data/retrieval";
-import { resolveLocal, planToJourney, resolveIntent } from "./resolveIntent";
+import { resolveLocal, planToJourney, planFromJourneyStops } from "./resolveIntent";
 
 function svc(over: Partial<Service> & { id: string }): Service {
   return {
@@ -33,11 +33,11 @@ describe("resolveLocal", () => {
     if (plan.kind === "destination") expect(plan.stop.serviceId).toBe("servicesg");
   });
 
-  it("defers a non-routable local match to the backend (low-confidence human fallback)", () => {
+  it("gives a non-routable local match a low-confidence human (ServiceSG) plan", () => {
     const r = resolveLocal("elderly active ageing", services);
-    // Non-routable physical services no longer dead-end in a local "Start in
-    // App" card — they get a low confidence so resolveIntent falls back to the
-    // backend, with a ServiceSG ("human") plan only if the backend is down.
+    // Non-routable physical services don't dead-end in a local "Start in App"
+    // card — they point at the ServiceSG counter as a soft local guess. The
+    // rich answer comes from the chatbot's journey (rendered via the poller).
     expect(r.plan.kind).toBe("human");
     expect(r.confidence).toBeLessThan(0.7);
   });
@@ -93,91 +93,60 @@ function okJourney(
   return { summary: null, confidenceLow: false, stops, ...over };
 }
 
-describe("resolveIntent (two-tier)", () => {
-  it("uses the local result and skips the backend when confident", async () => {
-    let called = false;
-    const fetchJourney = async (): Promise<RetrieveJourneyResponse> => {
-      called = true;
-      return okJourney([]);
-    };
-    const plan = await resolveIntent("library", services, [], undefined, fetchJourney);
-    expect(plan.kind).toBe("destination");
-    expect(called).toBe(false);
-  });
-
-  it("defers a non-routable local match to the backend (single physical stop → destination)", async () => {
-    const fetchJourney = async (): Promise<RetrieveJourneyResponse> =>
+describe("planFromJourneyStops", () => {
+  it("maps a single physical stop to a destination, carrying docs + reason", () => {
+    const plan = planFromJourneyStops(
       okJourney([
         {
-          service: adapted({ id: "MSF-001", nameEn: "ComCare", floorId: "L1", roomId: "L1-room-psc", displayFloor: "L1" }),
-          reason: "Speak to a social worker.",
-        },
-      ]);
-    // "elderly active ageing" matches the non-routable active-ageing locally;
-    // it must NOT short-circuit to a local card — the backend result wins.
-    const plan = await resolveIntent("elderly active ageing", services, [], undefined, fetchJourney);
-    expect(plan.kind).toBe("destination");
-    if (plan.kind === "destination") expect(plan.stop.serviceId).toBe("MSF-001");
-  });
-
-  it("preferBackend skips the local fast-path even for a confident local match", async () => {
-    let called = false;
-    const fetchJourney = async (): Promise<RetrieveJourneyResponse> => {
-      called = true;
-      return okJourney([
-        {
-          service: adapted({ id: "HDB-001", nameEn: "HDB", floorId: "L2", roomId: "L2-room-hdb-office", displayFloor: "L2" }),
+          service: adapted({
+            id: "HDB-001",
+            nameEn: "HDB Scheme",
+            floorId: "L2",
+            roomId: "L2-room-hdb-office",
+            displayFloor: "L2",
+            requiredDocuments: [{ name: "NRIC", required_if: null, notes: null }],
+          }),
           reason: "Mortgage help",
         },
-      ]);
-    };
-    // "library" matches a routable local service at high confidence, but a typed
-    // prompt (preferBackend) must still hit the backend.
-    const plan = await resolveIntent("library", services, [], undefined, fetchJourney, true);
-    expect(called).toBe(true);
+      ]),
+    );
     expect(plan.kind).toBe("destination");
-    if (plan.kind === "destination") expect(plan.stop.serviceId).toBe("HDB-001");
+    if (plan.kind === "destination") {
+      expect(plan.stop.serviceId).toBe("HDB-001");
+      expect(plan.stop.roomId).toBe("L2-room-hdb-office");
+      expect(plan.stop.requiredDocuments?.[0].name).toBe("NRIC");
+      expect(plan.stop.reason?.en).toBe("Mortgage help");
+    }
   });
 
-  it("builds a multi-stop journey from multiple backend stops (carrying reasons + order)", async () => {
-    const fetchJourney = async (): Promise<RetrieveJourneyResponse> =>
-      okJourney([
-        {
-          service: adapted({ id: "HDB-001", nameEn: "HDB", floorId: "L2", roomId: "L2-room-hdb-office", displayFloor: "L2" }),
-          reason: "Mortgage help",
-        },
-        {
-          service: adapted({ id: "MSF-001", nameEn: "ComCare", floorId: "L1", roomId: "L1-room-psc", displayFloor: "L1" }),
-          reason: "Daily expenses",
-        },
-      ]);
-    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, fetchJourney);
+  it("maps a single Digital_Hotline stop to an offsite Plan", () => {
+    const plan = planFromJourneyStops(
+      okJourney([{ service: adapted({ id: "CPF-001", locationType: "Digital_Hotline" }), reason: "Apply online." }]),
+    );
+    expect(plan.kind).toBe("offsite");
+  });
+
+  it("builds a multi-stop journey (order, per-stop reasons, title)", () => {
+    const plan = planFromJourneyStops(
+      okJourney(
+        [
+          {
+            service: adapted({ id: "HDB-001", nameEn: "HDB", floorId: "L2", roomId: "L2-room-hdb-office", displayFloor: "L2" }),
+            reason: "Mortgage help",
+          },
+          {
+            service: adapted({ id: "MSF-001", nameEn: "ComCare", floorId: "L1", roomId: "L1-room-psc", displayFloor: "L1" }),
+            reason: "Daily expenses",
+          },
+        ],
+        { summary: "Your plan" },
+      ),
+    );
     expect(plan.kind).toBe("journey");
     if (plan.kind === "journey") {
       expect(plan.stops.map(s => s.serviceId)).toEqual(["HDB-001", "MSF-001"]);
       expect(plan.stops[0].reason?.en).toBe("Mortgage help");
+      expect(plan.title?.en).toBe("Your plan");
     }
-  });
-
-  it("maps a single Digital_Hotline backend stop to an offsite Plan", async () => {
-    const fetchJourney = async (): Promise<RetrieveJourneyResponse> =>
-      okJourney([{ service: adapted({ id: "CPF-001", locationType: "Digital_Hotline" }), reason: "Apply online." }]);
-    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, fetchJourney);
-    expect(plan.kind).toBe("offsite");
-  });
-
-  it("gracefully falls back to the local plan when the backend errors", async () => {
-    const fetchJourney = async (): Promise<RetrieveJourneyResponse> => {
-      throw new Error("backend down");
-    };
-    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, fetchJourney);
-    expect(plan.kind).toBe("human");
-  });
-
-  it("returns the local plan when the backend signals low confidence", async () => {
-    const fetchJourney = async (): Promise<RetrieveJourneyResponse> =>
-      okJourney([], { confidenceLow: true });
-    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, fetchJourney);
-    expect(plan.kind).toBe("human");
   });
 });

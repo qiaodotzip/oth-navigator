@@ -1,15 +1,7 @@
-import type { Floor, Journey, Service } from "@/data/types";
-import {
-  retrieveJourney,
-  type AdaptedService,
-  type RetrieveJourneyResponse,
-  type UserContext,
-} from "@/data/retrieval";
+import type { Journey, Service } from "@/data/types";
+import type { AdaptedService, RetrieveJourneyResponse } from "@/data/retrieval";
 import { INTENT_SYNONYMS } from "./synonyms";
 import type { LocalizedText, Plan, PlanStop, ResolveResult } from "./types";
-
-/** Local matches at or above this confidence skip the backend entirely. */
-const LOCAL_CONFIDENCE_THRESHOLD = 0.7;
 
 const SERVICESG_ID = "servicesg"; // human-help anchor
 
@@ -80,12 +72,10 @@ export function resolveLocal(query: string, services: Service[]): ResolveResult 
     };
   }
 
-  // Matched a service we can't place on our map yet. These are physical
-  // services the backend can route better (to the right counter), so defer to
-  // it with LOW confidence rather than dead-ending in a local "Start in App"
-  // card. If the backend is down, send the user to the ServiceSG counter.
-  // (Genuine digital "Start in App" cards come from the backend's
-  // Digital_Hotline classification — see planFromRetrieval — not from here.)
+  // Matched a service we can't place on our map yet — send the user to the
+  // ServiceSG counter, where staff can direct them. (Genuine digital "Start in
+  // App" cards come from the chatbot's Digital_Hotline classification via
+  // planFromJourneyStops, not from local resolution.)
   return {
     confidence: 0.3,
     plan: {
@@ -130,51 +120,29 @@ function journeyStop(s: RetrieveJourneyResponse["stops"][number]): PlanStop {
 }
 
 /**
- * Two-tier resolve: try locally first; if we're not confident, ask the backend
- * for a step-by-step itinerary. The backend's stops map to a multi-stop journey
- * (≥2 stops), a single destination (1 physical stop) or an offsite handoff (1
- * Digital_Hotline stop). Falls back to the local guess if the backend signals
- * low confidence, returns nothing, or is unreachable — so the app still works
- * offline. `fetchJourney` is injectable for testing.
+ * Map the chatbot's published journey (fetched by the poller) into a Plan:
+ * a multi-stop journey (≥2 stops), a single destination (1 physical stop), or
+ * an offsite "Start in App" handoff (1 Digital_Hotline stop). Assumes at least
+ * one stop — callers skip empty journeys.
  */
-export async function resolveIntent(
-  query: string,
-  services: Service[],
-  floors: Floor[],
-  ctx?: UserContext,
-  fetchJourney: typeof retrieveJourney = retrieveJourney,
-  preferBackend = false,
-): Promise<Plan> {
-  const local = resolveLocal(query, services);
-  // Tiles / short known queries take the instant local answer. Typed free-text
-  // prompts (preferBackend) always ask the backend first — that's the point of
-  // typing a question — and fall back to local only if it can't help.
-  if (!preferBackend && local.confidence >= LOCAL_CONFIDENCE_THRESHOLD) return local.plan;
-  try {
-    const j = await fetchJourney(query, floors, ctx);
-    if (j.confidenceLow || j.stops.length === 0) return local.plan;
-
-    if (j.stops.length === 1) {
-      const only = j.stops[0];
-      const stop = journeyStop(only);
-      if (only.service.locationType === "Digital_Hotline") {
-        return {
-          kind: "offsite",
-          stop,
-          appHandoff: { label: { en: "Start in App", zh: "在应用中开始" } },
-        };
-      }
-      return { kind: "destination", answer: answerFor(only.service), stop };
+export function planFromJourneyStops(j: RetrieveJourneyResponse): Plan {
+  if (j.stops.length === 1) {
+    const only = j.stops[0];
+    const stop = journeyStop(only);
+    if (only.service.locationType === "Digital_Hotline") {
+      return {
+        kind: "offsite",
+        stop,
+        appHandoff: { label: { en: "Start in App", zh: "在应用中开始" } },
+      };
     }
-
-    return {
-      kind: "journey",
-      title: j.summary ? { en: j.summary, zh: j.summary } : undefined,
-      stops: j.stops.map(journeyStop),
-    };
-  } catch {
-    return local.plan; // backend down → best local guess
+    return { kind: "destination", answer: answerFor(only.service), stop };
   }
+  return {
+    kind: "journey",
+    title: j.summary ? { en: j.summary, zh: j.summary } : undefined,
+    stops: j.stops.map(journeyStop),
+  };
 }
 
 export function planToJourney(plan: Extract<Plan, { kind: "journey" }>): Journey {
