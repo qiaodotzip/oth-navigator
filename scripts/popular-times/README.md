@@ -32,6 +32,26 @@ To add a service: add a row to `oth-services.csv` (serviceId must match an `id`
 in `public/data/services.json` for it to affect that service's counters) and
 re-run `npm run build:popular-times`.
 
+## Real foot-traffic: BestTime.app (preferred real source)
+
+`besttime.ts` fetches real forecast (and optional live) foot-traffic from
+[BestTime.app](https://besttime.app) and **upserts** it over the modeled curves,
+tagging each entry `source: "forecast"` (or `"live"`). Modeled curves remain the
+fallback for any venue BestTime can't resolve.
+
+```
+# 1. seed modeled curves (sets every entry source:"modeled")
+npm run build:popular-times
+# 2. overlay real data (needs BESTTIME_API_KEY_PRIVATE in .env)
+npm run build:popular-times:real
+```
+
+Get free keys at besttime.app (Account -> API keys). Edit
+`scripts/popular-times/venues.json` to tune venue names/addresses. Run once with
+`npx tsx scripts/popular-times/besttime.ts --debug` to dump and verify the raw
+API shape. Government counters may not exist in BestTime's DB — those keep their
+modeled curve, which is honest and labeled "(estimated)" in the UI.
+
 ## Optional: scrape real Google Popular Times (`scrape.py`)
 
 If you later want the *actual* Google curve, `scrape.py` uses the `populartimes`
