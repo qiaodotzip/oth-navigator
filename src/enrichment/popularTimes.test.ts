@@ -6,7 +6,7 @@ function makeEntry(): PopularTimesEntry {
   const weekday = Array.from({ length: 7 }, () =>
     Array.from({ length: 24 }, (_, h) => ({ hour: h, busyness: h / 24 })),
   );
-  return { serviceId: "library", placeId: "p1", weekday };
+  return { serviceId: "library", placeId: "p1", weekday, source: "modeled" };
 }
 
 describe("busynessNow", () => {
@@ -34,6 +34,7 @@ describe("busynessNow", () => {
       serviceId: "library",
       placeId: "p1",
       weekday: [[], [], [], [], [], [], []],
+      source: "modeled",
     };
     const v = busynessNow("library", [partial], new Date());
     expect(v).toBeNull();

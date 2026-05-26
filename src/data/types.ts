@@ -112,13 +112,18 @@ export type NarrationResponse = {
 
 export type PopularTimesHour = { hour: number; busyness: number };
 
+/** Where a busyness curve came from. "live"=current BestTime reading,
+ *  "forecast"=BestTime weekly forecast, "modeled"=our category heuristic. */
+export type BusynessSource = "live" | "forecast" | "modeled";
+
 export type PopularTimesEntry = {
   serviceId: string;
-  placeId: string;
+  /** BestTime venue_id or legacy Google place id; absent for modeled curves. */
+  placeId?: string;
+  placeName?: string;
   weekday: PopularTimesHour[][];
   currentPopularity?: number;
-  /** true when the curve is heuristic (category-based), not scraped from Google. */
-  estimated?: boolean;
+  source: BusynessSource;
 };
 
 export type JourneyStop = {
