@@ -133,6 +133,9 @@ export const SERVICE_LOCATION_MAP: Record<string, Loc> = {
   "SSG-001": { floorId: "L1", roomId: "L1-room-psc", iconKey: "info" },
   "SSG-002": { floorId: "L1", roomId: "L1-room-psc", iconKey: "info" },
 
+  // Library — maps to the traced L2 library room.
+  "FAC-LIBRARY-001": { floorId: "L2", roomId: "L2-room-library", iconKey: "book" },
+
   // Digital_Hotline services — no OTH counter; helped in person at ServiceSG.
   "AIC-001": { floorId: "L1", roomId: "L1-room-psc", iconKey: "hospital" },
   "AIC-002": { floorId: "L1", roomId: "L1-room-psc", iconKey: "hospital" },
@@ -140,6 +143,20 @@ export const SERVICE_LOCATION_MAP: Record<string, Loc> = {
   "CPF-002": { floorId: "L1", roomId: "L1-room-psc", iconKey: "receipt" },
   "MSF-008": { floorId: "L1", roomId: "L1-room-psc", iconKey: "hospital" },
 };
+
+/** Service ids the Navigator can route to a real in-person place at OTH (their
+ *  own room, or the shared ServiceSG counter per the floor map). Excludes the
+ *  Digital_Hotline services (AIC / CPF / Baby Bonus) — those are online-only and
+ *  get the online option instead of a route. Keep in sync with JOM script.js. */
+export const ROUTABLE_SERVICE_IDS = new Set<string>([
+  "SSGC-001",
+  "HDB-001", "HDB-002", "HDB-003", "HDB-004", "HDB-005", "HDB-006",
+  "MSF-001", "MSF-002", "MSF-003", "MSF-007",
+  "WSG-001", "WSG-002", "WSG-003", "WSG-004",
+  "SSG-001", "SSG-002",
+  "FAMNEX-001",
+  "FAC-LIBRARY-001",
+]);
 
 function categoryFor(svc: BackendService): ServiceCategory {
   const id = svc.service_id;

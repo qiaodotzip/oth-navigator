@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, ChangeEvent, MouseEvent, WheelEvent } from "react";
-import type { Detail, Facing, Pt } from "@/data/types";
+import type { Detail, Facing, FloorId, Pt } from "@/data/types";
 
 type Tool =
   | "select"
@@ -15,28 +15,63 @@ type Tool =
   | "escalator-down"
   | "lift-block"
   | "staircase"
+  | "staircase-down"
+  | "walkway-bridge"
   | "stage"
   | "seating-block"
+  | "stadium-seats"
   | "barrier"
   | "football"
   | "court"
+  | "sport-hall"
   | "event-booth"
   | "shop-block"
   | "wall"
   | "psc"
-  | "family-centre";
+  | "family-centre"
+  | "library-entrance"
+  | "library-decor"
+  | "meeting-rooms"
+  | "walkway"
+  | "court-roof"
+  | "garden-decor"
+  | "hdb-office"
+  | "theatre";
 
 // Tools placed by clicking N points then closing the shape (not a rectangle).
-const POLYGON_TOOLS = new Set<Tool>(["psc", "family-centre"]);
+const POLYGON_TOOLS = new Set<Tool>([
+  "psc",
+  "family-centre",
+  "library-entrance",
+  "library-decor",
+  "meeting-rooms",
+  "walkway",
+  "court-roof",
+  "garden-decor",
+  "hdb-office",
+  "theatre",
+]);
 
 const TOOL_CATEGORIES: { name: string; tools: Tool[] }[] = [
   { name: "Hawker", tools: ["stall-row", "stall-island", "bench-rows", "round-table", "cleaning"] },
   { name: "Standard", tools: ["landscape-island", "greenery-row", "toilet", "barrier", "wall"] },
-  { name: "Circulation", tools: ["escalator-up", "escalator-down", "lift-block", "staircase"] },
-  { name: "Stage", tools: ["stage", "seating-block"] },
-  { name: "Sports", tools: ["football", "court"] },
+  { name: "Circulation", tools: ["escalator-up", "escalator-down", "lift-block", "staircase", "staircase-down", "walkway-bridge", "walkway"] },
+  { name: "Stage", tools: ["stage", "seating-block", "stadium-seats"] },
+  { name: "Sports", tools: ["football", "court", "sport-hall"] },
   { name: "Retail", tools: ["event-booth", "shop-block"] },
-  { name: "Civic (draw polygon)", tools: ["psc", "family-centre"] },
+  {
+    name: "Civic (draw polygon)",
+    tools: [
+      "psc",
+      "family-centre",
+      "library-entrance",
+      "library-decor",
+      "meeting-rooms",
+      "hdb-office",
+      "theatre",
+    ],
+  },
+  { name: "Outdoor (draw polygon)", tools: ["court-roof", "garden-decor"] },
 ];
 
 const STORAGE_KEY = (fid: string) => `oth-detail-editor:${fid}`;
@@ -71,16 +106,28 @@ const TOOL_LABELS: Record<Tool, string> = {
   "escalator-down": "Escalator ↓",
   "lift-block": "Lift block",
   staircase: "Staircase ↑",
+  "staircase-down": "Staircase ↓",
+  "walkway-bridge": "Walkway bridge (walkable)",
   stage: "Stage",
   "seating-block": "Seating block",
+  "stadium-seats": "Stadium seats (blocks)",
   barrier: "Barrier (blocks routing)",
   football: "Football pitch (blocks)",
   court: "Sports court (blocks)",
+  "sport-hall": "Sport hall (block)",
   "event-booth": "Event booth",
   "shop-block": "Shop block",
   wall: "Wall (blocks routing + agents)",
   psc: "Public Service Centre",
   "family-centre": "Family Centre",
+  "library-entrance": "Library entrance",
+  "library-decor": "Library decorations",
+  "meeting-rooms": "Meeting rooms",
+  "court-roof": "Court roof (draw polygon)",
+  "garden-decor": "Garden decor (draw polygon)",
+  "hdb-office": "HDB office",
+  theatre: "Theatre",
+  walkway: "Walkway (draw polygon)",
 };
 
 const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
@@ -96,16 +143,28 @@ const TOOL_COLORS: Record<Exclude<Tool, "select">, string> = {
   "escalator-down": "#FF8A50",
   "lift-block": "#7E868F",
   staircase: "#B8BEC6",
+  "staircase-down": "#8A95A3",
+  "walkway-bridge": "#607D8B",
   stage: "#7E57C2",
   "seating-block": "#90A4AE",
+  "stadium-seats": "#6D4C7D",
   barrier: "#B0202A",
   football: "#2E7D32",
   court: "#E07B39",
+  "sport-hall": "#1E88E5",
   "event-booth": "#C2185B",
   "shop-block": "#5D4037",
   wall: "#6B7280",
   psc: "#0E7C7B",
   "family-centre": "#D96BA0",
+  "library-entrance": "#3E7CB1",
+  "library-decor": "#8E6E53",
+  "meeting-rooms": "#5E81AC",
+  "court-roof": "#9AA1A9",
+  "garden-decor": "#5C8B47",
+  "hdb-office": "#1C7C9C",
+  theatre: "#8B2433",
+  walkway: "#A1887F",
 };
 
 const FACING_ARROW: Record<Facing, [number, number]> = {
@@ -124,10 +183,83 @@ function uid(): string {
   return Math.random().toString(36).slice(2);
 }
 
+// Classify an overlay polygon id as an UP vertical connector (goes to the floor
+// above). Lifts/stairs are bidirectional (count as up); escalators only if they
+// rise (exclude down-facing escalators). No B1 floor — building is L1–L3 only.
+function polyConnectorUp(id: string): "lift" | "escalator" | "stair" | null {
+  if (/elevator|lift/i.test(id)) return "lift";
+  if (/escalator/i.test(id)) return /down/i.test(id) ? null : "escalator";
+  if (/stair/i.test(id)) return "stair";
+  return null;
+}
+
+// Up-connectors of a floor from its raw polygons + details (all in METRES).
+function extractUpConnectors(
+  polygons: { id: string; points: Pt[] }[],
+  details: Detail[],
+): { kind: string; point: Pt }[] {
+  const out: { kind: string; point: Pt }[] = [];
+  for (const p of polygons) {
+    const k = polyConnectorUp(p.id);
+    if (k && Array.isArray(p.points) && p.points.length) {
+      out.push({
+        kind: k,
+        point: [
+          p.points.reduce((a, [x]) => a + x, 0) / p.points.length,
+          p.points.reduce((a, [, y]) => a + y, 0) / p.points.length,
+        ],
+      });
+    }
+  }
+  for (const d of details) {
+    let k: string | null = null;
+    if (d.type === "lift-block") k = "lift";
+    else if (d.type === "staircase") k = "stair";
+    else if (d.type === "escalator-up") k = "escalator";
+    if (!k || !("rect" in d)) continue;
+    out.push({ kind: k, point: [(d.rect[0][0] + d.rect[1][0]) / 2, (d.rect[0][1] + d.rect[1][1]) / 2] });
+  }
+  return out;
+}
+
+// "Sport hall" is a composite block, not a single Detail type. Dragging the tool
+// expands into a court + two stadium stands (facing in) wrapped by 4 walls. Each
+// piece is defined as fractions [fx0,fy0,fx1,fy1] of the drawn rectangle, so the
+// whole hall scales to fit whatever box you draw. Fractions come from a canonical
+// 32×22 m layout (wall ≈ 0.4 m, court 28×14, 3 m stands on both long sides).
+type HallPiece =
+  | { type: "wall" | "court"; f: [number, number, number, number] }
+  | { type: "stadium-seats"; f: [number, number, number, number]; facing: Facing };
+
+const SPORT_HALL_TEMPLATE: HallPiece[] = [
+  { type: "wall", f: [0, 0, 1, 0.0182] }, // top
+  { type: "wall", f: [0, 0.9818, 1, 1] }, // bottom
+  { type: "wall", f: [0, 0, 0.0125, 1] }, // left
+  { type: "wall", f: [0.9875, 0, 1, 1] }, // right
+  { type: "court", f: [0.0625, 0.1818, 0.9375, 0.8182] },
+  { type: "stadium-seats", f: [0.0625, 0.0318, 0.9375, 0.1682], facing: "S" }, // top stand, faces court
+  { type: "stadium-seats", f: [0.0625, 0.8318, 0.9375, 0.9682], facing: "N" }, // bottom stand, faces court
+];
+
+function makeSportHall(a: Pt, b: Pt): Detail[] {
+  const minX = Math.min(a[0], b[0]);
+  const minY = Math.min(a[1], b[1]);
+  const w = Math.abs(b[0] - a[0]);
+  const h = Math.abs(b[1] - a[1]);
+  const at = (fx: number, fy: number): Pt => [minX + fx * w, minY + fy * h];
+  return SPORT_HALL_TEMPLATE.map(p => {
+    const rect: [Pt, Pt] = [at(p.f[0], p.f[1]), at(p.f[2], p.f[3])];
+    if (p.type === "stadium-seats")
+      return { id: uid(), type: "stadium-seats", rect, facing: p.facing };
+    if (p.type === "court") return { id: uid(), type: "court", rect };
+    return { id: uid(), type: "wall", rect };
+  });
+}
+
 export function DetailEditor() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageDims, setImageDims] = useState<{ w: number; h: number }>({ w: 1, h: 1 });
-  const [floorId, setFloorId] = useState<"L1" | "L2">("L1");
+  const [floorId, setFloorId] = useState<FloorId>("L1");
   const [widthM, setWidthM] = useState(210);
   const [depthM, setDepthM] = useState(130);
   const [overlayMeters, setOverlayMeters] = useState<Array<{ id: string; points: Pt[] }>>([]);
@@ -138,6 +270,15 @@ export function DetailEditor() {
   const [hoverPoint, setHoverPoint] = useState<Pt | null>(null);
   const [polyPoints, setPolyPoints] = useState<Pt[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showConnectors, setShowConnectors] = useState(false);
+  // Up-connectors on the OTHER floor (metres) + that floor's bounds, loaded from
+  // its files. Drawn as ghosts (normalised by the OTHER floor's bounds) so you
+  // can align this floor's shafts to them even when the floors' depths differ.
+  const [otherFloor, setOtherFloor] = useState<{
+    widthM: number;
+    depthM: number;
+    conns: { kind: string; point: Pt }[];
+  }>({ widthM: 210, depthM: 130, conns: [] });
   const [view, setView] = useState({ x: 0, y: 0, w: 1, h: 1 });
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -146,20 +287,113 @@ export function DetailEditor() {
   const panStart = useRef<{ cx: number; cy: number; vx: number; vy: number } | null>(null);
   const dragMoved = useRef(false);
   const restoring = useRef(true);
+  // Details pulled from the saved -details.json file (in METRES), waiting for the
+  // image to load before we can convert them to editor pixel coords.
+  const pendingFileDetails = useRef<{ details: Detail[]; widthM: number; depthM: number } | null>(null);
+
+  // Convert pending file details (metres) → editor pixels once the image is loaded.
+  const applyPendingDetails = () => {
+    const p = pendingFileDetails.current;
+    if (!p) return;
+    if (imageDims.w <= 1 || imageDims.h <= 1) return; // wait for the image
+    const sx = imageDims.w / p.widthM;
+    const sy = imageDims.h / p.depthM;
+    const conv = ([x, y]: Pt): Pt => [x * sx, y * sy];
+    const loaded: Detail[] = p.details.map(d => {
+      if (d.type === "round-table") return { ...d, id: d.id ?? uid(), point: conv(d.point) };
+      if ("points" in d)
+        return { ...d, id: d.id ?? uid(), points: d.points.map(conv) };
+      return { ...d, id: d.id ?? uid(), rect: [conv(d.rect[0]), conv(d.rect[1])] as [Pt, Pt] };
+    });
+    setDetails(loaded);
+    pendingFileDetails.current = null;
+  };
+
+  // Manually (re)load the saved details file, replacing the current working copy.
+  const loadSavedDetailsFile = () => {
+    fetch(`/data/floors/${floorId}-details.json`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(dj => {
+        if (!dj || !Array.isArray(dj.details)) {
+          alert(`No saved ${floorId}-details.json found.`);
+          return;
+        }
+        pendingFileDetails.current = { details: dj.details, widthM, depthM };
+        if (imageDims.w > 1 && imageDims.h > 1) {
+          applyPendingDetails();
+        } else {
+          alert("Loaded saved details — load the floor image to see them.");
+        }
+      })
+      .catch(() => alert("Failed to load saved details file."));
+  };
 
   useEffect(() => {
     if (imageDims.w > 1 && imageDims.h > 1) {
       setView({ x: 0, y: 0, w: imageDims.w, h: imageDims.h });
+      applyPendingDetails();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageDims]);
+
+  // Load the OTHER floor's up-connectors (metres) so they can be ghosted on this
+  // floor for vertical alignment (a shaft must sit at the same x,y on both floors).
+  useEffect(() => {
+    // Align against the adjacent floor: L1↔L2, and L3 against L2 below it.
+    const other: FloorId = floorId === "L2" ? "L1" : "L2";
+    let cancelled = false;
+    Promise.all([
+      fetch(`/data/floors/${other}.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`/data/floors/${other}-details.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([fl, det]) => {
+      if (cancelled) return;
+      const polys = (fl?.polygons ?? []).filter((p: { points?: Pt[] }) => Array.isArray(p?.points));
+      const dets = (det?.details ?? []) as Detail[];
+      setOtherFloor({
+        widthM: typeof fl?.bounds?.width === "number" ? fl.bounds.width : widthM,
+        depthM: typeof fl?.bounds?.depth === "number" ? fl.bounds.depth : depthM,
+        conns: extractUpConnectors(polys, dets),
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [floorId]);
 
   useEffect(() => {
     restoring.current = true;
     let cancelled = false;
+    pendingFileDetails.current = null;
+    let hasLocalDetails = false;
+    try {
+      const probe = localStorage.getItem(STORAGE_KEY(floorId));
+      if (probe) {
+        const pd = JSON.parse(probe) as Stored;
+        hasLocalDetails = Array.isArray(pd.details) && pd.details.length > 0;
+      }
+    } catch {
+      hasLocalDetails = false;
+    }
     fetch(`/data/floors/${floorId}.json`)
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (cancelled) return;
+        let boundsW = widthM;
+        let boundsD = depthM;
+        if (typeof data?.bounds?.width === "number") boundsW = data.bounds.width;
+        if (typeof data?.bounds?.depth === "number") boundsD = data.bounds.depth;
+        // When there's no local working copy, load the saved details file so the
+        // editor shows your previously-authored layers (converted once image loads).
+        if (!hasLocalDetails) {
+          fetch(`/data/floors/${floorId}-details.json`)
+            .then(r => (r.ok ? r.json() : null))
+            .then(dj => {
+              if (cancelled || !dj || !Array.isArray(dj.details) || dj.details.length === 0) return;
+              pendingFileDetails.current = { details: dj.details, widthM: boundsW, depthM: boundsD };
+              applyPendingDetails();
+            })
+            .catch(() => {});
+        }
         if (data && Array.isArray(data.polygons)) {
           setOverlayMeters(
             data.polygons
@@ -254,7 +488,9 @@ export function DetailEditor() {
     const file = e.target.files?.[0];
     if (!file) return;
     const lower = file.name.toLowerCase();
-    if (lower.includes("2nd") || lower.includes("level2") || lower.includes("l2")) {
+    if (lower.includes("3rd") || lower.includes("level3") || lower.includes("l3")) {
+      setFloorId("L3");
+    } else if (lower.includes("2nd") || lower.includes("level2") || lower.includes("l2")) {
       setFloorId("L2");
     } else if (lower.includes("1st") || lower.includes("level1") || lower.includes("l1")) {
       setFloorId("L1");
@@ -334,6 +570,12 @@ export function DetailEditor() {
       setHoverPoint(pt);
     } else {
       const r: [Pt, Pt] = [firstCorner, pt];
+      if (tool === "sport-hall") {
+        setDetails(prev => [...prev, ...makeSportHall(firstCorner, pt)]);
+        setFirstCorner(null);
+        setHoverPoint(null);
+        return;
+      }
       const id = uid();
       let newDetail: Detail;
       switch (tool) {
@@ -367,11 +609,20 @@ export function DetailEditor() {
         case "staircase":
           newDetail = { id, type: "staircase", rect: r, facing: "S" };
           break;
+        case "staircase-down":
+          newDetail = { id, type: "staircase-down", rect: r, facing: "S" };
+          break;
+        case "walkway-bridge":
+          newDetail = { id, type: "walkway-bridge", rect: r };
+          break;
         case "stage":
           newDetail = { id, type: "stage", rect: r, facing: "S" };
           break;
         case "seating-block":
           newDetail = { id, type: "seating-block", rect: r, facing: "S" };
+          break;
+        case "stadium-seats":
+          newDetail = { id, type: "stadium-seats", rect: r, facing: "S" };
           break;
         case "barrier":
           newDetail = { id, type: "barrier", rect: r };
@@ -436,6 +687,49 @@ export function DetailEditor() {
 
   const closePolyShape = () => {
     if (polyPoints.length < 3) return;
+    if (tool === "library-entrance") {
+      setDetails(prev => [
+        ...prev,
+        { id: uid(), type: "library-entrance", points: polyPoints },
+      ]);
+      setPolyPoints([]);
+      return;
+    }
+    if (tool === "walkway") {
+      setDetails(prev => [...prev, { id: uid(), type: "walkway", points: polyPoints }]);
+      setPolyPoints([]);
+      return;
+    }
+    if (tool === "library-decor") {
+      setDetails(prev => [...prev, { id: uid(), type: "library-decor", points: polyPoints }]);
+      setPolyPoints([]);
+      return;
+    }
+    if (tool === "meeting-rooms") {
+      setDetails(prev => [...prev, { id: uid(), type: "meeting-rooms", points: polyPoints }]);
+      setPolyPoints([]);
+      return;
+    }
+    if (tool === "court-roof") {
+      setDetails(prev => [...prev, { id: uid(), type: "court-roof", points: polyPoints }]);
+      setPolyPoints([]);
+      return;
+    }
+    if (tool === "garden-decor") {
+      setDetails(prev => [...prev, { id: uid(), type: "garden-decor", points: polyPoints }]);
+      setPolyPoints([]);
+      return;
+    }
+    if (tool === "hdb-office") {
+      setDetails(prev => [...prev, { id: uid(), type: "hdb-office", points: polyPoints }]);
+      setPolyPoints([]);
+      return;
+    }
+    if (tool === "theatre") {
+      setDetails(prev => [...prev, { id: uid(), type: "theatre", points: polyPoints }]);
+      setPolyPoints([]);
+      return;
+    }
     const variant = tool === "family-centre" ? "family" : "psc";
     setDetails(prev => [
       ...prev,
@@ -490,7 +784,8 @@ export function DetailEditor() {
     const conv = ([x, y]: Pt): Pt => [r(x * sx), r(y * sy)];
     const exported = details.map(d => {
       if (d.type === "round-table") return { ...d, point: conv(d.point) };
-      if (d.type === "service-centre") return { ...d, points: d.points.map(conv) };
+      if ("points" in d)
+        return { ...d, points: d.points.map(conv) };
       return { ...d, rect: [conv(d.rect[0]), conv(d.rect[1])] as [Pt, Pt] };
     });
     return { id: floorId, details: exported };
@@ -572,7 +867,7 @@ export function DetailEditor() {
             if (d.type === "round-table") {
               return { ...d, id: d.id ?? uid(), point: convToPixels(d.point) };
             }
-            if (d.type === "service-centre") {
+            if ("points" in d) {
               return { ...d, id: d.id ?? uid(), points: d.points.map(convToPixels) };
             }
             return {
@@ -603,6 +898,33 @@ export function DetailEditor() {
   const strokeBase = Math.max(1.5, view.w / 600);
   const fontBase = Math.max(8, view.w / 100);
   const zoomPct = imageDims.w > 1 ? Math.round((imageDims.w / view.w) * 100) : 100;
+
+  // Up-going connectors (lift/escalator/stair → next floor) on the current floor,
+  // in image pixels. Pulled from overlay polygons AND details. Shared by the
+  // toggle's count and the on-map markers.
+  const connectorHighlights: { kind: string; cx: number; cy: number }[] = (() => {
+    const scx = imageDims.w / widthM;
+    const scy = imageDims.h / depthM;
+    const out: { kind: string; cx: number; cy: number }[] = [];
+    for (const p of overlayMeters) {
+      const kind = polyConnectorUp(p.id);
+      if (!kind) continue;
+      out.push({
+        kind,
+        cx: (p.points.reduce((a, [x]) => a + x, 0) / p.points.length) * scx,
+        cy: (p.points.reduce((a, [, y]) => a + y, 0) / p.points.length) * scy,
+      });
+    }
+    for (const d of details) {
+      let kind: string | null = null;
+      if (d.type === "lift-block") kind = "lift";
+      else if (d.type === "staircase") kind = "stair";
+      else if (d.type === "escalator-up") kind = "escalator";
+      if (!kind || !("rect" in d)) continue;
+      out.push({ kind, cx: (d.rect[0][0] + d.rect[1][0]) / 2, cy: (d.rect[0][1] + d.rect[1][1]) / 2 });
+    }
+    return out;
+  })();
   const cursorClass =
     tool === "select" ? "cursor-default" : tool === "round-table" ? "cursor-crosshair" : "cursor-crosshair";
 
@@ -666,6 +988,87 @@ export function DetailEditor() {
                   onSelect={() => setSelectedId(prev => (prev === d.id ? null : d.id))}
                 />
               ))}
+              {showConnectors && (
+                <g pointerEvents="none">
+                  {/* OTHER-floor connectors, ghosted for alignment (dashed orange).
+                      Normalised by the OTHER floor's bounds so it lands at the
+                      same fractional spot even if the floors' depths differ. */}
+                  {otherFloor.conns.map((h, i) => {
+                    const r = Math.max(6, view.w / 120);
+                    const cx = (h.point[0] / otherFloor.widthM) * imageDims.w;
+                    const cy = (h.point[1] / otherFloor.depthM) * imageDims.h;
+                    const other = floorId === "L2" ? "L1" : "L2";
+                    return (
+                      <g key={`other${i}`}>
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={r}
+                          fill="rgba(224,123,57,0.18)"
+                          stroke="#E07B39"
+                          strokeWidth={strokeBase * 1.6}
+                          strokeDasharray={`${strokeBase * 3},${strokeBase * 2}`}
+                        />
+                        <text
+                          x={cx}
+                          y={cy + r + fontBase * 0.85}
+                          fontSize={fontBase * 0.8}
+                          textAnchor="middle"
+                          fill="#7A3D12"
+                          fontWeight={700}
+                          stroke="#fff"
+                          strokeWidth={strokeBase * 0.45}
+                          paintOrder="stroke"
+                        >
+                          {other} {h.kind}
+                        </text>
+                      </g>
+                    );
+                  })}
+                  {connectorHighlights.map((h, i) => {
+                    const r = Math.max(6, view.w / 120);
+                    return (
+                      <g key={`conn${i}`}>
+                        <circle
+                          cx={h.cx}
+                          cy={h.cy}
+                          r={r}
+                          fill="rgba(0,194,168,0.4)"
+                          stroke="#00B39A"
+                          strokeWidth={strokeBase * 1.8}
+                        />
+                        <text
+                          x={h.cx}
+                          y={h.cy}
+                          fontSize={fontBase}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="#063D36"
+                          fontWeight={800}
+                          stroke="#fff"
+                          strokeWidth={strokeBase * 0.5}
+                          paintOrder="stroke"
+                        >
+                          ↑
+                        </text>
+                        <text
+                          x={h.cx}
+                          y={h.cy + r + fontBase * 0.85}
+                          fontSize={fontBase * 0.8}
+                          textAnchor="middle"
+                          fill="#063D36"
+                          fontWeight={700}
+                          stroke="#fff"
+                          strokeWidth={strokeBase * 0.45}
+                          paintOrder="stroke"
+                        >
+                          {h.kind}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+              )}
               {firstCorner && hoverPoint && tool !== "select" && tool !== "round-table" && (
                 <rect
                   x={Math.min(firstCorner[0], hoverPoint[0])}
@@ -785,11 +1188,12 @@ export function DetailEditor() {
             Floor
             <select
               value={floorId}
-              onChange={e => setFloorId(e.target.value as "L1" | "L2")}
+              onChange={e => setFloorId(e.target.value as FloorId)}
               className="block w-full mt-1 px-2 py-1 rounded border border-neutral-300 font-mono"
             >
               <option value="L1">L1</option>
               <option value="L2">L2</option>
+              <option value="L3">L3</option>
             </select>
           </label>
           <label className="text-xs font-semibold text-neutral-700">
@@ -822,6 +1226,17 @@ export function DetailEditor() {
                 : "none — no polygons found"}
           </span>
         </div>
+        <button
+          onClick={() => setShowConnectors(v => !v)}
+          className={`w-full mb-3 px-2 py-1.5 rounded text-xs font-semibold border ${
+            showConnectors
+              ? "bg-[#00B39A] text-white border-[#00B39A]"
+              : "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100"
+          }`}
+          title="Highlight lifts / escalators / stairs that go UP to the next floor"
+        >
+          {showConnectors ? "✓ " : ""}↑ connectors — {floorId} ({connectorHighlights.length}) + {floorId === "L2" ? "L1" : "L2"} ghosts ({otherFloor.conns.length})
+        </button>
         <div className="grid grid-cols-2 gap-2 mb-4">
           <label className="text-xs font-semibold text-neutral-700">
             Width (m)
@@ -923,9 +1338,18 @@ export function DetailEditor() {
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-semibold text-sm">Details ({details.length})</h3>
-            <button onClick={clearAll} className="text-xs text-red-600 underline">
-              Clear all
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={loadSavedDetailsFile}
+                className="text-xs text-oth-primary underline"
+                title={`Reload ${floorId}-details.json from disk`}
+              >
+                Reload file
+              </button>
+              <button onClick={clearAll} className="text-xs text-red-600 underline">
+                Clear all
+              </button>
+            </div>
           </div>
           <ul className="space-y-1 text-xs max-h-72 overflow-auto">
             {details.map(d => (
@@ -1115,6 +1539,190 @@ function DetailShape({
           fontWeight={600}
         >
           {detail.variant === "family" ? "family centre" : "PSC"}
+        </text>
+      </g>
+    );
+  }
+  if (detail.type === "library-entrance") {
+    const leColor = TOOL_COLORS["library-entrance"];
+    const cx = detail.points.reduce((s, [x]) => s + x, 0) / detail.points.length;
+    const cy = detail.points.reduce((s, [, y]) => s + y, 0) / detail.points.length;
+    // First edge (points[0]→[1]) is the doorway — draw it heavier so you can see it.
+    const [d0, d1] = [detail.points[0], detail.points[1] ?? detail.points[0]];
+    return (
+      <g pointerEvents={events} onClick={handleClick} style={{ cursor: selectable ? "pointer" : "default" }}>
+        <polygon
+          points={detail.points.map(([x, y]) => `${x},${y}`).join(" ")}
+          fill={selected ? `${HILITE}45` : `${leColor}33`}
+          stroke={selected ? HILITE : leColor}
+          strokeWidth={selected ? strokeBase * 2 : strokeBase}
+        />
+        <line
+          x1={d0[0]}
+          y1={d0[1]}
+          x2={d1[0]}
+          y2={d1[1]}
+          stroke={selected ? HILITE : leColor}
+          strokeWidth={strokeBase * 3}
+          strokeLinecap="round"
+        />
+        <text
+          x={cx}
+          y={cy}
+          fontSize={fontBase}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#111"
+          fontFamily="system-ui"
+          fontWeight={600}
+        >
+          library
+        </text>
+      </g>
+    );
+  }
+  if (detail.type === "walkway") {
+    const wkColor = TOOL_COLORS["walkway"];
+    const cx = detail.points.reduce((s, [x]) => s + x, 0) / detail.points.length;
+    const cy = detail.points.reduce((s, [, y]) => s + y, 0) / detail.points.length;
+    return (
+      <g pointerEvents={events} onClick={handleClick} style={{ cursor: selectable ? "pointer" : "default" }}>
+        <polygon
+          points={detail.points.map(([x, y]) => `${x},${y}`).join(" ")}
+          fill={selected ? `${HILITE}45` : `${wkColor}33`}
+          stroke={selected ? HILITE : wkColor}
+          strokeWidth={selected ? strokeBase * 2 : strokeBase}
+        />
+        <text
+          x={cx}
+          y={cy}
+          fontSize={fontBase}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#111"
+          fontFamily="system-ui"
+          fontWeight={600}
+        >
+          walkway
+        </text>
+      </g>
+    );
+  }
+  if (detail.type === "library-decor" || detail.type === "meeting-rooms") {
+    const c = TOOL_COLORS[detail.type];
+    const cx = detail.points.reduce((s, [x]) => s + x, 0) / detail.points.length;
+    const cy = detail.points.reduce((s, [, y]) => s + y, 0) / detail.points.length;
+    return (
+      <g pointerEvents={events} onClick={handleClick} style={{ cursor: selectable ? "pointer" : "default" }}>
+        <polygon
+          points={detail.points.map(([x, y]) => `${x},${y}`).join(" ")}
+          fill={selected ? `${HILITE}45` : `${c}33`}
+          stroke={selected ? HILITE : c}
+          strokeWidth={selected ? strokeBase * 2 : strokeBase}
+        />
+        <text
+          x={cx}
+          y={cy}
+          fontSize={fontBase}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#111"
+          fontFamily="system-ui"
+          fontWeight={600}
+        >
+          {detail.type === "meeting-rooms" ? "meeting rooms" : "library decor"}
+        </text>
+      </g>
+    );
+  }
+  if (detail.type === "court-roof" || detail.type === "garden-decor") {
+    const c = TOOL_COLORS[detail.type];
+    const cx = detail.points.reduce((s, [x]) => s + x, 0) / detail.points.length;
+    const cy = detail.points.reduce((s, [, y]) => s + y, 0) / detail.points.length;
+    return (
+      <g pointerEvents={events} onClick={handleClick} style={{ cursor: selectable ? "pointer" : "default" }}>
+        <polygon
+          points={detail.points.map(([x, y]) => `${x},${y}`).join(" ")}
+          fill={selected ? `${HILITE}45` : `${c}33`}
+          stroke={selected ? HILITE : c}
+          strokeWidth={selected ? strokeBase * 2 : strokeBase}
+        />
+        <text
+          x={cx}
+          y={cy}
+          fontSize={fontBase}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#111"
+          fontFamily="system-ui"
+          fontWeight={600}
+        >
+          {detail.type === "court-roof" ? "court roof" : "garden decor"}
+        </text>
+      </g>
+    );
+  }
+  if (detail.type === "hdb-office") {
+    const c = TOOL_COLORS["hdb-office"];
+    const cx = detail.points.reduce((s, [x]) => s + x, 0) / detail.points.length;
+    const cy = detail.points.reduce((s, [, y]) => s + y, 0) / detail.points.length;
+    return (
+      <g pointerEvents={events} onClick={handleClick} style={{ cursor: selectable ? "pointer" : "default" }}>
+        <polygon
+          points={detail.points.map(([x, y]) => `${x},${y}`).join(" ")}
+          fill={selected ? `${HILITE}45` : `${c}33`}
+          stroke={selected ? HILITE : c}
+          strokeWidth={selected ? strokeBase * 2 : strokeBase}
+        />
+        <text
+          x={cx}
+          y={cy}
+          fontSize={fontBase}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#111"
+          fontFamily="system-ui"
+          fontWeight={600}
+        >
+          HDB office
+        </text>
+      </g>
+    );
+  }
+  if (detail.type === "theatre") {
+    const c = TOOL_COLORS["theatre"];
+    const cx = detail.points.reduce((s, [x]) => s + x, 0) / detail.points.length;
+    const cy = detail.points.reduce((s, [, y]) => s + y, 0) / detail.points.length;
+    // First edge (points[0]→[1]) is the stage frontage — draw it heavier.
+    const [s0, s1] = [detail.points[0], detail.points[1] ?? detail.points[0]];
+    return (
+      <g pointerEvents={events} onClick={handleClick} style={{ cursor: selectable ? "pointer" : "default" }}>
+        <polygon
+          points={detail.points.map(([x, y]) => `${x},${y}`).join(" ")}
+          fill={selected ? `${HILITE}45` : `${c}33`}
+          stroke={selected ? HILITE : c}
+          strokeWidth={selected ? strokeBase * 2 : strokeBase}
+        />
+        <line
+          x1={s0[0]}
+          y1={s0[1]}
+          x2={s1[0]}
+          y2={s1[1]}
+          stroke={selected ? HILITE : c}
+          strokeWidth={strokeBase * 3}
+          strokeLinecap="round"
+        />
+        <text
+          x={cx}
+          y={cy}
+          fontSize={fontBase}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#111"
+          fontFamily="system-ui"
+          fontWeight={600}
+        >
+          theatre
         </text>
       </g>
     );
