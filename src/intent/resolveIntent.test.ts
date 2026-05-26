@@ -33,9 +33,13 @@ describe("resolveLocal", () => {
     if (plan.kind === "destination") expect(plan.stop.serviceId).toBe("servicesg");
   });
 
-  it("maps a non-routable service to an offsite (Start in App) Plan", () => {
-    const { plan } = resolveLocal("elderly active ageing", services);
-    expect(plan.kind).toBe("offsite");
+  it("defers a non-routable local match to the backend (low-confidence human fallback)", () => {
+    const r = resolveLocal("elderly active ageing", services);
+    // Non-routable physical services no longer dead-end in a local "Start in
+    // App" card — they get a low confidence so resolveIntent falls back to the
+    // backend, with a ServiceSG ("human") plan only if the backend is down.
+    expect(r.plan.kind).toBe("human");
+    expect(r.confidence).toBeLessThan(0.7);
   });
 
   it("falls back to a human Plan (ServiceSG) on no match", () => {
@@ -126,6 +130,21 @@ describe("resolveIntent (two-tier)", () => {
     const plan = await resolveIntent("library", services, [], undefined, retrieve);
     expect(plan.kind).toBe("destination");
     expect(called).toBe(false);
+  });
+
+  it("defers a non-routable local match to the backend and uses its routable result", async () => {
+    const retrieve = async (): Promise<RetrieveResponse> => ({
+      services: [
+        adapted({ id: "MSF-001", nameEn: "ComCare", floorId: "L1", roomId: "L1-room-psc", displayFloor: "L1" }),
+      ],
+      confidenceLow: false,
+      decomposition: [],
+    });
+    // "elderly active ageing" matches the non-routable active-ageing locally;
+    // it must NOT short-circuit to a local card — the backend's routable result wins.
+    const plan = await resolveIntent("elderly active ageing", services, [], undefined, retrieve);
+    expect(plan.kind).toBe("destination");
+    if (plan.kind === "destination") expect(plan.stop.serviceId).toBe("MSF-001");
   });
 
   it("falls back to the backend when local is not confident", async () => {

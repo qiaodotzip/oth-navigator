@@ -80,13 +80,21 @@ export function resolveLocal(query: string, services: Service[]): ResolveResult 
     };
   }
 
-  // Known service but not on our map → hand off to the app.
+  // Matched a service we can't place on our map yet. These are physical
+  // services the backend can route better (to the right counter), so defer to
+  // it with LOW confidence rather than dead-ending in a local "Start in App"
+  // card. If the backend is down, send the user to the ServiceSG counter.
+  // (Genuine digital "Start in App" cards come from the backend's
+  // Digital_Hotline classification — see planFromRetrieval — not from here.)
   return {
-    confidence,
+    confidence: 0.3,
     plan: {
-      kind: "offsite",
-      stop: toStop(svc),
-      appHandoff: { label: { en: "Start in App", zh: "在应用中开始" } },
+      kind: "human",
+      message: {
+        en: "Let me point you to the ServiceSG counter — the staff there can direct you.",
+        zh: "带您到 ServiceSG 柜台，工作人员可为您指引。",
+      },
+      stop: toStop(anchor),
     },
   };
 }
