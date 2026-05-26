@@ -1,6 +1,15 @@
-import type { Journey, Service } from "@/data/types";
+import type { Floor, Journey, Service } from "@/data/types";
+import {
+  retrieveServices,
+  type AdaptedService,
+  type RetrieveResponse,
+  type UserContext,
+} from "@/data/retrieval";
 import { INTENT_SYNONYMS } from "./synonyms";
 import type { Plan, PlanStop, ResolveResult } from "./types";
+
+/** Local matches at or above this confidence skip the backend entirely. */
+const LOCAL_CONFIDENCE_THRESHOLD = 0.7;
 
 const SERVICESG_ID = "servicesg"; // human-help anchor
 
@@ -80,6 +89,69 @@ export function resolveLocal(query: string, services: Service[]): ResolveResult 
       appHandoff: { label: { en: "Start in App", zh: "在应用中开始" } },
     },
   };
+}
+
+/** A backend retrieval result → a PlanStop (carries docs/hours into the card). */
+function adaptedToStop(a: AdaptedService): PlanStop {
+  return {
+    serviceId: a.id,
+    name: { en: a.nameEn, zh: a.nameZh },
+    floorId: a.floorId,
+    roomId: a.roomId,
+    operatingHours: a.operatingHours,
+    requiredDocuments: a.requiredDocuments.map(d => ({
+      name: d.name,
+      note: d.notes ?? undefined,
+    })),
+    accessibility: {
+      liftAccess: a.accessibility.liftAccess,
+      stepFree: a.accessibility.stepFreeRoute,
+      notes: a.accessibility.notes,
+    },
+  };
+}
+
+/** Map the backend's top-ranked result into a Plan (destination or offsite). */
+export function planFromRetrieval(resp: RetrieveResponse): Plan {
+  const top = resp.services[0];
+  const stop = adaptedToStop(top);
+  if (top.locationType === "Digital_Hotline") {
+    return {
+      kind: "offsite",
+      stop,
+      appHandoff: { label: { en: "Start in App", zh: "在应用中开始" } },
+    };
+  }
+  const lvl = top.displayFloor ? top.displayFloor.replace(/^L/, "Level ") : "";
+  return {
+    kind: "destination",
+    answer: { en: lvl ? `${top.nameEn} · ${lvl}` : top.nameEn, zh: top.nameZh },
+    stop,
+  };
+}
+
+/**
+ * Two-tier resolve: try locally first; if we're not confident, ask the backend.
+ * Falls back to the local guess if the backend signals low confidence, returns
+ * nothing, or is unreachable — so the app still works offline.
+ * `retrieve` is injectable for testing.
+ */
+export async function resolveIntent(
+  query: string,
+  services: Service[],
+  floors: Floor[],
+  ctx?: UserContext,
+  retrieve: typeof retrieveServices = retrieveServices,
+): Promise<Plan> {
+  const local = resolveLocal(query, services);
+  if (local.confidence >= LOCAL_CONFIDENCE_THRESHOLD) return local.plan;
+  try {
+    const resp = await retrieve(query, floors, ctx);
+    if (resp.confidenceLow || resp.services.length === 0) return local.plan;
+    return planFromRetrieval(resp);
+  } catch {
+    return local.plan; // backend down → best local guess
+  }
 }
 
 export function planToJourney(plan: Extract<Plan, { kind: "journey" }>): Journey {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Service } from "@/data/types";
-import { resolveLocal, planToJourney } from "./resolveIntent";
+import type { AdaptedService, RetrieveResponse } from "@/data/retrieval";
+import { resolveLocal, planToJourney, planFromRetrieval, resolveIntent } from "./resolveIntent";
 
 function svc(over: Partial<Service> & { id: string }): Service {
   return {
@@ -53,5 +54,108 @@ describe("resolveLocal", () => {
     });
     expect(j.stops.map(s => s.order)).toEqual([0, 1]);
     expect(j.stops[1].serviceId).toBe("library");
+  });
+});
+
+function adapted(over: Partial<AdaptedService> & { id: string }): AdaptedService {
+  return {
+    id: over.id,
+    nameEn: over.nameEn ?? over.id,
+    nameZh: over.nameZh ?? over.id,
+    providerName: "A",
+    category: "government",
+    routable: true,
+    displayFloor: over.displayFloor ?? "L1",
+    floorId: over.floorId,
+    roomId: over.roomId,
+    accessibility: { liftAccess: true, stepFreeRoute: true },
+    sourceUrl: "https://x",
+    iconKey: "info",
+    relevanceScore: 1,
+    justification: null,
+    locationType: over.locationType ?? "Physical_OTH",
+    othLocation: "",
+    operatingHours: over.operatingHours ?? {},
+    contact: { phone: null, email: null, website: null },
+    requiredDocuments: over.requiredDocuments ?? [],
+    richDescription: "",
+  };
+}
+
+describe("planFromRetrieval", () => {
+  it("maps a top physical result to a destination, carrying documents", () => {
+    const resp: RetrieveResponse = {
+      services: [
+        adapted({
+          id: "HDB-001",
+          nameEn: "HDB Scheme",
+          floorId: "L2",
+          roomId: "L2-room-hdb-office",
+          displayFloor: "L2",
+          requiredDocuments: [{ name: "NRIC", required_if: null, notes: null }],
+        }),
+      ],
+      confidenceLow: false,
+      decomposition: [],
+    };
+    const plan = planFromRetrieval(resp);
+    expect(plan.kind).toBe("destination");
+    if (plan.kind === "destination") {
+      expect(plan.stop.roomId).toBe("L2-room-hdb-office");
+      expect(plan.stop.requiredDocuments?.[0].name).toBe("NRIC");
+    }
+  });
+
+  it("maps a Digital_Hotline top result to an offsite Plan", () => {
+    const resp: RetrieveResponse = {
+      services: [adapted({ id: "CPF-001", locationType: "Digital_Hotline" })],
+      confidenceLow: false,
+      decomposition: [],
+    };
+    expect(planFromRetrieval(resp).kind).toBe("offsite");
+  });
+});
+
+describe("resolveIntent (two-tier)", () => {
+  it("uses the local result and skips the backend when confident", async () => {
+    let called = false;
+    const retrieve = async (): Promise<RetrieveResponse> => {
+      called = true;
+      return { services: [], confidenceLow: true, decomposition: [] };
+    };
+    const plan = await resolveIntent("library", services, [], undefined, retrieve);
+    expect(plan.kind).toBe("destination");
+    expect(called).toBe(false);
+  });
+
+  it("falls back to the backend when local is not confident", async () => {
+    const retrieve = async (): Promise<RetrieveResponse> => ({
+      services: [
+        adapted({ id: "HDB-001", nameEn: "HDB", floorId: "L2", roomId: "L2-room-hdb-office", displayFloor: "L2" }),
+      ],
+      confidenceLow: false,
+      decomposition: [],
+    });
+    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, retrieve);
+    expect(plan.kind).toBe("destination");
+    if (plan.kind === "destination") expect(plan.stop.serviceId).toBe("HDB-001");
+  });
+
+  it("gracefully falls back to the local plan when the backend errors", async () => {
+    const retrieve = async (): Promise<RetrieveResponse> => {
+      throw new Error("backend down");
+    };
+    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, retrieve);
+    expect(plan.kind).toBe("human");
+  });
+
+  it("returns the local plan when the backend signals low confidence", async () => {
+    const retrieve = async (): Promise<RetrieveResponse> => ({
+      services: [],
+      confidenceLow: true,
+      decomposition: [],
+    });
+    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, retrieve);
+    expect(plan.kind).toBe("human");
   });
 });

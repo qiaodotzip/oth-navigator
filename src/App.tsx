@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { resolveLocal, planToJourney } from "@/intent/resolveIntent";
+import { resolveIntent, planToJourney } from "@/intent/resolveIntent";
 import type { Plan } from "@/intent/types";
 import { PhoneFrame } from "@/ui/PhoneFrame";
 import { Scene } from "@/world/Scene";
@@ -100,11 +100,11 @@ export default function App() {
     [profile, services, startRoute, setActiveFloor],
   );
 
-  const onSubmitIntent = useCallback((query: string) => {
+  const onSubmitIntent = useCallback(async (query: string) => {
     const st = useStore.getState();
     st.setIntentStatus("resolving");
-    // Phase 1: synchronous local resolve. (Phase 2 will await the backend.)
-    const { plan } = resolveLocal(query, st.services);
+    // Two-tier: local first, backend fallback (graceful if it's unreachable).
+    const plan = await resolveIntent(query, st.services, st.floors);
     st.setPlan(plan);
     st.setIntentStatus("resolved");
   }, []);
@@ -119,8 +119,10 @@ export default function App() {
   }, [onPickService]);
 
   const onStartInApp = useCallback((_plan: Extract<Plan, { kind: "offsite" }>) => {
-    // Phase 1 stub — Phase 2 deep-links to the teammates' app.
-    window.alert("Opening the OTH app… (handoff to be wired in Phase 2)");
+    const url = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+      ?.VITE_OTH_APP_URL;
+    if (url) window.open(url, "_blank", "noopener");
+    else window.alert("Opening the OTH app… (set VITE_OTH_APP_URL to wire the real handoff)");
   }, []);
 
   const onAskAgain = useCallback(() => {
