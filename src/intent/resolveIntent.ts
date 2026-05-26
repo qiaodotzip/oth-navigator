@@ -1,12 +1,12 @@
 import type { Floor, Journey, Service } from "@/data/types";
 import {
-  retrieveServices,
+  retrieveJourney,
   type AdaptedService,
-  type RetrieveResponse,
+  type RetrieveJourneyResponse,
   type UserContext,
 } from "@/data/retrieval";
 import { INTENT_SYNONYMS } from "./synonyms";
-import type { Plan, PlanStop, ResolveResult } from "./types";
+import type { LocalizedText, Plan, PlanStop, ResolveResult } from "./types";
 
 /** Local matches at or above this confidence skip the backend entirely. */
 const LOCAL_CONFIDENCE_THRESHOLD = 0.7;
@@ -119,44 +119,55 @@ function adaptedToStop(a: AdaptedService): PlanStop {
   };
 }
 
-/** Map the backend's top-ranked result into a Plan (destination or offsite). */
-export function planFromRetrieval(resp: RetrieveResponse): Plan {
-  const top = resp.services[0];
-  const stop = adaptedToStop(top);
-  if (top.locationType === "Digital_Hotline") {
-    return {
-      kind: "offsite",
-      stop,
-      appHandoff: { label: { en: "Start in App", zh: "在应用中开始" } },
-    };
-  }
-  const lvl = top.displayFloor ? top.displayFloor.replace(/^L/, "Level ") : "";
-  return {
-    kind: "destination",
-    answer: { en: lvl ? `${top.nameEn} · ${lvl}` : top.nameEn, zh: top.nameZh },
-    stop,
-  };
+function answerFor(a: AdaptedService): LocalizedText {
+  const lvl = a.displayFloor ? a.displayFloor.replace(/^L/, "Level ") : "";
+  return { en: lvl ? `${a.nameEn} · ${lvl}` : a.nameEn, zh: a.nameZh };
+}
+
+/** One resolved journey stop → a PlanStop (docs/hours + the per-stop reason). */
+function journeyStop(s: RetrieveJourneyResponse["stops"][number]): PlanStop {
+  return { ...adaptedToStop(s.service), reason: { en: s.reason, zh: s.reason } };
 }
 
 /**
- * Two-tier resolve: try locally first; if we're not confident, ask the backend.
- * Falls back to the local guess if the backend signals low confidence, returns
- * nothing, or is unreachable — so the app still works offline.
- * `retrieve` is injectable for testing.
+ * Two-tier resolve: try locally first; if we're not confident, ask the backend
+ * for a step-by-step itinerary. The backend's stops map to a multi-stop journey
+ * (≥2 stops), a single destination (1 physical stop) or an offsite handoff (1
+ * Digital_Hotline stop). Falls back to the local guess if the backend signals
+ * low confidence, returns nothing, or is unreachable — so the app still works
+ * offline. `fetchJourney` is injectable for testing.
  */
 export async function resolveIntent(
   query: string,
   services: Service[],
   floors: Floor[],
   ctx?: UserContext,
-  retrieve: typeof retrieveServices = retrieveServices,
+  fetchJourney: typeof retrieveJourney = retrieveJourney,
 ): Promise<Plan> {
   const local = resolveLocal(query, services);
   if (local.confidence >= LOCAL_CONFIDENCE_THRESHOLD) return local.plan;
   try {
-    const resp = await retrieve(query, floors, ctx);
-    if (resp.confidenceLow || resp.services.length === 0) return local.plan;
-    return planFromRetrieval(resp);
+    const j = await fetchJourney(query, floors, ctx);
+    if (j.confidenceLow || j.stops.length === 0) return local.plan;
+
+    if (j.stops.length === 1) {
+      const only = j.stops[0];
+      const stop = journeyStop(only);
+      if (only.service.locationType === "Digital_Hotline") {
+        return {
+          kind: "offsite",
+          stop,
+          appHandoff: { label: { en: "Start in App", zh: "在应用中开始" } },
+        };
+      }
+      return { kind: "destination", answer: answerFor(only.service), stop };
+    }
+
+    return {
+      kind: "journey",
+      title: j.summary ? { en: j.summary, zh: j.summary } : undefined,
+      stops: j.stops.map(journeyStop),
+    };
   } catch {
     return local.plan; // backend down → best local guess
   }

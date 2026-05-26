@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Service } from "@/data/types";
-import type { AdaptedService, RetrieveResponse } from "@/data/retrieval";
-import { resolveLocal, planToJourney, planFromRetrieval, resolveIntent } from "./resolveIntent";
+import type { AdaptedService, RetrieveJourneyResponse } from "@/data/retrieval";
+import { resolveLocal, planToJourney, resolveIntent } from "./resolveIntent";
 
 function svc(over: Partial<Service> & { id: string }): Service {
   return {
@@ -86,95 +86,79 @@ function adapted(over: Partial<AdaptedService> & { id: string }): AdaptedService
   };
 }
 
-describe("planFromRetrieval", () => {
-  it("maps a top physical result to a destination, carrying documents", () => {
-    const resp: RetrieveResponse = {
-      services: [
-        adapted({
-          id: "HDB-001",
-          nameEn: "HDB Scheme",
-          floorId: "L2",
-          roomId: "L2-room-hdb-office",
-          displayFloor: "L2",
-          requiredDocuments: [{ name: "NRIC", required_if: null, notes: null }],
-        }),
-      ],
-      confidenceLow: false,
-      decomposition: [],
-    };
-    const plan = planFromRetrieval(resp);
-    expect(plan.kind).toBe("destination");
-    if (plan.kind === "destination") {
-      expect(plan.stop.roomId).toBe("L2-room-hdb-office");
-      expect(plan.stop.requiredDocuments?.[0].name).toBe("NRIC");
-    }
-  });
-
-  it("maps a Digital_Hotline top result to an offsite Plan", () => {
-    const resp: RetrieveResponse = {
-      services: [adapted({ id: "CPF-001", locationType: "Digital_Hotline" })],
-      confidenceLow: false,
-      decomposition: [],
-    };
-    expect(planFromRetrieval(resp).kind).toBe("offsite");
-  });
-});
+function okJourney(
+  stops: RetrieveJourneyResponse["stops"],
+  over: Partial<RetrieveJourneyResponse> = {},
+): RetrieveJourneyResponse {
+  return { summary: null, confidenceLow: false, stops, ...over };
+}
 
 describe("resolveIntent (two-tier)", () => {
   it("uses the local result and skips the backend when confident", async () => {
     let called = false;
-    const retrieve = async (): Promise<RetrieveResponse> => {
+    const fetchJourney = async (): Promise<RetrieveJourneyResponse> => {
       called = true;
-      return { services: [], confidenceLow: true, decomposition: [] };
+      return okJourney([]);
     };
-    const plan = await resolveIntent("library", services, [], undefined, retrieve);
+    const plan = await resolveIntent("library", services, [], undefined, fetchJourney);
     expect(plan.kind).toBe("destination");
     expect(called).toBe(false);
   });
 
-  it("defers a non-routable local match to the backend and uses its routable result", async () => {
-    const retrieve = async (): Promise<RetrieveResponse> => ({
-      services: [
-        adapted({ id: "MSF-001", nameEn: "ComCare", floorId: "L1", roomId: "L1-room-psc", displayFloor: "L1" }),
-      ],
-      confidenceLow: false,
-      decomposition: [],
-    });
+  it("defers a non-routable local match to the backend (single physical stop → destination)", async () => {
+    const fetchJourney = async (): Promise<RetrieveJourneyResponse> =>
+      okJourney([
+        {
+          service: adapted({ id: "MSF-001", nameEn: "ComCare", floorId: "L1", roomId: "L1-room-psc", displayFloor: "L1" }),
+          reason: "Speak to a social worker.",
+        },
+      ]);
     // "elderly active ageing" matches the non-routable active-ageing locally;
-    // it must NOT short-circuit to a local card — the backend's routable result wins.
-    const plan = await resolveIntent("elderly active ageing", services, [], undefined, retrieve);
+    // it must NOT short-circuit to a local card — the backend result wins.
+    const plan = await resolveIntent("elderly active ageing", services, [], undefined, fetchJourney);
     expect(plan.kind).toBe("destination");
     if (plan.kind === "destination") expect(plan.stop.serviceId).toBe("MSF-001");
   });
 
-  it("falls back to the backend when local is not confident", async () => {
-    const retrieve = async (): Promise<RetrieveResponse> => ({
-      services: [
-        adapted({ id: "HDB-001", nameEn: "HDB", floorId: "L2", roomId: "L2-room-hdb-office", displayFloor: "L2" }),
-      ],
-      confidenceLow: false,
-      decomposition: [],
-    });
-    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, retrieve);
-    expect(plan.kind).toBe("destination");
-    if (plan.kind === "destination") expect(plan.stop.serviceId).toBe("HDB-001");
+  it("builds a multi-stop journey from multiple backend stops (carrying reasons + order)", async () => {
+    const fetchJourney = async (): Promise<RetrieveJourneyResponse> =>
+      okJourney([
+        {
+          service: adapted({ id: "HDB-001", nameEn: "HDB", floorId: "L2", roomId: "L2-room-hdb-office", displayFloor: "L2" }),
+          reason: "Mortgage help",
+        },
+        {
+          service: adapted({ id: "MSF-001", nameEn: "ComCare", floorId: "L1", roomId: "L1-room-psc", displayFloor: "L1" }),
+          reason: "Daily expenses",
+        },
+      ]);
+    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, fetchJourney);
+    expect(plan.kind).toBe("journey");
+    if (plan.kind === "journey") {
+      expect(plan.stops.map(s => s.serviceId)).toEqual(["HDB-001", "MSF-001"]);
+      expect(plan.stops[0].reason?.en).toBe("Mortgage help");
+    }
+  });
+
+  it("maps a single Digital_Hotline backend stop to an offsite Plan", async () => {
+    const fetchJourney = async (): Promise<RetrieveJourneyResponse> =>
+      okJourney([{ service: adapted({ id: "CPF-001", locationType: "Digital_Hotline" }), reason: "Apply online." }]);
+    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, fetchJourney);
+    expect(plan.kind).toBe("offsite");
   });
 
   it("gracefully falls back to the local plan when the backend errors", async () => {
-    const retrieve = async (): Promise<RetrieveResponse> => {
+    const fetchJourney = async (): Promise<RetrieveJourneyResponse> => {
       throw new Error("backend down");
     };
-    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, retrieve);
+    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, fetchJourney);
     expect(plan.kind).toBe("human");
   });
 
   it("returns the local plan when the backend signals low confidence", async () => {
-    const retrieve = async (): Promise<RetrieveResponse> => ({
-      services: [],
-      confidenceLow: true,
-      decomposition: [],
-    });
-    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, retrieve);
+    const fetchJourney = async (): Promise<RetrieveJourneyResponse> =>
+      okJourney([], { confidenceLow: true });
+    const plan = await resolveIntent("zxcvbnm qwerty unknown", services, [], undefined, fetchJourney);
     expect(plan.kind).toBe("human");
   });
 });
