@@ -16,7 +16,6 @@ function svc(over: Partial<Service> & { id: string }): Service {
     accessibility: { liftAccess: true, stepFreeRoute: true },
     sourceUrl: "https://x",
     iconKey: "info",
-    ...over,
   };
 }
 
