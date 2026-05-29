@@ -10,7 +10,7 @@ import { PromptPanel } from "@/ui/PromptPanel";
 import { useStore } from "@/store";
 import { loadDataBundle } from "@/data/loaders";
 import { prewarmAll } from "@/narration/prewarm";
-import { buildRoute, DEFAULT_START, routeArrivalLocation } from "@/routing/buildRoute";
+import { buildRoute, DEFAULT_START, routeArrivalLocation, serviceLocation } from "@/routing/buildRoute";
 import { connectorCrowdPenalty } from "@/routing/crowdPenalty";
 import { simDate } from "@/enrichment/simClock";
 import { nextJourneyStopId } from "@/routing/journeyNav";
@@ -328,55 +328,23 @@ export default function App() {
     useStore.getState().resetIntent();
   }, []);
 
-  // DEMO: mimic a multi-stop journey arriving from the backend, so we can see
-  // the journey Plan render without the real retrieval service running.
-  const onReceiveJourney = useCallback(() => {
+  // DEMO: preset a crowd-sensitive single route so we can show the time toggle
+  // bending the path. Start on the leisure (hawker) side of L1, route up to the
+  // HDB branch on L2; presets the time to "evening" (leisure peak) so the crowd
+  // effect is visible on first press — the presenter then toggles Time to show
+  // the connector choice flip. NOTE: verify this start/dest actually flips
+  // against the real geometry; the exact ids/anchor may need adjusting.
+  const onRoutingDemo = useCallback(() => {
     const st = useStore.getState();
-    // Intent: a senior's "health + errands" day. Ordered top-down to exercise
-    // cross-floor routing: start (L1) → up to the clinic on L3 → down to HDB on
-    // L2 → down to ServiceSG on L1.
-    const demo: { id: string; reason: { en: string; zh: string } }[] = [
-      {
-        id: "family-medicine-clinic",
-        reason: { en: "See the doctor for your health check", zh: "看医生做健康检查" },
-      },
-      {
-        id: "hdb",
-        reason: { en: "Settle your flat matter at the HDB branch", zh: "在建屋局分行处理组屋事务" },
-      },
-      {
-        id: "servicesg",
-        reason: { en: "Renew your documents on the way out", zh: "离开前更新您的证件" },
-      },
-    ];
-    const stops = demo
-      .map(d => {
-        const svc = st.services.find(s => s.id === d.id);
-        if (!svc) return null;
-        return {
-          serviceId: svc.id,
-          name: { en: svc.nameEn, zh: svc.nameZh },
-          floorId: svc.floorId,
-          roomId: svc.roomId,
-          reason: d.reason,
-          accessibility: {
-            liftAccess: svc.accessibility.liftAccess,
-            stepFree: svc.accessibility.stepFreeRoute,
-            notes: svc.accessibility.notes,
-          },
-        };
-      })
-      .filter((s): s is NonNullable<typeof s> => s !== null);
-    if (stops.length === 0) return;
-    const plan: Plan = {
-      kind: "journey",
-      title: { en: "Your visit today: health & errands", zh: "今日行程：看诊与办事" },
-      stops,
-    };
-    st.setIntentStatus("resolving");
-    st.setPlan(plan);
-    st.setIntentStatus("resolved");
-  }, []);
+    const anchorSvc = st.services.find(s => s.id === "hawker");
+    const anchor = anchorSvc ? serviceLocation(anchorSvc, st.floors) : null;
+    const start = anchor
+      ? { floorId: anchor.floorId, point: anchor.point }
+      : DEFAULT_START;
+    st.setUserLocation(start);
+    st.setTimeOfDay("evening");
+    onPickService("hdb");
+  }, [onPickService]);
 
   // Speak the current step's instruction (same line PromptPanel shows) whenever
   // the step or language changes. Voice routes through JOM's ElevenLabs TTS with
@@ -455,7 +423,7 @@ export default function App() {
           >
             <PromptPanel
               onSubmitIntent={onSubmitIntent}
-              onReceiveJourney={onReceiveJourney}
+              onRoutingDemo={onRoutingDemo}
               onGuide={onGuide}
               onStartInApp={onStartInApp}
               onAskAgain={onAskAgain}

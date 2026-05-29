@@ -17,7 +17,7 @@ const WALK_SPEED_MPS = 1.2;
 
 export function PromptPanel({
   onSubmitIntent,
-  onReceiveJourney,
+  onRoutingDemo,
   onGuide,
   onStartInApp,
   onAskAgain,
@@ -25,7 +25,7 @@ export function PromptPanel({
   onArrived,
 }: {
   onSubmitIntent: (query: string, fromText?: boolean) => void;
-  onReceiveJourney?: () => void;
+  onRoutingDemo?: () => void;
   onGuide: (plan: import("@/intent/types").Plan) => void;
   onStartInApp: (plan: Extract<import("@/intent/types").Plan, { kind: "offsite" }>) => void;
   onAskAgain: () => void;
@@ -72,7 +72,7 @@ export function PromptPanel({
       );
     }
     return shell(
-      <IntentEntry onSubmit={onSubmitIntent} onReceiveJourney={onReceiveJourney} />,
+      <IntentEntry onSubmit={onSubmitIntent} onRoutingDemo={onRoutingDemo} />,
     );
   }
 

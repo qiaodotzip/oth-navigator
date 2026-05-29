@@ -5,12 +5,12 @@ import { PURPOSE_TILES } from "@/intent/synonyms";
 
 export function IntentEntry({
   onSubmit,
-  onReceiveJourney,
+  onRoutingDemo,
 }: {
   // Tile taps take the instant local path (fromText omitted). The typed
   // free-text → backend concierge path lives in the top-bar search.
   onSubmit: (query: string, fromText?: boolean) => void;
-  onReceiveJourney?: () => void;
+  onRoutingDemo?: () => void;
 }) {
   const language = useStore(s => s.language);
 
@@ -36,14 +36,14 @@ export function IntentEntry({
         ))}
       </div>
 
-      {onReceiveJourney && (
+      {onRoutingDemo && (
         <button
           type="button"
-          onClick={onReceiveJourney}
+          onClick={onRoutingDemo}
           className="mt-4 inline-flex items-center gap-2 self-start rounded-xl border border-dashed border-oth-primary/50 bg-oth-primary/5 px-3 py-2 text-sm font-semibold text-oth-primary transition active:scale-95 hover:bg-oth-primary/10"
         >
           <DownloadSimple size={18} weight="bold" />
-          {language === "zh" ? "接收行程（演示）" : "Receive Journey (demo)"}
+          {language === "zh" ? "演示路线逻辑" : "Show routing logic"}
         </button>
       )}
     </div>

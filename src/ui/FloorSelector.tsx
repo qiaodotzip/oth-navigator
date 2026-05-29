@@ -175,7 +175,7 @@ export function FloorSelector() {
               const I = TIME_ICON[timeOfDay].Icon;
               return <I size={18} weight="bold" />;
             })()}
-            label="Daylight"
+            label="Time"
             value={TIME_ICON[timeOfDay].label}
             active
             onClick={cycleTimeOfDay}
