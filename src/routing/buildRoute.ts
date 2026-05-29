@@ -118,6 +118,7 @@ function pickConnector(
   dest: Pt,
   profile: AccessibilityProfile,
   destRoomId?: string,
+  connectorPenalty: (point: Pt, floorId: FloorId) => number = () => 0,
 ): Connector | null {
   const tripDir: ConnectorDir = floorIndex(destFloor) > floorIndex(startFloor) ? "up" : "down";
   // Escalators and stairs are single-hop (one floor); a lift serves every floor.
@@ -152,7 +153,7 @@ function pickConnector(
   for (const { c } of pre) {
     const startLeg = sf ? pathLength(findPath(startPoint, c.point, sf)) : dist(startPoint, c.point);
     const destLeg = df ? pathLength(findPath(c.point, dest, df, destRoomId)) : dist(c.point, dest);
-    const total = startLeg + destLeg;
+    const total = startLeg + destLeg + connectorPenalty(c.point, c.floorId);
     if (total < bestLen) {
       bestLen = total;
       best = c;
@@ -260,6 +261,7 @@ export function buildRoute(
   floors: Floor[],
   entrances: EntranceMap = {},
   loads: Record<string, number> = {},
+  connectorPenalty: (point: Pt, floorId: FloorId) => number = () => 0,
 ): RouteVariant | null {
   const floorById = new Map(floors.map(f => [f.id, f]));
 
@@ -315,7 +317,7 @@ export function buildRoute(
     // Route via the nearest suitable lift / escalator / stair (lift only when
     // step-free), picked to minimise total start→connector→destination travel.
     const connector =
-      pickConnector(floors, start.floorId, start.point, destFloorId, dest, profile, service.roomId) ??
+      pickConnector(floors, start.floorId, start.point, destFloorId, dest, profile, service.roomId, connectorPenalty) ??
       ({
         point: TRANSITION_POINT,
         kind: profile === "stepFree" ? "lift" : "escalator",
