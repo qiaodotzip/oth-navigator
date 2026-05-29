@@ -17,7 +17,7 @@ import { GroundPlane } from "./GroundPlane";
 import { TIME_PRESETS } from "./timePresets";
 import type { Floor as FloorData } from "@/data/types";
 
-export function Scene() {
+export function Scene({ onPickPlace }: { onPickPlace?: (serviceId: string) => void }) {
   const floors = useStore(s => s.floors);
   const activeFloor = useStore(s => s.activeFloor);
   const inspectMode = useStore(s => s.inspectMode);
@@ -106,10 +106,11 @@ export function Scene() {
         centerX={ground.cx}
         centerZ={ground.cz}
         color={preset.groundColor}
+        tiled={activeFloor === "L1"}
       />
       {active && <Floor data={active} />}
       {active && <FloorDetails floor={active} />}
-      {active && showLabels && <PolygonLabels floor={active} />}
+      {active && showLabels && <PolygonLabels floor={active} onPickPlace={onPickPlace} />}
       {active && <RouteArrow floor={active} />}
       {active && <UserBlob floor={active} />}
       {active && pickingLocation && (

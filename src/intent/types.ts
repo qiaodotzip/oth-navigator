@@ -7,6 +7,8 @@ export type PlanStop = {
   name: LocalizedText;
   floorId?: FloorId;
   roomId?: string;
+  /** In OTH but on an unmodelled floor (L4/L5) → lift hand-off, not a routed room. */
+  unmodelledLevel?: number;
   reason?: LocalizedText;
   walkInAccepted?: boolean;
   appointmentRequired?: boolean;

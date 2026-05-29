@@ -1,4 +1,4 @@
-export type FloorId = "L1" | "L2";
+export type FloorId = "L1" | "L2" | "L3";
 export type PolygonType = "room" | "corridor" | "landmark" | "void";
 export type AccessibilityProfile = "default" | "stepFree";
 export type Language = "en" | "zh";
@@ -28,15 +28,26 @@ export type Detail =
   | { id: string; type: "escalator-down"; rect: [Pt, Pt]; facing: Facing }
   | { id: string; type: "lift-block"; rect: [Pt, Pt]; facing: Facing }
   | { id: string; type: "staircase"; rect: [Pt, Pt]; facing: Facing }
+  | { id: string; type: "staircase-down"; rect: [Pt, Pt]; facing: Facing }
   | { id: string; type: "stage"; rect: [Pt, Pt]; facing: Facing }
   | { id: string; type: "seating-block"; rect: [Pt, Pt]; facing: Facing }
+  | { id: string; type: "stadium-seats"; rect: [Pt, Pt]; facing: Facing }
+  | { id: string; type: "walkway-bridge"; rect: [Pt, Pt] }
   | { id: string; type: "barrier"; rect: [Pt, Pt] }
   | { id: string; type: "football"; rect: [Pt, Pt] }
   | { id: string; type: "court"; rect: [Pt, Pt] }
   | { id: string; type: "event-booth"; rect: [Pt, Pt] }
   | { id: string; type: "shop-block"; rect: [Pt, Pt] }
   | { id: string; type: "wall"; rect: [Pt, Pt] }
-  | { id: string; type: "service-centre"; points: Pt[]; variant: "psc" | "family" };
+  | { id: string; type: "service-centre"; points: Pt[]; variant: "psc" | "family" }
+  | { id: string; type: "library-entrance"; points: Pt[] }
+  | { id: string; type: "library-decor"; points: Pt[] }
+  | { id: string; type: "meeting-rooms"; points: Pt[] }
+  | { id: string; type: "walkway"; points: Pt[] }
+  | { id: string; type: "court-roof"; points: Pt[] }
+  | { id: string; type: "garden-decor"; points: Pt[] }
+  | { id: string; type: "hdb-office"; points: Pt[] }
+  | { id: string; type: "theatre"; points: Pt[] };
 
 export type Floor = {
   id: FloorId;
@@ -64,6 +75,10 @@ export type Service = {
   displayFloor: string;
   floorId?: FloorId;
   roomId?: string;
+  /** Set when the service is inside OTH but on a floor we haven't modelled
+   *  (e.g. L4/L5). Routing takes the user to a lift and hands off with a
+   *  "ride to Level N — upper-floor navigation coming soon" message. */
+  unmodelledLevel?: number;
   counterIds?: string[];
   accessibility: {
     liftAccess: boolean;
@@ -73,6 +88,10 @@ export type Service = {
   sourceUrl: string;
   iconKey: string;
 };
+
+/** A routing target point for a place/service, keyed by id (see EntranceEditor). */
+export type Entrance = { floorId: FloorId; point: Pt };
+export type EntranceMap = Record<string, Entrance>;
 
 export type Waypoint = {
   floorId: FloorId;
@@ -85,6 +104,8 @@ export type Waypoint = {
    * Absent on the first step or for cross-floor (lift/escalator) hops.
    */
   pathFromPrev?: [number, number][];
+  /** On a "lift-handoff" step: the unmodelled OTH level the user rides up to. */
+  handoffLevel?: number;
 };
 
 export type RouteVariant = {

@@ -1,9 +1,47 @@
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
-import type { Floor } from "@/data/types";
-import { isInBarrier } from "@/routing/pathChecks";
+import type { Floor, Pt } from "@/data/types";
+import { findPath, smoothPath } from "@/routing/pathfinder";
 import type { WanderLoop } from "./wanderLoops";
+
+/**
+ * Build a closed WALKABLE polyline (in floor metres) for a loop by A*-routing
+ * between consecutive anchors. The raw anchors are hand-placed zone centres and
+ * the straight lines between them cut across non-walkable ground (e.g. L2's open
+ * tile, or through rooms). Routing each leg keeps every walked segment on
+ * walkable cells only — walkways, bridges, landmarks and open plaza. Segments
+ * that can't connect are dropped rather than drawn as a straight cheat line.
+ */
+function buildWalkablePath(loop: WanderLoop, floor: Floor): Pt[] {
+  const anchors = loop.points;
+  const out: Pt[] = [];
+  const push = (p: Pt) => {
+    const last = out[out.length - 1];
+    if (last && Math.hypot(last[0] - p[0], last[1] - p[1]) < 0.15) return;
+    out.push(p);
+  };
+  for (let i = 0; i < anchors.length; i++) {
+    const a = anchors[i];
+    const b = anchors[(i + 1) % anchors.length];
+    const raw = findPath(a, b, floor);
+    if (!raw || raw.length < 2) continue;
+    for (const p of smoothPath(raw, floor)) push(p);
+  }
+  return out;
+}
+
+// Computed once per (loop, floor) — all agents on a loop share the polyline.
+const pathCache = new WeakMap<WanderLoop, Record<string, Pt[]>>();
+function loopPath(loop: WanderLoop, floor: Floor): Pt[] {
+  let byFloor = pathCache.get(loop);
+  if (!byFloor) {
+    byFloor = {};
+    pathCache.set(loop, byFloor);
+  }
+  if (!byFloor[floor.id]) byFloor[floor.id] = buildWalkablePath(loop, floor);
+  return byFloor[floor.id];
+}
 
 export function AnalyticsAgent({
   loop,
@@ -16,56 +54,61 @@ export function AnalyticsAgent({
   speed: number;
   phase: number;
 }) {
-  const t = useRef(phase);
   const ref = useRef<THREE.Group>(null!);
-  const offsets = useMemo(() => {
-    const arr: number[] = [0];
-    for (let i = 1; i < loop.points.length; i++) {
-      const [px, py] = loop.points[i - 1];
-      const [qx, qy] = loop.points[i];
-      arr.push(arr[i - 1] + Math.hypot(qx - px, qy - py));
-    }
-    const last = loop.points[loop.points.length - 1];
-    const first = loop.points[0];
-    arr.push(arr[arr.length - 1] + Math.hypot(first[0] - last[0], first[1] - last[1]));
-    return arr;
-  }, [loop]);
   const yawRef = useRef(0);
-  const dir = useRef(1);
+
+  // Walkable polyline in scene coords + per-segment lengths for arc-length walk.
+  const { pts, segLen, total } = useMemo(() => {
+    const metres = loopPath(loop, floor);
+    const ps = metres.map(
+      ([mx, my]) =>
+        new THREE.Vector3(mx - floor.bounds.width / 2, 0, my - floor.bounds.depth / 2),
+    );
+    const lens: number[] = [];
+    let sum = 0;
+    for (let i = 0; i < ps.length; i++) {
+      const a = ps[i];
+      const b = ps[(i + 1) % ps.length]; // wrap: closed loop
+      const l = a.distanceTo(b);
+      lens.push(l);
+      sum += l;
+    }
+    return { pts: ps, segLen: lens, total: sum };
+  }, [loop, floor]);
+
+  const traveled = useRef(phase);
+  const tmp = useRef(new THREE.Vector3());
 
   useFrame((_, dt) => {
-    const totalLen = offsets[offsets.length - 1];
-    const nextT = t.current + dir.current * speed * dt;
-    const u = ((nextT % totalLen) + totalLen) % totalLen;
-    let segIdx = 0;
-    while (segIdx < offsets.length - 1 && offsets[segIdx + 1] < u) segIdx++;
-    const segStart = offsets[segIdx];
-    const segEnd = offsets[segIdx + 1];
-    const segT = (u - segStart) / Math.max(0.001, segEnd - segStart);
-    const p = loop.points[segIdx % loop.points.length];
-    const q = loop.points[(segIdx + 1) % loop.points.length];
-    const mxMetres = p[0] + (q[0] - p[0]) * segT;
-    const myMetres = p[1] + (q[1] - p[1]) * segT;
-
-    // Bounce off walls/barriers/courts (not rooms — loops visit room centres).
-    if (isInBarrier([mxMetres, myMetres], floor)) {
-      dir.current *= -1;
+    if (!ref.current) return;
+    if (pts.length < 2 || total < 0.001) {
+      if (pts.length === 1) ref.current.position.copy(pts[0]);
       return;
     }
-    t.current = nextT;
+    traveled.current += speed * dt;
+    const u = ((traveled.current % total) + total) % total;
 
-    const x = mxMetres - floor.bounds.width / 2;
-    const z = myMetres - floor.bounds.depth / 2;
-    const dx = (q[0] - p[0]) * dir.current;
-    const dy = (q[1] - p[1]) * dir.current;
-    const targetYaw = Math.atan2(dx, -dy);
-    yawRef.current += (targetYaw - yawRef.current) * Math.min(1, dt * 6);
-    const bob = Math.sin(t.current * 8) * 0.05;
-    if (ref.current) {
-      ref.current.position.set(x, 0, z);
-      ref.current.rotation.y = yawRef.current;
-      ref.current.position.y = bob;
+    let acc = 0;
+    let seg = 0;
+    while (seg < segLen.length - 1 && acc + segLen[seg] < u) {
+      acc += segLen[seg];
+      seg++;
     }
+    const a = pts[seg];
+    const b = pts[(seg + 1) % pts.length];
+    const segT = segLen[seg] > 0.001 ? (u - acc) / segLen[seg] : 0;
+    tmp.current.copy(a).lerp(b, segT);
+
+    const targetYaw = Math.atan2(b.x - a.x, -(b.z - a.z));
+    // shortest-arc yaw lerp
+    let dYaw = targetYaw - yawRef.current;
+    while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+    while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+    yawRef.current += dYaw * Math.min(1, dt * 6);
+
+    const bob = Math.sin(traveled.current * 4) * 0.05;
+    ref.current.position.set(tmp.current.x, bob, tmp.current.z);
+    ref.current.rotation.y = yawRef.current;
   });
 
   return (

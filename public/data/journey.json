@@ -1,0 +1,20 @@
+{
+  "id": "demo-1",
+  "stops": [
+    {
+      "serviceId": "servicesg",
+      "order": 0,
+      "reason": { "en": "Renew your documents", "zh": "更新您的证件" }
+    },
+    {
+      "serviceId": "library",
+      "order": 1,
+      "reason": { "en": "Pick up your reserved books", "zh": "领取预订的书籍" }
+    },
+    {
+      "serviceId": "theatre",
+      "order": 2,
+      "reason": { "en": "Collect your show tickets", "zh": "领取演出门票" }
+    }
+  ]
+}

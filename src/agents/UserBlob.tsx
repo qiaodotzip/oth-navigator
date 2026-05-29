@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Floor } from "@/data/types";
 import { useStore } from "@/store";
+import { guidePose } from "@/world/guidePose";
 
-const TOWN_SQUARE_M: [number, number] = [128, 83.37];
+const TOWN_SQUARE_M: [number, number] = [128, 95.21];
 const WALK_SPEED = 16; // scene units per second
 
 function metresToScene(point: [number, number], floor: Floor): [number, number] {
@@ -94,6 +95,9 @@ function BlobMesh({
       groupRef.current.position.lerp(legPath[0], 1 - Math.pow(0.001, dt));
       const bob = Math.sin(performance.now() * 0.006) * 0.04;
       groupRef.current.position.y = bob;
+      // Arrived / standing at a route step: keep the chase cam settled on us.
+      guidePose.pos.set(groupRef.current.position.x, 0, groupRef.current.position.z);
+      guidePose.following = !!step;
       return;
     }
 
@@ -117,6 +121,10 @@ function BlobMesh({
       yawRef.current += (targetYaw - yawRef.current) * Math.min(1, dt * 8);
       groupRef.current.rotation.y = yawRef.current;
     }
+    // Publish live pose for the chase cam.
+    guidePose.pos.set(pos.x, 0, pos.z);
+    guidePose.yaw = yawRef.current;
+    guidePose.following = true;
   });
 
   return (

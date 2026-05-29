@@ -57,7 +57,30 @@ function pointInRect(pt: Pt, rect: [Pt, Pt], margin = 0): boolean {
  * CAN walk across, so they are not here. Barriers (gates/fences) and sports
  * courts block.
  */
-const ROUTE_BLOCKING_DETAILS = new Set(["barrier", "court", "wall"]);
+const ROUTE_BLOCKING_DETAILS = new Set([
+  "barrier",
+  "court",
+  "wall",
+  "stadium-seats",
+]);
+
+/** Walkway details define where you CAN walk (the deck / paved path). */
+export function isOnWalkway(pt: Pt, floor: Floor): boolean {
+  for (const d of floor.details ?? []) {
+    if (d.type === "walkway-bridge" && "rect" in d && pointInRect(pt, d.rect, 0.4)) return true;
+    if (d.type === "walkway" && "points" in d && pointInPolygon(pt, d.points)) return true;
+  }
+  return false;
+}
+
+/**
+ * A floor "constrained to walkways" only lets you walk on walkways / landmarks /
+ * destination rooms — open space (the tile, e.g. open air on an upper deck) is
+ * NOT walkable. Auto-detected: true once the floor defines any walkway.
+ */
+export function floorHasWalkways(floor: Floor): boolean {
+  return (floor.details ?? []).some(d => d.type === "walkway" || d.type === "walkway-bridge");
+}
 
 // Inflate barrier hit-tests so thin gate strips reliably block the A* grid
 // (cell centres are 1.2m apart; a 0.5m-thin gate could otherwise be stepped over).
@@ -92,13 +115,20 @@ export function isPointWalkable(
   }
   // Barriers block first — they cut through landmarks (e.g. gated town square).
   if (isInBarrier(pt, floor)) return false;
+  // Walkways are explicit walkable surfaces (decks / paved paths).
+  if (isOnWalkway(pt, floor)) return true;
   if (isInWalkableLandmark(pt, floor)) return true;
+  let inDestRoom = false;
   for (const poly of floor.polygons) {
     if (poly.type !== "room") continue;
-    if (poly.id === destRoomId) continue;
-    if (pointInPolygon(pt, poly.points)) return false;
+    if (!pointInPolygon(pt, poly.points)) continue;
+    if (poly.id === destRoomId) inDestRoom = true;
+    else return false; // a non-destination room blocks
   }
-  return true;
+  if (inDestRoom) return true;
+  // Open space (no polygon): walkable on ground floors, but NOT on floors whose
+  // walkable area is defined by walkways (so the guide stays off the open tile).
+  return floorHasWalkways(floor) ? false : true;
 }
 
 export type BlockReport = {
@@ -128,14 +158,17 @@ export function checkSegment(
       blocking.add("barrier");
       continue;
     }
+    if (isOnWalkway(pt, floor)) continue;
     if (isInWalkableLandmark(pt, floor)) continue;
+    let inAnyRoom = false;
     for (const poly of floor.polygons) {
       if (poly.type !== "room") continue;
-      if (poly.id === destinationRoomId) continue;
-      if (pointInPolygon(pt, poly.points)) {
-        blocking.add(poly.id);
-      }
+      if (!pointInPolygon(pt, poly.points)) continue;
+      inAnyRoom = true;
+      if (poly.id !== destinationRoomId) blocking.add(poly.id);
     }
+    // Off-walkway open space counts as blocked on walkway-constrained floors.
+    if (!inAnyRoom && floorHasWalkways(floor)) blocking.add("off-walkway");
   }
   return { blocked: blocking.size > 0, blockingRoomIds: Array.from(blocking) };
 }

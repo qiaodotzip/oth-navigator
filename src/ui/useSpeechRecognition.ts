@@ -10,6 +10,10 @@ export function useSpeechRecognition() {
   const [listening, setListening] = useState(false);
   const recogRef = useRef<SR>(null);
 
+  const supported =
+    typeof window !== "undefined" &&
+    ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+
   function start(lang: "en-US" | "zh-CN") {
     const Ctor =
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,5 +39,5 @@ export function useSpeechRecognition() {
     setListening(false);
   }
 
-  return { transcript, listening, start, stop };
+  return { transcript, listening, supported, start, stop };
 }

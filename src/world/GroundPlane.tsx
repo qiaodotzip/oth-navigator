@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import * as THREE from "three";
 import { useStore } from "@/store";
 
@@ -31,6 +31,7 @@ export function GroundPlane({
   centerZ = 0,
   margin = 14,
   color = "#FAFBFC",
+  tiled = true,
 }: {
   width: number;
   depth: number;
@@ -38,16 +39,26 @@ export function GroundPlane({
   centerZ?: number;
   margin?: number;
   color?: string;
+  /** When false, render a plain solid surface with no grout-line tile texture. */
+  tiled?: boolean;
 }) {
   const tileSizeM = useStore(s => s.tileSizeM);
   // Plane snug to the building footprint plus a small margin; fog fades the edge.
   const w = width + margin * 2;
   const d = depth + margin * 2;
   const tex = useMemo(() => {
+    if (!tiled) return null;
     const t = makeFloorTexture();
     t.repeat.set(w / tileSizeM, d / tileSizeM);
     return t;
-  }, [w, d, tileSizeM]);
+  }, [w, d, tileSizeM, tiled]);
+  const matRef = useRef<THREE.MeshStandardMaterial>(null);
+  // three.js only toggles the USE_MAP shader define when the material is
+  // recompiled. Adding/removing `map` at runtime (e.g. switching floors) needs
+  // an explicit needsUpdate, or the ground keeps sampling the old tile texture.
+  useEffect(() => {
+    if (matRef.current) matRef.current.needsUpdate = true;
+  }, [tex]);
   return (
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
@@ -55,7 +66,7 @@ export function GroundPlane({
       receiveShadow
     >
       <planeGeometry args={[w, d]} />
-      <meshStandardMaterial map={tex} color={color} />
+      <meshStandardMaterial ref={matRef} map={tex} color={color} />
     </mesh>
   );
 }

@@ -47,6 +47,8 @@ type State = {
   timeOfDay: TimeOfDay;
   tileSizeM: number;
   effectsEnabled: boolean;
+  /** Spoken turn-by-turn guidance during navigation (ElevenLabs via JOM). */
+  voiceOn: boolean;
 
   setLanguage: (l: Language) => void;
   setProfile: (p: AccessibilityProfile) => void;
@@ -76,6 +78,7 @@ type State = {
   cycleTimeOfDay: () => void;
   setTileSize: (m: number) => void;
   toggleEffects: () => void;
+  toggleVoice: () => void;
 };
 
 const TILE_KEY = "oth-ground-tile-m";
@@ -85,9 +88,15 @@ const initialTile = (() => {
   return Number.isFinite(v) && v > 0 ? v : 1.2;
 })();
 
+const VOICE_KEY = "oth-voice-on";
+const initialVoiceOn = (() => {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(VOICE_KEY) !== "false"; // default ON
+})();
+
 export const useStore = create<State>(set => ({
   language: "en",
-  profile: "default",
+  profile: "stepFree",
   activeFloor: "L1",
   floors: [],
   services: [],
@@ -109,6 +118,7 @@ export const useStore = create<State>(set => ({
   timeOfDay: "morning",
   tileSizeM: initialTile,
   effectsEnabled: true,
+  voiceOn: initialVoiceOn,
 
   setLanguage: l => set({ language: l }),
   setProfile: p => set({ profile: p }),
@@ -131,8 +141,18 @@ export const useStore = create<State>(set => ({
     set(s => (s.doneStops.includes(serviceId) ? {} : { doneStops: [...s.doneStops, serviceId] })),
   resetJourneyProgress: () => set({ doneStops: [] }),
   setEntrances: e => set({ entrances: e }),
+  // Starting a route drops straight into GPS navigation (close follow cam) —
+  // we're a wayfinding app, so the default on "go" is the turn-by-turn view, not
+  // the orbit map. The "Follow me" toggle (shown while a route is active) is the
+  // way back out to the map. inspectMode must be off or Scene mounts OrbitControls
+  // instead of CameraRig; firstPerson off so the follow cam wins.
   startRoute: v =>
-    set({ activeRoute: { variant: v, startedAt: Date.now(), currentWaypointIndex: 0 } }),
+    set({
+      activeRoute: { variant: v, startedAt: Date.now(), currentWaypointIndex: 0 },
+      cameraFollow: true,
+      inspectMode: false,
+      firstPerson: false,
+    }),
   advanceRoute: () =>
     set(s => {
       if (!s.activeRoute) return {};
@@ -193,4 +213,14 @@ export const useStore = create<State>(set => ({
     set({ tileSizeM: v });
   },
   toggleEffects: () => set(s => ({ effectsEnabled: !s.effectsEnabled })),
+  toggleVoice: () =>
+    set(s => {
+      const voiceOn = !s.voiceOn;
+      try {
+        localStorage.setItem(VOICE_KEY, String(voiceOn));
+      } catch {
+        /* ignore */
+      }
+      return { voiceOn };
+    }),
 }));

@@ -90,7 +90,9 @@ export const BACKEND_SERVICE_CATALOG: { id: string; name: string }[] = [
 // and the in-person help point for all Digital_Hotline services.
 const SERVICESG_ANCHOR = { floorId: "L1" as FloorId, roomId: "L1-room-psc", iconKey: "info" };
 
-type Loc = { floorId: FloorId; roomId: string; iconKey: string };
+// A placed location has floorId+roomId; an in-OTH-but-unmodelled one (L4/L5)
+// carries `unmodelledLevel` instead and routes to a lift hand-off.
+type Loc = { floorId?: FloorId; roomId?: string; unmodelledLevel?: number; iconKey: string };
 
 /**
  * Where each backend service sits in our model. roomIds marked STUB don't have
@@ -108,14 +110,15 @@ export const SERVICE_LOCATION_MAP: Record<string, Loc> = {
   "MSF-002": { floorId: "L1", roomId: "L1-room-psc", iconKey: "info" },
   "MSF-003": { floorId: "L1", roomId: "L1-room-psc", iconKey: "info" },
 
-  // Tampines Family Service Centre (L1) — STUB room.
-  "MSF-007": { floorId: "L1", roomId: "L1-room-tfsc", iconKey: "info" },
+  // Tampines Family Service Centre — backend places it on Level 4 (in OTH,
+  // unmodelled floor) → lift hand-off.
+  "MSF-007": { unmodelledLevel: 4, iconKey: "info" },
 
   // Family Nexus @ L1, near Gate 10 — STUB room.
   "FAMNEX-001": { floorId: "L1", roomId: "L1-room-family-nexus", iconKey: "hospital" },
 
-  // HDB Tampines Branch. Backend says Level 3; we model it on L2 for now
-  // (L2-room-hdb-office exists). Switch to L3 once that floor is added.
+  // HDB Tampines Branch — confirmed on-site on Level 2 (overrides the backend's
+  // oth_location, which says Level 3). L2-room-hdb-office is the traced room.
   "HDB-001": { floorId: "L2", roomId: "L2-room-hdb-office", iconKey: "receipt" },
   "HDB-002": { floorId: "L2", roomId: "L2-room-hdb-office", iconKey: "receipt" },
   "HDB-003": { floorId: "L2", roomId: "L2-room-hdb-office", iconKey: "receipt" },
@@ -123,13 +126,13 @@ export const SERVICE_LOCATION_MAP: Record<string, Loc> = {
   "HDB-005": { floorId: "L2", roomId: "L2-room-hdb-office", iconKey: "receipt" },
   "HDB-006": { floorId: "L2", roomId: "L2-room-hdb-office", iconKey: "receipt" },
 
-  // WSG / SkillsFuture career services at OTH are delivered through e2i, which
-  // shares the ServiceSG / PSC counter at L1 #01-21 (no separate "Careers
-  // Connect" unit exists per the PA directory) — so they route to ServiceSG.
-  "WSG-001": { floorId: "L1", roomId: "L1-room-psc", iconKey: "info" },
-  "WSG-002": { floorId: "L1", roomId: "L1-room-psc", iconKey: "info" },
-  "WSG-003": { floorId: "L1", roomId: "L1-room-psc", iconKey: "info" },
-  "WSG-004": { floorId: "L1", roomId: "L1-room-psc", iconKey: "info" },
+  // WSG Careers Connect — backend places it on Level 5 (in OTH, unmodelled
+  // floor) → lift hand-off.
+  "WSG-001": { unmodelledLevel: 5, iconKey: "info" },
+  "WSG-002": { unmodelledLevel: 5, iconKey: "info" },
+  "WSG-003": { unmodelledLevel: 5, iconKey: "info" },
+  "WSG-004": { unmodelledLevel: 5, iconKey: "info" },
+  // SkillsFuture is online; in-person advice happens at the ServiceSG counter (L1).
   "SSG-001": { floorId: "L1", roomId: "L1-room-psc", iconKey: "info" },
   "SSG-002": { floorId: "L1", roomId: "L1-room-psc", iconKey: "info" },
 
@@ -166,31 +169,38 @@ function categoryFor(svc: BackendService): ServiceCategory {
 }
 
 function resolveLocation(svc: BackendService, floors: Floor[]): Loc {
-  const intended = SERVICE_LOCATION_MAP[svc.service_id];
   // Digital_Hotline always anchors at ServiceSG for in-person help.
-  const base = svc.location_type === "Digital_Hotline" ? SERVICESG_ANCHOR : (intended ?? SERVICESG_ANCHOR);
-  const floor = floors.find(f => f.id === base.floorId);
-  const roomExists = !!floor?.polygons.some(p => p.id === base.roomId);
-  if (roomExists) return base;
+  if (svc.location_type === "Digital_Hotline") return SERVICESG_ANCHOR;
+  const intended = SERVICE_LOCATION_MAP[svc.service_id];
+  if (!intended) return SERVICESG_ANCHOR;
+  // In OTH but on an unmodelled floor (L4/L5) → keep it; routing does a lift hand-off.
+  if (intended.unmodelledLevel) return intended;
+  const floor = floors.find(f => f.id === intended.floorId);
+  const roomExists = !!floor?.polygons.some(p => p.id === intended.roomId);
+  if (roomExists) return intended;
   // Room not traced yet → fall back to the ServiceSG anchor so routing resolves.
-  return { ...SERVICESG_ANCHOR, iconKey: base.iconKey };
+  return { ...SERVICESG_ANCHOR, iconKey: intended.iconKey };
 }
 
 /**
- * Resolve a backend service id → floor/room for the "Face to face" handoff
- * (JOM opens us with ?dest=<{serviceId,name}>). Same map as the adapter; falls
- * back to ServiceSG if the id is unknown or its room isn't traced yet.
+ * Resolve a backend service id → routing target for the "Face to face" handoff
+ * (JOM opens us with ?dest=<{serviceId,name}>). Same map as the adapter:
+ * a placed room, an `unmodelledLevel` (L4/L5 → caller does the lift hand-off),
+ * or a ServiceSG fallback if the id is unknown / its room isn't traced.
  */
 export function locationForServiceId(
   serviceId: string,
   floors: Floor[],
-): { floorId: FloorId; roomId: string } {
+): { floorId?: FloorId; roomId?: string; unmodelledLevel?: number } {
   const base = SERVICE_LOCATION_MAP[serviceId] ?? SERVICESG_ANCHOR;
+  // In OTH but on an unmodelled floor → caller routes to a lift hand-off.
+  if (base.unmodelledLevel) return { unmodelledLevel: base.unmodelledLevel };
   const floor = floors.find(f => f.id === base.floorId);
   const roomExists = !!floor?.polygons.some(p => p.id === base.roomId);
-  return roomExists
-    ? { floorId: base.floorId, roomId: base.roomId }
-    : { floorId: SERVICESG_ANCHOR.floorId, roomId: SERVICESG_ANCHOR.roomId };
+  if (roomExists && base.floorId && base.roomId) {
+    return { floorId: base.floorId, roomId: base.roomId };
+  }
+  return { floorId: SERVICESG_ANCHOR.floorId, roomId: SERVICESG_ANCHOR.roomId };
 }
 
 /** A retrieval result mapped into our app, ready for tiles + routing. */
@@ -213,16 +223,18 @@ export function adaptService(
 ): AdaptedService {
   const loc = resolveLocation(svc, floors);
   const digital = svc.location_type === "Digital_Hotline";
+  const unmodelled = loc.unmodelledLevel;
   return {
     id: svc.service_id,
     nameEn: svc.service_name,
     nameZh: svc.service_name, // backend has no Chinese name; reuse English
     providerName: svc.agency,
     category: categoryFor(svc),
-    routable: true, // resolveLocation always lands on a real room (ServiceSG fallback)
-    displayFloor: loc.floorId,
-    floorId: loc.floorId,
-    roomId: loc.roomId,
+    routable: true, // placed → real room; unmodelled → lift hand-off; else ServiceSG
+    displayFloor: unmodelled ? `L${unmodelled}` : (loc.floorId ?? "L1"),
+    floorId: unmodelled ? undefined : loc.floorId,
+    roomId: unmodelled ? undefined : loc.roomId,
+    unmodelledLevel: unmodelled,
     accessibility: {
       liftAccess: true,
       stepFreeRoute: true,
@@ -249,7 +261,7 @@ export function adaptService(
 // render whatever arrives. We never send queries from here.
 // Set VITE_RETRIEVAL_API (e.g. http://127.0.0.1:8000).
 
-const RETRIEVAL_BASE =
+export const RETRIEVAL_BASE =
   (import.meta as unknown as { env?: Record<string, string | undefined> }).env
     ?.VITE_RETRIEVAL_API ?? "";
 

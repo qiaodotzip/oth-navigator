@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { resolveLocal, planToJourney, planFromJourneyStops } from "@/intent/resolveIntent";
-import { fetchCurrentJourney, locationForServiceId } from "@/data/retrieval";
+import { fetchCurrentJourney, locationForServiceId, ROUTABLE_SERVICE_IDS } from "@/data/retrieval";
 import type { Plan, PlanStop } from "@/intent/types";
 import { PhoneFrame } from "@/ui/PhoneFrame";
 import { Scene } from "@/world/Scene";
@@ -12,12 +12,11 @@ import { loadDataBundle } from "@/data/loaders";
 import { prewarmAll } from "@/narration/prewarm";
 import { buildRoute, DEFAULT_START, routeArrivalLocation } from "@/routing/buildRoute";
 import { nextJourneyStopId } from "@/routing/journeyNav";
-import { fetchNarration } from "@/narration/client";
-import { getCached, setCached } from "@/narration/cache";
-import { enqueueSegments, cancelAll } from "@/narration/ttsQueue";
-import type { NarrationSegment, PopularTimesEntry, Service } from "@/data/types";
+import { speak, stopSpeaking } from "@/narration/voice";
+import { buildStepInstruction } from "@/ui/stepInstruction";
+import type { PopularTimesEntry, Service } from "@/data/types";
 import { SetLocationControl } from "@/ui/SetLocationControl";
-import { JourneyTimeline } from "@/ui/JourneyTimeline";
+// import { JourneyTimeline } from "@/ui/JourneyTimeline"; // top pill hidden for screenshots
 import { WaypointEditor } from "@/dev/WaypointEditor";
 import { PolygonEditor } from "@/dev/PolygonEditor";
 import { EntranceEditor } from "@/dev/EntranceEditor";
@@ -25,8 +24,6 @@ import { EntranceEditor } from "@/dev/EntranceEditor";
 import { DetailEditor } from "@/dev/DetailEditor";
 import { Dashboard } from "@/dashboard/Dashboard";
 import { ReportView } from "@/dashboard/ReportView";
-
-const TTS_ENABLED = false;
 
 /** Stops in a resolved plan (1 for destination/offsite/human, N for journey). */
 function planStops(plan: Plan): PlanStop[] {
@@ -42,10 +39,11 @@ function stopToService(stop: PlanStop): Service {
     nameZh: stop.name.zh,
     providerName: "",
     category: "government",
-    routable: !!(stop.floorId && stop.roomId),
-    displayFloor: stop.floorId ?? "L1",
+    routable: !!(stop.floorId && stop.roomId) || !!stop.unmodelledLevel,
+    displayFloor: stop.unmodelledLevel ? `L${stop.unmodelledLevel}` : (stop.floorId ?? "L1"),
     floorId: stop.floorId,
     roomId: stop.roomId,
+    unmodelledLevel: stop.unmodelledLevel,
     accessibility: {
       liftAccess: stop.accessibility?.liftAccess ?? true,
       stepFreeRoute: stop.accessibility?.stepFree ?? true,
@@ -74,11 +72,9 @@ export default function App() {
   const advanceRoute = useStore(s => s.advanceRoute);
   const setActiveFloor = useStore(s => s.setActiveFloor);
   const activeRoute = useStore(s => s.activeRoute);
-  const journey = useStore(s => s.journey);
+  // const journey = useStore(s => s.journey); // used by the hidden "Your trip" top pill
   const floors = useStore(s => s.floors);
-
-  const [narrationText, setNarrationText] = useState("");
-  const [segments, setSegments] = useState<NarrationSegment[]>([]);
+  const voiceOn = useStore(s => s.voiceOn);
 
   useEffect(() => {
     loadDataBundle()
@@ -99,8 +95,36 @@ export default function App() {
       .catch(e => console.warn("[App] popular-times load failed:", e));
   }, []);
 
+  // Switching step-free ↔ stairs-OK mid-route should visibly re-route (the
+  // toggle only changes cross-floor connectors, so single-floor routes won't
+  // move — that's expected). Rebuild from the current leg's start so we don't
+  // jump the user back to the building entrance.
+  const prevProfile = useRef(profile);
+  useEffect(() => {
+    if (prevProfile.current === profile) return;
+    prevProfile.current = profile;
+    const st = useStore.getState();
+    const route = st.activeRoute;
+    if (!route) return;
+    const svc = st.services.find(s => s.id === route.variant.serviceId);
+    const start = route.variant.steps[0];
+    if (!svc || !start) return;
+    const rebuilt = buildRoute(
+      { floorId: start.floorId, point: start.point },
+      svc,
+      profile,
+      st.floors,
+      st.entrances,
+      st.counterLoads,
+    );
+    if (rebuilt) {
+      st.setActiveFloor(rebuilt.steps[0].floorId);
+      st.startRoute(rebuilt);
+    }
+  }, [profile]);
+
   const onPickService = useCallback(
-    async (serviceId: string) => {
+    (serviceId: string) => {
       // Read fresh from the store: a service may have just been registered
       // (backend/poller/?dest handoff) in the same tick, before re-render.
       const svc = useStore.getState().services.find(s => s.id === serviceId);
@@ -113,23 +137,6 @@ export default function App() {
       if (!variant) return;
       setActiveFloor(variant.steps[0].floorId);
       startRoute(variant);
-
-      let narr = getCached(serviceId, profile);
-      if (!narr) {
-        try {
-          narr = await fetchNarration({
-            query: svc.nameEn,
-            profile,
-            services: [svc],
-            segmentKeys: variant.steps.map(s => s.segmentKey),
-          });
-          setCached(serviceId, profile, narr);
-        } catch (e) {
-          console.warn("[App] fetchNarration failed:", e);
-          return;
-        }
-      }
-      setSegments(narr.segments);
     },
     [profile, services, startRoute, setActiveFloor],
   );
@@ -152,6 +159,13 @@ export default function App() {
     }
   }, [onPickService]);
 
+  // Live ref so the poll effect (deps []) can auto-route via onGuide without
+  // re-subscribing every time onGuide's identity changes.
+  const onGuideRef = useRef(onGuide);
+  onGuideRef.current = onGuide;
+  // One-shot guard for the "Take me on the route" (?route=auto) hand-off.
+  const autoRoutedRef = useRef(false);
+
   const onStartInApp = useCallback((_plan: Extract<Plan, { kind: "offsite" }>) => {
     const url = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
       ?.VITE_OTH_APP_URL;
@@ -161,24 +175,50 @@ export default function App() {
 
   // Receiver: poll the journey the JOM chatbot published and render it. We never
   // send queries from here — the chatbot bar lives on the JOM side.
-  const lastJourneyVersion = useRef(-1);
+  //
+  // The backend keeps the last journey stored forever (it only changes on a new
+  // chat turn). If we tracked "seen" only in a ref it'd reset to -1 on every
+  // remount — a page reload or a Vite HMR save in dev — and we'd re-apply the
+  // same stale journey again. Persist the last-consumed version so each
+  // published journey is delivered exactly once, even across reloads.
+  const SEEN_JOURNEY_KEY = "tamp.lastJourneyVersion";
+  const lastJourneyVersion = useRef(
+    Number(window.localStorage.getItem(SEEN_JOURNEY_KEY) ?? -1),
+  );
+  const markJourneySeen = (version: number) => {
+    lastJourneyVersion.current = version;
+    window.localStorage.setItem(SEEN_JOURNEY_KEY, String(version));
+  };
   useEffect(() => {
     // In face-to-face mode (opened with ?dest) we route to that single place;
     // the live whole-journey poll would override it, so skip polling then.
     if (new URLSearchParams(window.location.search).get("dest")) return;
+    // "Take me on the route" from JOM opens us with ?route=auto — start
+    // navigating the currently-published journey immediately (even if its
+    // version was already seen), instead of just showing the plan card.
+    const autoRoute = new URLSearchParams(window.location.search).get("route") === "auto";
     let alive = true;
     const tick = async () => {
       const st = useStore.getState();
       if (st.floors.length === 0) return;
+      if (st.activeRoute) return; // already navigating — don't interrupt
       try {
         const { version, response } = await fetchCurrentJourney(st.floors);
-        if (!alive || version === lastJourneyVersion.current) return;
-        if (st.activeRoute) return; // don't interrupt active navigation; apply once idle
+        if (!alive) return;
         if (!response || response.stops.length === 0) {
-          lastJourneyVersion.current = version;
+          if (!autoRoute) markJourneySeen(version);
           return;
         }
-        lastJourneyVersion.current = version;
+        if (autoRoute) {
+          if (autoRoutedRef.current) return; // one-shot
+          autoRoutedRef.current = true;
+          const plan = planFromJourneyStops(response);
+          st.addServices(planStops(plan).map(stopToService));
+          onGuideRef.current(plan); // start navigating the whole journey
+          return;
+        }
+        if (version === lastJourneyVersion.current) return;
+        markJourneySeen(version);
         const plan = planFromJourneyStops(response);
         st.addServices(planStops(plan).map(stopToService));
         st.setPlan(plan);
@@ -209,6 +249,22 @@ export default function App() {
         name?: string;
       };
       if (!serviceId) return;
+      if (!ROUTABLE_SERVICE_IDS.has(serviceId)) {
+        const st = useStore.getState();
+        st.setPlan({
+          kind: "human",
+          message: {
+            en: `${name ?? "This service"} is online or handled at a counter — check the OTH Buddy chat for how to access it.`,
+            zh: `${name ?? "此服务"}为线上或柜台办理 — 请在 OTH Buddy 聊天中查看办理方式。`,
+          },
+          stop: {
+            serviceId,
+            name: { en: name ?? serviceId, zh: name ?? serviceId },
+          },
+        });
+        st.setIntentStatus("resolved");
+        return;
+      }
       const loc = locationForServiceId(serviceId, floors);
       const label = name ?? serviceId;
       const stop: PlanStop = {
@@ -216,6 +272,7 @@ export default function App() {
         name: { en: label, zh: label },
         floorId: loc.floorId,
         roomId: loc.roomId,
+        unmodelledLevel: loc.unmodelledLevel,
       };
       const plan: Plan = { kind: "destination", answer: { en: label, zh: label }, stop };
       const st = useStore.getState();
@@ -282,39 +339,35 @@ export default function App() {
     st.setIntentStatus("resolved");
   }, []);
 
-  // Play the segment for the current waypoint whenever the index changes
+  // Speak the current step's instruction (same line PromptPanel shows) whenever
+  // the step or language changes. Voice routes through JOM's ElevenLabs TTS with
+  // a browser-speech fallback. Silent when voice is off or no route is active.
   useEffect(() => {
-    if (!activeRoute || segments.length === 0) return;
-    const step = activeRoute.variant.steps[activeRoute.currentWaypointIndex];
-    if (!step) return;
-    const seg = segments.find(s => s.key === step.segmentKey);
-    if (!seg) {
-      // Intermediate waypoint (auto-generated by A*) — show generic text, no TTS
-      setNarrationText(language === "zh" ? "继续前行" : "Continue ahead");
+    if (!activeRoute || !voiceOn) {
+      stopSpeaking();
       return;
     }
-    const text = language === "zh" ? seg.zh : seg.en;
-    setNarrationText(text);
-    // TTS audio disabled for now — narration shows as text only.
-    cancelAll();
-    if (TTS_ENABLED) enqueueSegments([seg], language, () => {});
-  }, [activeRoute?.currentWaypointIndex, segments, language, activeRoute]);
-
-  // Cleanup when route ends
-  useEffect(() => {
-    if (!activeRoute) {
-      setNarrationText("");
-      cancelAll();
-      setSegments([]);
-    }
-  }, [activeRoute]);
+    const st = useStore.getState();
+    const instr = buildStepInstruction(
+      activeRoute.variant,
+      activeRoute.currentWaypointIndex,
+      st.services,
+      language,
+    );
+    // Speak just the headline + distance (e.g. "Walk to ComCare …, 58 meters").
+    const meters = Math.round(instr.distanceM);
+    const dist = meters > 0 ? (language === "zh" ? `，${meters}米` : `, ${meters} meters`) : "";
+    void speak(`${instr.title}${dist}`, language);
+  }, [activeRoute?.currentWaypointIndex, activeRoute?.variant.serviceId, voiceOn, language, activeRoute]);
 
   const onNext = useCallback(() => {
+    stopSpeaking(); // silence the current line immediately on tap
     advanceRoute();
   }, [advanceRoute]);
 
   // Arrived at a stop: mark it done, then chain to the next journey stop (if any).
   const onArrived = useCallback(() => {
+    stopSpeaking(); // silence the current line immediately on tap
     const st = useStore.getState();
     const route = st.activeRoute;
     if (!route) return;
@@ -351,7 +404,8 @@ export default function App() {
             }`}
           >
             <Scene onPickPlace={onPickService} />
-            {journey && <JourneyTimeline onPick={onPickService} />}
+            {/* "Your trip" top pill — hidden for clean screenshots. Re-enable: */}
+            {/* {journey && <JourneyTimeline onPick={onPickService} />} */}
             <FloorSelector />
             <SetLocationControl />
           </div>
@@ -361,7 +415,6 @@ export default function App() {
             }`}
           >
             <PromptPanel
-              narrationText={narrationText}
               onSubmitIntent={onSubmitIntent}
               onReceiveJourney={onReceiveJourney}
               onGuide={onGuide}

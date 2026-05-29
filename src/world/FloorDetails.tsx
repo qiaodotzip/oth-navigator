@@ -11,6 +11,13 @@ import {
   EventBoothMesh,
   FootballMesh,
   ServiceCentreMesh,
+  LibraryEntranceMesh,
+  LibraryDecorMesh,
+  MeetingRoomsMesh,
+  CourtRoofMesh,
+  GardenDecorMesh,
+  HdbOfficeMesh,
+  TheatreMesh,
   ShopBlockMesh,
   CleaningBlockMesh,
   CubicleMesh,
@@ -22,8 +29,11 @@ import {
   SeatingBlockMesh,
   SinkMesh,
   SINK_D,
+  StadiumSeatsMesh,
   StaircaseMesh,
   StageMesh,
+  WalkwayBridgeMesh,
+  WalkwayMesh,
   StallMesh,
   STALL_COLORS,
   STALL_D,
@@ -295,8 +305,11 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
     const escalators: EscalatorItem[] = [];
     const lifts: OrientedItem[] = [];
     const stairs: OrientedItem[] = [];
+    const stairsDown: OrientedItem[] = [];
     const stages: OrientedItem[] = [];
     const seatings: OrientedItem[] = [];
+    const stadiums: OrientedItem[] = [];
+    const bridges: OrientedItem[] = [];
     const barriers: OrientedItem[] = [];
     const footballs: OrientedItem[] = [];
     const courts: OrientedItem[] = [];
@@ -304,6 +317,14 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
     const shops: OrientedItem[] = [];
     const walls: OrientedItem[] = [];
     const serviceCentres: { points: [number, number][]; variant: "psc" | "family" }[] = [];
+    const courtRoofs: { points: [number, number][] }[] = [];
+    const gardenDecors: { points: [number, number][] }[] = [];
+    const hdbOffices: { points: [number, number][] }[] = [];
+    const theatres: { points: [number, number][] }[] = [];
+    const walkways: { points: [number, number][] }[] = [];
+    const libraryEntrances: { points: [number, number][] }[] = [];
+    const libraryDecors: { points: [number, number][] }[] = [];
+    const meetingRooms: { points: [number, number][] }[] = [];
     const flatRect = (rect: [Pt, Pt]): OrientedItem => {
       const b = rectBounds(rect);
       return {
@@ -343,10 +364,16 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
         lifts.push(orientedFromRect(d.rect, d.facing));
       } else if (d.type === "staircase") {
         stairs.push(orientedAlongLong(d.rect, d.facing));
+      } else if (d.type === "staircase-down") {
+        stairsDown.push(orientedAlongLong(d.rect, d.facing));
       } else if (d.type === "stage") {
         stages.push(orientedFromRect(d.rect, d.facing));
       } else if (d.type === "seating-block") {
         seatings.push(orientedFromRect(d.rect, d.facing));
+      } else if (d.type === "stadium-seats") {
+        stadiums.push(orientedFromRect(d.rect, d.facing));
+      } else if (d.type === "walkway-bridge") {
+        bridges.push(orientedAlongLong(d.rect, "S"));
       } else if (d.type === "barrier") {
         barriers.push(flatRect(d.rect));
       } else if (d.type === "football") {
@@ -366,6 +393,54 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
           points: d.points.map(([px, py]) => [px - W / 2, py - H / 2] as [number, number]),
           variant: d.variant,
         });
+      } else if (d.type === "walkway") {
+        const W = floor.bounds.width;
+        const H = floor.bounds.depth;
+        walkways.push({
+          points: d.points.map(([px, py]) => [px - W / 2, py - H / 2] as [number, number]),
+        });
+      } else if (d.type === "library-entrance") {
+        const W = floor.bounds.width;
+        const H = floor.bounds.depth;
+        libraryEntrances.push({
+          points: d.points.map(([px, py]) => [px - W / 2, py - H / 2] as [number, number]),
+        });
+      } else if (d.type === "library-decor") {
+        const W = floor.bounds.width;
+        const H = floor.bounds.depth;
+        libraryDecors.push({
+          points: d.points.map(([px, py]) => [px - W / 2, py - H / 2] as [number, number]),
+        });
+      } else if (d.type === "meeting-rooms") {
+        const W = floor.bounds.width;
+        const H = floor.bounds.depth;
+        meetingRooms.push({
+          points: d.points.map(([px, py]) => [px - W / 2, py - H / 2] as [number, number]),
+        });
+      } else if (d.type === "court-roof") {
+        const W = floor.bounds.width;
+        const H = floor.bounds.depth;
+        courtRoofs.push({
+          points: d.points.map(([px, py]) => [px - W / 2, py - H / 2] as [number, number]),
+        });
+      } else if (d.type === "garden-decor") {
+        const W = floor.bounds.width;
+        const H = floor.bounds.depth;
+        gardenDecors.push({
+          points: d.points.map(([px, py]) => [px - W / 2, py - H / 2] as [number, number]),
+        });
+      } else if (d.type === "hdb-office") {
+        const W = floor.bounds.width;
+        const H = floor.bounds.depth;
+        hdbOffices.push({
+          points: d.points.map(([px, py]) => [px - W / 2, py - H / 2] as [number, number]),
+        });
+      } else if (d.type === "theatre") {
+        const W = floor.bounds.width;
+        const H = floor.bounds.depth;
+        theatres.push({
+          points: d.points.map(([px, py]) => [px - W / 2, py - H / 2] as [number, number]),
+        });
       }
     }
     return {
@@ -381,8 +456,11 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       escalators,
       lifts,
       stairs,
+      stairsDown,
       stages,
       seatings,
+      stadiums,
+      bridges,
       barriers,
       footballs,
       courts,
@@ -390,6 +468,14 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       shops,
       walls,
       serviceCentres,
+      walkways,
+      libraryEntrances,
+      libraryDecors,
+      meetingRooms,
+      courtRoofs,
+      gardenDecors,
+      hdbOffices,
+      theatres,
     };
   }, [floor]);
 
@@ -494,6 +580,16 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
           rotY={it.rotY}
         />
       ))}
+      {layout.stairsDown.map((it, i) => (
+        <StaircaseMesh
+          key={`stairdn${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
+          down
+        />
+      ))}
       {layout.stages.map((it, i) => (
         <StageMesh
           key={`stage${i}`}
@@ -506,6 +602,24 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       {layout.seatings.map((it, i) => (
         <SeatingBlockMesh
           key={`seat${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
+        />
+      ))}
+      {layout.stadiums.map((it, i) => (
+        <StadiumSeatsMesh
+          key={`stadium${i}`}
+          position={toLocal(it.pos[0], it.pos[1])}
+          width={it.width}
+          depth={it.depth}
+          rotY={it.rotY}
+        />
+      ))}
+      {layout.bridges.map((it, i) => (
+        <WalkwayBridgeMesh
+          key={`bridge${i}`}
           position={toLocal(it.pos[0], it.pos[1])}
           width={it.width}
           depth={it.depth}
@@ -567,6 +681,30 @@ export function FloorDetails({ floor }: { floor: FloorData }) {
       ))}
       {layout.serviceCentres.map((sc, i) => (
         <ServiceCentreMesh key={`sc${i}`} points={sc.points} variant={sc.variant} />
+      ))}
+      {layout.walkways.map((wk, i) => (
+        <WalkwayMesh key={`walkway${i}`} points={wk.points} />
+      ))}
+      {layout.libraryEntrances.map((le, i) => (
+        <LibraryEntranceMesh key={`lib${i}`} points={le.points} />
+      ))}
+      {layout.libraryDecors.map((ld, i) => (
+        <LibraryDecorMesh key={`libdecor${i}`} points={ld.points} />
+      ))}
+      {layout.meetingRooms.map((mr, i) => (
+        <MeetingRoomsMesh key={`mr${i}`} points={mr.points} />
+      ))}
+      {layout.courtRoofs.map((cr, i) => (
+        <CourtRoofMesh key={`croof${i}`} points={cr.points} />
+      ))}
+      {layout.gardenDecors.map((gd, i) => (
+        <GardenDecorMesh key={`garden${i}`} points={gd.points} />
+      ))}
+      {layout.hdbOffices.map((ho, i) => (
+        <HdbOfficeMesh key={`hdb${i}`} points={ho.points} />
+      ))}
+      {layout.theatres.map((th, i) => (
+        <TheatreMesh key={`theatre${i}`} points={th.points} />
       ))}
     </group>
   );

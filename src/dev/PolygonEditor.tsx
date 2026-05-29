@@ -33,7 +33,7 @@ export function PolygonEditor() {
   const [imageDims, setImageDims] = useState<{ w: number; h: number }>({ w: 1, h: 1 });
   const [polygons, setPolygons] = useState<Poly[]>([]);
   const [currentPoints, setCurrentPoints] = useState<Pt[]>([]);
-  const [floorId, setFloorId] = useState<"L1" | "L2">("L1");
+  const [floorId, setFloorId] = useState<"L1" | "L2" | "L3">("L1");
   const [widthM, setWidthM] = useState(210);
   // depth matches the 3000x2121 image aspect at 0.07 m/px so traces aren't squished
   const [depthM, setDepthM] = useState(148.47);
@@ -46,15 +46,56 @@ export function PolygonEditor() {
   const panStart = useRef<{ cx: number; cy: number; vx: number; vy: number } | null>(null);
   const dragMoved = useRef(false);
   const restoring = useRef(true);
+  // Polygons pulled from the saved floor JSON (in METRES), waiting for the image
+  // to load before converting to editor pixel coords.
+  const pendingFilePolys = useRef<{ polys: { id: string; type: PolyType; points: Pt[] }[]; widthM: number; depthM: number } | null>(null);
+
+  const applyPendingPolys = () => {
+    const p = pendingFilePolys.current;
+    if (!p) return;
+    if (imageDims.w <= 1 || imageDims.h <= 1) return; // wait for the image
+    const sx = imageDims.w / p.widthM;
+    const sy = imageDims.h / p.depthM;
+    const loaded: Poly[] = p.polys.map(poly => ({
+      id: poly.id,
+      type: poly.type ?? inferType(poly.id),
+      points: poly.points.map(([x, y]) => [x * sx, y * sy] as Pt),
+    }));
+    setPolygons(loaded);
+    setRestoredCount(loaded.length);
+    pendingFilePolys.current = null;
+  };
+
+  const loadSavedFloorFile = () => {
+    fetch(`/data/floors/${floorId}.json`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (!data || !Array.isArray(data.polygons)) {
+          alert(`No saved ${floorId}.json found.`);
+          return;
+        }
+        const w = typeof data.bounds?.width === "number" ? data.bounds.width : widthM;
+        const d = typeof data.bounds?.depth === "number" ? data.bounds.depth : depthM;
+        setWidthM(w);
+        setDepthM(d);
+        pendingFilePolys.current = { polys: data.polygons, widthM: w, depthM: d };
+        if (imageDims.w > 1 && imageDims.h > 1) applyPendingPolys();
+        else alert("Loaded saved polygons — load the floor image to see them.");
+      })
+      .catch(() => alert("Failed to load saved floor file."));
+  };
 
   useEffect(() => {
     if (imageDims.w > 1 && imageDims.h > 1) {
       setView({ x: 0, y: 0, w: imageDims.w, h: imageDims.h });
+      applyPendingPolys();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageDims]);
 
   useEffect(() => {
     restoring.current = true;
+    pendingFilePolys.current = null;
     const raw = localStorage.getItem(STORAGE_KEY(floorId));
     if (raw) {
       try {
@@ -72,9 +113,23 @@ export function PolygonEditor() {
         setSavedAt(null);
       }
     } else {
+      // No local working copy — seed from the saved floor JSON (converted to
+      // pixels once the image loads) so traces show up on a fresh browser.
       setPolygons([]);
       setRestoredCount(null);
       setSavedAt(null);
+      fetch(`/data/floors/${floorId}.json`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => {
+          if (!data || !Array.isArray(data.polygons) || data.polygons.length === 0) return;
+          const w = typeof data.bounds?.width === "number" ? data.bounds.width : widthM;
+          const d = typeof data.bounds?.depth === "number" ? data.bounds.depth : depthM;
+          setWidthM(w);
+          setDepthM(d);
+          pendingFilePolys.current = { polys: data.polygons, widthM: w, depthM: d };
+          applyPendingPolys();
+        })
+        .catch(() => {});
     }
     setCurrentPoints([]);
     setSelectedIdx(null);
@@ -104,7 +159,9 @@ export function PolygonEditor() {
     const file = e.target.files?.[0];
     if (!file) return;
     const lower = file.name.toLowerCase();
-    if (lower.includes("2nd") || lower.includes("level2") || lower.includes("l2")) {
+    if (lower.includes("3rd") || lower.includes("level3") || lower.includes("l3")) {
+      setFloorId("L3");
+    } else if (lower.includes("2nd") || lower.includes("level2") || lower.includes("l2")) {
       setFloorId("L2");
     } else if (lower.includes("1st") || lower.includes("level1") || lower.includes("l1")) {
       setFloorId("L1");
@@ -523,11 +580,12 @@ export function PolygonEditor() {
             Floor
             <select
               value={floorId}
-              onChange={e => setFloorId(e.target.value as "L1" | "L2")}
+              onChange={e => setFloorId(e.target.value as "L1" | "L2" | "L3")}
               className="block w-full mt-1 px-2 py-1 rounded border border-neutral-300 font-mono"
             >
               <option value="L1">L1</option>
               <option value="L2">L2</option>
+              <option value="L3">L3</option>
             </select>
           </label>
           <label className="text-xs font-semibold text-neutral-700">
@@ -628,9 +686,18 @@ export function PolygonEditor() {
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-semibold text-sm">Polygons ({polygons.length})</h3>
-            <button onClick={clearAll} className="text-xs text-red-600 underline">
-              Clear all
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={loadSavedFloorFile}
+                className="text-xs text-oth-primary underline"
+                title={`Reload ${floorId}.json from disk`}
+              >
+                Reload file
+              </button>
+              <button onClick={clearAll} className="text-xs text-red-600 underline">
+                Clear all
+              </button>
+            </div>
           </div>
           <ul className="space-y-1 text-xs max-h-72 overflow-auto">
             {polygons.map((p, i) => (

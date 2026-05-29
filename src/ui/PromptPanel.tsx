@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useStore } from "@/store";
 import { IntentEntry } from "./IntentEntry";
 import { ResultCard } from "./ResultCard";
+import { buildStepInstruction } from "./stepInstruction";
 import {
   ArrowRight,
   Check,
@@ -11,25 +12,10 @@ import {
   MapPin,
   X,
 } from "phosphor-react";
-import type { Language } from "@/data/types";
 
 const WALK_SPEED_MPS = 1.2;
 
-type TransitKey = "lift" | "stairs" | "escalator";
-
-function transitWord(key: string, lang: Language): string | null {
-  if (key === "lift") return lang === "zh" ? "电梯" : "lift";
-  if (key === "stairs") return lang === "zh" ? "楼梯" : "stairs";
-  if (key === "escalator") return lang === "zh" ? "扶梯" : "escalator";
-  return null;
-}
-
-function isTransit(key: string): key is TransitKey {
-  return key === "lift" || key === "stairs" || key === "escalator";
-}
-
 export function PromptPanel({
-  narrationText,
   onSubmitIntent,
   onReceiveJourney,
   onGuide,
@@ -38,7 +24,6 @@ export function PromptPanel({
   onNext,
   onArrived,
 }: {
-  narrationText: string;
   onSubmitIntent: (query: string, fromText?: boolean) => void;
   onReceiveJourney?: () => void;
   onGuide: (plan: import("@/intent/types").Plan) => void;
@@ -124,76 +109,33 @@ export function PromptPanel({
       })()
     : null;
 
-  // Distance = length of the wall-avoiding polyline to the next waypoint.
-  const legPoly =
-    next && next.pathFromPrev && next.pathFromPrev.length >= 2
-      ? next.pathFromPrev
-      : next
-        ? [current.point, next.point]
-        : [];
-  let distance = 0;
-  for (let k = 0; k < legPoly.length - 1; k++) {
-    distance += Math.hypot(
-      legPoly[k + 1][0] - legPoly[k][0],
-      legPoly[k + 1][1] - legPoly[k][1],
-    );
-  }
+  // Headline instruction for this step — same builder the spoken guidance uses,
+  // so the on-screen distance and the spoken distance always match.
+  const instruction = buildStepInstruction(route.variant, idx, services, language);
+  const distance = instruction.distanceM;
   const walkSec = Math.max(1, Math.round(distance / WALK_SPEED_MPS));
   const eta = walkSec < 60 ? `${walkSec}${language === "zh" ? "秒" : "s"}` : `${Math.round(walkSec / 60)} ${language === "zh" ? "分钟" : "min"}`;
   const floorChange = !!(next && next.floorId !== current.floorId);
   const goingUp = floorChange && next!.floorId > current.floorId; // "L2" > "L1"
-
-  // Build the headline instruction for this step.
-  const instruction = (() => {
-    if (isLast) {
-      return {
-        kind: "arrived" as const,
-        title: language === "zh" ? "您已到达" : "You've arrived",
-        sub: language === "zh" ? `${svcName} 就在这里。` : `${svcName} is right here.`,
-      };
-    }
-    if (floorChange) {
-      const word = transitWord(current.segmentKey, language) ?? (language === "zh" ? "电梯" : "lift");
-      return {
-        kind: "transit" as const,
-        title:
-          language === "zh"
-            ? `乘${word}前往 ${next!.floorId}`
-            : `Take the ${word} ${goingUp ? "up" : "down"} to ${next!.floorId}`,
-        sub:
-          language === "zh"
-            ? `${word}就在前方，跟着指示牌走。`
-            : `The ${word} is just ahead — follow the signs.`,
-      };
-    }
-    const nextWord = next && isTransit(next.segmentKey) ? transitWord(next.segmentKey, language) : null;
-    const title = nextWord
-      ? language === "zh" ? `步行前往${nextWord}` : `Walk to the ${nextWord}`
-      : language === "zh" ? `步行前往 ${svcName}` : `Walk to ${svcName}`;
-    const sub = nextWord
-      ? language === "zh"
-        ? `继续往前走，${nextWord}就在附近。`
-        : `Head straight ahead — the ${nextWord} is nearby.`
-      : language === "zh"
-        ? `继续往前走，${svcName} 就在前方。`
-        : `Keep going straight — ${svcName} is just ahead.`;
-    return { kind: "walk" as const, title, sub };
-  })();
 
   const progressPct = steps.length > 1 ? (idx / (steps.length - 1)) * 100 : 100;
 
   const HeroIcon =
     instruction.kind === "arrived"
       ? MapPin
-      : instruction.kind === "transit"
-        ? goingUp
-          ? ArrowUp
-          : ArrowDown
-        : PersonSimpleWalk;
+      : instruction.kind === "handoff"
+        ? ArrowUp
+        : instruction.kind === "transit"
+          ? goingUp
+            ? ArrowUp
+            : ArrowDown
+          : PersonSimpleWalk;
   const heroTone =
     instruction.kind === "arrived"
       ? "bg-green-600"
-      : "bg-oth-primary";
+      : instruction.kind === "handoff"
+        ? "bg-amber-500"
+        : "bg-oth-primary";
 
   return (
     <div className="h-full bg-oth-paper border-t border-neutral-300 md:border-t-0 md:border-r flex flex-col">
@@ -265,10 +207,6 @@ export function PromptPanel({
             <Check size={13} weight="bold" />
             {language === "zh" ? "无障碍路线" : "Step-free route"}
           </span>
-        )}
-
-        {narrationText && (
-          <p className="text-sm leading-snug text-neutral-600">{narrationText}</p>
         )}
       </div>
 

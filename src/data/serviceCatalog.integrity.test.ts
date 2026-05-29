@@ -10,6 +10,7 @@ const services = JSON.parse(
 const floors: Record<string, Floor> = {
   L1: JSON.parse(readFileSync(path.join(root, "public/data/floors/L1.json"), "utf8")),
   L2: JSON.parse(readFileSync(path.join(root, "public/data/floors/L2.json"), "utf8")),
+  L3: JSON.parse(readFileSync(path.join(root, "public/data/floors/L3.json"), "utf8")),
 };
 
 describe("service catalog integrity", () => {

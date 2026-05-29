@@ -1,4 +1,4 @@
-import type { Detail, Floor, Pt, RouteVariant, Service, Waypoint } from "./types";
+import type { Detail, EntranceMap, Floor, Journey, Pt, RouteVariant, Service, Waypoint } from "./types";
 import { validateBundle } from "./validate";
 import { checkSegment } from "@/routing/pathChecks";
 import { findPath } from "@/routing/pathfinder";
@@ -26,6 +26,17 @@ async function fetchDetails(floorId: string): Promise<Detail[]> {
     return Array.isArray(data?.details) ? (data.details as Detail[]) : [];
   } catch {
     return [];
+  }
+}
+
+/** Fetch a floor's polygon file, or null if it hasn't been traced yet. */
+async function fetchFloor(floorId: string): Promise<Floor | null> {
+  try {
+    const r = await fetch(`/data/floors/${floorId}.json`);
+    if (!r.ok) return null;
+    return (await r.json()) as Floor;
+  } catch {
+    return null;
   }
 }
 
@@ -84,22 +95,70 @@ function expandRoutes(
   });
 }
 
+/** Fetch the catalog from the stub backend, falling back to the static file. */
+async function loadServices(): Promise<Service[]> {
+  try {
+    const r = await fetch("/api/services");
+    if (r.ok) return (await r.json()) as Service[];
+  } catch {
+    /* fall through to static */
+  }
+  return fetch("/data/services.json").then(r => r.json() as Promise<Service[]>);
+}
+
+/** The user's planned journey, simulated as coming from the backend. */
+async function loadJourney(): Promise<Journey | null> {
+  try {
+    const r = await fetch("/api/demo-journey");
+    if (r.ok) return (await r.json()) as Journey;
+  } catch {
+    /* fall through to static */
+  }
+  try {
+    const r = await fetch("/data/journey.json");
+    if (r.ok) return (await r.json()) as Journey;
+  } catch {
+    /* none */
+  }
+  return null;
+}
+
+/** Per-place entrance points (set in the entrance editor). */
+async function loadEntrances(): Promise<EntranceMap> {
+  try {
+    const r = await fetch("/data/entrances.json");
+    if (r.ok) {
+      const j = await r.json();
+      return (j && typeof j === "object" ? j : {}) as EntranceMap;
+    }
+  } catch {
+    /* none */
+  }
+  return {};
+}
+
 export async function loadDataBundle() {
-  const [L1, L2, L1Details, L2Details, services, routesRaw] = await Promise.all([
-    fetch("/data/floors/L1.json").then(r => r.json() as Promise<Floor>),
-    fetch("/data/floors/L2.json").then(r => r.json() as Promise<Floor>),
-    fetchDetails("L1"),
-    fetchDetails("L2"),
-    fetch("/data/services.json").then(r => r.json() as Promise<Service[]>),
-    fetch("/data/waypoints.json")
-      .then(r => (r.ok ? r.json() : []))
-      .then(j => j as RouteVariant[]),
-  ]);
+  const [L1, L2, L3, L1Details, L2Details, L3Details, services, routesRaw, journey, entrances] =
+    await Promise.all([
+      fetch("/data/floors/L1.json").then(r => r.json() as Promise<Floor>),
+      fetch("/data/floors/L2.json").then(r => r.json() as Promise<Floor>),
+      fetchFloor("L3"), // optional — only once the floor plan is traced
+      fetchDetails("L1"),
+      fetchDetails("L2"),
+      fetchDetails("L3"),
+      loadServices(),
+      fetch("/data/waypoints.json")
+        .then(r => (r.ok ? r.json() : []))
+        .then(j => j as RouteVariant[]),
+      loadJourney(),
+      loadEntrances(),
+    ]);
 
   L1.details = [...(L1.details ?? []), ...L1Details];
   L2.details = [...(L2.details ?? []), ...L2Details];
+  if (L3) L3.details = [...(L3.details ?? []), ...L3Details];
 
-  const floors = [L1, L2];
+  const floors = L3 ? [L1, L2, L3] : [L1, L2];
   const routes = expandRoutes(routesRaw, floors, services);
 
   const { errors, warnings } = validateBundle(floors, services, routes);
@@ -112,5 +171,5 @@ export async function loadDataBundle() {
         warnings.join("\n"),
     );
   }
-  return { floors, services, routes, errors };
+  return { floors, services, routes, journey, entrances, errors };
 }

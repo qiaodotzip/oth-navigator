@@ -8,7 +8,7 @@
         "floorId": "L1",
         "point": [
           128,
-          83.37
+          95.21
         ],
         "decisionPoint": false,
         "segmentKey": "start"
@@ -17,7 +17,7 @@
         "floorId": "L1",
         "point": [
           99,
-          60.53
+          69.13
         ],
         "decisionPoint": false,
         "segmentKey": "arrived"
@@ -33,7 +33,7 @@
         "floorId": "L1",
         "point": [
           128,
-          83.37
+          95.21
         ],
         "decisionPoint": false,
         "segmentKey": "start"
@@ -42,7 +42,7 @@
         "floorId": "L1",
         "point": [
           99,
-          60.53
+          69.13
         ],
         "decisionPoint": false,
         "segmentKey": "arrived"
@@ -58,7 +58,7 @@
         "floorId": "L1",
         "point": [
           128,
-          83.37
+          95.21
         ],
         "decisionPoint": false,
         "segmentKey": "start"
@@ -67,7 +67,7 @@
         "floorId": "L1",
         "point": [
           97,
-          43.4
+          49.57
         ],
         "decisionPoint": false,
         "segmentKey": "arrived"
@@ -83,7 +83,7 @@
         "floorId": "L1",
         "point": [
           128,
-          83.37
+          95.21
         ],
         "decisionPoint": false,
         "segmentKey": "start"
@@ -92,7 +92,7 @@
         "floorId": "L1",
         "point": [
           84,
-          65.1
+          74.35
         ],
         "decisionPoint": false,
         "segmentKey": "arrived"
@@ -108,7 +108,7 @@
         "floorId": "L1",
         "point": [
           128,
-          83.37
+          95.21
         ],
         "decisionPoint": false,
         "segmentKey": "start"
@@ -117,7 +117,7 @@
         "floorId": "L1",
         "point": [
           130,
-          79.95
+          91.31
         ],
         "decisionPoint": true,
         "segmentKey": "escalator"
@@ -151,7 +151,7 @@
         "floorId": "L1",
         "point": [
           128,
-          83.37
+          95.21
         ],
         "decisionPoint": false,
         "segmentKey": "start"
@@ -160,7 +160,7 @@
         "floorId": "L1",
         "point": [
           130,
-          85.66
+          97.83
         ],
         "decisionPoint": true,
         "segmentKey": "lift"
@@ -194,7 +194,7 @@
         "floorId": "L1",
         "point": [
           128,
-          83.37
+          95.21
         ],
         "decisionPoint": false,
         "segmentKey": "start"
@@ -203,7 +203,7 @@
         "floorId": "L1",
         "point": [
           130,
-          79.95
+          91.31
         ],
         "decisionPoint": true,
         "segmentKey": "escalator"
@@ -237,7 +237,7 @@
         "floorId": "L1",
         "point": [
           128,
-          83.37
+          95.21
         ],
         "decisionPoint": false,
         "segmentKey": "start"
@@ -246,7 +246,7 @@
         "floorId": "L1",
         "point": [
           130,
-          85.66
+          97.83
         ],
         "decisionPoint": true,
         "segmentKey": "escalator"

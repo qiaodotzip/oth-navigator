@@ -96,6 +96,7 @@ function adaptedToStop(a: AdaptedService): PlanStop {
     name: { en: a.nameEn, zh: a.nameZh },
     floorId: a.floorId,
     roomId: a.roomId,
+    unmodelledLevel: a.unmodelledLevel,
     operatingHours: a.operatingHours,
     requiredDocuments: a.requiredDocuments.map(d => ({
       name: d.name,

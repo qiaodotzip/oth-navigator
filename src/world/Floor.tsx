@@ -22,6 +22,9 @@ const COLORS: Record<Polygon["type"], string> = {
 
 const DETAILED_SLAB_COLOR = "#C9B98A";
 const DETAILED_SLAB_HEIGHT = 0.12;
+// Landmarks (town square, atria, holding lounge) are open plazas, not buildings —
+// render them as a flat slab instead of a tall extrusion.
+const LANDMARK_FLAT_HEIGHT = 0.14;
 
 function pointInPolygon(px: number, py: number, polygon: Pt[]): boolean {
   let inside = false;
@@ -37,7 +40,7 @@ function pointInPolygon(px: number, py: number, polygon: Pt[]): boolean {
 
 function detailCenter(d: Detail): Pt {
   if (d.type === "round-table") return d.point;
-  if (d.type === "service-centre") {
+  if ("points" in d) {
     const n = d.points.length;
     const sx = d.points.reduce((s, [x]) => s + x, 0) / n;
     const sy = d.points.reduce((s, [, y]) => s + y, 0) / n;
@@ -60,7 +63,11 @@ export function Floor({ data, yOffset = 0 }: { data: FloorData; yOffset?: number
     const details = data.details ?? [];
     return data.polygons.map(p => {
       const detailed = details.length > 0 && polygonHasAnyDetail(p, details);
-      const slabHeight = detailed ? DETAILED_SLAB_HEIGHT : p.heightMeters;
+      const slabHeight = detailed
+        ? DETAILED_SLAB_HEIGHT
+        : p.type === "landmark"
+          ? LANDMARK_FLAT_HEIGHT
+          : p.heightMeters;
       const shape = polygonToShape(p, data.bounds.depth);
       const geometry = new THREE.ExtrudeGeometry(shape, {
         depth: slabHeight,

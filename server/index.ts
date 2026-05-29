@@ -60,7 +60,7 @@ app.post("/api/save-floor", async c => {
   const floorId = body?.floorId;
   const kind = body?.kind; // "floor" | "details"
   const data = body?.data;
-  if (!["L1", "L2"].includes(floorId) || !data) {
+  if (!["L1", "L2", "L3"].includes(floorId) || !data) {
     return c.json({ error: "bad floorId or missing data" }, 400);
   }
   const dir = resolve(process.cwd(), "public/data/floors");

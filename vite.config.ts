@@ -1,9 +1,56 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import fs from "node:fs";
+
+const DATA_DIR = path.resolve(__dirname, "public/data");
+
+/**
+ * Dev-only endpoint so the in-app editors can write straight into
+ * `public/data/**` instead of downloading a file you then move by hand.
+ * POST /__save { name: "entrances.json" | "floors/L1.json" | …, data: any }.
+ * Restricted to .json files that resolve inside public/data (no traversal).
+ * Pairs with `server.watch.ignored` below so these writes don't full-reload
+ * the editor (which would drop the blob-URL floor image you uploaded).
+ */
+function devSavePlugin(): Plugin {
+  return {
+    name: "oth-dev-save",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use("/__save", (req, res) => {
+        const reject = (code: number, msg: string) => {
+          res.statusCode = code;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: msg }));
+        };
+        if (req.method !== "POST") return reject(405, "POST only");
+        let body = "";
+        req.on("data", c => (body += c));
+        req.on("end", () => {
+          try {
+            const { name, data } = JSON.parse(body) as { name?: string; data?: unknown };
+            if (!name || !/^[\w\-/]+\.json$/.test(name) || name.includes(".."))
+              return reject(400, "bad file name");
+            const target = path.resolve(DATA_DIR, name);
+            if (target !== DATA_DIR && !target.startsWith(DATA_DIR + path.sep))
+              return reject(400, "outside public/data");
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            fs.writeFileSync(target, JSON.stringify(data, null, 2) + "\n");
+            res.statusCode = 200;
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify({ ok: true, path: `public/data/${name}` }));
+          } catch (e) {
+            reject(500, String(e));
+          }
+        });
+      });
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), devSavePlugin()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
@@ -13,6 +60,8 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:3000",
     },
+    // Editors write here continuously; don't let that reload the page.
+    watch: { ignored: ["**/public/data/**"] },
   },
   test: {
     globals: true,

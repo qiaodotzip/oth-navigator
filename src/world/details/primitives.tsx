@@ -581,18 +581,21 @@ export function StaircaseMesh({
   width,
   depth,
   rotY,
+  down = false,
 }: {
   position: [number, number, number];
   width: number;
   depth: number;
   rotY: number;
+  /** false = ascends toward +z (to floor above); true = descends (to floor below). */
+  down?: boolean;
 }) {
-  // Ascends toward +z.
   const rise = Math.min(ESC_RISE, depth * 0.6);
   const nSteps = Math.max(5, Math.round(depth / 0.32));
   const going = depth / nSteps;
   const stepW = Math.min(width, 3.0);
   const night = useNightGlow();
+  const sign = down ? -1 : 1; // descend below the floor when going down
   return (
     <group position={position} rotation={[0, rotY, 0]}>
       {Array.from({ length: nSteps }).map((_, i) => {
@@ -600,12 +603,12 @@ export function StaircaseMesh({
         const h = ((i + 1) / nSteps) * rise;
         return (
           <group key={i}>
-            <mesh position={[0, h / 2, z]} castShadow receiveShadow>
+            <mesh position={[0, (sign * h) / 2, z]} castShadow receiveShadow>
               <boxGeometry args={[stepW, h, going * 0.96]} />
               <meshStandardMaterial color={STAIR_COLOR} />
             </mesh>
             {/* glowing step-edge strip lights up at night */}
-            <mesh position={[0, h + 0.02, z + going * 0.45]}>
+            <mesh position={[0, sign * h + sign * 0.02, z + going * 0.45]}>
               <boxGeometry args={[stepW, 0.04, 0.06]} />
               <meshStandardMaterial
                 color="#FFE9A8"
@@ -737,6 +740,151 @@ export function SeatingBlockMesh({
         <ChairMesh key={i} position={[x, 0, z]} rotY={0} />
       ))}
     </group>
+  );
+}
+
+// Tiered stadium stand: concrete steps rise away from the facing (+z) front
+// edge, so the stand is HIGHEST at the back (-z) and DESCENDS to the front.
+// You enter from the top and walk down to your row. Seats face +z.
+export const STADIUM_TIER_DEPTH = 0.85; // depth of one row/step (metres)
+export const STADIUM_RISE = 0.45; // height gained per tier
+const STADIUM_RISER_COLOR = "#8A9099"; // concrete steps
+const STADIUM_SEAT_W = 0.45;
+const STADIUM_SEAT_SPACING = 0.62;
+const STADIUM_SEAT_COLORS = ["#2E6BD6", "#D9534F", "#F2A33C", "#4F8A40", "#7E57C2"];
+
+export function StadiumSeatsMesh({
+  position,
+  width,
+  depth,
+  rotY,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+}) {
+  const night = useNightGlow();
+  const nTiers = Math.max(1, Math.floor(depth / STADIUM_TIER_DEPTH));
+  const tierStep = depth / nTiers; // depth occupied by one tier
+  const nSeats = Math.max(1, Math.floor(width / STADIUM_SEAT_SPACING));
+  const colStep = width / nSeats;
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      {Array.from({ length: nTiers }).map((_, r) => {
+        // r = 0 is the FRONT (lowest, +z edge); r = nTiers-1 is the BACK (highest, -z).
+        const tierTop = (r + 1) * STADIUM_RISE;
+        // Front of the stand is at +depth/2; each tier sits further back (-z).
+        const zCenter = depth / 2 - (r + 0.5) * tierStep;
+        const seatColor = STADIUM_SEAT_COLORS[r % STADIUM_SEAT_COLORS.length];
+        return (
+          <group key={r}>
+            {/* solid concrete step: filled mass from the ground up to this tier */}
+            <mesh position={[0, tierTop / 2, zCenter]} castShadow receiveShadow>
+              <boxGeometry args={[width, tierTop, tierStep * 0.98]} />
+              <meshStandardMaterial color={STADIUM_RISER_COLOR} />
+            </mesh>
+            {/* a row of bucket seats sitting on the step, facing +z (the front) */}
+            {Array.from({ length: nSeats }).map((__, c) => {
+              const x = -width / 2 + (c + 0.5) * colStep;
+              return (
+                <group key={c} position={[x, tierTop, zCenter + tierStep * 0.12]}>
+                  <mesh position={[0, 0.22, 0]} castShadow>
+                    <boxGeometry args={[STADIUM_SEAT_W, 0.08, 0.4]} />
+                    <meshStandardMaterial
+                      color={seatColor}
+                      emissive={seatColor}
+                      emissiveIntensity={night ? 0.5 : 0}
+                    />
+                  </mesh>
+                  <mesh position={[0, 0.42, -0.2]} castShadow>
+                    <boxGeometry args={[STADIUM_SEAT_W, 0.42, 0.06]} />
+                    <meshStandardMaterial
+                      color={seatColor}
+                      emissive={seatColor}
+                      emissiveIntensity={night ? 0.5 : 0}
+                    />
+                  </mesh>
+                </group>
+              );
+            })}
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+// Flat pedestrian walkway bridge: a ground-level paved deck spanning the rect's
+// long axis (local z), with a low rail down each long side. Not elevated — it's
+// a walkable path, so routes travel ON it (see pathChecks isOnWalkway).
+const BRIDGE_DECK_T = 0.12;
+const BRIDGE_DECK_Y = 0.16; // sits just above the floor slab
+const BRIDGE_RAIL_H = 0.9;
+const BRIDGE_DECK_COLOR = "#C7CCD2";
+const BRIDGE_RAIL_COLOR = "#9AA3AD";
+
+export function WalkwayBridgeMesh({
+  position,
+  width,
+  depth,
+  rotY,
+}: {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  rotY: number;
+}) {
+  const railX = Math.max(0, width / 2 - 0.06);
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      {/* flat deck */}
+      <mesh position={[0, BRIDGE_DECK_Y, 0]} receiveShadow>
+        <boxGeometry args={[width, BRIDGE_DECK_T, depth]} />
+        <meshStandardMaterial color={BRIDGE_DECK_COLOR} />
+      </mesh>
+      {/* low side rails */}
+      {[railX, -railX].map((x, i) => (
+        <group key={i}>
+          <mesh position={[x, BRIDGE_DECK_Y + BRIDGE_RAIL_H * 0.45, 0]} castShadow>
+            <boxGeometry args={[0.06, BRIDGE_RAIL_H * 0.9, depth]} />
+            <meshStandardMaterial color={BRIDGE_RAIL_COLOR} transparent opacity={0.55} />
+          </mesh>
+          <mesh position={[x, BRIDGE_DECK_Y + BRIDGE_RAIL_H, 0]} castShadow>
+            <boxGeometry args={[0.12, 0.08, depth]} />
+            <meshStandardMaterial color={BRIDGE_RAIL_COLOR} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// Flat polygon walkway: a thin paved path laid on the floor, following the
+// drawn polygon. Walkable (it doesn't block routing). `points` arrive already
+// centred in scene-local (x, z) by the caller, matching ServiceCentreMesh.
+const WALKWAY_COLOR = "#B8AFA0";
+
+export function WalkwayMesh({ points }: { points: [number, number][] }) {
+  const night = useNightGlow();
+  const geom = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const g = new THREE.ShapeGeometry(shape);
+    g.rotateX(Math.PI / 2);
+    return g;
+  }, [points]);
+  return (
+    <mesh geometry={geom} position={[0, 0.18, 0]} receiveShadow>
+      <meshStandardMaterial
+        color={WALKWAY_COLOR}
+        side={THREE.DoubleSide}
+        emissive={WALKWAY_COLOR}
+        emissiveIntensity={night ? 0.25 : 0}
+      />
+    </mesh>
   );
 }
 
@@ -1194,6 +1342,858 @@ export function ServiceCentreMesh({
           <mesh position={[0, 0.85, 0]} castShadow>
             <icosahedronGeometry args={[0.5, 0]} />
             <meshStandardMaterial color="#4F8A40" flatShading />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+const LIB_GLASS = "#BCD8DA";
+const LIB_FLOOR = "#EDE7D6";
+const LIB_ACCENT = "#3E7CB1";
+const LIB_WALL_H = 3.0;
+const LIB_FLOOR_Y = 0.14;
+const LIB_KIOSK_BODY = "#2C3138";
+const LIB_GATE = "#3A3F45";
+const LIB_BOOK_COLORS = ["#B5402F", "#2E6E8E", "#4F8A40", "#E0A93C", "#7A4FA0"];
+
+/**
+ * Library entrance. `points` are scene-local (x, z), already centred by the
+ * caller. Glass-walled with a doorway gap on the FIRST edge (points[0]→[1]),
+ * RFID security gates flanking that gap, a row of self-checkout / borrow
+ * machines a few metres inside, and book display stands deeper in.
+ */
+export function LibraryEntranceMesh({ points }: { points: [number, number][] }) {
+  const night = useNightGlow();
+
+  const floorGeom = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const g = new THREE.ShapeGeometry(shape);
+    g.rotateX(Math.PI / 2);
+    return g;
+  }, [points]);
+
+  const plan = useMemo(() => {
+    const inside = (x: number, z: number) => scPointInPoly(x, z, points);
+    // Edge 0 (points[0] → points[1]) is the doorway frontage.
+    const a = points[0];
+    const b = points[1 % points.length];
+    const ex = b[0] - a[0];
+    const ez = b[1] - a[1];
+    const elen = Math.hypot(ex, ez) || 1;
+    const dirX = ex / elen;
+    const dirZ = ez / elen;
+    const midX = (a[0] + b[0]) / 2;
+    const midZ = (a[1] + b[1]) / 2;
+    // inward normal (flip to the side that lies inside the polygon)
+    let nX = -dirZ;
+    let nZ = dirX;
+    if (!inside(midX + nX * 0.8, midZ + nZ * 0.8)) {
+      nX = -nX;
+      nZ = -nZ;
+    }
+    const doorHalf = Math.max(0.5, Math.min(elen * 0.28, 1.6, elen / 2 - 0.3));
+    const edgeRotY = Math.atan2(-dirZ, dirX);
+
+    type Seg = { pos: [number, number, number]; len: number; rotY: number };
+    const walls: Seg[] = [];
+    const pushWall = (ax: number, az: number, bx: number, bz: number) => {
+      const dx = bx - ax;
+      const dz = bz - az;
+      const len = Math.hypot(dx, dz);
+      if (len < 0.25) return;
+      walls.push({
+        pos: [(ax + bx) / 2, LIB_FLOOR_Y + LIB_WALL_H / 2, (az + bz) / 2],
+        len,
+        rotY: Math.atan2(-dz, dx),
+      });
+    };
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      const q = points[(i + 1) % points.length];
+      if (i === 0) {
+        // leave a centred gap for the doorway
+        pushWall(p[0], p[1], midX - dirX * doorHalf, midZ - dirZ * doorHalf);
+        pushWall(midX + dirX * doorHalf, midZ + dirZ * doorHalf, q[0], q[1]);
+      } else {
+        pushWall(p[0], p[1], q[0], q[1]);
+      }
+    }
+
+    // RFID gates: a post on each side of the gap, pulled slightly inward.
+    const gates = [
+      { pos: [midX - dirX * doorHalf + nX * 0.5, midZ - dirZ * doorHalf + nZ * 0.5], rotY: edgeRotY, face: 1 },
+      { pos: [midX + dirX * doorHalf + nX * 0.5, midZ + dirZ * doorHalf + nZ * 0.5], rotY: edgeRotY, face: -1 },
+    ];
+
+    // Self-checkout / borrow machines: a row ~3 m inside, facing the doorway.
+    const kioskRotY = Math.atan2(-nZ, nX);
+    const kiosks: { pos: [number, number]; rotY: number }[] = [];
+    for (let t = -elen / 2 + 1.2; t <= elen / 2 - 1.2; t += 1.9) {
+      const x = midX + dirX * t + nX * 3.0;
+      const z = midZ + dirZ * t + nZ * 3.0;
+      if (inside(x, z)) kiosks.push({ pos: [x, z], rotY: kioskRotY });
+    }
+
+    // Book display stands: deeper inside, spaced wider.
+    const stands: { pos: [number, number]; rotY: number }[] = [];
+    for (let t = -elen / 2 + 1.6; t <= elen / 2 - 1.6; t += 2.8) {
+      const x = midX + dirX * t + nX * 6.0;
+      const z = midZ + dirZ * t + nZ * 6.0;
+      if (inside(x, z)) stands.push({ pos: [x, z], rotY: edgeRotY });
+    }
+
+    return { walls, gates, kiosks, stands };
+  }, [points]);
+
+  return (
+    <group>
+      <mesh geometry={floorGeom} position={[0, LIB_FLOOR_Y, 0]} receiveShadow>
+        <meshStandardMaterial
+          color={LIB_FLOOR}
+          side={THREE.DoubleSide}
+          emissive={LIB_ACCENT}
+          emissiveIntensity={night ? 0.5 : 0}
+        />
+      </mesh>
+      {/* glass perimeter walls (gap on the doorway edge) */}
+      {plan.walls.map((w, i) => (
+        <mesh key={`lw${i}`} position={w.pos} rotation={[0, w.rotY, 0]}>
+          <boxGeometry args={[w.len, LIB_WALL_H, 0.08]} />
+          <meshStandardMaterial color={LIB_GLASS} transparent opacity={0.22} />
+        </mesh>
+      ))}
+      {/* RFID security gates flanking the doorway */}
+      {plan.gates.map((g, i) => (
+        <group key={`lg${i}`} position={[g.pos[0], LIB_FLOOR_Y, g.pos[1]]} rotation={[0, g.rotY, 0]}>
+          <mesh position={[0, 0.7, 0]} castShadow>
+            <boxGeometry args={[0.18, 1.4, 0.5]} />
+            <meshStandardMaterial color={LIB_GATE} />
+          </mesh>
+          <mesh position={[0.1 * g.face, 0.8, 0]}>
+            <boxGeometry args={[0.04, 1.0, 0.12]} />
+            <meshStandardMaterial color={LIB_ACCENT} emissive={LIB_ACCENT} emissiveIntensity={0.7} />
+          </mesh>
+        </group>
+      ))}
+      {/* self-checkout / borrow machines */}
+      {plan.kiosks.map((k, i) => (
+        <group key={`lk${i}`} position={[k.pos[0], LIB_FLOOR_Y, k.pos[1]]} rotation={[0, k.rotY, 0]}>
+          <mesh position={[0, 0.55, 0]} castShadow>
+            <boxGeometry args={[0.7, 1.1, 0.55]} />
+            <meshStandardMaterial color={LIB_KIOSK_BODY} />
+          </mesh>
+          <mesh position={[0, 1.0, 0.2]} rotation={[-0.5, 0, 0]}>
+            <boxGeometry args={[0.55, 0.45, 0.04]} />
+            <meshStandardMaterial color={LIB_ACCENT} emissive={LIB_ACCENT} emissiveIntensity={0.6} />
+          </mesh>
+        </group>
+      ))}
+      {/* book display stands */}
+      {plan.stands.map((s, i) => (
+        <group key={`ls${i}`} position={[s.pos[0], LIB_FLOOR_Y, s.pos[1]]} rotation={[0, s.rotY, 0]}>
+          <mesh position={[0, 0.45, 0]} castShadow receiveShadow>
+            <boxGeometry args={[1.4, 0.9, 0.5]} />
+            <meshStandardMaterial color="#8A6A45" />
+          </mesh>
+          {[-0.45, -0.15, 0.15, 0.45].map((bx, j) => (
+            <mesh key={j} position={[bx, 1.02, 0]} castShadow>
+              <boxGeometry args={[0.22, 0.28, 0.42]} />
+              <meshStandardMaterial color={LIB_BOOK_COLORS[(i * 4 + j) % LIB_BOOK_COLORS.length]} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
+const DECOR_SHELF_WOOD = "#6E4B2A";
+const DECOR_BOOKS = ["#B5402F", "#2E6E8E", "#4F8A40", "#E0A93C", "#7A4FA0", "#C25E8A"];
+const DECOR_TABLE = "#A9764B";
+const DECOR_CHAIR = "#3E6B6B";
+const DECOR_FLOOR_Y = 0.14;
+
+/**
+ * General library decorations to drop INSIDE an existing room (no walls/floor):
+ * parallel rows of tall bookshelf stacks with reading tables in the aisles
+ * between them, plus a few corner plants. `points` are scene-local (x, z),
+ * already centred by the caller.
+ */
+export function LibraryDecorMesh({ points }: { points: [number, number][] }) {
+  const plan = useMemo(() => {
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
+    for (const [x, z] of points) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    }
+    const inside = (x: number, z: number) => scPointInPoly(x, z, points);
+    const shelves: [number, number][] = [];
+    const tables: [number, number][] = [];
+    const plants: [number, number][] = [];
+    let row = 0;
+    for (let z = minZ + 1.4; z <= maxZ - 1.4; z += 2.2, row++) {
+      if (row % 2 === 0) {
+        for (let x = minX + 0.9; x <= maxX - 0.9; x += 1.0) {
+          if (inside(x, z)) shelves.push([x, z]);
+        }
+      } else {
+        for (let x = minX + 1.8; x <= maxX - 1.8; x += 3.4) {
+          if (inside(x, z)) tables.push([x, z]);
+        }
+      }
+    }
+    for (const p of [
+      [minX + 1, minZ + 1],
+      [maxX - 1, minZ + 1],
+      [minX + 1, maxZ - 1],
+      [maxX - 1, maxZ - 1],
+    ] as [number, number][]) {
+      if (inside(p[0], p[1])) plants.push(p);
+    }
+    return { shelves, tables, plants };
+  }, [points]);
+
+  return (
+    <group>
+      {/* bookshelf stacks (books face the aisles on both z sides) */}
+      {plan.shelves.map(([x, z], i) => (
+        <group key={`sh${i}`} position={[x, DECOR_FLOOR_Y, z]}>
+          <mesh position={[0, 0.95, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.92, 1.9, 0.5]} />
+            <meshStandardMaterial color={DECOR_SHELF_WOOD} />
+          </mesh>
+          {[0.27, -0.27].map((dz, s) =>
+            [0.45, 1.0, 1.55].map((by, r) => (
+              <mesh key={`${s}-${r}`} position={[0, by, dz]}>
+                <boxGeometry args={[0.84, 0.32, 0.06]} />
+                <meshStandardMaterial color={DECOR_BOOKS[(i + r + s) % DECOR_BOOKS.length]} />
+              </mesh>
+            )),
+          )}
+        </group>
+      ))}
+      {/* reading tables with chairs */}
+      {plan.tables.map(([x, z], i) => (
+        <group key={`rt${i}`} position={[x, DECOR_FLOOR_Y, z]}>
+          <mesh position={[0, 0.74, 0]} castShadow receiveShadow>
+            <boxGeometry args={[1.6, 0.06, 0.9]} />
+            <meshStandardMaterial color={DECOR_TABLE} />
+          </mesh>
+          {[
+            [0.55, 0.62],
+            [-0.55, 0.62],
+            [0.55, -0.62],
+            [-0.55, -0.62],
+          ].map(([cx, cz], j) => (
+            <group key={j} position={[cx, 0, cz]}>
+              <mesh position={[0, 0.42, 0]} castShadow>
+                <boxGeometry args={[0.42, 0.07, 0.42]} />
+                <meshStandardMaterial color={DECOR_CHAIR} />
+              </mesh>
+              <mesh position={[0, 0.66, cz > 0 ? 0.18 : -0.18]}>
+                <boxGeometry args={[0.42, 0.4, 0.06]} />
+                <meshStandardMaterial color={DECOR_CHAIR} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+      ))}
+      {/* corner plants */}
+      {plan.plants.map(([x, z], i) => (
+        <group key={`pl${i}`} position={[x, DECOR_FLOOR_Y, z]}>
+          <mesh position={[0, 0.25, 0]}>
+            <cylinderGeometry args={[0.22, 0.26, 0.5, 8]} />
+            <meshStandardMaterial color="#7A5230" />
+          </mesh>
+          <mesh position={[0, 0.85, 0]} castShadow>
+            <icosahedronGeometry args={[0.5, 0]} />
+            <meshStandardMaterial color="#4F8A40" flatShading />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+const MR_GLASS = "#BCD8DA";
+const MR_TABLE = "#C9A06A";
+const MR_CHAIR = ["#2E8B8B", "#E08A3C", "#4F8A40"];
+const MR_FLOOR = "#E4E7EA";
+const MR_FLOOR_Y = 0.14;
+const MR_WALL_H = 2.6;
+const MR_ACCENT = "#5E81AC";
+
+/**
+ * Meeting rooms: tiles the polygon with glass-walled rooms (only where a full
+ * room fits inside), each with a central table and chairs. `points` are
+ * scene-local (x, z), already centred by the caller.
+ */
+export function MeetingRoomsMesh({ points }: { points: [number, number][] }) {
+  const night = useNightGlow();
+
+  const floorGeom = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const g = new THREE.ShapeGeometry(shape);
+    g.rotateX(Math.PI / 2);
+    return g;
+  }, [points]);
+
+  const plan = useMemo(() => {
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
+    for (const [x, z] of points) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    }
+    const inside = (x: number, z: number) => scPointInPoly(x, z, points);
+    const room = 4.2;
+    const gap = 1.4;
+    const step = room + gap;
+    const half = room / 2;
+    const rooms: [number, number][] = [];
+    for (let cx = minX + half + 0.4; cx <= maxX - half - 0.4; cx += step) {
+      for (let cz = minZ + half + 0.4; cz <= maxZ - half - 0.4; cz += step) {
+        if (
+          inside(cx - half, cz - half) &&
+          inside(cx + half, cz - half) &&
+          inside(cx - half, cz + half) &&
+          inside(cx + half, cz + half)
+        ) {
+          rooms.push([cx, cz]);
+        }
+      }
+    }
+    return { rooms, room };
+  }, [points]);
+
+  const w = plan.room;
+  const h = MR_WALL_H;
+  const walls: { pos: [number, number, number]; size: [number, number, number] }[] = [
+    { pos: [0, h / 2, w / 2], size: [w, h, 0.08] },
+    { pos: [0, h / 2, -w / 2], size: [w, h, 0.08] },
+    { pos: [w / 2, h / 2, 0], size: [0.08, h, w] },
+    { pos: [-w / 2, h / 2, 0], size: [0.08, h, w] },
+  ];
+
+  return (
+    <group>
+      <mesh geometry={floorGeom} position={[0, MR_FLOOR_Y, 0]} receiveShadow>
+        <meshStandardMaterial
+          color={MR_FLOOR}
+          side={THREE.DoubleSide}
+          emissive={MR_ACCENT}
+          emissiveIntensity={night ? 0.4 : 0}
+        />
+      </mesh>
+      {plan.rooms.map(([cx, cz], i) => (
+        <group key={`mr${i}`} position={[cx, MR_FLOOR_Y, cz]}>
+          {walls.map((wl, j) => (
+            <mesh key={j} position={wl.pos}>
+              <boxGeometry args={wl.size} />
+              <meshStandardMaterial color={MR_GLASS} transparent opacity={0.25} />
+            </mesh>
+          ))}
+          {/* table */}
+          <mesh position={[0, 0.74, 0]} castShadow receiveShadow>
+            <boxGeometry args={[w * 0.5, 0.06, w * 0.28]} />
+            <meshStandardMaterial color={MR_TABLE} />
+          </mesh>
+          {/* chairs around the table */}
+          {[
+            [w * 0.32, 0],
+            [-w * 0.32, 0],
+            [0, w * 0.22],
+            [0, -w * 0.22],
+          ].map(([px, pz], j) => (
+            <mesh key={`c${j}`} position={[px, 0.45, pz]} castShadow>
+              <boxGeometry args={[0.45, 0.5, 0.45]} />
+              <meshStandardMaterial color={MR_CHAIR[(i + j) % MR_CHAIR.length]} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// ---------- Roof / sky-terrace polygon primitives ----------
+
+const COURT_ROOF_Y = 6.5; // underside-to-top sits around here, above court hoops
+const COURT_ROOF_T = 0.3;
+const COURT_ROOF_COLOR = "#9AA1A9";
+const COURT_ROOF_COLUMN = "#7E868F";
+
+/**
+ * Flat grey court roof: a thick slab covering the drawn polygon, floating at
+ * COURT_ROOF_Y on support columns dropped at the polygon's bbox corners. You
+ * walk underneath, so it never blocks routing. `points` are scene-local (x, z).
+ */
+export function CourtRoofMesh({ points }: { points: [number, number][] }) {
+  const { geom, columns } = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const g = new THREE.ExtrudeGeometry(shape, { depth: COURT_ROOF_T, bevelEnabled: false });
+    g.rotateX(Math.PI / 2);
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
+    for (const [x, z] of points) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    }
+    const ins = 0.6;
+    const cols: [number, number][] = [
+      [minX + ins, minZ + ins],
+      [maxX - ins, minZ + ins],
+      [minX + ins, maxZ - ins],
+      [maxX - ins, maxZ - ins],
+    ];
+    return { geom: g, columns: cols };
+  }, [points]);
+  return (
+    <group>
+      <mesh geometry={geom} position={[0, COURT_ROOF_Y, 0]} castShadow receiveShadow>
+        <meshStandardMaterial color={COURT_ROOF_COLOR} side={THREE.DoubleSide} />
+      </mesh>
+      {columns.map(([x, z], i) => (
+        <mesh key={i} position={[x, COURT_ROOF_Y / 2, z]} castShadow receiveShadow>
+          <boxGeometry args={[0.32, COURT_ROOF_Y, 0.32]} />
+          <meshStandardMaterial color={COURT_ROOF_COLUMN} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+const GARDEN_GRASS = "#5C8B47";
+const GARDEN_BUSH = ["#4F7A3A", "#5C8B47", "#3E6A30"];
+const GARDEN_PLANTER = "#7A5230";
+const GARDEN_FLOOR_Y = 0.16;
+
+/**
+ * Lush sky-terrace garden decoration: a grass base over the drawn polygon,
+ * scattered with bushes, small trees and planters. Decorative — does not block
+ * routing. `points` are scene-local (x, z), already centred by the caller.
+ */
+export function GardenDecorMesh({ points }: { points: [number, number][] }) {
+  const night = useNightGlow();
+  const plan = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const geom = new THREE.ShapeGeometry(shape);
+    geom.rotateX(Math.PI / 2);
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
+    for (const [x, z] of points) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    }
+    const inside = (x: number, z: number) => scPointInPoly(x, z, points);
+    const bushes: [number, number][] = [];
+    const trees: [number, number][] = [];
+    const planters: [number, number][] = [];
+    let row = 0;
+    for (let z = minZ + 0.8; z <= maxZ - 0.8; z += 1.6, row++) {
+      for (let x = minX + 0.8; x <= maxX - 0.8; x += 1.6) {
+        if (!inside(x, z)) continue;
+        const k = ((row * 3 + Math.round(x) + 100) % 5 + 5) % 5;
+        if (k === 0) trees.push([x, z]);
+        else if (k === 1) planters.push([x, z]);
+        else bushes.push([x, z]);
+      }
+    }
+    return { geom, bushes, trees, planters };
+  }, [points]);
+  return (
+    <group>
+      <mesh geometry={plan.geom} position={[0, GARDEN_FLOOR_Y, 0]} receiveShadow>
+        <meshStandardMaterial
+          color={GARDEN_GRASS}
+          side={THREE.DoubleSide}
+          emissive={GARDEN_GRASS}
+          emissiveIntensity={night ? 0.3 : 0}
+        />
+      </mesh>
+      {plan.bushes.map(([x, z], i) => (
+        <mesh key={`b${i}`} position={[x, GARDEN_FLOOR_Y + 0.3, z]} castShadow>
+          <icosahedronGeometry args={[0.4, 0]} />
+          <meshStandardMaterial
+            color={GARDEN_BUSH[i % GARDEN_BUSH.length]}
+            flatShading
+            emissive={GARDEN_BUSH[i % GARDEN_BUSH.length]}
+            emissiveIntensity={night ? 0.5 : 0}
+          />
+        </mesh>
+      ))}
+      {plan.trees.map(([x, z], i) => (
+        <group key={`t${i}`} position={[x, GARDEN_FLOOR_Y, z]}>
+          <mesh position={[0, 0.7, 0]} castShadow>
+            <cylinderGeometry args={[0.1, 0.14, 1.4, 6]} />
+            <meshStandardMaterial color="#8B6B4A" flatShading />
+          </mesh>
+          <mesh position={[0, 1.6, 0]} castShadow>
+            <icosahedronGeometry args={[0.6, 0]} />
+            <meshStandardMaterial
+              color="#3E7A34"
+              flatShading
+              emissive="#3E7A34"
+              emissiveIntensity={night ? 0.4 : 0}
+            />
+          </mesh>
+        </group>
+      ))}
+      {plan.planters.map(([x, z], i) => (
+        <group key={`p${i}`} position={[x, GARDEN_FLOOR_Y, z]}>
+          <mesh position={[0, 0.19, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.7, 0.38, 0.55]} />
+            <meshStandardMaterial color={GARDEN_PLANTER} />
+          </mesh>
+          <mesh position={[0, 0.55, 0]} castShadow>
+            <icosahedronGeometry args={[0.32, 0]} />
+            <meshStandardMaterial color="#5C8B47" flatShading />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+const HDB_FLOOR = "#ECE9E1";
+const HDB_ACCENT = "#1C7C9C"; // HDB teal-blue branding
+const HDB_COUNTER = "#A9764B";
+const HDB_KIOSK_BODY = "#2C3138";
+const HDB_CHAIR = "#3E6B8B";
+const HDB_FLOOR_Y = 0.14;
+
+/**
+ * HDB branch office. `points` are scene-local (x, z), already centred by the
+ * caller. A government housing-services hall: service counters along the back,
+ * a queue ticket machine near the entrance, rows of waiting chairs facing the
+ * counters, self-service payment kiosks down one side, and a few plants.
+ */
+export function HdbOfficeMesh({ points }: { points: [number, number][] }) {
+  const night = useNightGlow();
+
+  const floorGeom = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const g = new THREE.ShapeGeometry(shape);
+    g.rotateX(Math.PI / 2);
+    return g;
+  }, [points]);
+
+  const walls = useMemo(() => {
+    const out: { pos: [number, number, number]; len: number; rotY: number }[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      const dx = b[0] - a[0];
+      const dz = b[1] - a[1];
+      const len = Math.hypot(dx, dz);
+      if (len < 0.3) continue;
+      out.push({
+        pos: [(a[0] + b[0]) / 2, HDB_FLOOR_Y + 1.5, (a[1] + b[1]) / 2],
+        len,
+        rotY: Math.atan2(-dz, dx),
+      });
+    }
+    return out;
+  }, [points]);
+
+  const interior = useMemo(() => {
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
+    for (const [x, z] of points) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    }
+    const inside = (x: number, z: number) => scPointInPoly(x, z, points);
+
+    const counters: [number, number][] = [];
+    const kiosks: [number, number][] = [];
+    const chairs: [number, number][] = [];
+    const plants: [number, number][] = [];
+    let ticket: [number, number] | null = null;
+
+    // Service counters along the back (minZ) edge.
+    for (let x = minX + 2; x < maxX - 1; x += 2.6) {
+      const z = minZ + 1.3;
+      if (inside(x, z)) counters.push([x, z]);
+    }
+    // Self-service payment kiosks down the left (minX) side.
+    for (let z = minZ + 3.6; z < maxZ - 1.5; z += 1.9) {
+      const x = minX + 1.3;
+      if (inside(x, z)) kiosks.push([x, z]);
+    }
+    // Waiting-area chairs filling the central band, facing the counters (-z).
+    for (let z = minZ + 4.0; z < maxZ - 1.2; z += 1.15) {
+      for (let x = minX + 3.0; x < maxX - 1.2; x += 0.8) {
+        if (inside(x, z)) chairs.push([x, z]);
+      }
+    }
+    // Queue ticket machine near the entrance (front-right corner).
+    const tc: [number, number] = [maxX - 1.6, maxZ - 1.6];
+    if (inside(tc[0], tc[1])) ticket = tc;
+    // Plants near the front corners.
+    for (const p of [
+      [minX + 1.0, maxZ - 1.0],
+      [maxX - 1.0, maxZ - 1.0],
+    ] as [number, number][]) {
+      if (inside(p[0], p[1])) plants.push(p);
+    }
+    return { counters, kiosks, chairs, plants, ticket };
+  }, [points]);
+
+  return (
+    <group>
+      <mesh geometry={floorGeom} position={[0, HDB_FLOOR_Y, 0]} receiveShadow>
+        <meshStandardMaterial
+          color={HDB_FLOOR}
+          side={THREE.DoubleSide}
+          emissive={HDB_ACCENT}
+          emissiveIntensity={night ? 0.6 : 0}
+        />
+      </mesh>
+      {/* low glass partition walls */}
+      {walls.map((w, i) => (
+        <mesh key={`hw${i}`} position={w.pos} rotation={[0, w.rotY, 0]}>
+          <boxGeometry args={[w.len, 3.0, 0.08]} />
+          <meshStandardMaterial color="#BCD8DA" transparent opacity={0.2} />
+        </mesh>
+      ))}
+      {/* service counters with a teal accent top */}
+      {interior.counters.map(([x, z], i) => (
+        <group key={`hc${i}`} position={[x, HDB_FLOOR_Y, z]}>
+          <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
+            <boxGeometry args={[2.2, 1.1, 0.7]} />
+            <meshStandardMaterial color={HDB_COUNTER} />
+          </mesh>
+          <mesh position={[0, 1.12, 0]}>
+            <boxGeometry args={[2.25, 0.08, 0.78]} />
+            <meshStandardMaterial color={HDB_ACCENT} />
+          </mesh>
+          {/* staff monitor */}
+          <mesh position={[0, 1.35, -0.1]}>
+            <boxGeometry args={[0.5, 0.34, 0.04]} />
+            <meshStandardMaterial color={HDB_KIOSK_BODY} emissive={HDB_ACCENT} emissiveIntensity={0.3} />
+          </mesh>
+        </group>
+      ))}
+      {/* self-service payment kiosks */}
+      {interior.kiosks.map(([x, z], i) => (
+        <group key={`hk${i}`} position={[x, HDB_FLOOR_Y, z]}>
+          <mesh position={[0, 0.75, 0]} castShadow>
+            <boxGeometry args={[0.7, 1.5, 0.5]} />
+            <meshStandardMaterial color={HDB_KIOSK_BODY} />
+          </mesh>
+          <mesh position={[0.27, 1.05, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <boxGeometry args={[0.5, 0.6, 0.04]} />
+            <meshStandardMaterial color={HDB_ACCENT} emissive={HDB_ACCENT} emissiveIntensity={0.55} />
+          </mesh>
+        </group>
+      ))}
+      {/* waiting-area chairs (back toward +z, sitter faces the counters) */}
+      {interior.chairs.map(([x, z], i) => (
+        <group key={`hch${i}`} position={[x, HDB_FLOOR_Y, z]}>
+          <mesh position={[0, 0.42, 0]} castShadow>
+            <boxGeometry args={[0.5, 0.08, 0.5]} />
+            <meshStandardMaterial color={HDB_CHAIR} />
+          </mesh>
+          <mesh position={[0, 0.66, 0.22]}>
+            <boxGeometry args={[0.5, 0.42, 0.06]} />
+            <meshStandardMaterial color={HDB_CHAIR} />
+          </mesh>
+        </group>
+      ))}
+      {/* queue ticket machine */}
+      {interior.ticket && (
+        <group position={[interior.ticket[0], HDB_FLOOR_Y, interior.ticket[1]]}>
+          <mesh position={[0, 0.7, 0]} castShadow>
+            <boxGeometry args={[0.55, 1.4, 0.4]} />
+            <meshStandardMaterial color={HDB_ACCENT} />
+          </mesh>
+          <mesh position={[0, 1.0, 0.21]}>
+            <boxGeometry args={[0.4, 0.5, 0.04]} />
+            <meshStandardMaterial color="#0E2A33" emissive={HDB_ACCENT} emissiveIntensity={0.5} />
+          </mesh>
+        </group>
+      )}
+      {/* plants */}
+      {interior.plants.map(([x, z], i) => (
+        <group key={`hp${i}`} position={[x, HDB_FLOOR_Y, z]}>
+          <mesh position={[0, 0.25, 0]}>
+            <cylinderGeometry args={[0.22, 0.26, 0.5, 8]} />
+            <meshStandardMaterial color="#7A5230" />
+          </mesh>
+          <mesh position={[0, 0.85, 0]} castShadow>
+            <icosahedronGeometry args={[0.5, 0]} />
+            <meshStandardMaterial color="#4F8A40" flatShading />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+const THEATRE_FLOOR = "#2B2A33"; // dark auditorium floor
+const THEATRE_STAGE = "#5A3A2E"; // wooden stage deck
+const THEATRE_SCREEN = "#11131A";
+const THEATRE_SCREEN_GLOW = "#3A4A6B";
+const THEATRE_CURTAIN = "#7A1F2B"; // deep red curtains
+const THEATRE_SEAT = "#8B2433"; // red auditorium seats
+const THEATRE_FLOOR_Y = 0.14;
+const THEATRE_STAGE_DEPTH = 4.0;
+const THEATRE_STAGE_H = 0.5;
+
+/**
+ * Theatre / auditorium. `points` are scene-local (x, z), already centred by the
+ * caller. The FIRST edge (points[0]→[1]) is the stage frontage: a raised wooden
+ * deck with a glowing screen and red side curtains sits there, and raked rows of
+ * red seats fill the rest of the polygon facing it.
+ */
+export function TheatreMesh({ points }: { points: [number, number][] }) {
+  const night = useNightGlow();
+
+  const floorGeom = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.closePath();
+    const g = new THREE.ShapeGeometry(shape);
+    g.rotateX(Math.PI / 2);
+    return g;
+  }, [points]);
+
+  const plan = useMemo(() => {
+    const inside = (x: number, z: number) => scPointInPoly(x, z, points);
+    const a = points[0];
+    const b = points[1 % points.length];
+    const ex = b[0] - a[0];
+    const ez = b[1] - a[1];
+    const elen = Math.hypot(ex, ez) || 1;
+    const dirX = ex / elen;
+    const dirZ = ez / elen;
+    const midX = (a[0] + b[0]) / 2;
+    const midZ = (a[1] + b[1]) / 2;
+    // inward normal (points into the polygon)
+    let nX = -dirZ;
+    let nZ = dirX;
+    if (!inside(midX + nX * 0.8, midZ + nZ * 0.8)) {
+      nX = -nX;
+      nZ = -nZ;
+    }
+    // how far the polygon extends inward from the stage edge
+    let maxReach = 0;
+    for (const [px, pz] of points) {
+      const s = (px - midX) * nX + (pz - midZ) * nZ;
+      if (s > maxReach) maxReach = s;
+    }
+    // local +z points inward (away from stage); seats face -z (the stage)
+    const rotY = Math.atan2(nX, nZ);
+    const at = (t: number, s: number): [number, number] => [
+      midX + dirX * t + nX * s,
+      midZ + dirZ * t + nZ * s,
+    ];
+    const stageWidth = Math.min(elen * 0.94, elen - 0.4);
+
+    // raked rows of seats, rising away from the stage
+    const seats: { pos: [number, number]; y: number }[] = [];
+    let row = 0;
+    for (let s = THEATRE_STAGE_DEPTH + 2.0; s < maxReach - 0.6; s += 1.0, row++) {
+      const riseY = 0.12 + row * 0.13;
+      for (let t = -elen / 2 + 0.6; t <= elen / 2 - 0.6; t += 0.65) {
+        const [x, z] = at(t, s);
+        if (inside(x, z)) seats.push({ pos: [x, z], y: riseY });
+      }
+    }
+
+    return {
+      seats,
+      rotY,
+      stageCenter: at(0, THEATRE_STAGE_DEPTH / 2 + 0.3),
+      screenCenter: at(0, 0.35),
+      curtainL: at(-stageWidth / 2 + 0.4, 0.5),
+      curtainR: at(stageWidth / 2 - 0.4, 0.5),
+      stageWidth,
+    };
+  }, [points]);
+
+  return (
+    <group>
+      <mesh geometry={floorGeom} position={[0, THEATRE_FLOOR_Y, 0]} receiveShadow>
+        <meshStandardMaterial color={THEATRE_FLOOR} side={THREE.DoubleSide} />
+      </mesh>
+      {/* stage deck */}
+      <group position={[plan.stageCenter[0], THEATRE_FLOOR_Y, plan.stageCenter[1]]} rotation={[0, plan.rotY, 0]}>
+        <mesh position={[0, THEATRE_STAGE_H / 2, 0]} castShadow receiveShadow>
+          <boxGeometry args={[plan.stageWidth, THEATRE_STAGE_H, THEATRE_STAGE_DEPTH]} />
+          <meshStandardMaterial color={THEATRE_STAGE} />
+        </mesh>
+      </group>
+      {/* screen / backdrop */}
+      <group position={[plan.screenCenter[0], THEATRE_FLOOR_Y, plan.screenCenter[1]]} rotation={[0, plan.rotY, 0]}>
+        <mesh position={[0, 2.4, 0]} castShadow>
+          <boxGeometry args={[plan.stageWidth * 0.8, 4.4, 0.16]} />
+          <meshStandardMaterial
+            color={THEATRE_SCREEN}
+            emissive={THEATRE_SCREEN_GLOW}
+            emissiveIntensity={night ? 0.9 : 0.35}
+          />
+        </mesh>
+      </group>
+      {/* red side curtains framing the stage */}
+      {[plan.curtainL, plan.curtainR].map((c, i) => (
+        <group key={`cur${i}`} position={[c[0], THEATRE_FLOOR_Y, c[1]]} rotation={[0, plan.rotY, 0]}>
+          <mesh position={[0, 2.6, 0]} castShadow>
+            <boxGeometry args={[0.7, 5.2, 0.6]} />
+            <meshStandardMaterial color={THEATRE_CURTAIN} />
+          </mesh>
+        </group>
+      ))}
+      {/* raked auditorium seats (back toward +z, sitter faces the stage) */}
+      {plan.seats.map((st, i) => (
+        <group key={`ts${i}`} position={[st.pos[0], THEATRE_FLOOR_Y + st.y, st.pos[1]]} rotation={[0, plan.rotY, 0]}>
+          <mesh position={[0, 0.22, 0]} castShadow>
+            <boxGeometry args={[0.52, 0.12, 0.5]} />
+            <meshStandardMaterial color={THEATRE_SEAT} />
+          </mesh>
+          <mesh position={[0, 0.5, 0.22]}>
+            <boxGeometry args={[0.52, 0.5, 0.08]} />
+            <meshStandardMaterial color={THEATRE_SEAT} />
           </mesh>
         </group>
       ))}

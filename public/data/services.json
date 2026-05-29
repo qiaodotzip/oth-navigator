@@ -156,15 +156,17 @@
     "nameZh": "淡滨尼天地民众俱乐部",
     "providerName": "People's Association",
     "category": "community",
-    "routable": false,
-    "displayFloor": "L4",
+    "routable": true,
+    "displayFloor": "L3",
+    "floorId": "L3",
+    "roomId": "L3-room-tampines-cc",
     "counterIds": [
       "cc-1"
     ],
     "accessibility": {
       "liftAccess": true,
       "stepFreeRoute": true,
-      "notes": "Community Club on Level 4"
+      "notes": "Tampines Central CC — function & interest-group rooms on Level 3"
     },
     "sourceUrl": "https://www.onepa.gov.sg/cc/our-tampines-hub",
     "iconKey": "info"
@@ -175,14 +177,34 @@
     "nameZh": "淡滨尼家庭医学诊所",
     "providerName": "SingHealth / Changi General Hospital",
     "category": "healthcare",
-    "routable": false,
+    "routable": true,
     "displayFloor": "L3",
+    "floorId": "L3",
+    "roomId": "L3-room-family-medicine-clinic",
     "accessibility": {
       "liftAccess": true,
       "stepFreeRoute": true,
       "notes": "#03-34, multi-doctor general practice"
     },
     "sourceUrl": "https://www.cgh.com.sg/community-care/community-health-services/fmc",
+    "iconKey": "info"
+  },
+  {
+    "id": "community-health-centre",
+    "nameEn": "Community Health Centre",
+    "nameZh": "社区健康中心",
+    "providerName": "SingHealth Community Health",
+    "category": "healthcare",
+    "routable": true,
+    "displayFloor": "L3",
+    "floorId": "L3",
+    "roomId": "L3-room-community-health-centre",
+    "accessibility": {
+      "liftAccess": true,
+      "stepFreeRoute": true,
+      "notes": "Level 3 — ancillary health services (nursing, screening)"
+    },
+    "sourceUrl": "https://www.healthhub.sg/",
     "iconKey": "info"
   },
   {

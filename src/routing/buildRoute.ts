@@ -236,6 +236,23 @@ function leastBusyCounter(
   return best;
 }
 
+/** Nearest lift to `from` on its floor (by walking distance) — the hand-off
+ *  point for services on unmodelled upper floors. */
+function nearestLift(floors: Floor[], floorId: FloorId, from: Pt): Pt | null {
+  const floor = floors.find(f => f.id === floorId);
+  const lifts = collectConnectors(floors).filter(c => c.kind === "lift");
+  let best: Pt | null = null;
+  let bestLen = Infinity;
+  for (const c of lifts) {
+    const len = floor ? pathLength(findPath(from, c.point, floor)) : dist(from, c.point);
+    if (len < bestLen) {
+      bestLen = len;
+      best = c.point;
+    }
+  }
+  return best;
+}
+
 export function buildRoute(
   start: { floorId: FloorId; point: Pt },
   service: Service,
@@ -245,6 +262,31 @@ export function buildRoute(
   loads: Record<string, number> = {},
 ): RouteVariant | null {
   const floorById = new Map(floors.map(f => [f.id, f]));
+
+  // In-OTH but on an unmodelled floor (L4/L5): we can't route inside it, so walk
+  // the user to the nearest lift and hand off ("ride to Level N — upper-floor
+  // navigation coming soon"). No cross-floor hop; the journey ends at the lift.
+  if (service.unmodelledLevel && !service.roomId) {
+    const startFloor = floorById.get(start.floorId);
+    const lift = nearestLift(floors, start.floorId, start.point) ?? TRANSITION_POINT;
+    return {
+      serviceId: service.id,
+      profile,
+      counterId: leastBusyCounter(service.counterIds, loads),
+      steps: [
+        { floorId: start.floorId, point: start.point, decisionPoint: false, segmentKey: "start" },
+        {
+          floorId: start.floorId,
+          point: lift,
+          decisionPoint: true,
+          segmentKey: "lift-handoff",
+          handoffLevel: service.unmodelledLevel,
+          pathFromPrev: startFloor ? legPath(start.point, lift, startFloor) : [start.point, lift],
+        },
+      ],
+    };
+  }
+
   // An explicit entrance (set in the entrance editor) overrides the building
   // centroid. Look up by service id first, then by its room/place id.
   const entrance =

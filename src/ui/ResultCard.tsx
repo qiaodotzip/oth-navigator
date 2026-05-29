@@ -34,7 +34,7 @@ export function ResultCard({
         </div>
         <button
           onClick={() => onGuide(plan)}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-oth-primary py-3.5 text-base font-bold text-white shadow-sm transition active:scale-95"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-oth-primary py-3 text-[15px] font-bold leading-tight text-white shadow-sm transition active:scale-95"
         >
           {language === "zh" ? "带我去服务柜台" : "Take me to the help desk"}
           <ArrowRight size={20} weight="bold" />
@@ -56,7 +56,7 @@ export function ResultCard({
         </p>
         <button
           onClick={() => onStartInApp(plan)}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3.5 text-base font-bold text-white shadow-sm transition active:scale-95"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3 text-[15px] font-bold leading-tight text-white shadow-sm transition active:scale-95"
         >
           {t(plan.appHandoff.label)}
           <ArrowSquareOut size={20} weight="bold" />
@@ -74,22 +74,26 @@ export function ResultCard({
         </p>
         <ul className="mt-2 flex flex-col gap-2 overflow-y-auto">
           {plan.stops.map((s, i) => (
-            <li key={s.serviceId} className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white p-2.5">
-              <span className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-full bg-oth-primary text-sm font-bold text-white">
+            <li key={s.serviceId} className="flex items-start gap-3 rounded-xl border border-neutral-200 bg-white p-2.5">
+              <span className="mt-0.5 grid h-7 w-7 flex-shrink-0 place-items-center rounded-full bg-oth-primary text-sm font-bold text-white">
                 {i + 1}
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-sm font-bold text-oth-ink">{t(s.name)}</span>
-                {s.reason && <span className="block truncate text-xs text-neutral-500">{t(s.reason)}</span>}
+                <span className="block text-sm font-bold leading-tight text-oth-ink">{t(s.name)}</span>
+                {s.reason && (
+                  <span className="mt-0.5 block text-xs leading-snug text-neutral-500 line-clamp-2">
+                    {t(s.reason)}
+                  </span>
+                )}
               </span>
             </li>
           ))}
         </ul>
         <button
           onClick={() => onGuide(plan)}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-oth-primary py-3.5 text-base font-bold text-white shadow-sm transition active:scale-95"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-oth-primary py-3 text-[15px] font-bold leading-tight text-white shadow-sm transition active:scale-95"
         >
-          {language === "zh" ? `开始：${t(plan.stops[0].name)}` : `Start with ${t(plan.stops[0].name)}`}
+          {language === "zh" ? "开始行程" : "Start journey"}
           <ArrowRight size={20} weight="bold" />
         </button>
         {AskAgain}
@@ -126,7 +130,7 @@ export function ResultCard({
       )}
       <button
         onClick={() => onGuide(plan)}
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-oth-primary py-3.5 text-base font-bold text-white shadow-sm transition active:scale-95"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-oth-primary py-3 text-[15px] font-bold leading-tight text-white shadow-sm transition active:scale-95"
       >
         <MapPinLine size={20} weight="bold" />
         {language === "zh" ? "带我去" : "Guide me there"}

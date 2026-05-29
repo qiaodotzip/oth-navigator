@@ -12,19 +12,19 @@ export const WANDER_LOOPS: WanderLoop[] = [
   {
     floorId: "L1",
     color: "#F2A33C",
-    points: [[128, 83.37], [125, 83.37], [132, 85.66], [130, 46.83], [128, 83.37]],
+    points: [[128, 95.21], [125, 95.21], [132, 97.83], [130, 53.48], [128, 95.21]],
   },
   // L1 - services loop: town square -> PSC -> hawker -> community
   {
     floorId: "L1",
     color: "#0066B3",
-    points: [[128, 83.37], [99, 60.53], [97, 43.4], [84, 65.1], [128, 83.37]],
+    points: [[128, 95.21], [99, 69.13], [97, 49.57], [84, 74.35], [128, 95.21]],
   },
   // L1 - leisure loop: town square -> interim park -> community
   {
     floorId: "L1",
     color: "#4CAF50",
-    points: [[128, 83.37], [91, 95.93], [84, 65.1], [128, 83.37]],
+    points: [[128, 95.21], [91, 109.56], [84, 74.35], [128, 95.21]],
   },
   // L2 - library / arts loop
   {
