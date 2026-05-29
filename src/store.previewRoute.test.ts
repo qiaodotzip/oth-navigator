@@ -18,20 +18,25 @@ describe("previewRoute", () => {
     useStore.getState().endRoute();
   });
 
-  it("shows the route on the map in orbit view (no GPS follow, no nav UI flag)", () => {
+  it("shows the route on the map in orbit view, tagged with the demo kind", () => {
     useStore.getState().previewRoute(fakeVariant());
     const s = useStore.getState();
     expect(s.activeRoute?.variant.serviceId).toBe("hdb"); // route drawn
-    expect(s.routePreview).toBe(true); // preview, not navigation
+    expect(s.routePreview).toBe("crowd"); // default kind
     expect(s.cameraFollow).toBe(false); // stays in orbit/map view
     expect(s.inspectMode).toBe(true); // orbit controls on
+  });
+
+  it("records the requested preview kind", () => {
+    useStore.getState().previewRoute(fakeVariant(), "access");
+    expect(useStore.getState().routePreview).toBe("access");
   });
 
   it("startRoute clears the preview flag (real navigation)", () => {
     useStore.getState().previewRoute(fakeVariant());
     useStore.getState().startRoute(fakeVariant());
     const s = useStore.getState();
-    expect(s.routePreview).toBe(false);
+    expect(s.routePreview).toBeNull();
     expect(s.cameraFollow).toBe(true);
   });
 
@@ -40,6 +45,6 @@ describe("previewRoute", () => {
     useStore.getState().endRoute();
     const s = useStore.getState();
     expect(s.activeRoute).toBeNull();
-    expect(s.routePreview).toBe(false);
+    expect(s.routePreview).toBeNull();
   });
 });

@@ -13,6 +13,7 @@ import {
   X,
   Sun,
   MoonStars,
+  Wheelchair,
 } from "phosphor-react";
 
 const WALK_SPEED_MPS = 1.2;
@@ -20,24 +21,31 @@ const WALK_SPEED_MPS = 1.2;
 export function PromptPanel({
   onSubmitIntent,
   onRoutingDemo,
+  onAccessDemo,
   onGuide,
   onStartInApp,
   onAskAgain,
   onNext,
   onArrived,
+  onGoToHelpDesk,
+  onSkipStop,
 }: {
   onSubmitIntent: (query: string, fromText?: boolean) => void;
   onRoutingDemo?: () => void;
+  onAccessDemo?: () => void;
   onGuide: (plan: import("@/intent/types").Plan) => void;
   onStartInApp: (plan: Extract<import("@/intent/types").Plan, { kind: "offsite" }>) => void;
   onAskAgain: () => void;
   onNext: () => void;
   onArrived: () => void;
+  onGoToHelpDesk: (stop: import("@/intent/types").PlanStop) => void;
+  onSkipStop: (stop: import("@/intent/types").PlanStop) => void;
 }) {
   const route = useStore(s => s.activeRoute);
   const routePreview = useStore(s => s.routePreview);
   const timeOfDay = useStore(s => s.timeOfDay);
   const setTimeOfDay = useStore(s => s.setTimeOfDay);
+  const setProfile = useStore(s => s.setProfile);
   const activePlan = useStore(s => s.activePlan);
   const intentStatus = useStore(s => s.intentStatus);
   const services = useStore(s => s.services);
@@ -73,30 +81,39 @@ export function PromptPanel({
           onGuide={onGuide}
           onStartInApp={onStartInApp}
           onAskAgain={onAskAgain}
+          onGoToHelpDesk={onGoToHelpDesk}
+          onSkipStop={onSkipStop}
         />,
       );
     }
     return shell(
-      <IntentEntry onSubmit={onSubmitIntent} onRoutingDemo={onRoutingDemo} />,
+      <IntentEntry
+        onSubmit={onSubmitIntent}
+        onRoutingDemo={onRoutingDemo}
+        onAccessDemo={onAccessDemo}
+      />,
     );
   }
 
   // PREVIEW: the route is drawn on the map (orbit view) purely to illustrate the
-  // crowd-aware routing. No turn-by-turn — instead an in-panel Morning/Evening
-  // switch so the presenter flips the time and watches the path re-bend.
+  // routing. No turn-by-turn — instead an in-panel switch (Morning/Evening for
+  // the crowd demo, Step-free/Stairs for the accessibility demo) so the presenter
+  // flips it and watches the path re-bend.
   if (routePreview) {
+    const isAccess = routePreview === "access";
     const svc = services.find(s => s.id === route.variant.serviceId);
     const svcName = svc ? (language === "zh" ? svc.nameZh : svc.nameEn) : "";
-    const timeBtn = (
-      tod: "morning" | "evening",
+    const switchBtn = (
+      active: boolean,
+      onClick: () => void,
       Icon: typeof Sun,
       label: string,
     ) => (
       <button
-        onClick={() => setTimeOfDay(tod)}
-        aria-pressed={timeOfDay === tod}
+        onClick={onClick}
+        aria-pressed={active}
         className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-sm font-bold transition active:scale-95 ${
-          timeOfDay === tod
+          active
             ? "bg-oth-primary text-white shadow-sm"
             : "bg-white text-oth-ink ring-1 ring-neutral-200"
         }`}
@@ -105,6 +122,20 @@ export function PromptPanel({
         {label}
       </button>
     );
+    const headline = isAccess
+      ? language === "zh"
+        ? "切换路线类型，看它改走电梯或楼梯"
+        : "Switch the route type — lift or staircase"
+      : language === "zh"
+        ? "切换时间，看路线避开人潮"
+        : "Switch the time — watch the route avoid the crowd";
+    const sub = isAccess
+      ? language === "zh"
+        ? "无障碍只走电梯；可走楼梯时，路线改走附近的楼梯。"
+        : "Step-free takes the lift; allow stairs and it routes via the nearby staircase."
+      : language === "zh"
+        ? "傍晚小贩中心人多，路线会改走较空的电梯。"
+        : "In the evening the hawker centre fills up, so the route takes a quieter lift.";
     return (
       <div className="h-full overflow-x-hidden bg-oth-paper border-t border-neutral-300 md:border-t-0 md:border-r flex flex-col">
         <div className="flex flex-shrink-0 items-center justify-between gap-2 px-4 pt-3">
@@ -124,19 +155,40 @@ export function PromptPanel({
           </button>
         </div>
         <div className="flex flex-1 flex-col justify-center gap-3 overflow-y-auto px-4 py-3">
-          <p className="text-lg font-extrabold leading-tight text-oth-ink">
-            {language === "zh"
-              ? "切换时间，看路线避开人潮"
-              : "Switch the time — watch the route avoid the crowd"}
-          </p>
-          <p className="text-sm font-semibold leading-snug text-neutral-500">
-            {language === "zh"
-              ? "傍晚小贩中心人多，路线会改走较空的电梯。"
-              : "In the evening the hawker centre fills up, so the route takes a quieter lift."}
-          </p>
+          <p className="text-lg font-extrabold leading-tight text-oth-ink">{headline}</p>
+          <p className="text-sm font-semibold leading-snug text-neutral-500">{sub}</p>
           <div className="mt-1 flex flex-col gap-2">
-            {timeBtn("morning", Sun, language === "zh" ? "早晨 · 人少" : "Morning · quiet")}
-            {timeBtn("evening", MoonStars, language === "zh" ? "傍晚 · 人多" : "Evening · busy")}
+            {isAccess ? (
+              <>
+                {switchBtn(
+                  profile === "stepFree",
+                  () => setProfile("stepFree"),
+                  Wheelchair,
+                  language === "zh" ? "无障碍 · 电梯" : "Step-free · lift",
+                )}
+                {switchBtn(
+                  profile === "default",
+                  () => setProfile("default"),
+                  PersonSimpleWalk,
+                  language === "zh" ? "可走楼梯 · 楼梯" : "Stairs OK · staircase",
+                )}
+              </>
+            ) : (
+              <>
+                {switchBtn(
+                  timeOfDay === "morning",
+                  () => setTimeOfDay("morning"),
+                  Sun,
+                  language === "zh" ? "早晨 · 人少" : "Morning · quiet",
+                )}
+                {switchBtn(
+                  timeOfDay === "evening",
+                  () => setTimeOfDay("evening"),
+                  MoonStars,
+                  language === "zh" ? "傍晚 · 人多" : "Evening · busy",
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -35,10 +35,12 @@ type State = {
   doneStops: string[];
   entrances: EntranceMap;
   activeRoute: ActiveRoute | null;
-  /** The active route is a static map PREVIEW (orbit view, no turn-by-turn / no
-   *  voice), used by the "Show routing logic" demo so toggling Time visibly
-   *  re-bends the path without the user having to walk or "arrive". */
-  routePreview: boolean;
+  /** When set, the active route is a static map PREVIEW (orbit view, no
+   *  turn-by-turn / no voice) used by a demo, and the value names which demo so
+   *  the panel shows the right switch: "crowd" → Morning/Evening (Time re-bends
+   *  the lift choice); "access" → Step-free/Stairs (profile switches lift↔stairs).
+   *  null = real navigation. */
+  routePreview: "crowd" | "access" | null;
   activePlan: Plan | null;
   intentStatus: "idle" | "resolving" | "resolved";
   inspectMode: boolean;
@@ -71,8 +73,9 @@ type State = {
   resetJourneyProgress: () => void;
   setEntrances: (e: EntranceMap) => void;
   startRoute: (v: RouteVariant) => void;
-  /** Draw a route on the map as a preview (orbit view), not as navigation. */
-  previewRoute: (v: RouteVariant) => void;
+  /** Draw a route on the map as a preview (orbit view), not as navigation.
+   *  `kind` selects which in-panel switch the preview card shows. */
+  previewRoute: (v: RouteVariant, kind?: "crowd" | "access") => void;
   advanceRoute: () => void;
   endRoute: () => void;
   toggleInspectMode: () => void;
@@ -114,7 +117,7 @@ export const useStore = create<State>(set => ({
   doneStops: [],
   entrances: {},
   activeRoute: null,
-  routePreview: false,
+  routePreview: null,
   activePlan: null,
   intentStatus: "idle",
   inspectMode: true,
@@ -157,7 +160,7 @@ export const useStore = create<State>(set => ({
   startRoute: v =>
     set({
       activeRoute: { variant: v, startedAt: Date.now(), currentWaypointIndex: 0 },
-      routePreview: false,
+      routePreview: null,
       cameraFollow: true,
       inspectMode: false,
       firstPerson: false,
@@ -167,10 +170,10 @@ export const useStore = create<State>(set => ({
   // drawn, but there's nothing to walk or "arrive" at, so toggling Time simply
   // re-bends the visible path. Orbit view (inspectMode on, follow off) so the
   // full path — and the connector choice — is visible.
-  previewRoute: v =>
+  previewRoute: (v, kind = "crowd") =>
     set({
       activeRoute: { variant: v, startedAt: Date.now(), currentWaypointIndex: 0 },
-      routePreview: true,
+      routePreview: kind,
       cameraFollow: false,
       inspectMode: true,
       firstPerson: false,
@@ -198,8 +201,8 @@ export const useStore = create<State>(set => ({
   endRoute: () =>
     set(s =>
       s.cameraFollow
-        ? { activeRoute: null, routePreview: false, cameraFollow: false, inspectMode: true }
-        : { activeRoute: null, routePreview: false },
+        ? { activeRoute: null, routePreview: null, cameraFollow: false, inspectMode: true }
+        : { activeRoute: null, routePreview: null },
     ),
   // Manually touching rotate/tilt or walk mode exits GPS-follow, so the flag
   // never goes stale against the active camera.

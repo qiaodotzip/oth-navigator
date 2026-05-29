@@ -16,7 +16,7 @@ import { simDate } from "@/enrichment/simClock";
 import { nextJourneyStopId } from "@/routing/journeyNav";
 import { speak, stopSpeaking } from "@/narration/voice";
 import { buildStepInstruction } from "@/ui/stepInstruction";
-import type { PopularTimesEntry, Service, Pt, FloorId } from "@/data/types";
+import type { PopularTimesEntry, Service, Pt, FloorId, Floor, EntranceMap, RouteVariant } from "@/data/types";
 import { SetLocationControl } from "@/ui/SetLocationControl";
 // import { JourneyTimeline } from "@/ui/JourneyTimeline"; // top pill hidden for screenshots
 import { WaypointEditor } from "@/dev/WaypointEditor";
@@ -51,9 +51,38 @@ function stopToService(stop: PlanStop): Service {
       stepFreeRoute: stop.accessibility?.stepFree ?? true,
       notes: stop.accessibility?.notes,
     },
-    sourceUrl: "",
+    sourceUrl: stop.website ?? "",
     iconKey: "info",
   };
+}
+
+// The two human help desks we can route to when a place can't be reached
+// indoors: ServiceSG (L1 PSC) and Our Tampines Hub CC (L3). Both are traced.
+const HELP_DESK_IDS = ["servicesg", "community-centre"];
+
+/** Total walked length of a route, with a per-floor-change penalty, so we can
+ *  pick the *nearer* help desk by actual travel rather than straight line. */
+function routeLength(v: RouteVariant): number {
+  let len = 0;
+  for (const s of v.steps) {
+    const p = s.pathFromPrev;
+    if (p && p.length >= 2) {
+      for (let i = 1; i < p.length; i++) {
+        len += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+      }
+    }
+  }
+  const floorChanges = new Set(v.steps.map(s => s.floorId)).size - 1;
+  return len + floorChanges * 60; // a floor change is worth ~60m of walking
+}
+
+/** Can we draw an indoor route to this service? False for unmodelled upper
+ *  floors (L4/L5), the basement (B1), and rooms we haven't traced — those get
+ *  the "unreachable" card instead of a broken/janky route. */
+function canRoute(service: Service, floors: Floor[], entrances: EntranceMap): boolean {
+  const entrance = entrances[service.id] ?? (service.roomId ? entrances[service.roomId] : undefined);
+  if (entrance) return true;
+  return serviceLocation(service, floors) != null;
 }
 
 /** A connector-crowd penalty bound to the current catalog + the toggled time. */
@@ -131,8 +160,9 @@ export default function App() {
     );
     if (rebuilt) {
       st.setActiveFloor(rebuilt.steps[0].floorId);
-      // Keep a preview a preview (orbit/map view); only real navigation follows.
-      if (st.routePreview) st.previewRoute(rebuilt);
+      // Keep a preview a preview (orbit/map view), preserving which demo it is;
+      // only real navigation follows.
+      if (st.routePreview) st.previewRoute(rebuilt, st.routePreview);
       else st.startRoute(rebuilt);
     }
   }, [profile]);
@@ -160,8 +190,9 @@ export default function App() {
     );
     if (rebuilt) {
       st.setActiveFloor(rebuilt.steps[0].floorId);
-      // Keep a preview a preview (orbit/map view); only real navigation follows.
-      if (st.routePreview) st.previewRoute(rebuilt);
+      // Keep a preview a preview (orbit/map view), preserving which demo it is;
+      // only real navigation follows.
+      if (st.routePreview) st.previewRoute(rebuilt, st.routePreview);
       else st.startRoute(rebuilt);
     }
   }, [timeOfDay]);
@@ -170,18 +201,83 @@ export default function App() {
     (serviceId: string) => {
       // Read fresh from the store: a service may have just been registered
       // (backend/poller/?dest handoff) in the same tick, before re-render.
-      const svc = useStore.getState().services.find(s => s.id === serviceId);
+      const st = useStore.getState();
+      const svc = st.services.find(s => s.id === serviceId);
       if (!svc) return;
-      const start = useStore.getState().userLocation ?? DEFAULT_START;
-      const floors = useStore.getState().floors;
-      const entrances = useStore.getState().entrances;
-      const loads = useStore.getState().counterLoads;
-      const variant = buildRoute(start, svc, profile, floors, entrances, loads, currentConnectorPenalty());
+      // Can't draw an indoor route there (L4/L5, B1, untraced room)? Show the
+      // "do it online / nearest help desk" card instead of a broken route.
+      if (!canRoute(svc, st.floors, st.entrances)) {
+        st.endRoute(); // leave nav view (e.g. when chaining from a prior stop)
+        st.setPlan({
+          kind: "unreachable",
+          stop: {
+            serviceId: svc.id,
+            name: { en: svc.nameEn, zh: svc.nameZh },
+            unmodelledLevel: svc.unmodelledLevel,
+            website: svc.sourceUrl || undefined,
+          },
+        });
+        st.setIntentStatus("resolved");
+        return;
+      }
+      const start = st.userLocation ?? DEFAULT_START;
+      const variant = buildRoute(start, svc, profile, st.floors, st.entrances, st.counterLoads, currentConnectorPenalty());
       if (!variant) return;
       setActiveFloor(variant.steps[0].floorId);
       startRoute(variant);
     },
     [profile, services, startRoute, setActiveFloor],
+  );
+
+  // Nearest reachable help desk (ServiceSG L1 vs OTH CC L3) by actual travel
+  // from where the user is now — the fallback when a place can't be routed to.
+  const nearestHelpDeskId = useCallback((): string => {
+    const st = useStore.getState();
+    const start = st.userLocation ?? DEFAULT_START;
+    let best = HELP_DESK_IDS[0];
+    let bestLen = Infinity;
+    for (const id of HELP_DESK_IDS) {
+      const svc = st.services.find(s => s.id === id);
+      if (!svc) continue;
+      const v = buildRoute(start, svc, st.profile, st.floors, st.entrances, st.counterLoads, currentConnectorPenalty());
+      if (!v) continue;
+      const len = routeLength(v);
+      if (len < bestLen) {
+        bestLen = len;
+        best = id;
+      }
+    }
+    return best;
+  }, []);
+
+  // From the unreachable card: walk me to the nearest help desk instead. Mark
+  // the stop handled so a journey's progress reflects it.
+  const onGoToHelpDesk = useCallback(
+    (stop: PlanStop) => {
+      useStore.getState().markStopDone(stop.serviceId);
+      onPickService(nearestHelpDeskId());
+    },
+    [onPickService, nearestHelpDeskId],
+  );
+
+  // From the unreachable card (after doing it online): move on. Advances the
+  // journey to the next stop if there is one, otherwise ends.
+  const onSkipStop = useCallback(
+    (stop: PlanStop) => {
+      const st = useStore.getState();
+      st.markStopDone(stop.serviceId);
+      const journey = st.journey;
+      if (journey) {
+        const nextId = nextJourneyStopId(journey, stop.serviceId);
+        if (nextId) {
+          onPickService(nextId);
+          return;
+        }
+      }
+      st.endRoute();
+      st.resetIntent();
+    },
+    [onPickService],
   );
 
   // Quick-access tiles resolve LOCALLY only — tamp never sends queries; the
@@ -363,7 +459,38 @@ export default function App() {
     );
     if (!variant) return;
     st.setActiveFloor(variant.steps[0].floorId);
-    st.previewRoute(variant);
+    st.previewRoute(variant, "crowd");
+  }, []);
+
+  // DEMO 2 (accessibility): same hawker start, route up to the LIBRARY on L2.
+  // Presets step-free so the route takes the east lift; toggling the Step-free /
+  // Stairs control (top-right, or the in-panel switch) re-routes via the nearby
+  // staircase instead — the same A* connector picker, just a different profile.
+  // Verified against the real geometry (feasibility harness): step-free → east
+  // lift, stairs-OK → east staircase.
+  const onAccessDemo = useCallback(() => {
+    const st = useStore.getState();
+    const dest = st.services.find(s => s.id === "library");
+    if (!dest) return;
+    const anchorSvc = st.services.find(s => s.id === "hawker");
+    const anchor = anchorSvc ? serviceLocation(anchorSvc, st.floors) : null;
+    const start = anchor
+      ? { floorId: anchor.floorId, point: anchor.point }
+      : DEFAULT_START;
+    st.setUserLocation(start);
+    st.setProfile("stepFree");
+    const variant = buildRoute(
+      start,
+      dest,
+      "stepFree",
+      st.floors,
+      st.entrances,
+      st.counterLoads,
+      currentConnectorPenalty(),
+    );
+    if (!variant) return;
+    st.setActiveFloor(variant.steps[0].floorId);
+    st.previewRoute(variant, "access");
   }, []);
 
   // Speak the current step's instruction (same line PromptPanel shows) whenever
@@ -445,11 +572,14 @@ export default function App() {
             <PromptPanel
               onSubmitIntent={onSubmitIntent}
               onRoutingDemo={onRoutingDemo}
+              onAccessDemo={onAccessDemo}
               onGuide={onGuide}
               onStartInApp={onStartInApp}
               onAskAgain={onAskAgain}
               onNext={onNext}
               onArrived={onArrived}
+              onGoToHelpDesk={onGoToHelpDesk}
+              onSkipStop={onSkipStop}
             />
           </div>
         </div>

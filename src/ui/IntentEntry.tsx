@@ -1,4 +1,4 @@
-import { DownloadSimple } from "phosphor-react";
+import { DownloadSimple, Wheelchair } from "phosphor-react";
 import { useStore } from "@/store";
 import { ServiceIcon } from "./iconMap";
 import { PURPOSE_TILES } from "@/intent/synonyms";
@@ -6,11 +6,13 @@ import { PURPOSE_TILES } from "@/intent/synonyms";
 export function IntentEntry({
   onSubmit,
   onRoutingDemo,
+  onAccessDemo,
 }: {
   // Tile taps take the instant local path (fromText omitted). The typed
   // free-text → backend concierge path lives in the top-bar search.
   onSubmit: (query: string, fromText?: boolean) => void;
   onRoutingDemo?: () => void;
+  onAccessDemo?: () => void;
 }) {
   const language = useStore(s => s.language);
 
@@ -36,15 +38,29 @@ export function IntentEntry({
         ))}
       </div>
 
-      {onRoutingDemo && (
-        <button
-          type="button"
-          onClick={onRoutingDemo}
-          className="mt-4 inline-flex items-center gap-2 self-start rounded-xl border border-dashed border-oth-primary/50 bg-oth-primary/5 px-3 py-2 text-sm font-semibold text-oth-primary transition active:scale-95 hover:bg-oth-primary/10"
-        >
-          <DownloadSimple size={18} weight="bold" />
-          {language === "zh" ? "演示路线逻辑" : "Show routing logic"}
-        </button>
+      {(onRoutingDemo || onAccessDemo) && (
+        <div className="mt-4 flex flex-col gap-2">
+          {onRoutingDemo && (
+            <button
+              type="button"
+              onClick={onRoutingDemo}
+              className="inline-flex items-center gap-2 self-start rounded-xl border border-dashed border-oth-primary/50 bg-oth-primary/5 px-3 py-2 text-sm font-semibold text-oth-primary transition active:scale-95 hover:bg-oth-primary/10"
+            >
+              <DownloadSimple size={18} weight="bold" />
+              {language === "zh" ? "演示：人潮路线" : "Demo: crowd-aware route"}
+            </button>
+          )}
+          {onAccessDemo && (
+            <button
+              type="button"
+              onClick={onAccessDemo}
+              className="inline-flex items-center gap-2 self-start rounded-xl border border-dashed border-oth-primary/50 bg-oth-primary/5 px-3 py-2 text-sm font-semibold text-oth-primary transition active:scale-95 hover:bg-oth-primary/10"
+            >
+              <Wheelchair size={18} weight="bold" />
+              {language === "zh" ? "演示：无障碍路线" : "Demo: step-free vs stairs"}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
