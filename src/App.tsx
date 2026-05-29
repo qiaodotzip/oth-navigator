@@ -438,7 +438,7 @@ export default function App() {
             <SetLocationControl />
           </div>
           <div
-            className={`min-h-0 md:h-full md:w-1/4 md:flex-none ${
+            className={`min-h-0 min-w-0 md:h-full md:w-1/3 md:min-w-[300px] md:max-w-[400px] md:flex-none ${
               activeRoute ? "h-[40%]" : "h-[42%]"
             }`}
           >

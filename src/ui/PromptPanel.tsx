@@ -49,7 +49,7 @@ export function PromptPanel({
 
   if (!route) {
     const shell = (inner: ReactNode) => (
-      <div className="h-full overflow-y-auto bg-oth-paper border-t border-neutral-300 md:border-t-0 md:border-r">
+      <div className="h-full overflow-y-auto overflow-x-hidden bg-oth-paper border-t border-neutral-300 md:border-t-0 md:border-r">
         {inner}
       </div>
     );
@@ -95,7 +95,7 @@ export function PromptPanel({
       <button
         onClick={() => setTimeOfDay(tod)}
         aria-pressed={timeOfDay === tod}
-        className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-sm font-bold transition active:scale-95 ${
+        className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-sm font-bold transition active:scale-95 ${
           timeOfDay === tod
             ? "bg-oth-primary text-white shadow-sm"
             : "bg-white text-oth-ink ring-1 ring-neutral-200"
@@ -106,9 +106,9 @@ export function PromptPanel({
       </button>
     );
     return (
-      <div className="h-full bg-oth-paper border-t border-neutral-300 md:border-t-0 md:border-r flex flex-col">
-        <div className="flex flex-shrink-0 items-center justify-between px-4 pt-3">
-          <span className="truncate text-sm font-semibold text-neutral-500">
+      <div className="h-full overflow-x-hidden bg-oth-paper border-t border-neutral-300 md:border-t-0 md:border-r flex flex-col">
+        <div className="flex flex-shrink-0 items-center justify-between gap-2 px-4 pt-3">
+          <span className="min-w-0 truncate text-sm font-semibold text-neutral-500">
             {language === "zh" ? "路线预览" : "Routing preview"}
             {svcName && ` → ${svcName}`}
           </span>
@@ -134,7 +134,7 @@ export function PromptPanel({
               ? "傍晚小贩中心人多，路线会改走较空的电梯。"
               : "In the evening the hawker centre fills up, so the route takes a quieter lift."}
           </p>
-          <div className="mt-1 flex gap-2">
+          <div className="mt-1 flex flex-col gap-2">
             {timeBtn("morning", Sun, language === "zh" ? "早晨 · 人少" : "Morning · quiet")}
             {timeBtn("evening", MoonStars, language === "zh" ? "傍晚 · 人多" : "Evening · busy")}
           </div>
@@ -205,7 +205,7 @@ export function PromptPanel({
         : "bg-oth-primary";
 
   return (
-    <div className="h-full bg-oth-paper border-t border-neutral-300 md:border-t-0 md:border-r flex flex-col">
+    <div className="h-full overflow-x-hidden bg-oth-paper border-t border-neutral-300 md:border-t-0 md:border-r flex flex-col">
       {/* Header: journey progress + step counter + exit */}
       <div className="flex-shrink-0 px-4 pt-3">
         <div className="mb-2 flex items-center justify-between">
