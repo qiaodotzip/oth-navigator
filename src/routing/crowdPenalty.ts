@@ -4,9 +4,13 @@ import { serviceLocation } from "./buildRoute";
 
 // How close (metres) a venue must be to a connector to crowd it, and how many
 // metres of "extra walking" a fully-busy (1.0) neighbour adds to that connector's
-// cost. Tunable to guarantee the demo route flips.
-export const CROWD_RADIUS_M = 12;
-export const CROWD_WEIGHT_M = 40;
+// cost. Tuned (Task 8) against the real OTH geometry: radius 16 lets a connector
+// "see" a venue ~14m away (the central lift sits ~14m from the hawker centre),
+// and weight 120 is comfortably inside the stable flip zone (flips for r 16–20,
+// w 100–140) so the hawker→HDB demo route swings off the crowded central lift in
+// the evening without being a knife-edge.
+export const CROWD_RADIUS_M = 16;
+export const CROWD_WEIGHT_M = 120;
 
 function dist(a: Pt, b: Pt): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);

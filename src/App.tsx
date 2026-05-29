@@ -328,12 +328,13 @@ export default function App() {
     useStore.getState().resetIntent();
   }, []);
 
-  // DEMO: preset a crowd-sensitive single route so we can show the time toggle
+  // DEMO: preset a crowd-sensitive single route so we can show the Time toggle
   // bending the path. Start on the leisure (hawker) side of L1, route up to the
-  // HDB branch on L2; presets the time to "evening" (leisure peak) so the crowd
-  // effect is visible on first press — the presenter then toggles Time to show
-  // the connector choice flip. NOTE: verify this start/dest actually flips
-  // against the real geometry; the exact ids/anchor may need adjusting.
+  // HDB branch on L2. Presets the time to "morning" — the quiet baseline where
+  // the route takes the direct central lift. The reveal is toggling Time to
+  // "evening": the hawker centre fills up, the central lift gets a crowd penalty,
+  // and the route visibly swings to the quieter east lift. Verified (Task 8)
+  // against the real geometry with CROWD_RADIUS_M=16 / CROWD_WEIGHT_M=120.
   const onRoutingDemo = useCallback(() => {
     const st = useStore.getState();
     const anchorSvc = st.services.find(s => s.id === "hawker");
@@ -342,7 +343,7 @@ export default function App() {
       ? { floorId: anchor.floorId, point: anchor.point }
       : DEFAULT_START;
     st.setUserLocation(start);
-    st.setTimeOfDay("evening");
+    st.setTimeOfDay("morning");
     onPickService("hdb");
   }, [onPickService]);
 
