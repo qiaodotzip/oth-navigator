@@ -11,10 +11,12 @@ import { useStore } from "@/store";
 import { loadDataBundle } from "@/data/loaders";
 import { prewarmAll } from "@/narration/prewarm";
 import { buildRoute, DEFAULT_START, routeArrivalLocation } from "@/routing/buildRoute";
+import { connectorCrowdPenalty } from "@/routing/crowdPenalty";
+import { simDate } from "@/enrichment/simClock";
 import { nextJourneyStopId } from "@/routing/journeyNav";
 import { speak, stopSpeaking } from "@/narration/voice";
 import { buildStepInstruction } from "@/ui/stepInstruction";
-import type { PopularTimesEntry, Service } from "@/data/types";
+import type { PopularTimesEntry, Service, Pt, FloorId } from "@/data/types";
 import { SetLocationControl } from "@/ui/SetLocationControl";
 // import { JourneyTimeline } from "@/ui/JourneyTimeline"; // top pill hidden for screenshots
 import { WaypointEditor } from "@/dev/WaypointEditor";
@@ -54,6 +56,14 @@ function stopToService(stop: PlanStop): Service {
   };
 }
 
+/** A connector-crowd penalty bound to the current catalog + the toggled time. */
+function currentConnectorPenalty(): (point: Pt, floorId: FloorId) => number {
+  const st = useStore.getState();
+  const now = simDate(st.timeOfDay);
+  return (point, floorId) =>
+    connectorCrowdPenalty(point, floorId, st.services, st.floors, st.popularTimes, now);
+}
+
 export default function App() {
   if (typeof window !== "undefined") {
     if (window.location.hash === "#waypoints") return <WaypointEditor />;
@@ -75,6 +85,7 @@ export default function App() {
   // const journey = useStore(s => s.journey); // used by the hidden "Your trip" top pill
   const floors = useStore(s => s.floors);
   const voiceOn = useStore(s => s.voiceOn);
+  const timeOfDay = useStore(s => s.timeOfDay);
 
   useEffect(() => {
     loadDataBundle()
@@ -116,12 +127,40 @@ export default function App() {
       st.floors,
       st.entrances,
       st.counterLoads,
+      currentConnectorPenalty(),
     );
     if (rebuilt) {
       st.setActiveFloor(rebuilt.steps[0].floorId);
       st.startRoute(rebuilt);
     }
   }, [profile]);
+
+  // Toggling the Time control re-routes the active route from the current leg's
+  // start, so the path visibly bends around the new crowd picture.
+  const prevTime = useRef(timeOfDay);
+  useEffect(() => {
+    if (prevTime.current === timeOfDay) return;
+    prevTime.current = timeOfDay;
+    const st = useStore.getState();
+    const route = st.activeRoute;
+    if (!route) return;
+    const svc = st.services.find(s => s.id === route.variant.serviceId);
+    const start = route.variant.steps[0];
+    if (!svc || !start) return;
+    const rebuilt = buildRoute(
+      { floorId: start.floorId, point: start.point },
+      svc,
+      st.profile,
+      st.floors,
+      st.entrances,
+      st.counterLoads,
+      currentConnectorPenalty(),
+    );
+    if (rebuilt) {
+      st.setActiveFloor(rebuilt.steps[0].floorId);
+      st.startRoute(rebuilt);
+    }
+  }, [timeOfDay]);
 
   const onPickService = useCallback(
     (serviceId: string) => {
@@ -133,7 +172,7 @@ export default function App() {
       const floors = useStore.getState().floors;
       const entrances = useStore.getState().entrances;
       const loads = useStore.getState().counterLoads;
-      const variant = buildRoute(start, svc, profile, floors, entrances, loads);
+      const variant = buildRoute(start, svc, profile, floors, entrances, loads, currentConnectorPenalty());
       if (!variant) return;
       setActiveFloor(variant.steps[0].floorId);
       startRoute(variant);
@@ -357,7 +396,7 @@ export default function App() {
     // Speak just the headline + distance (e.g. "Walk to ComCare …, 58 meters").
     const meters = Math.round(instr.distanceM);
     const dist = meters > 0 ? (language === "zh" ? `，${meters}米` : `, ${meters} meters`) : "";
-    void speak(`${instr.title}${dist}`, language);
+    void speak(`${instr.title}${dist}`);
   }, [activeRoute?.currentWaypointIndex, activeRoute?.variant.serviceId, voiceOn, language, activeRoute]);
 
   const onNext = useCallback(() => {
