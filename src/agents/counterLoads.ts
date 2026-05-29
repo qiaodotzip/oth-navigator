@@ -7,6 +7,7 @@ import { Noise } from "noisejs";
 import { useEffect } from "react";
 import { useStore } from "@/store";
 import { busynessNow } from "@/enrichment/popularTimes";
+import { simDate } from "@/enrichment/simClock";
 
 const noise = new Noise(Math.random());
 
@@ -14,6 +15,7 @@ export function useCounterLoadSimulator() {
   const services = useStore(s => s.services);
   const popularTimes = useStore(s => s.popularTimes);
   const setLoad = useStore(s => s.setLoad);
+  const timeOfDay = useStore(s => s.timeOfDay);
   useEffect(() => {
     if (!services.length) return;
 
@@ -28,7 +30,7 @@ export function useCounterLoadSimulator() {
     // churning the store 60x/sec and the re-renders that come with it.
     const tick = () => {
       const seconds = performance.now() / 1000;
-      const now = new Date();
+      const now = simDate(timeOfDay);
       counters.forEach((cid, i) => {
         const serviceId = counterToService.get(cid)!;
         const real = busynessNow(serviceId, popularTimes, now);
@@ -44,5 +46,5 @@ export function useCounterLoadSimulator() {
     tick();
     const id = setInterval(tick, 650);
     return () => clearInterval(id);
-  }, [services, popularTimes, setLoad]);
+  }, [services, popularTimes, setLoad, timeOfDay]);
 }
