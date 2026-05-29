@@ -76,6 +76,7 @@ type State = {
   setUserLocation: (loc: UserLocation) => void;
   setPickingLocation: (v: boolean) => void;
   cycleTimeOfDay: () => void;
+  setTimeOfDay: (t: TimeOfDay) => void;
   setTileSize: (m: number) => void;
   toggleEffects: () => void;
   toggleVoice: () => void;
@@ -203,6 +204,7 @@ export const useStore = create<State>(set => ({
           ? "night"
           : "morning",
     })),
+  setTimeOfDay: t => set({ timeOfDay: t }),
   setTileSize: m => {
     const v = Math.max(0.3, Math.min(20, m));
     try {
