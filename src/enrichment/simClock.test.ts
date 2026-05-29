@@ -15,4 +15,11 @@ describe("simDate", () => {
     expect(d.getDay()).toBe(5); // Friday
     expect(d.getHours()).toBe(18);
   });
+
+  it.each(["morning", "evening", "night"] as const)(
+    "simDate(%s) lands on a Friday",
+    t => {
+      expect(simDate(t).getDay()).toBe(5);
+    },
+  );
 });
