@@ -35,6 +35,10 @@ type State = {
   doneStops: string[];
   entrances: EntranceMap;
   activeRoute: ActiveRoute | null;
+  /** The active route is a static map PREVIEW (orbit view, no turn-by-turn / no
+   *  voice), used by the "Show routing logic" demo so toggling Time visibly
+   *  re-bends the path without the user having to walk or "arrive". */
+  routePreview: boolean;
   activePlan: Plan | null;
   intentStatus: "idle" | "resolving" | "resolved";
   inspectMode: boolean;
@@ -67,6 +71,8 @@ type State = {
   resetJourneyProgress: () => void;
   setEntrances: (e: EntranceMap) => void;
   startRoute: (v: RouteVariant) => void;
+  /** Draw a route on the map as a preview (orbit view), not as navigation. */
+  previewRoute: (v: RouteVariant) => void;
   advanceRoute: () => void;
   endRoute: () => void;
   toggleInspectMode: () => void;
@@ -108,6 +114,7 @@ export const useStore = create<State>(set => ({
   doneStops: [],
   entrances: {},
   activeRoute: null,
+  routePreview: false,
   activePlan: null,
   intentStatus: "idle",
   inspectMode: true,
@@ -150,8 +157,22 @@ export const useStore = create<State>(set => ({
   startRoute: v =>
     set({
       activeRoute: { variant: v, startedAt: Date.now(), currentWaypointIndex: 0 },
+      routePreview: false,
       cameraFollow: true,
       inspectMode: false,
+      firstPerson: false,
+    }),
+  // Preview a route on the orbit/map view (whole path visible) instead of
+  // dropping into GPS turn-by-turn. Used by the routing-logic demo: the route is
+  // drawn, but there's nothing to walk or "arrive" at, so toggling Time simply
+  // re-bends the visible path. Orbit view (inspectMode on, follow off) so the
+  // full path — and the connector choice — is visible.
+  previewRoute: v =>
+    set({
+      activeRoute: { variant: v, startedAt: Date.now(), currentWaypointIndex: 0 },
+      routePreview: true,
+      cameraFollow: false,
+      inspectMode: true,
       firstPerson: false,
     }),
   advanceRoute: () =>
@@ -177,8 +198,8 @@ export const useStore = create<State>(set => ({
   endRoute: () =>
     set(s =>
       s.cameraFollow
-        ? { activeRoute: null, cameraFollow: false, inspectMode: true }
-        : { activeRoute: null },
+        ? { activeRoute: null, routePreview: false, cameraFollow: false, inspectMode: true }
+        : { activeRoute: null, routePreview: false },
     ),
   // Manually touching rotate/tilt or walk mode exits GPS-follow, so the flag
   // never goes stale against the active camera.

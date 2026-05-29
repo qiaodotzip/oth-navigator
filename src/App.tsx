@@ -131,7 +131,9 @@ export default function App() {
     );
     if (rebuilt) {
       st.setActiveFloor(rebuilt.steps[0].floorId);
-      st.startRoute(rebuilt);
+      // Keep a preview a preview (orbit/map view); only real navigation follows.
+      if (st.routePreview) st.previewRoute(rebuilt);
+      else st.startRoute(rebuilt);
     }
   }, [profile]);
 
@@ -158,7 +160,9 @@ export default function App() {
     );
     if (rebuilt) {
       st.setActiveFloor(rebuilt.steps[0].floorId);
-      st.startRoute(rebuilt);
+      // Keep a preview a preview (orbit/map view); only real navigation follows.
+      if (st.routePreview) st.previewRoute(rebuilt);
+      else st.startRoute(rebuilt);
     }
   }, [timeOfDay]);
 
@@ -328,15 +332,19 @@ export default function App() {
     useStore.getState().resetIntent();
   }, []);
 
-  // DEMO: preset a crowd-sensitive single route so we can show the Time toggle
-  // bending the path. Start on the leisure (hawker) side of L1, route up to the
-  // HDB branch on L2. Presets the time to "morning" — the quiet baseline where
-  // the route takes the direct central lift. The reveal is toggling Time to
-  // "evening": the hawker centre fills up, the central lift gets a crowd penalty,
-  // and the route visibly swings to the quieter east lift. Verified (Task 8)
-  // against the real geometry with CROWD_RADIUS_M=16 / CROWD_WEIGHT_M=120.
+  // DEMO: draw a crowd-sensitive route as a map PREVIEW (orbit view, no walking)
+  // so toggling Time visibly re-bends it. Start on the leisure (hawker) side of
+  // L1, route up to the HDB branch on L2. Presets "morning" — the quiet baseline
+  // where the route takes the direct central lift. The reveal is switching Time
+  // to "evening": the hawker centre fills up, the central lift gets a crowd
+  // penalty, and the path swings to the quieter east lift. Because it's a preview
+  // (not navigation), there's nothing to "arrive" at — the route stays on screen
+  // and re-bends each time Time changes. Verified (Task 8) against the real
+  // geometry with CROWD_RADIUS_M=16 / CROWD_WEIGHT_M=120.
   const onRoutingDemo = useCallback(() => {
     const st = useStore.getState();
+    const dest = st.services.find(s => s.id === "hdb");
+    if (!dest) return;
     const anchorSvc = st.services.find(s => s.id === "hawker");
     const anchor = anchorSvc ? serviceLocation(anchorSvc, st.floors) : null;
     const start = anchor
@@ -344,14 +352,26 @@ export default function App() {
       : DEFAULT_START;
     st.setUserLocation(start);
     st.setTimeOfDay("morning");
-    onPickService("hdb");
-  }, [onPickService]);
+    const variant = buildRoute(
+      start,
+      dest,
+      st.profile,
+      st.floors,
+      st.entrances,
+      st.counterLoads,
+      currentConnectorPenalty(),
+    );
+    if (!variant) return;
+    st.setActiveFloor(variant.steps[0].floorId);
+    st.previewRoute(variant);
+  }, []);
 
   // Speak the current step's instruction (same line PromptPanel shows) whenever
   // the step or language changes. Voice routes through JOM's ElevenLabs TTS with
   // a browser-speech fallback. Silent when voice is off or no route is active.
   useEffect(() => {
-    if (!activeRoute || !voiceOn) {
+    // A preview route is a silent map illustration — no turn-by-turn voice.
+    if (!activeRoute || !voiceOn || useStore.getState().routePreview) {
       stopSpeaking();
       return;
     }
@@ -365,7 +385,7 @@ export default function App() {
     // Speak just the headline + distance (e.g. "Walk to ComCare …, 58 meters").
     const meters = Math.round(instr.distanceM);
     const dist = meters > 0 ? (language === "zh" ? `，${meters}米` : `, ${meters} meters`) : "";
-    void speak(`${instr.title}${dist}`);
+    void speak(`${instr.title}${dist}`, language);
   }, [activeRoute?.currentWaypointIndex, activeRoute?.variant.serviceId, voiceOn, language, activeRoute]);
 
   const onNext = useCallback(() => {
