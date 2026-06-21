@@ -3,8 +3,8 @@
 > **Status:** v0.1 hackathon build, 2026-05-23
 > **Working title:** OTH Navigator (also referred to as "HubGuide" in pitches)
 > **Companion docs:**
-> - Technical design: `docs/superpowers/specs/2026-05-22-oth-2_5d-navigation-design.md`
-> - Implementation plan: `docs/superpowers/plans/2026-05-22-oth-2_5d-navigation.md`
+> - Technical design: `docs/design-and-plans/specs/2026-05-22-oth-2_5d-navigation-design.md`
+> - Implementation plan: `docs/design-and-plans/plans/2026-05-22-oth-2_5d-navigation.md`
 
 ---
 
@@ -186,7 +186,7 @@ Ordered by judged value vs. effort:
 
 ## 12. Architecture summary
 
-(See `docs/superpowers/specs/2026-05-22-oth-2_5d-navigation-design.md` for full detail.)
+(See `docs/design-and-plans/specs/2026-05-22-oth-2_5d-navigation-design.md` for full detail.)
 
 - **Frontend:** React 18 + Vite + TypeScript + Tailwind. React Three Fiber for the 2.5D model. Zustand for state. Web Speech API for voice in/out.
 - **Backend:** Single Hono Node server (`server/index.ts`) deployed on Railway. Exposes `/api/narrate` (OpenAI proxy) and `/api/health`. Serves built static frontend in production.

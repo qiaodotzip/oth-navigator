@@ -15,7 +15,7 @@
 - Phosphor icons
 - Vercel for deployment (`vercel dev` for local API emulation)
 
-**Reference spec:** `docs/superpowers/specs/2026-05-22-oth-2_5d-navigation-design.md`
+**Reference spec:** `docs/design-and-plans/specs/2026-05-22-oth-2_5d-navigation-design.md`
 
 **Parallelism note:** Phase 1 (asset pipeline — research + tracing) is mostly **non-code** and can be done by the same engineer in parallel with Phase 2-3 (rendering and agents). Phase 5 (routing + narration) cannot start until Phase 1 tasks 5, 7, 8, 10, 11 are complete. The plan lists tasks linearly; cross-references call out when later tasks depend on earlier ones.
 
@@ -3235,7 +3235,7 @@ The plan covers everything in the spec. To execute, pick one of the two executio
 
 ---
 
-**Plan complete and saved to `docs/superpowers/plans/2026-05-22-oth-2_5d-navigation.md`. Two execution options:**
+**Plan complete and saved to `docs/design-and-plans/plans/2026-05-22-oth-2_5d-navigation.md`. Two execution options:**
 
 1. **Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration.
 2. **Inline Execution** — Execute tasks in this session using executing-plans, batch execution with checkpoints.

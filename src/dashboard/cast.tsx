@@ -1,7 +1,7 @@
 /**
  * Shared mock cast + report data for the Service Fragmentation Lens.
  * Persona stats/reviews are MOCK (match the planned pipeline shapes — see
- * docs/superpowers/plans/2026-05-26-fragmentation-dashboard-plan.md). Persona
+ * docs/design-and-plans/plans/2026-05-26-fragmentation-dashboard-plan.md). Persona
  * `stops` use REAL routable service ids so the dashboard's map replay works.
  */
 

@@ -292,7 +292,7 @@ Failing validation hides the service from the tile grid and logs to the console.
 
 ```
 tamp_hackathon/
-├── docs/superpowers/specs/2026-05-22-oth-2_5d-navigation-design.md    # this file
+├── docs/design-and-plans/specs/2026-05-22-oth-2_5d-navigation-design.md    # this file
 ├── images/                                                            # source floor plans
 ├── research/                                                          # service-mapping notes
 │   ├── oth-services-from-pdf.md

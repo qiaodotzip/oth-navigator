@@ -8,7 +8,7 @@
 
 **Tech Stack:** Hono + Node (server), React 18 + Zustand + R3F (frontend), Vitest. Vite proxies `/api` → `:3000` (already configured).
 
-**Spec:** `docs/superpowers/specs/2026-05-23-oth-service-catalog-stub-design.md`
+**Spec:** `docs/design-and-plans/specs/2026-05-23-oth-service-catalog-stub-design.md`
 
 ---
 

@@ -175,7 +175,8 @@ tamp_hackathon/
 │   └── App.tsx             # top-level wiring
 ├── server/index.ts         # Hono API: /api/narrate, /api/services, /api/save-floor
 ├── scripts/                # SVG→polygon tracing, popular-times builders
-├── docs/                   # PRD, RUNBOOK, pitch decks, specs & plans
+├── docs/                   # product docs + AI-assisted design journal (see docs/README.md)
+├── research/               # the data-sourcing trail behind services.json
 └── images/                 # source OTH floor plans the polygons were traced from
 ```
 
@@ -232,6 +233,21 @@ with the in-app editor under `src/dev/`. Every service entry in `services.json` 
 a `sourceUrl` for verification — the app never invents a location, and the LLM only
 ever picks from the curated catalog. This is **demo data**; verify specifics with OTH
 Customer Service before relying on them.
+
+---
+
+## Documentation & how this was built
+
+This project was designed and built in the open, working with an AI coding assistant.
+The full paper trail is browsable:
+
+- **[`docs/`](docs/README.md)** — start here. Product requirements, the run/demo
+  runbook, and an **AI-assisted design journal** (`docs/design-and-plans/`): the
+  specs (the *what & why*) and step-by-step build plans (the *how*) for every major
+  feature, in the order they were built.
+- **[`research/`](research/README.md)** — the data-sourcing trail: which public
+  sources the OTH service data came from, what could and couldn't be verified, and
+  the gaps that still need an on-site check.
 
 ---
 

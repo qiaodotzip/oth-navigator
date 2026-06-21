@@ -3,7 +3,7 @@
 > **Status:** approved design, 2026-05-26
 > **Roadmap home:** PRD §9 V0.3 "Real live data — at least 2 services with real
 > queue data"; `docs/FUTURE_FEATURES.md` §1 (LTA DataMall crowd) + §2 (data.gov.sg).
-> **Companion:** implementation plan to follow in `docs/superpowers/plans/`.
+> **Companion:** implementation plan to follow in `docs/design-and-plans/plans/`.
 
 ---
 
