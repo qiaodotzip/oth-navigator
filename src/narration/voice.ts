@@ -2,22 +2,23 @@ import type { Language } from "@/data/types";
 import { RETRIEVAL_BASE } from "@/data/retrieval";
 
 /**
- * Spoken turn-by-turn guidance. Same path as JOM's Buddy voice: POST the line
- * to the backend's ElevenLabs endpoint (`/api/tts`) and play the MP3; if the
- * key isn't set (503) / it errors (502) / the network is down / autoplay is
- * blocked, fall back to the browser's speechSynthesis so navigation still talks.
+ * Spoken turn-by-turn guidance. Primary path is the backend's ElevenLabs
+ * endpoint (`/api/tts`). The browser's speechSynthesis is used ONLY as a
+ * fallback when the backend can't return audio — a non-200 (key blocked /
+ * ElevenLabs errored) or an unreachable backend. It never plays on top of a
+ * working ElevenLabs line: by then we've already committed to the audio path.
  * We hold the playing Audio so a new step (or a tap) cancels the previous line.
  */
 
 // `_aborted` marks an element we stopped on purpose (tap Next / mute / new step).
-// Clearing `src` to release it fires an `error` event, and pausing rejects a
-// pending `play()` — without this flag those paths would wrongly fall back to
-// the browser voice on top of the next line.
+// Clearing `src` to release it fires an `error` event and pausing rejects a
+// pending `play()`; the flag lets those handlers tell an intentional stop from a
+// real failure.
 type ManagedAudio = HTMLAudioElement & { _aborted?: boolean };
 let currentAudio: ManagedAudio | null = null;
 // Bumped on every stop. An in-flight speak() compares its captured value after
 // each await and bails if a newer line (or a stop) has superseded it — fixes
-// out-of-order fetches starting old audio on top of the current line.
+// out-of-order fetches starting an old line on top of the current one.
 let speakSeq = 0;
 
 function langTag(l: Language): string {
@@ -50,6 +51,7 @@ function pickVoice(lang: Language): SpeechSynthesisVoice | null {
   return voices.find(v => v.lang?.startsWith(prefix)) ?? voices[0];
 }
 
+// Fallback only — used when ElevenLabs is unavailable, never alongside it.
 function speakWithBrowser(text: string, lang: Language) {
   if (!("speechSynthesis" in window)) return;
   const utt = new SpeechSynthesisUtterance(text);
@@ -65,13 +67,13 @@ function speakWithBrowser(text: string, lang: Language) {
   window.speechSynthesis.speak(utt);
 }
 
-/** Stop whatever is currently being spoken (ElevenLabs audio or browser voice). */
+/** Stop whatever line is currently playing (ElevenLabs audio or browser voice). */
 export function stopSpeaking() {
   speakSeq++; // invalidate any speak() currently awaiting a fetch
   if (currentAudio) {
     const a = currentAudio;
     currentAudio = null;
-    a._aborted = true; // guards the error / play-reject / autoplay-check paths
+    a._aborted = true;
     try {
       a.pause();
     } catch {
@@ -96,7 +98,9 @@ export async function speak(text: string, lang: Language) {
     });
     if (seq !== speakSeq) return; // superseded while fetching — drop this line
     if (!resp.ok) {
-      // 503 (no key) / 502 (ElevenLabs errored) → browser voice.
+      // Key blocked / ElevenLabs errored (502/503/…). Fall back so the demo
+      // still talks. No ElevenLabs audio exists yet, so nothing overlaps.
+      console.warn(`[voice] TTS ${resp.status} — falling back to browser voice`);
       speakWithBrowser(clean, lang);
       return;
     }
@@ -110,36 +114,26 @@ export async function speak(text: string, lang: Language) {
       if (currentAudio === audio) currentAudio = null;
     };
     audio.addEventListener("ended", cleanup);
-    audio.addEventListener("error", () => {
-      cleanup();
-      if (audio._aborted) return; // we stopped it on purpose — don't fall back
-      speakWithBrowser(clean, lang);
-    });
+    // ElevenLabs succeeded — a stop/end just clears the element. Do NOT fall
+    // back here, or an intentional stop (src="") would speak over the next line.
+    audio.addEventListener("error", cleanup);
     try {
       await audio.play();
-      // Chrome may resolve play() then silently block (expired user gesture,
-      // no error event). Sanity-check and fall back if it never started — but
-      // only if this line is still the active one and wasn't stopped.
-      await new Promise(r => setTimeout(r, 150));
-      if (audio._aborted || currentAudio !== audio) return;
-      if (audio.paused && audio.currentTime === 0) {
-        cleanup();
-        speakWithBrowser(clean, lang);
-      }
-    } catch {
-      if (audio._aborted) return; // pause() during stop rejects play() — expected
+    } catch (e) {
+      if (audio._aborted) return; // pause() during a stop rejects play() — expected
+      console.warn("[voice] audio.play() blocked:", e);
       cleanup();
-      speakWithBrowser(clean, lang);
     }
-  } catch {
-    if (seq !== speakSeq) return; // superseded — don't fall back over the new line
-    // Network error reaching the backend — browser voice.
+  } catch (e) {
+    if (seq !== speakSeq) return;
+    // Backend unreachable — fall back to the browser voice.
+    console.warn("[voice] TTS request failed — falling back to browser voice:", e);
     speakWithBrowser(clean, lang);
   }
 }
 
-// Voice lists load async on most browsers; touch once so the first line isn't
-// the robotic default.
+// Voice lists load async on most browsers; touch once so a first fallback line
+// isn't the robotic default.
 if (typeof window !== "undefined" && "speechSynthesis" in window) {
   window.speechSynthesis.getVoices();
 }

@@ -16,10 +16,25 @@ import { PERSONAS, SERVICES, RECS, moodFor, Avatar, type Persona } from "./cast"
  * real routing.
  */
 
+// Crowd size precedence: ?agents=N in the URL (works at runtime, no restart) >
+// VITE_SIM_AGENTS in .env (inlined at vite start) > 30 default. Logged once so
+// the value Vite actually saw is visible in devtools when it's wrong.
 const N = (() => {
-  const raw = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_SIM_AGENTS;
-  const n = raw ? parseInt(raw, 10) : 24;
-  return Number.isFinite(n) ? Math.max(4, Math.min(500, n)) : 24;
+  const fromUrl = typeof window !== "undefined"
+    ? parseInt(new URLSearchParams(window.location.search).get("agents") ?? "", 10)
+    : NaN;
+  const envRaw = (import.meta as unknown as { env?: Record<string, string | undefined> })
+    .env?.VITE_SIM_AGENTS;
+  const fromEnv = envRaw ? parseInt(envRaw, 10) : NaN;
+  const picked = Number.isFinite(fromUrl) ? fromUrl : Number.isFinite(fromEnv) ? fromEnv : 30;
+  const clamped = Math.max(1, Math.min(500, picked));
+  if (typeof window !== "undefined") {
+    console.info(
+      `[dashboard] crowd size N=${clamped} (url=${Number.isFinite(fromUrl) ? fromUrl : "—"}, ` +
+      `VITE_SIM_AGENTS=${envRaw ?? "—"})`,
+    );
+  }
+  return clamped;
 })();
 
 const NAMES = ["Mei", "Kumar", "Fatimah", "Wei Ming", "Devi", "Hafiz", "Siew Ling", "Arun", "Noraini", "Jun Jie", "Lakshmi", "Aishah", "Boon Hwee", "Rajesh", "Halimah", "Xiao Hui"];

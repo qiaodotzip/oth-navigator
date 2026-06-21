@@ -11,6 +11,7 @@ function toStop(svc: Service): PlanStop {
     name: { en: svc.nameEn, zh: svc.nameZh },
     floorId: svc.floorId,
     roomId: svc.roomId,
+    website: svc.sourceUrl || undefined,
     accessibility: {
       liftAccess: svc.accessibility.liftAccess,
       stepFree: svc.accessibility.stepFreeRoute,
@@ -97,6 +98,7 @@ function adaptedToStop(a: AdaptedService): PlanStop {
     floorId: a.floorId,
     roomId: a.roomId,
     unmodelledLevel: a.unmodelledLevel,
+    website: a.sourceUrl || undefined,
     operatingHours: a.operatingHours,
     requiredDocuments: a.requiredDocuments.map(d => ({
       name: d.name,
