@@ -1,6 +1,6 @@
 # Backend Integration Plan — Bolo Bao retrieval → OTH Navigator
 
-**Backend:** `the-team/JOM-AI-Hackathon` (Digital OTH retrieval layer).
+**Backend:** the JOM chatbot — a separate companion repo (Digital OTH retrieval layer).
 **Contract:** `POST /api/retrieve` returns ranked `Service` records (no spatial
 data). We map them onto our floors + routing.
 

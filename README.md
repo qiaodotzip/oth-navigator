@@ -75,9 +75,10 @@ npm run dev:full           # runs Vite (:5173) + the Hono API server (:3000) tog
 In the full two-app demo, you type into the **JOM** chatbot (a separate repo, runs on
 `:8000`) and this map *receives* the resulting journey. tamp polls JOM's
 `GET /api/current-journey` and draws the route. To wire it up, set
-`VITE_RETRIEVAL_API=http://127.0.0.1:8000` in `.env` and start JOM first. If JOM isn't
+`VITE_RETRIEVAL_API=<your JOM base URL>` in `.env` and start JOM first. If JOM isn't
 running, tamp ignores it and you drive the map directly via the service tiles / voice
-input. See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for the full two-app demo sequence.
+input. See [`docs/BACKEND_INTEGRATION_PLAN.md`](docs/BACKEND_INTEGRATION_PLAN.md) for the
+contract between the two apps.
 
 ---
 
@@ -241,10 +242,10 @@ Customer Service before relying on them.
 This project was designed and built in the open, working with an AI coding assistant.
 The full paper trail is browsable:
 
-- **[`docs/`](docs/README.md)** — start here. Product requirements, the run/demo
-  runbook, and an **AI-assisted design journal** (`docs/design-and-plans/`): the
-  specs (the *what & why*) and step-by-step build plans (the *how*) for every major
-  feature, in the order they were built.
+- **[`docs/`](docs/README.md)** — start here. Product requirements and an
+  **AI-assisted design journal** (`docs/design-and-plans/`): the specs (the *what &
+  why*) and step-by-step build plans (the *how*) for every major feature, in the order
+  they were built.
 - **[`research/`](research/README.md)** — the data-sourcing trail: which public
   sources the OTH service data came from, what could and couldn't be verified, and
   the gaps that still need an on-site check.

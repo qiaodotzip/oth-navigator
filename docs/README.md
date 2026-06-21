@@ -18,8 +18,7 @@ design-and-build journal. New here? Read in the order below.
 
 | Doc | What it is |
 |---|---|
-| [`RUNBOOK.md`](RUNBOOK.md) | **How to run the full two-app demo** — this map (tamp) plus the JOM chatbot, both on localhost. (To run *just* this map, the root [`README.md`](../README.md) quick-start is all you need.) |
-| [`BACKEND_INTEGRATION_PLAN.md`](BACKEND_INTEGRATION_PLAN.md) | **How tamp and JOM talk.** The contract: JOM returns ranked services with no spatial data; this app maps each to a floor + room and routes there. |
+| [`BACKEND_INTEGRATION_PLAN.md`](BACKEND_INTEGRATION_PLAN.md) | **How tamp and JOM talk.** The contract: JOM returns ranked services with no spatial data; this app maps each to a floor + room and routes there. (To run *just* this map, the root [`README.md`](../README.md) quick-start is all you need.) |
 | [`architecture.excalidraw`](architecture.excalidraw) | The hand-drawn architecture diagram (open at [excalidraw.com](https://excalidraw.com)). The always-renders version lives in the root README. |
 
 ## 3. The AI-assisted design journal

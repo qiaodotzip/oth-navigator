@@ -1,7 +1,7 @@
 # OTH Service Catalog Stub Backend — Design
 
 > **Status:** Design, 2026-05-23
-> **Author:** brainstormed with Stef
+> **Author:** brainstormed with the team
 > **Companion:** `docs/PRD.md`, routing in `src/routing/buildRoute.ts`
 
 ## 1. Purpose

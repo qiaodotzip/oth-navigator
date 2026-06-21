@@ -16,7 +16,7 @@ runtime where the genuinely time-varying bits (open status, busyness-curve
 lookup) are computed live from the clock. Demo-safe by default; an optional
 live-proxy knob can re-poll transport data when desired.
 
-This is **frontend-owned**. The teammates' backend (`the-team/JOM-AI-Hackathon`)
+This is **frontend-owned**. The teammates' backend (the JOM chatbot, a separate repo)
 is retrieval-only — it returns service records with static `operating_hours` but
 **no crowd, queue, or live data**. We do not depend on a new backend endpoint.
 
