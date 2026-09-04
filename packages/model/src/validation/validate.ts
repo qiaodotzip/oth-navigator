@@ -1,9 +1,16 @@
 import type { MapModel } from "../schema/model";
+import { reachabilityRules } from "./rules/reachability";
 import { referenceRules } from "./rules/references";
 import { structureRules } from "./rules/structure";
+import { warningRules } from "./rules/warnings";
 import type { Rule, ValidationReport } from "./types";
 
-export const ALL_RULES: Rule[] = [...structureRules, ...referenceRules];
+export const ALL_RULES: Rule[] = [
+  ...structureRules,
+  ...referenceRules,
+  ...reachabilityRules,
+  ...warningRules,
+];
 
 /**
  * Runs every rule and sorts errors first. The publish gate refuses on
