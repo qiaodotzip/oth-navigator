@@ -1,0 +1,89 @@
+import { mkdtemp, readFile, readdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { Database } from "../db/client";
+import { buildings, levels, publishedVersions } from "../db/schema";
+import { createEntity } from "../entities/repository";
+import { createTestDb } from "../testing/harness";
+import { PublishBlockedError, publish } from "./service";
+
+let db: Database;
+let dir: string;
+
+const lobby = {
+  id: "L1-lobby", levelId: "oth-L1", kind: "atrium",
+  footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
+  heightM: 6, walkable: true, nameEn: "Lobby", nameZh: "大堂",
+};
+const entrance = { id: "e-main", levelId: "oth-L1", roomId: "L1-lobby", point: [5, 5] };
+
+beforeEach(async () => {
+  db = await createTestDb();
+  dir = await mkdtemp(join(tmpdir(), "oth-publish-"));
+  await db.insert(buildings).values({ id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94, rotationDeg: 0 });
+  await db.insert(levels).values({
+    id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1,
+    nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6,
+  });
+});
+
+async function seedPublishable() {
+  await createEntity(db, "room", lobby, "user_1");
+  await createEntity(db, "entrance", entrance, "user_1");
+}
+
+describe("publish", () => {
+  it("writes the bundle files to disk", async () => {
+    await seedPublishable();
+    const result = await publish(db, dir, { createdBy: "user_1", notes: "first" });
+    const files = await readdir(join(dir, "published", result.version));
+    expect(files.sort()).toEqual(["building.json", "levels", "manifest.json", "nav.json", "placements.json"]);
+  });
+
+  it("records the version in the database", async () => {
+    await seedPublishable();
+    const result = await publish(db, dir, { createdBy: "user_1", notes: "first" });
+    const rows = await db.select().from(publishedVersions);
+    expect(rows[0]?.id).toBe(result.version);
+    expect(rows[0]?.notes).toBe("first");
+  });
+
+  it("refuses to publish a model with validation errors", async () => {
+    // Walkable room with no entrance → unreachable.
+    await createEntity(db, "room", lobby, "user_1");
+    await expect(publish(db, dir, { createdBy: "user_1" })).rejects.toBeInstanceOf(PublishBlockedError);
+  });
+
+  it("carries the validation report on the block so the editor can list the problems", async () => {
+    await createEntity(db, "room", lobby, "user_1");
+    await expect(publish(db, dir, { createdBy: "user_1" }))
+      .rejects.toMatchObject({ report: expect.objectContaining({ ok: false }) });
+  });
+
+  it("writes nothing to disk when publishing is blocked", async () => {
+    await createEntity(db, "room", lobby, "user_1");
+    await publish(db, dir, { createdBy: "user_1" }).catch(() => {});
+    await expect(readdir(join(dir, "published"))).rejects.toThrow();
+  });
+
+  it("reports warnings without blocking", async () => {
+    await createEntity(db, "room", { ...lobby, nameEn: "", nameZh: "" }, "user_1");
+    await createEntity(db, "entrance", entrance, "user_1");
+    const result = await publish(db, dir, { createdBy: "user_1" });
+    expect(result.warningCount).toBeGreaterThan(0);
+  });
+
+  it("points latest at the newest version", async () => {
+    await seedPublishable();
+    const first = await publish(db, dir, { createdBy: "user_1" });
+    const latest = JSON.parse(await readFile(join(dir, "published", "latest.json"), "utf8"));
+    expect(latest.version).toBe(first.version);
+  });
+
+  it("writes a level file named by the level code", async () => {
+    await seedPublishable();
+    const result = await publish(db, dir, { createdBy: "user_1" });
+    expect(await readdir(join(dir, "published", result.version, "levels"))).toEqual(["L1.json"]);
+  });
+});

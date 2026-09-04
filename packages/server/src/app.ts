@@ -9,6 +9,7 @@ import { lockRoutes } from "./locks/routes";
 import { modelRoutes } from "./model/routes";
 import { presenceRoutes } from "./presence/routes";
 import { PresenceTracker } from "./presence/service";
+import { publishRoutes } from "./publish/routes";
 
 export type AppDeps = {
   db: Database;
@@ -37,6 +38,7 @@ export function createApp(deps: AppDeps) {
   app.route("/api/model", modelRoutes);
   app.route("/api/locks", lockRoutes);
   app.route("/api/assets", assetRoutes);
+  app.route("/api", publishRoutes);
 
   // Defaults to a fresh tracker so every createApp({ db }) call site keeps working.
   app.route("/api/presence", presenceRoutes(deps.presence ?? new PresenceTracker()));
