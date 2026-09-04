@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { authRoutes } from "./auth/routes";
 import type { User } from "./auth/users";
 import type { Database } from "./db/client";
+import { entityRoutes } from "./entities/routes";
 
 export type AppDeps = { db: Database };
 
@@ -18,6 +19,7 @@ export function createApp(deps: AppDeps) {
   app.get("/api/health", c => c.json({ ok: true }));
 
   app.route("/api/auth", authRoutes);
+  app.route("/api/entities", entityRoutes);
 
   app.notFound(c => c.json({ error: "not found" }, 404));
   app.onError((err, c) => c.json({ error: err.message }, 500));
