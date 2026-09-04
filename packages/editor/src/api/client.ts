@@ -1,0 +1,117 @@
+import type { MapModel, ValidationReport } from "@oth/model";
+
+export class ApiError extends Error {
+  constructor(public readonly status: number, public readonly body: unknown) {
+    super(`api error ${status}`);
+    this.name = "ApiError";
+  }
+}
+
+/** A 409 is a real editorial event, not a transport failure — it gets its own type. */
+export class ConflictError extends ApiError {
+  constructor(public readonly current: Record<string, unknown> | null, body: unknown) {
+    super(409, body);
+    this.name = "ConflictError";
+  }
+}
+
+export type EntityType =
+  | "level" | "room" | "doorway" | "entrance"
+  | "portal" | "portalEndpoint" | "navHint" | "placement" | "tenant";
+
+export type SessionUser = { id: string; email: string; displayName: string };
+
+export type ApiOptions = { fetchImpl?: typeof fetch; baseUrl?: string };
+
+export function createApi(options: ApiOptions = {}) {
+  const doFetch = options.fetchImpl ?? fetch;
+  const base = options.baseUrl ?? "";
+
+  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const res = await doFetch(`${base}${path}`, {
+      ...init,
+      // The session lives in an httpOnly cookie, so every call must carry it.
+      credentials: "same-origin",
+      headers: init.body instanceof FormData
+        ? init.headers
+        : { "content-type": "application/json", ...(init.headers ?? {}) },
+    });
+
+    if (res.status === 204) return undefined as T;
+
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      if (res.status === 409) {
+        const current = (body as { current?: Record<string, unknown> } | null)?.current ?? null;
+        throw new ConflictError(current, body);
+      }
+      throw new ApiError(res.status, body);
+    }
+    return body as T;
+  }
+
+  const json = (data: unknown) => JSON.stringify(data);
+
+  return {
+    async login(email: string, password: string): Promise<SessionUser> {
+      const body = await request<{ user: SessionUser }>("/api/auth/login", {
+        method: "POST",
+        body: json({ email, password }),
+      });
+      return body.user;
+    },
+
+    logout: () => request<void>("/api/auth/logout", { method: "POST" }),
+
+    async me(): Promise<SessionUser> {
+      return (await request<{ user: SessionUser }>("/api/auth/me")).user;
+    },
+
+    getModel: () => request<MapModel>("/api/model"),
+
+    validate: () => request<ValidationReport>("/api/model/validate"),
+
+    async createEntity(type: EntityType, data: unknown) {
+      const body = await request<{ entity: Record<string, unknown> }>(`/api/entities/${type}`, {
+        method: "POST",
+        body: json({ data }),
+      });
+      return body.entity;
+    },
+
+    async updateEntity(
+      type: EntityType, id: string, expectedVersion: number, data: Record<string, unknown>,
+    ) {
+      const body = await request<{ entity: Record<string, unknown> }>(`/api/entities/${type}/${id}`, {
+        method: "PATCH",
+        body: json({ expectedVersion, data }),
+      });
+      return body.entity;
+    },
+
+    async deleteEntity(type: EntityType, id: string, expectedVersion: number) {
+      const body = await request<{ entity: Record<string, unknown> }>(`/api/entities/${type}/${id}`, {
+        method: "DELETE",
+        body: json({ expectedVersion }),
+      });
+      return body.entity;
+    },
+
+    acquireLock: (type: string, id: string) =>
+      request<{ lock: unknown }>(`/api/locks/${type}/${id}`, { method: "POST" }),
+
+    releaseLock: (type: string, id: string) =>
+      request<void>(`/api/locks/${type}/${id}`, { method: "DELETE" }),
+
+    heartbeat: (levelId: string | null) =>
+      request<void>("/api/presence", { method: "POST", body: json({ levelId }) }),
+
+    publish: (notes?: string) =>
+      request<{ version: string; warningCount: number }>("/api/publish", {
+        method: "POST",
+        body: json({ notes }),
+      }),
+  };
+}
+
+export type Api = ReturnType<typeof createApi>;

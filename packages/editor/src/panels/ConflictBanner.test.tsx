@@ -1,0 +1,37 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useEditorStore } from "../state/store";
+import { ConflictBanner } from "./ConflictBanner";
+
+beforeEach(() => useEditorStore.getState().reset());
+
+describe("ConflictBanner", () => {
+  it("renders nothing when there is no conflict", () => {
+    const { container } = render(<ConflictBanner onReload={vi.fn()} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("names the entity someone else saved", () => {
+    useEditorStore.getState().setConflict({
+      entityType: "room", entityId: "L1-a",
+      current: { updatedBy: "user_2", version: 3 },
+    });
+    render(<ConflictBanner onReload={vi.fn()} />);
+    expect(screen.getByText("L1-a")).toBeTruthy();
+  });
+
+  it("offers to reload rather than silently overwriting", () => {
+    const onReload = vi.fn();
+    useEditorStore.getState().setConflict({ entityType: "room", entityId: "L1-a", current: null });
+    render(<ConflictBanner onReload={onReload} />);
+    fireEvent.click(screen.getByRole("button", { name: /reload/i }));
+    expect(onReload).toHaveBeenCalled();
+  });
+
+  it("clears the conflict once acknowledged", () => {
+    useEditorStore.getState().setConflict({ entityType: "room", entityId: "L1-a", current: null });
+    render(<ConflictBanner onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /reload/i }));
+    expect(useEditorStore.getState().conflict).toBeNull();
+  });
+});
