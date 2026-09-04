@@ -21,6 +21,15 @@ export type EntityType =
 
 export type SessionUser = { id: string; email: string; displayName: string };
 
+export type AssetRecord = {
+  id: string;
+  filename: string;
+  checksum: string;
+  sizeBytes: number;
+  triangleCount: number;
+  bbox: { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number };
+};
+
 export type ApiOptions = { fetchImpl?: typeof fetch; baseUrl?: string };
 
 export function createApi(options: ApiOptions = {}) {
@@ -105,6 +114,23 @@ export function createApi(options: ApiOptions = {}) {
 
     heartbeat: (levelId: string | null) =>
       request<void>("/api/presence", { method: "POST", body: json({ levelId }) }),
+
+    async listAssets(): Promise<AssetRecord[]> {
+      return (await request<{ items: AssetRecord[] }>("/api/assets")).items;
+    },
+
+    async uploadAsset(file: File): Promise<AssetRecord> {
+      const form = new FormData();
+      form.append("file", file);
+      // No content-type header: the browser must set the multipart boundary.
+      const body = await request<{ asset: AssetRecord }>("/api/assets", {
+        method: "POST",
+        body: form,
+      });
+      return body.asset;
+    },
+
+    assetFileUrl: (id: string) => `${base}/api/assets/${id}/file`,
 
     publish: (notes?: string) =>
       request<{ version: string; warningCount: number }>("/api/publish", {

@@ -4,3 +4,6 @@ export * from "./theme";
 export * from "./RoomMesh";
 export * from "./LevelGroup";
 export * from "./MapScene";
+export * from "./walls";
+export * from "./contextExport";
+export * from "./PlacementMesh";

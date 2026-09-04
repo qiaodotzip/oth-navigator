@@ -2,6 +2,9 @@ import { MapScene } from "@oth/renderer";
 import { useEffect, useMemo, useState } from "react";
 import { createApi } from "./api/client";
 import { LoginScreen } from "./auth/LoginScreen";
+import { AssetLibrary } from "./panels/AssetLibrary";
+import { ContextExportButton } from "./panels/ContextExportButton";
+import { DxfImportButton } from "./panels/DxfImportButton";
 import { ConflictBanner } from "./panels/ConflictBanner";
 import { Inspector } from "./panels/Inspector";
 import { LevelSwitcher } from "./panels/LevelSwitcher";
@@ -75,7 +78,13 @@ export function App() {
               Preview
             </h2>
             <div className="min-h-0 flex-1">
-              {model && activeLevelId && <MapScene model={model} activeLevelId={activeLevelId} />}
+              {model && activeLevelId && (
+                <MapScene
+                  model={model}
+                  activeLevelId={activeLevelId}
+                  assetUrl={api.assetFileUrl}
+                />
+              )}
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
@@ -83,6 +92,29 @@ export function App() {
               onRename={(id, version, nameEn) => void saver.update("room", id, version, { nameEn })}
             />
             <ValidationPanel />
+
+            <div className="space-y-2 border-t p-3">
+              <ContextExportButton />
+              <DxfImportButton saver={saver} />
+            </div>
+
+            <AssetLibrary
+              api={api}
+              onPlace={assetId => {
+                const selection = useEditorStore.getState().selection;
+                if (!activeLevelId || !selection || selection.type !== "room") {
+                  useEditorStore.getState().setStatus("Select a room first.");
+                  return;
+                }
+                void saver.create("placement", {
+                  id: `${activeLevelId}-place-${Date.now()}`,
+                  levelId: activeLevelId,
+                  assetId,
+                  roomId: selection.id,
+                  position: [0, 0, 0],
+                });
+              }}
+            />
           </div>
         </aside>
       </div>

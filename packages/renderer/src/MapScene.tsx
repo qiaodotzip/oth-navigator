@@ -11,10 +11,12 @@ export type MapSceneProps = {
   showLevelBelow?: boolean;
   selectedId?: string | null;
   onSelect?: (roomId: string) => void;
+  /** Resolves an asset id to a URL the renderer can fetch. */
+  assetUrl?: (assetId: string) => string;
 };
 
 export function MapScene({
-  model, activeLevelId, showLevelBelow = true, selectedId, onSelect,
+  model, activeLevelId, showLevelBelow = true, selectedId, onSelect, assetUrl,
 }: MapSceneProps) {
   const { active, below } = useMemo(() => {
     const ordered = [...model.levels].sort((a, b) => a.ordinal - b.ordinal);
@@ -35,6 +37,8 @@ export function MapScene({
         <LevelGroup
           level={active}
           rooms={roomsFor(active.id)}
+          placements={model.placements.filter(p => p.levelId === active.id)}
+          assetUrl={assetUrl}
           selectedId={selectedId}
           onSelect={onSelect}
         />

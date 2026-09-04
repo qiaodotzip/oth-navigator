@@ -73,3 +73,24 @@ describe("api client", () => {
     await expect(api.logout()).resolves.toBeUndefined();
   });
 });
+
+describe("assets", () => {
+  it("lists assets", async () => {
+    const fetchImpl = mockFetch(200, { items: [{ id: "asset_1", filename: "arch.glb" }] });
+    expect((await createApi({ fetchImpl }).listAssets())[0]?.filename).toBe("arch.glb");
+  });
+
+  it("uploads as multipart and does not force a JSON content-type", async () => {
+    const fetchImpl = mockFetch(201, { asset: { id: "asset_1", filename: "arch.glb" } });
+    await createApi({ fetchImpl }).uploadAsset(new File([new Uint8Array([1, 2, 3])], "arch.glb"));
+    const init = fetchImpl.mock.calls[0]![1]!;
+    expect(init.body).toBeInstanceOf(FormData);
+    // Setting content-type by hand strips the multipart boundary and the
+    // upload silently fails to parse server-side.
+    expect(init.headers).toBeUndefined();
+  });
+
+  it("builds a stable file url", () => {
+    expect(createApi().assetFileUrl("asset_1")).toBe("/api/assets/asset_1/file");
+  });
+});

@@ -1,6 +1,6 @@
 import type { Level, MapModel, Ring, Room, ValidationReport, Vec2 } from "@oth/model";
 import { create } from "zustand";
-import type { SessionUser } from "../api/client";
+import type { AssetRecord, SessionUser } from "../api/client";
 import { DEFAULT_VIEWPORT, type Viewport } from "../plan/viewport";
 
 export type Tool =
@@ -34,6 +34,8 @@ export type EditorState = {
   conflict: Conflict;
   presence: PresenceEntry[];
   status: string | null;
+  assets: AssetRecord[];
+  selectedAssetId: string | null;
 
   setUser: (u: SessionUser | null) => void;
   setModel: (m: MapModel) => void;
@@ -48,6 +50,8 @@ export type EditorState = {
   setConflict: (c: Conflict) => void;
   setPresence: (p: PresenceEntry[]) => void;
   setStatus: (s: string | null) => void;
+  setAssets: (a: AssetRecord[]) => void;
+  selectAsset: (id: string | null) => void;
   reset: () => void;
 };
 
@@ -68,6 +72,8 @@ const initial = {
   conflict: null,
   presence: [],
   status: null,
+  assets: [],
+  selectedAssetId: null,
 };
 
 export const useEditorStore = create<EditorState>(set => ({
@@ -100,6 +106,8 @@ export const useEditorStore = create<EditorState>(set => ({
   setConflict: conflict => set({ conflict }),
   setPresence: presence => set({ presence }),
   setStatus: status => set({ status }),
+  setAssets: assets => set({ assets }),
+  selectAsset: selectedAssetId => set({ selectedAssetId }),
 
   reset: () => set(initial),
 }));
