@@ -3,6 +3,7 @@ import { authRoutes } from "./auth/routes";
 import type { User } from "./auth/users";
 import type { Database } from "./db/client";
 import { entityRoutes } from "./entities/routes";
+import { modelRoutes } from "./model/routes";
 
 export type AppDeps = { db: Database };
 
@@ -20,6 +21,7 @@ export function createApp(deps: AppDeps) {
 
   app.route("/api/auth", authRoutes);
   app.route("/api/entities", entityRoutes);
+  app.route("/api/model", modelRoutes);
 
   app.notFound(c => c.json({ error: "not found" }, 404));
   app.onError((err, c) => c.json({ error: err.message }, 500));

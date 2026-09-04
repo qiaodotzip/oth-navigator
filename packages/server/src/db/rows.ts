@@ -4,14 +4,27 @@ export type Row = Record<string, unknown>;
 const DATE_FIELDS = ["updatedAt", "deletedAt", "createdAt"] as const;
 
 /**
+ * `deletedAt` is the one column where null is meaningful rather than merely
+ * absent — it is how "not deleted" is spelled, and the model schema accepts it.
+ */
+const NULLABLE_FIELDS = new Set<string>(["deletedAt"]);
+
+/**
  * Converts a Drizzle row into something `@oth/model`'s schemas can parse.
- * Drizzle hands back `Date` objects; the model uses ISO strings, so every path
- * that feeds a row back through a schema goes through here.
+ *
+ * Two impedance mismatches to bridge. Drizzle hands back `Date` objects where
+ * the model uses ISO strings. And Postgres spells "no value" as `null` while
+ * the model's optional fields mean `undefined` — so a null optional column is
+ * dropped entirely, letting the schema's own default apply.
  */
 export function toModelRow(row: Row): Row {
-  const out: Row = { ...row };
+  const out: Row = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (value === null && !NULLABLE_FIELDS.has(key)) continue;
+    out[key] = value instanceof Date ? value.toISOString() : value;
+  }
   for (const field of DATE_FIELDS) {
-    const value = out[field];
+    const value = row[field];
     if (value instanceof Date) out[field] = value.toISOString();
   }
   return out;
