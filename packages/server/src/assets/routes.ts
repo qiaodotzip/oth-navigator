@@ -61,7 +61,7 @@ assetRoutes.get("/:id/file", async c => {
   const [row] = await c.get("db").select().from(assets).where(eq(assets.id, c.req.param("id")));
   if (!row) return c.json({ error: "not found" }, 404);
   const bytes = await readAsset(c.get("dataDir"), row.storagePath);
-  return c.body(bytes, 200, {
+  return c.body(bytes.buffer as ArrayBuffer, 200, {
     "content-type": "model/gltf-binary",
     "content-disposition": `inline; filename="${row.filename}"`,
   });

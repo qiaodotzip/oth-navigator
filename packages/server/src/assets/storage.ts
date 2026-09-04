@@ -15,6 +15,11 @@ export async function storeAsset(dataDir: string, bytes: Uint8Array) {
   return { checksum, storagePath };
 }
 
-export async function readAsset(dataDir: string, storagePath: string): Promise<Buffer> {
-  return readFile(join(dataDir, storagePath));
+/**
+ * Returns a plain Uint8Array rather than a Buffer: Node's Buffer is typed over
+ * ArrayBufferLike, which may be a SharedArrayBuffer, and Hono's response body
+ * will not accept that.
+ */
+export async function readAsset(dataDir: string, storagePath: string): Promise<Uint8Array> {
+  return new Uint8Array(await readFile(join(dataDir, storagePath)));
 }
