@@ -2,6 +2,8 @@
   "files": [],
   "references": [
     { "path": "./packages/model" },
-    { "path": "./packages/server" }
+    { "path": "./packages/server" },
+    { "path": "./packages/renderer" },
+    { "path": "./packages/editor" }
   ]
 }
