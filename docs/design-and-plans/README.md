@@ -49,4 +49,4 @@ hackathon floor data is superseded.
 
 | Feature | Spec | Plan |
 |---|---|---|
-| **Map model & editor** — the four-layer model, hosted multi-user editor, Blender round trip, publish pipeline | [`specs/2026-09-04-oth-map-model-design.md`](specs/2026-09-04-oth-map-model-design.md) | 1. [`plans/2026-09-04-map-model-foundation.md`](plans/2026-09-04-map-model-foundation.md)<br>2. server *(pending)*<br>3. editor + renderer *(pending)* |
+| **Map model & editor** — the four-layer model, hosted multi-user editor, Blender round trip, publish pipeline | [`specs/2026-09-04-oth-map-model-design.md`](specs/2026-09-04-oth-map-model-design.md) | 1. [`plans/2026-09-04-map-model-foundation.md`](plans/2026-09-04-map-model-foundation.md)<br>2. [`plans/2026-09-04-map-model-server.md`](plans/2026-09-04-map-model-server.md)<br>3. editor + renderer *(pending)* |
