@@ -38,3 +38,15 @@ Smaller or later additions that went straight to a plan:
 - [`plans/2026-05-26-real-counter-data-besttime.md`](plans/2026-05-26-real-counter-data-besttime.md) — pulling **real foot-traffic** from the BestTime API (off by default; the app ships with modeled curves).
 - [`plans/2026-05-26-offsite-services-plan.md`](plans/2026-05-26-offsite-services-plan.md) — handling services that live **outside** OTH ("Start in App" hand-off).
 - [`plans/2026-05-26-fragmentation-dashboard-plan.md`](plans/2026-05-26-fragmentation-dashboard-plan.md) — the **ops analytics dashboard** side-quest (visitor flow / counter loads).
+
+---
+
+## OTH production phase (2026-09 onwards)
+
+After the hackathon, OTH engaged us to take the map forward as a production web
+application. That work starts from a new model and new authoring tooling; the
+hackathon floor data is superseded.
+
+| Feature | Spec | Plan |
+|---|---|---|
+| **Map model & editor** — the four-layer model, hosted multi-user editor, Blender round trip, publish pipeline | [`specs/2026-09-04-oth-map-model-design.md`](specs/2026-09-04-oth-map-model-design.md) | _pending_ |
