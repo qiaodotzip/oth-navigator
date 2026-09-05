@@ -51,7 +51,17 @@ export function MapScene({
   }, [model.rooms, active]);
 
   return (
-    <Canvas shadows camera={{ position: [...view.position], fov: 45 }}>
+    <Canvas
+      // R3F defaults to frameloop="always", which re-renders WebGL every
+      // animation frame forever whether or not anything changed. For a static
+      // preview that is a permanent 60fps shadow-map plus scene pass the moment
+      // any geometry exists — measurably the only cost in the editor that grows
+      // with room count. "demand" renders on React commits and on OrbitControls
+      // interaction, which is all this panel ever needs.
+      frameloop="demand"
+      shadows
+      camera={{ position: [...view.position], fov: 45 }}
+    >
       <ambientLight intensity={0.7} />
       <directionalLight position={[60, 120, 40]} intensity={1.1} castShadow />
       {showLevelBelow && below && (
