@@ -10,6 +10,11 @@
 
 **Spec:** [`docs/design-and-plans/specs/2026-09-05-details-and-dressing-design.md`](../specs/2026-09-05-details-and-dressing-design.md)
 
+> **Status:** complete, 2026-09-05.
+> One thing the plan under-specified: Dressing had deliberately been a
+> section with no status dot, so giving it a step needed the section to keep
+> `status: null` while still carrying the step's tool, count and warnings.
+
 ## Global Constraints
 
 - **A detail is never walkable and never a destination.** It contributes no cells to the nav grid and raises no access or name warnings.
@@ -47,7 +52,7 @@
 **Interfaces:**
 - Produces: `RoomKind` gains `"detail"`. Everything downstream that switches on kind must handle it.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `packages/model/src/validation/rules/warnings.test.ts`:
 
@@ -96,12 +101,12 @@ Append to `packages/model/src/nav/grid.test.ts`, inside the top-level describe f
   });
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `npx vitest run packages/model`
 Expected: FAIL — `"detail"` is not a member of the `RoomKind` enum, so `parseModel` throws.
 
-- [ ] **Step 3: Add the kind**
+- [x] **Step 3: Add the kind**
 
 In `packages/model/src/schema/structure.ts`, inside `RoomKindSchema`, after `"area"`:
 
@@ -114,7 +119,7 @@ In `packages/model/src/schema/structure.ts`, inside `RoomKindSchema`, after `"ar
   "detail",
 ```
 
-- [ ] **Step 4: Exempt details from the name warning**
+- [x] **Step 4: Exempt details from the name warning**
 
 In `packages/model/src/validation/rules/warnings.ts`, in `unnamedRooms`:
 
@@ -126,7 +131,7 @@ const unnamedRooms: Rule = model =>
     .filter(r => r.nameEn.trim() === "" && r.nameZh.trim() === "")
 ```
 
-- [ ] **Step 5: Give it a colour**
+- [x] **Step 5: Give it a colour**
 
 In `packages/renderer/src/theme.ts`, in `BASE`. `Record<RoomKind, string>` means omitting it fails to compile:
 
@@ -135,7 +140,7 @@ In `packages/renderer/src/theme.ts`, in `BASE`. `Record<RoomKind, string>` means
   detail: "#c8bfa8",
 ```
 
-- [ ] **Step 6: Run and commit**
+- [x] **Step 6: Run and commit**
 
 ```bash
 npx vitest run packages/model packages/renderer
@@ -160,7 +165,7 @@ git commit -m "feat(model): a detail is a fifth kind of space"
   - `buildDetailGlb(detail: Room, context: readonly Room[], level: Level): Promise<{ bytes: Uint8Array; offset: Vec2 }>`
   - `DETAIL_ORIGIN_NOTE: string`
 
-- [ ] **Step 1: Write the failing centroid test**
+- [x] **Step 1: Write the failing centroid test**
 
 Append to `packages/model/src/geometry/ring.test.ts`:
 
@@ -189,12 +194,12 @@ describe("ringCentroid", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/model/src/geometry/ring.test.ts`
 Expected: FAIL — `ringCentroid is not a function`.
 
-- [ ] **Step 3: Implement the centroid**
+- [x] **Step 3: Implement the centroid**
 
 Append to `packages/model/src/geometry/ring.ts`:
 
@@ -235,12 +240,12 @@ export function ringCentroid(ring: Ring): Vec2 {
 
 `Vec2` is already imported in this file via `Ring`; add it to the type import if not.
 
-- [ ] **Step 4: Run it and see it pass**
+- [x] **Step 4: Run it and see it pass**
 
 Run: `npx vitest run packages/model/src/geometry/ring.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Write the failing export tests**
+- [x] **Step 5: Write the failing export tests**
 
 Append to `packages/renderer/src/contextExport.test.ts`:
 
@@ -329,12 +334,12 @@ function bboxOfGlb(bytes: Uint8Array) {
 }
 ```
 
-- [ ] **Step 6: Run and watch it fail**
+- [x] **Step 6: Run and watch it fail**
 
 Run: `npx vitest run packages/renderer`
 Expected: FAIL — `buildDetailGlb is not exported`.
 
-- [ ] **Step 7: Implement the export**
+- [x] **Step 7: Implement the export**
 
 In `packages/renderer/src/contextExport.ts`:
 
@@ -458,7 +463,7 @@ async function bboxOfGlb(bytes: Uint8Array) {
 
 Every call to it in the tests must be `await`ed.
 
-- [ ] **Step 8: Export it and run**
+- [x] **Step 8: Export it and run**
 
 Add to `packages/renderer/src/index.ts`:
 
@@ -469,7 +474,7 @@ export { DETAIL_CONTEXT_MARGIN_M, DETAIL_ORIGIN_NOTE, buildDetailGlb, detailCont
 Run: `npx vitest run packages/renderer` then `npm run typecheck`
 Expected: PASS, clean.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/model/src/geometry/ring.ts packages/model/src/geometry/ring.test.ts packages/renderer/src/contextExport.ts packages/renderer/src/contextExport.test.ts packages/renderer/src/index.ts
@@ -491,7 +496,7 @@ git commit -m "feat(renderer): export a detail as a dimensioned block at the ori
   - `PlanCanvasProps.onCommitSpace?: (kind: SpaceKind, ring: Ring) => void` — **replaces** `onCommitRoom` and `onCommitArea`.
   - `LayerEntityType` gains `"detail"`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Replace the body of `packages/editor/src/flow/newSpace.test.ts` with:
 
@@ -582,12 +587,12 @@ Append to `packages/editor/src/flow/layers.test.ts`:
   });
 ```
 
-- [ ] **Step 2: Run and watch them fail**
+- [x] **Step 2: Run and watch them fail**
 
 Run: `npx vitest run packages/editor`
 Expected: FAIL — `newSpace` is not exported, `"draw-detail"` is not a `Tool`, there is no `detail` layer group.
 
-- [ ] **Step 3: One payload builder keyed by kind**
+- [x] **Step 3: One payload builder keyed by kind**
 
 Replace the three builders in `packages/editor/src/flow/newSpace.ts`:
 
@@ -622,11 +627,11 @@ export function newPathway(levelId: string, polyline: Vec2[], now = Date.now()) 
 }
 ```
 
-- [ ] **Step 4: Add the tool**
+- [x] **Step 4: Add the tool**
 
 In `packages/editor/src/state/store.ts`, add `"draw-detail"` to `Tool` after `"draw-room"`. In `packages/editor/src/state/tools.ts` add `"draw-detail": "Draw detail"` to `TOOL_LABELS` and `"draw-detail"` to `TOOLBAR_TOOLS` after `"draw-pathway"`.
 
-- [ ] **Step 5: One commit callback in the canvas**
+- [x] **Step 5: One commit callback in the canvas**
 
 In `PlanCanvas.tsx`, replace `onCommitRoom` and `onCommitArea` with:
 
@@ -662,7 +667,7 @@ then, after the pathways block:
 
 with the existing `<polygon>` extracted to a local `renderRoom(room: Room)` returning the same JSX unchanged, keyed by `room.id`.
 
-- [ ] **Step 6: Hint and layers**
+- [x] **Step 6: Hint and layers**
 
 In `DrawingHint.tsx` add to `WHAT`: `"draw-detail": "Drawing a detail"`, and to `howTo`:
 
@@ -689,7 +694,7 @@ and group by kind:
       r.kind === "area" ? "area" : r.kind === "detail" ? "detail" : "room";
 ```
 
-- [ ] **Step 7: Wire the App**
+- [x] **Step 7: Wire the App**
 
 Replace the two commit props on `PlanCanvas` in `App.tsx` with one:
 
@@ -699,7 +704,7 @@ Replace the two commit props on `PlanCanvas` in `App.tsx` with one:
             }}
 ```
 
-- [ ] **Step 8: Run and commit**
+- [x] **Step 8: Run and commit**
 
 ```bash
 npx vitest run packages/editor
@@ -721,7 +726,7 @@ git commit -m "feat(editor): draw details, painted on top of the floor they stan
 - Consumes: `buildDetailGlb`, `detailContextRooms` (Task 2); the `detail` kind and layer group (Tasks 1, 3).
 - Produces: `DetailExportButton` — no props; reads the selection from the store.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/editor/src/panels/DetailExportButton.test.tsx`:
 
@@ -796,12 +801,12 @@ Append to `packages/editor/src/panels/Inspector.test.tsx` (create it if absent, 
   });
 ```
 
-- [ ] **Step 2: Run and watch them fail**
+- [x] **Step 2: Run and watch them fail**
 
 Run: `npx vitest run packages/editor/src/panels`
 Expected: FAIL — no `DetailExportButton` module, `Inspector` takes no `onResize`.
 
-- [ ] **Step 3: The export button**
+- [x] **Step 3: The export button**
 
 `packages/editor/src/panels/DetailExportButton.tsx`:
 
@@ -854,7 +859,7 @@ export function DetailExportButton() {
 }
 ```
 
-- [ ] **Step 4: The height field**
+- [x] **Step 4: The height field**
 
 In `Inspector.tsx`, add the prop and the input:
 
@@ -889,7 +894,7 @@ export function Inspector({
       </label>
 ```
 
-- [ ] **Step 5: Place on the detail**
+- [x] **Step 5: Place on the detail**
 
 In `App.tsx`, pass `onResize` to the `Inspector`:
 
@@ -927,11 +932,11 @@ Add `<DetailExportButton />` to the `dressing` section beside `<ContextExportBut
                     }}
 ```
 
-- [ ] **Step 6: Rename the section**
+- [x] **Step 6: Rename the section**
 
 In `packages/editor/src/flow/sections.ts` the dressing label stays "Dressing"; no change. Confirm the detail tool reaches the dressing section by adding it to the dressing entry in `StepsPanel`'s content — details are drawn from the toolbar, and the Dressing section holds the export and upload buttons.
 
-- [ ] **Step 7: Run and commit**
+- [x] **Step 7: Run and commit**
 
 ```bash
 npx vitest run packages/editor
@@ -951,7 +956,7 @@ git commit -m "feat(editor): export a detail, model it, place it back where it w
 **Interfaces:**
 - Produces: validation code `detail.undressed`, owned by the `dressing` section.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `packages/model/src/validation/rules/warnings.test.ts`:
 
@@ -1008,12 +1013,12 @@ describe("roomsToDraw", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch them fail**
+- [x] **Step 2: Run and watch them fail**
 
 Run: `npx vitest run packages/model packages/renderer`
 Expected: FAIL — no `detail.undressed`, no `roomsToDraw`.
 
-- [ ] **Step 3: The warning**
+- [x] **Step 3: The warning**
 
 In `packages/model/src/validation/rules/warnings.ts`:
 
@@ -1040,7 +1045,7 @@ const undressedDetails: Rule = model => {
 
 Add it to `warningRules`.
 
-- [ ] **Step 4: Route it to the dressing section**
+- [x] **Step 4: Route it to the dressing section**
 
 In `packages/editor/src/flow/checklist.ts`, `stepForCode`:
 
@@ -1050,7 +1055,7 @@ In `packages/editor/src/flow/checklist.ts`, `stepForCode`:
 
 `"dressing"` is a `SectionId` but not a `StepId`, so add a `dressing` step to `StepId` and to `MEMBERS.dressing` in `sections.ts` with `tools: ["draw-detail"]`, `status` done once every detail on the level has a placement, and `detail` reading `"3 details, 1 undressed"`. Follow the shape of the `connect` step exactly.
 
-- [ ] **Step 5: The placeholder rule**
+- [x] **Step 5: The placeholder rule**
 
 In `packages/renderer/src/LevelGroup.tsx`:
 
@@ -1070,7 +1075,7 @@ export function roomsToDraw(rooms: readonly Room[], placements: readonly Placeme
 
 and use it: `{roomsToDraw(rooms, placements).map(room => (<RoomMesh … />))}`.
 
-- [ ] **Step 6: Run everything and commit**
+- [x] **Step 6: Run everything and commit**
 
 ```bash
 npm test
