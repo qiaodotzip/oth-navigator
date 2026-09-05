@@ -77,11 +77,11 @@ describe("reachability rule", () => {
   });
 
   it("flags a walkable room cut off from every entrance", () => {
-    expect(codes({ rooms: [l1Lobby, l1Back] })).toContain("room.unreachable");
+    expect(codes({ rooms: [l1Lobby, l1Back] })).toContain("area.unreachable");
   });
 
   it("flags a modelled upper level with no portal serving it", () => {
-    expect(codes({ rooms: [l1Lobby, l2Hall] })).toContain("room.unreachable");
+    expect(codes({ rooms: [l1Lobby, l2Hall] })).toContain("area.unreachable");
   });
 
   it("does not flag non-walkable rooms", () => {

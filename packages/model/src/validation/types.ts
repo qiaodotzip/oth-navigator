@@ -11,6 +11,7 @@ export type EntityType =
   | "portal"
   | "portalEndpoint"
   | "navHint"
+  | "pathway"
   | "asset"
   | "placement"
   | "tenant";

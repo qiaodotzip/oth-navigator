@@ -1,4 +1,5 @@
 import type { MapModel } from "../schema/model";
+import { accessRules } from "./rules/access";
 import { reachabilityRules } from "./rules/reachability";
 import { referenceRules } from "./rules/references";
 import { structureRules } from "./rules/structure";
@@ -9,6 +10,7 @@ export const ALL_RULES: Rule[] = [
   ...structureRules,
   ...referenceRules,
   ...reachabilityRules,
+  ...accessRules,
   ...warningRules,
 ];
 

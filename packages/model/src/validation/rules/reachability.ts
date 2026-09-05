@@ -12,7 +12,7 @@ const reachable: Rule = model => {
     return [{
       severity: "error",
       code: "building.entrances.none",
-      message: "The model has walkable rooms but no entrance, so nothing is reachable.",
+      message: "The model has walkable areas but no entrance, so nothing is reachable.",
       entityType: "building",
       entityId: model.building.id,
     }];
@@ -54,8 +54,8 @@ const reachable: Rule = model => {
     if (!anyReachable) {
       issues.push({
         severity: "error",
-        code: "room.unreachable",
-        message: `Room "${room.id}" is walkable but cannot be reached from any entrance. Check for a missing doorway or portal.`,
+        code: "area.unreachable",
+        message: `Area "${room.nameEn || room.id}" cannot be reached from any entrance. Check for a missing pathway or portal.`,
         entityType: "room",
         entityId: room.id,
         levelId: room.levelId,
