@@ -361,3 +361,96 @@ describe("placements on the canvas", () => {
     expect(onMovePlacement).not.toHaveBeenCalled();
   });
 });
+
+describe("pathways", () => {
+  it("renders a pathway at its real width", () => {
+    useEditorStore.getState().setModel(
+      parseModel({
+        building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+        levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+        pathways: [{ id: "L1-p", levelId: "oth-L1", polyline: [[0, 0], [20, 0]], widthM: 4 }],
+      }),
+    );
+    render(<PlanCanvas width={800} height={600} />);
+    const el = screen.getByTestId("pathway-L1-p");
+    // Stroke width is the pathway's real width in screen pixels.
+    const scale = useEditorStore.getState().viewport.scale;
+    expect(Number(el.getAttribute("stroke-width"))).toBeCloseTo(4 * scale, 1);
+  });
+
+  it("commits a pathway as a polyline, not a closed ring", () => {
+    const onCommitPathway = vi.fn();
+    useEditorStore.getState().setTool("draw-pathway");
+    render(<PlanCanvas width={800} height={600} onCommitPathway={onCommitPathway} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 100 });
+    fireEvent.doubleClick(surface);
+    expect(onCommitPathway).toHaveBeenCalledTimes(1);
+    expect(onCommitPathway.mock.calls[0]![0]).toHaveLength(2);
+  });
+
+  it("needs only two points, unlike a room", () => {
+    const onCommitPathway = vi.fn();
+    const onCommitRoom = vi.fn();
+    useEditorStore.getState().setTool("draw-pathway");
+    render(<PlanCanvas width={800} height={600} onCommitPathway={onCommitPathway} onCommitRoom={onCommitRoom} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 100 });
+    fireEvent.doubleClick(surface);
+    expect(onCommitPathway).toHaveBeenCalled();
+    expect(onCommitRoom).not.toHaveBeenCalled();
+  });
+
+  it("refuses a pathway of one point", () => {
+    const onCommitPathway = vi.fn();
+    useEditorStore.getState().setTool("draw-pathway");
+    render(<PlanCanvas width={800} height={600} onCommitPathway={onCommitPathway} />);
+    fireEvent.click(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100 });
+    fireEvent.doubleClick(screen.getByTestId("plan-surface"));
+    expect(onCommitPathway).not.toHaveBeenCalled();
+  });
+
+  it("draws the pathway draft unfilled, since it is a line and not a ring", () => {
+    useEditorStore.getState().setTool("draw-pathway");
+    render(<PlanCanvas width={800} height={600} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 100 });
+    expect(screen.getByTestId("draft").getAttribute("fill")).toBe("none");
+  });
+
+  it("commits an area of three points to the area handler, not the room one", () => {
+    const onCommitArea = vi.fn();
+    const onCommitRoom = vi.fn();
+    useEditorStore.getState().setTool("draw-area");
+    render(<PlanCanvas width={800} height={600} onCommitArea={onCommitArea} onCommitRoom={onCommitRoom} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 200 });
+    fireEvent.doubleClick(surface);
+    expect(onCommitArea).toHaveBeenCalledTimes(1);
+    expect(onCommitRoom).not.toHaveBeenCalled();
+  });
+
+  it("explains the pathway tool in the hint", () => {
+    useEditorStore.getState().setTool("draw-pathway");
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("drawing-hint").textContent).toMatch(/walk/i);
+  });
+
+  it("selects a pathway when it is clicked", () => {
+    useEditorStore.getState().setModel(
+      parseModel({
+        building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+        levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+        pathways: [{ id: "L1-p", levelId: "oth-L1", polyline: [[0, 0], [20, 0]] }],
+      }),
+    );
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.click(screen.getByTestId("pathway-L1-p"));
+    expect(useEditorStore.getState().selection).toEqual({ type: "pathway", id: "L1-p" });
+  });
+});

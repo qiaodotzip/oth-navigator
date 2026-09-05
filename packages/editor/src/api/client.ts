@@ -16,7 +16,7 @@ export class ConflictError extends ApiError {
 }
 
 export type EntityType =
-  | "level" | "room" | "doorway" | "entrance"
+  | "level" | "room" | "pathway" | "doorway" | "entrance"
   | "portal" | "portalEndpoint" | "navHint" | "placement" | "tenant";
 
 export type SessionUser = { id: string; email: string; displayName: string };

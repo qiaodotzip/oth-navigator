@@ -5,14 +5,19 @@ import { DEFAULT_VIEWPORT, type Viewport } from "../plan/viewport";
 
 export type Tool =
   | "select"
+  | "draw-area"
   | "draw-room"
+  | "draw-pathway"
   | "draw-doorway"
   | "place-entrance"
   | "place-portal"
   | "calibrate";
 
 export type Selection =
-  | { type: "room" | "doorway" | "entrance" | "portalEndpoint" | "placement"; id: string }
+  | {
+      type: "room" | "pathway" | "doorway" | "entrance" | "portalEndpoint" | "placement";
+      id: string;
+    }
   | null;
 
 export type Conflict =

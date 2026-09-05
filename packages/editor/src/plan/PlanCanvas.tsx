@@ -5,6 +5,7 @@ import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore } from "../state
 import { imageCalibration, imageForLevel, underlayBBox } from "../state/underlay";
 import { contentBBox, hasArea } from "./content";
 import { DrawingHint } from "./DrawingHint";
+import { PathwayShape } from "./PathwayShape";
 import { snapPoint } from "./snapping";
 import { Underlay } from "./Underlay";
 import { VertexHandles } from "./VertexHandles";
@@ -17,6 +18,8 @@ export type PlanCanvasProps = {
   width: number;
   height: number;
   onCommitRoom?: (ring: Ring) => void;
+  onCommitArea?: (ring: Ring) => void;
+  onCommitPathway?: (polyline: Vec2[]) => void;
   onCommitDoorway?: (a: Vec2, b: Vec2) => void;
   onCommitPoint?: (p: Vec2) => void;
   onReshapeRoom?: (room: Room, ring: Ring) => void;
@@ -29,6 +32,8 @@ export function PlanCanvas({
   width,
   height,
   onCommitRoom,
+  onCommitArea,
+  onCommitPathway,
   onCommitDoorway,
   onCommitPoint,
   onReshapeRoom,
@@ -141,6 +146,9 @@ export function PlanCanvas({
     if (!draft) return;
     // Below three points it is not a ring, and the model would reject it.
     if (state.tool === "draw-room" && draft.length >= 3) onCommitRoom?.(draft);
+    if (state.tool === "draw-area" && draft.length >= 3) onCommitArea?.(draft);
+    // A pathway is a line, so two points is enough; a ring needs three.
+    if (state.tool === "draw-pathway" && draft.length >= 2) onCommitPathway?.(draft);
     if (state.tool === "draw-doorway" && draft.length >= 2) {
       onCommitDoorway?.(draft[0]!, draft[draft.length - 1]!);
     }
@@ -161,7 +169,12 @@ export function PlanCanvas({
 
     const p = pointerWorld(event);
 
-    if (state.tool === "draw-room" || state.tool === "draw-doorway") {
+    if (
+      state.tool === "draw-room" ||
+      state.tool === "draw-area" ||
+      state.tool === "draw-pathway" ||
+      state.tool === "draw-doorway"
+    ) {
       if (!state.draft) state.beginDraft();
       state.pushDraftPoint(p);
       return;
@@ -217,6 +230,24 @@ export function PlanCanvas({
           }}
           onMouseLeave={() => setCursor(null)}
         />
+
+        {state.model?.pathways
+          .filter(p => p.levelId === state.activeLevelId)
+          .map(p => (
+            <PathwayShape
+              key={p.id}
+              id={p.id}
+              polyline={p.polyline}
+              widthM={p.widthM}
+              viewport={state.viewport}
+              selected={state.selection?.id === p.id}
+              onClick={event => {
+                if (state.tool !== "select") return;
+                event.stopPropagation();
+                state.select({ type: "pathway", id: p.id });
+              }}
+            />
+          ))}
 
         {rooms.map(room => (
           <polygon
@@ -288,7 +319,7 @@ export function PlanCanvas({
           <polyline
             data-testid="draft"
             points={ringPoints(state.draft)}
-            fill="rgba(242,163,60,0.2)"
+            fill={state.tool === "draw-pathway" ? "none" : "rgba(242,163,60,0.2)"}
             stroke="#f2a33c"
             strokeWidth={2}
           />

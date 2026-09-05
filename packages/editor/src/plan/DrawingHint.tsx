@@ -1,7 +1,9 @@
 import type { Tool } from "../state/store";
 
 const WHAT: Partial<Record<Tool, string>> = {
+  "draw-area": "Drawing an open area",
   "draw-room": "Drawing a room",
+  "draw-pathway": "Drawing a pathway",
   "draw-doorway": "Drawing a doorway",
   "place-entrance": "Placing an entrance",
   "place-portal": "Placing a lift or stair",
@@ -13,6 +15,17 @@ function howTo(tool: Tool, pointCount: number): string {
     if (pointCount === 0) return "Click to place the first corner.";
     if (pointCount < 3) return `${pointCount} of at least 3 corners. Backspace undoes, Esc cancels.`;
     return "Click the first corner again to close, or double-click. Backspace undoes.";
+  }
+  if (tool === "draw-area") {
+    if (pointCount === 0) return "Click a corner of the open space.";
+    return pointCount < 3
+      ? `${pointCount} of at least 3 corners. Backspace undoes, Esc cancels.`
+      : "Click the first corner again to close, or double-click. Backspace undoes.";
+  }
+  if (tool === "draw-pathway") {
+    return pointCount < 2
+      ? "Click along the middle of where people walk."
+      : "Keep clicking, then double-click to finish. Backspace undoes.";
   }
   if (tool === "draw-doorway") {
     return pointCount === 0

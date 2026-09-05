@@ -100,7 +100,28 @@ export function App() {
                 kind: "room",
                 footprint: ring,
                 heightM: 3.5,
+                // A room is somewhere you arrive, not somewhere you route through.
+                walkable: false,
+              });
+            }}
+            onCommitArea={ring => {
+              if (!activeLevelId) return;
+              void saver.create("room", {
+                id: `${activeLevelId}-area-${Date.now()}`,
+                levelId: activeLevelId,
+                kind: "area",
+                footprint: ring,
+                heightM: 5,
+                // Set from the tool, so nobody has to know the checkbox exists.
                 walkable: true,
+              });
+            }}
+            onCommitPathway={polyline => {
+              if (!activeLevelId) return;
+              void saver.create("pathway", {
+                id: `${activeLevelId}-path-${Date.now()}`,
+                levelId: activeLevelId,
+                polyline,
               });
             }}
           />
