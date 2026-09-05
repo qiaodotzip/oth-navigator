@@ -1,6 +1,7 @@
 import type { Placement, Ring, Room, Vec2 } from "@oth/model";
 import { roomColor } from "@oth/renderer";
 import { useEffect, useRef, useState } from "react";
+import type { SpaceKind } from "../flow/newSpace";
 import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore } from "../state/store";
 import { imageCalibration, imageForLevel, underlayBBox } from "../state/underlay";
 import { contentBBox, hasArea } from "./content";
@@ -17,8 +18,8 @@ const GRID_M = 0.25;
 export type PlanCanvasProps = {
   width: number;
   height: number;
-  onCommitRoom?: (ring: Ring) => void;
-  onCommitArea?: (ring: Ring) => void;
+  /** One callback for every polygon tool; the kind says which tool drew it. */
+  onCommitSpace?: (kind: SpaceKind, ring: Ring) => void;
   onCommitPathway?: (polyline: Vec2[]) => void;
   onCommitDoorway?: (a: Vec2, b: Vec2) => void;
   onCommitPoint?: (p: Vec2) => void;
@@ -31,8 +32,7 @@ export type PlanCanvasProps = {
 export function PlanCanvas({
   width,
   height,
-  onCommitRoom,
-  onCommitArea,
+  onCommitSpace,
   onCommitPathway,
   onCommitDoorway,
   onCommitPoint,
@@ -158,8 +158,11 @@ export function PlanCanvas({
     if (!state.draft) return;
     const draft = withoutRepeats(state.draft);
     // Below three points it is not a ring, and the model would reject it.
-    if (state.tool === "draw-room" && draft.length >= 3) onCommitRoom?.(draft);
-    if (state.tool === "draw-area" && draft.length >= 3) onCommitArea?.(draft);
+    if (draft.length >= 3) {
+      if (state.tool === "draw-room") onCommitSpace?.("room", draft);
+      if (state.tool === "draw-area") onCommitSpace?.("area", draft);
+      if (state.tool === "draw-detail") onCommitSpace?.("detail", draft);
+    }
     // A pathway is a line, so two points is enough; a ring needs three.
     if (state.tool === "draw-pathway" && draft.length >= 2) onCommitPathway?.(draft);
     if (state.tool === "draw-doorway" && draft.length >= 2) {
@@ -185,6 +188,7 @@ export function PlanCanvas({
     if (
       state.tool === "draw-room" ||
       state.tool === "draw-area" ||
+      state.tool === "draw-detail" ||
       state.tool === "draw-pathway" ||
       state.tool === "draw-doorway"
     ) {
@@ -206,6 +210,23 @@ export function PlanCanvas({
 
   const ringPoints = (ring: readonly Vec2[]) =>
     ring.map(p => worldToScreen(state.viewport, p).join(",")).join(" ");
+
+  const renderRoom = (room: Room) => (
+    <polygon
+      key={room.id}
+      data-testid={`room-${room.id}`}
+      points={ringPoints(room.footprint)}
+      fill={roomColor(room.kind, { selected: state.selection?.id === room.id })}
+      stroke="#57534e"
+      strokeWidth={1}
+      onClick={event => {
+        // Drawing tools own the surface; clicking a room must not steal the point.
+        if (state.tool !== "select") return;
+        event.stopPropagation();
+        state.select({ type: "room", id: room.id });
+      }}
+    />
+  );
 
   return (
     <div className="relative" style={{ width, height }}>
@@ -244,22 +265,7 @@ export function PlanCanvas({
           onMouseLeave={() => setCursor(null)}
         />
 
-        {rooms.map(room => (
-          <polygon
-            key={room.id}
-            data-testid={`room-${room.id}`}
-            points={ringPoints(room.footprint)}
-            fill={roomColor(room.kind, { selected: state.selection?.id === room.id })}
-            stroke="#57534e"
-            strokeWidth={1}
-            onClick={event => {
-              // Drawing tools own the surface; clicking a room must not steal the point.
-              if (state.tool !== "select") return;
-              event.stopPropagation();
-              state.select({ type: "room", id: room.id });
-            }}
-          />
-        ))}
+        {rooms.filter(r => r.kind !== "detail").map(renderRoom)}
 
         {/*
           Painted over the rooms, not under them. Room fills are opaque, so a
@@ -283,6 +289,9 @@ export function PlanCanvas({
               }}
             />
           ))}
+
+        {/* A detail stands on the floor and on anything crossing it. */}
+        {rooms.filter(r => r.kind === "detail").map(renderRoom)}
 
         {state.tool === "select" && selectedRoom && (
           <VertexHandles

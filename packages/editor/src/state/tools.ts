@@ -10,6 +10,7 @@ export const TOOL_LABELS: Record<Tool, string> = {
   select: "Select",
   "draw-area": "Draw area",
   "draw-room": "Draw room",
+  "draw-detail": "Draw detail",
   "draw-pathway": "Draw pathway",
   "draw-doorway": "Doorway",
   "place-entrance": "Entrance",
@@ -23,6 +24,7 @@ export const TOOLBAR_TOOLS: Tool[] = [
   "draw-area",
   "draw-room",
   "draw-pathway",
+  "draw-detail",
   "place-entrance",
   "place-portal",
   // Doorway stays reachable — still right for a genuinely walled corridor —

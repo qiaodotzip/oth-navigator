@@ -3,20 +3,23 @@ import type { MapModel } from "@oth/model";
 /**
  * The entity kinds the layers panel manages.
  *
- * "area" is a layer group rather than an entity type — an area is a room whose
- * kind is `area` — so this is not simply a subset of EntityType.
+ * "area" and "detail" are layer groups rather than entity types — both are
+ * rooms whose kind says so — so this is not simply a subset of EntityType.
  */
 export type LayerEntityType =
-  | "area" | "room" | "pathway" | "doorway" | "entrance" | "portalEndpoint" | "placement";
+  | "area" | "room" | "detail" | "pathway"
+  | "doorway" | "entrance" | "portalEndpoint" | "placement";
 
 /**
  * The entity a layer item actually reads and writes.
  *
- * An area is a room whose kind is `area`, so selecting or saving one is a room
- * operation — only the grouping in this panel differs.
+ * An area and a detail are rooms whose kind says so, so selecting or saving one
+ * is a room operation — only the grouping in this panel differs.
  */
-export function layerEntityType(type: LayerEntityType): Exclude<LayerEntityType, "area"> {
-  return type === "area" ? "room" : type;
+export function layerEntityType(
+  type: LayerEntityType,
+): Exclude<LayerEntityType, "area" | "detail"> {
+  return type === "area" || type === "detail" ? "room" : type;
 }
 
 export type LayerItem = {
@@ -38,6 +41,7 @@ export type LayerGroup = {
 const GROUP_LABELS: Record<LayerEntityType, string> = {
   area: "Areas",
   room: "Rooms",
+  detail: "Details",
   pathway: "Pathways",
   doorway: "Doorways",
   entrance: "Entrances",
@@ -66,7 +70,8 @@ export function levelLayers(model: MapModel | null, levelId: string | null): Lay
   for (const r of model.rooms.filter(x => x.levelId === levelId)) {
     // Areas and rooms are drawn with different tools and read differently on
     // the canvas, so they list separately.
-    const type: LayerEntityType = r.kind === "area" ? "area" : "room";
+    const type: LayerEntityType =
+      r.kind === "area" ? "area" : r.kind === "detail" ? "detail" : "room";
     byType.get(type)!.push({
       type,
       id: r.id,

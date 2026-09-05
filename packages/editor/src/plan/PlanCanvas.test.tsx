@@ -66,27 +66,27 @@ describe("PlanCanvas", () => {
   });
 
   it("commits a room on double click and clears the draft", () => {
-    const onCommitRoom = vi.fn();
+    const onCommitSpace = vi.fn();
     useEditorStore.getState().setTool("draw-room");
-    render(<PlanCanvas width={800} height={600} onCommitRoom={onCommitRoom} />);
+    render(<PlanCanvas width={800} height={600} onCommitSpace={onCommitSpace} />);
     const surface = screen.getByTestId("plan-surface");
     fireEvent.click(surface, { clientX: 100, clientY: 100 });
     fireEvent.click(surface, { clientX: 200, clientY: 100 });
     fireEvent.click(surface, { clientX: 200, clientY: 200 });
     fireEvent.doubleClick(surface);
-    expect(onCommitRoom).toHaveBeenCalledTimes(1);
-    expect(onCommitRoom.mock.calls[0]![0]).toHaveLength(3);
+    expect(onCommitSpace).toHaveBeenCalledTimes(1);
+    expect(onCommitSpace.mock.calls[0]![1]).toHaveLength(3);
     expect(useEditorStore.getState().draft).toBeNull();
   });
 
   it("refuses to commit a ring with fewer than three points", () => {
-    const onCommitRoom = vi.fn();
+    const onCommitSpace = vi.fn();
     useEditorStore.getState().setTool("draw-room");
-    render(<PlanCanvas width={800} height={600} onCommitRoom={onCommitRoom} />);
+    render(<PlanCanvas width={800} height={600} onCommitSpace={onCommitSpace} />);
     const surface = screen.getByTestId("plan-surface");
     fireEvent.click(surface, { clientX: 100, clientY: 100 });
     fireEvent.doubleClick(surface);
-    expect(onCommitRoom).not.toHaveBeenCalled();
+    expect(onCommitSpace).not.toHaveBeenCalled();
   });
 
   it("zooms on wheel", () => {
@@ -238,14 +238,14 @@ describe("drawing feedback", () => {
   });
 
   it("closes the shape when the first corner is clicked", () => {
-    const onCommitRoom = vi.fn();
-    render(<PlanCanvas width={800} height={600} onCommitRoom={onCommitRoom} />);
+    const onCommitSpace = vi.fn();
+    render(<PlanCanvas width={800} height={600} onCommitSpace={onCommitSpace} />);
     const surface = screen.getByTestId("plan-surface");
     fireEvent.click(surface, { clientX: 100, clientY: 100 });
     fireEvent.click(surface, { clientX: 200, clientY: 100 });
     fireEvent.click(surface, { clientX: 200, clientY: 200 });
     fireEvent.click(screen.getByTestId("draft-vertex-0"));
-    expect(onCommitRoom).toHaveBeenCalledTimes(1);
+    expect(onCommitSpace).toHaveBeenCalledTimes(1);
     expect(useEditorStore.getState().draft).toBeNull();
   });
 
@@ -392,15 +392,15 @@ describe("pathways", () => {
 
   it("needs only two points, unlike a room", () => {
     const onCommitPathway = vi.fn();
-    const onCommitRoom = vi.fn();
+    const onCommitSpace = vi.fn();
     useEditorStore.getState().setTool("draw-pathway");
-    render(<PlanCanvas width={800} height={600} onCommitPathway={onCommitPathway} onCommitRoom={onCommitRoom} />);
+    render(<PlanCanvas width={800} height={600} onCommitPathway={onCommitPathway} onCommitSpace={onCommitSpace} />);
     const surface = screen.getByTestId("plan-surface");
     fireEvent.click(surface, { clientX: 100, clientY: 100 });
     fireEvent.click(surface, { clientX: 200, clientY: 100 });
     fireEvent.doubleClick(surface);
     expect(onCommitPathway).toHaveBeenCalled();
-    expect(onCommitRoom).not.toHaveBeenCalled();
+    expect(onCommitSpace).not.toHaveBeenCalled();
   });
 
   it("refuses a pathway of one point", () => {
@@ -421,18 +421,17 @@ describe("pathways", () => {
     expect(screen.getByTestId("draft").getAttribute("fill")).toBe("none");
   });
 
-  it("commits an area of three points to the area handler, not the room one", () => {
-    const onCommitArea = vi.fn();
-    const onCommitRoom = vi.fn();
+  it("commits an area with the area kind, not as a room", () => {
+    const onCommitSpace = vi.fn();
     useEditorStore.getState().setTool("draw-area");
-    render(<PlanCanvas width={800} height={600} onCommitArea={onCommitArea} onCommitRoom={onCommitRoom} />);
+    render(<PlanCanvas width={800} height={600} onCommitSpace={onCommitSpace} />);
     const surface = screen.getByTestId("plan-surface");
     fireEvent.click(surface, { clientX: 100, clientY: 100 });
     fireEvent.click(surface, { clientX: 200, clientY: 100 });
     fireEvent.click(surface, { clientX: 200, clientY: 200 });
     fireEvent.doubleClick(surface);
-    expect(onCommitArea).toHaveBeenCalledTimes(1);
-    expect(onCommitRoom).not.toHaveBeenCalled();
+    expect(onCommitSpace).toHaveBeenCalledTimes(1);
+    expect(onCommitSpace.mock.calls[0]![0]).toBe("area");
   });
 
   it("explains the pathway tool in the hint", () => {
@@ -475,14 +474,14 @@ describe("what a real double-click commits", () => {
   });
 
   it("does not give a room a zero-length edge", () => {
-    const onCommitRoom = vi.fn();
+    const onCommitSpace = vi.fn();
     useEditorStore.getState().setTool("draw-room");
-    render(<PlanCanvas width={800} height={600} onCommitRoom={onCommitRoom} />);
+    render(<PlanCanvas width={800} height={600} onCommitSpace={onCommitSpace} />);
     const surface = screen.getByTestId("plan-surface");
     fireEvent.click(surface, { clientX: 100, clientY: 100 });
     fireEvent.click(surface, { clientX: 300, clientY: 100 });
     realDoubleClick(surface, { clientX: 300, clientY: 300 });
-    expect(onCommitRoom.mock.calls[0]![0]).toHaveLength(3);
+    expect(onCommitSpace.mock.calls[0]![1]).toHaveLength(3);
   });
 
   it("still refuses a pathway the user only clicked once", () => {
@@ -517,5 +516,53 @@ describe("pathways are visible over the floor", () => {
     const path = screen.getByTestId("pathway-L1-p");
     // eslint-disable-next-line no-bitwise
     expect(room.compareDocumentPosition(path) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe("details on the canvas", () => {
+  it("commits a detail with the detail kind", () => {
+    const onCommitSpace = vi.fn();
+    useEditorStore.getState().setTool("draw-detail");
+    render(<PlanCanvas width={800} height={600} onCommitSpace={onCommitSpace} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 200 });
+    fireEvent.doubleClick(surface);
+    expect(onCommitSpace.mock.calls[0]![0]).toBe("detail");
+  });
+
+  it("paints a detail above the floor and the pathways crossing it", () => {
+    useEditorStore.getState().setModel(
+      parseModel({
+        building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+        levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+        rooms: [
+          { id: "L1-sq", levelId: "oth-L1", kind: "area", footprint: [[0, 0], [20, 0], [20, 20], [0, 20]], heightM: 6, walkable: true },
+          { id: "L1-vend", levelId: "oth-L1", kind: "detail", footprint: [[8, 8], [12, 8], [12, 12], [8, 12]], heightM: 1.9, walkable: false },
+        ],
+        pathways: [{ id: "L1-p", levelId: "oth-L1", polyline: [[2, 10], [18, 10]] }],
+      }),
+    );
+    render(<PlanCanvas width={800} height={600} />);
+    const area = screen.getByTestId("room-L1-sq");
+    const path = screen.getByTestId("pathway-L1-p");
+    const detail = screen.getByTestId("room-L1-vend");
+    // A detail stands on the floor, so it is painted after both.
+    expect(area.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(path.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("still selects a detail by clicking it", () => {
+    useEditorStore.getState().setModel(
+      parseModel({
+        building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+        levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+        rooms: [{ id: "L1-vend", levelId: "oth-L1", kind: "detail", footprint: [[8, 8], [12, 8], [12, 12], [8, 12]], heightM: 1.9, walkable: false }],
+      }),
+    );
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.click(screen.getByTestId("room-L1-vend"));
+    expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-vend" });
   });
 });

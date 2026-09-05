@@ -38,8 +38,10 @@ const groups = (levelId: string | null) =>
 describe("levelLayers", () => {
   it("keeps every group even when empty, so nothing looks unsupported", () => {
     const g = levelLayers(null, null);
-    expect(g.map(x => x.type))
-      .toEqual(["area", "room", "pathway", "doorway", "entrance", "portalEndpoint", "placement"]);
+    expect(g.map(x => x.type)).toEqual([
+      "area", "room", "detail", "pathway",
+      "doorway", "entrance", "portalEndpoint", "placement",
+    ]);
     expect(g.every(x => x.items.length === 0)).toBe(true);
   });
 
@@ -132,5 +134,26 @@ describe("areas and pathways", () => {
     });
     expect(levelLayers(named, "oth-L1").find(x => x.type === "pathway")?.items[0]?.label)
       .toBe("Link Bridge");
+  });
+});
+
+describe("details in layers", () => {
+  const m = parseModel({
+    building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+    levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+    rooms: [
+      { id: "L1-vend", levelId: "oth-L1", kind: "detail", footprint: [[0, 0], [4, 0], [4, 2]], heightM: 1.9, walkable: false },
+      { id: "L1-shop", levelId: "oth-L1", kind: "room", footprint: [[10, 0], [20, 0], [20, 10]], heightM: 3.5, walkable: false },
+    ],
+  });
+  const g = Object.fromEntries(levelLayers(m, "oth-L1").map(x => [x.type, x]));
+
+  it("lists details in their own group, since they are dressing not structure", () => {
+    expect(g.detail?.items.map(i => i.id)).toEqual(["L1-vend"]);
+    expect(g.room?.items.map(i => i.id)).toEqual(["L1-shop"]);
+  });
+
+  it("can be renamed, since a detail is worth labelling for a modeller", () => {
+    expect(g.detail?.items[0]?.renamable).toBe(true);
   });
 });

@@ -7,6 +7,7 @@ export type Tool =
   | "select"
   | "draw-area"
   | "draw-room"
+  | "draw-detail"
   | "draw-pathway"
   | "draw-doorway"
   | "place-entrance"
