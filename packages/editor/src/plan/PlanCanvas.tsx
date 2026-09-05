@@ -141,9 +141,22 @@ export function PlanCanvas({
     }).point;
   }
 
+  /**
+   * A browser fires two clicks before `dblclick`, so finishing a shape lands
+   * its end point two or three times over. Committed as-is that gives every
+   * shape a zero-length edge, and a double-click on empty canvas commits a
+   * pathway with no length at all.
+   */
+  function withoutRepeats(points: readonly Vec2[]): Vec2[] {
+    return points.filter((p, i) => {
+      const prev = points[i - 1];
+      return !prev || p[0] !== prev[0] || p[1] !== prev[1];
+    });
+  }
+
   function commitDraft() {
-    const draft = state.draft;
-    if (!draft) return;
+    if (!state.draft) return;
+    const draft = withoutRepeats(state.draft);
     // Below three points it is not a ring, and the model would reject it.
     if (state.tool === "draw-room" && draft.length >= 3) onCommitRoom?.(draft);
     if (state.tool === "draw-area" && draft.length >= 3) onCommitArea?.(draft);
@@ -231,6 +244,28 @@ export function PlanCanvas({
           onMouseLeave={() => setCursor(null)}
         />
 
+        {rooms.map(room => (
+          <polygon
+            key={room.id}
+            data-testid={`room-${room.id}`}
+            points={ringPoints(room.footprint)}
+            fill={roomColor(room.kind, { selected: state.selection?.id === room.id })}
+            stroke="#57534e"
+            strokeWidth={1}
+            onClick={event => {
+              // Drawing tools own the surface; clicking a room must not steal the point.
+              if (state.tool !== "select") return;
+              event.stopPropagation();
+              state.select({ type: "room", id: room.id });
+            }}
+          />
+        ))}
+
+        {/*
+          Painted over the rooms, not under them. Room fills are opaque, so a
+          pathway drawn beneath one is invisible exactly where it matters most:
+          crossing a floor, or running along a row of shop fronts.
+        */}
         {state.model?.pathways
           .filter(p => p.levelId === state.activeLevelId)
           .map(p => (
@@ -248,23 +283,6 @@ export function PlanCanvas({
               }}
             />
           ))}
-
-        {rooms.map(room => (
-          <polygon
-            key={room.id}
-            data-testid={`room-${room.id}`}
-            points={ringPoints(room.footprint)}
-            fill={roomColor(room.kind, { selected: state.selection?.id === room.id })}
-            stroke="#57534e"
-            strokeWidth={1}
-            onClick={event => {
-              // Drawing tools own the surface; clicking a room must not steal the point.
-              if (state.tool !== "select") return;
-              event.stopPropagation();
-              state.select({ type: "room", id: room.id });
-            }}
-          />
-        ))}
 
         {state.tool === "select" && selectedRoom && (
           <VertexHandles

@@ -454,3 +454,68 @@ describe("pathways", () => {
     expect(useEditorStore.getState().selection).toEqual({ type: "pathway", id: "L1-p" });
   });
 });
+
+describe("what a real double-click commits", () => {
+  /** A browser dispatches two clicks before dblclick; fireEvent.doubleClick does not. */
+  function realDoubleClick(el: Element, at: { clientX: number; clientY: number }) {
+    fireEvent.click(el, at);
+    fireEvent.click(el, at);
+    fireEvent.doubleClick(el, at);
+  }
+
+  it("does not repeat the last point of a pathway", () => {
+    const onCommitPathway = vi.fn();
+    useEditorStore.getState().setTool("draw-pathway");
+    render(<PlanCanvas width={800} height={600} onCommitPathway={onCommitPathway} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    realDoubleClick(surface, { clientX: 300, clientY: 100 });
+    // The two clicks that make up the double-click both land on the end point.
+    expect(onCommitPathway.mock.calls[0]![0]).toHaveLength(2);
+  });
+
+  it("does not give a room a zero-length edge", () => {
+    const onCommitRoom = vi.fn();
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} onCommitRoom={onCommitRoom} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    fireEvent.click(surface, { clientX: 300, clientY: 100 });
+    realDoubleClick(surface, { clientX: 300, clientY: 300 });
+    expect(onCommitRoom.mock.calls[0]![0]).toHaveLength(3);
+  });
+
+  it("still refuses a pathway the user only clicked once", () => {
+    const onCommitPathway = vi.fn();
+    useEditorStore.getState().setTool("draw-pathway");
+    render(<PlanCanvas width={800} height={600} onCommitPathway={onCommitPathway} />);
+    // One place, then finishing on the same spot, is one point, not two.
+    realDoubleClick(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100 });
+    expect(onCommitPathway).not.toHaveBeenCalled();
+  });
+});
+
+describe("pathways are visible over the floor", () => {
+  it("paints a pathway on top of the rooms it crosses", () => {
+    // Room fills are opaque, so a pathway painted first is invisible wherever it
+    // crosses a room — which is the normal case, since a corridor runs across
+    // shop fronts.
+    useEditorStore.getState().setModel(
+      parseModel({
+        building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+        levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+        rooms: [{
+          id: "L1-r", levelId: "oth-L1", kind: "area",
+          footprint: [[0, 0], [20, 0], [20, 20], [0, 20]],
+          heightM: 6, walkable: true,
+        }],
+        pathways: [{ id: "L1-p", levelId: "oth-L1", polyline: [[2, 10], [18, 10]] }],
+      }),
+    );
+    render(<PlanCanvas width={800} height={600} />);
+    const room = screen.getByTestId("room-L1-r");
+    const path = screen.getByTestId("pathway-L1-p");
+    // eslint-disable-next-line no-bitwise
+    expect(room.compareDocumentPosition(path) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
