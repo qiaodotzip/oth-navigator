@@ -88,4 +88,46 @@ describe("details", () => {
     expect(codes({ rooms: [{ ...detail, id: "L1-shop", kind: "room" }] }))
       .toContain("room.name.missing");
   });
+
+  const asset = {
+    id: "asset_1", filename: "v.glb", storagePath: "a", checksum: "c",
+    sizeBytes: 10, triangleCount: 5,
+    bbox: { minX: 0, minY: 0, minZ: 0, maxX: 1, maxY: 1, maxZ: 1 },
+  };
+
+  it("warns that a detail has nothing modelled on it yet", () => {
+    expect(codes({ rooms: [detail] })).toContain("detail.undressed");
+  });
+
+  it("says nothing once a placement anchors to it", () => {
+    expect(codes({
+      rooms: [detail],
+      assets: [asset],
+      placements: [{
+        id: "pl_1", levelId: "oth-L1", assetId: "asset_1",
+        roomId: "L1-seats", position: [2, 1, 0],
+      }],
+    })).not.toContain("detail.undressed");
+  });
+
+  it("is not fooled by a placement anchored to some other space", () => {
+    expect(codes({
+      rooms: [detail, { ...detail, id: "L1-other" }],
+      assets: [asset],
+      placements: [{
+        id: "pl_1", levelId: "oth-L1", assetId: "asset_1",
+        roomId: "L1-other", position: [2, 1, 0],
+      }],
+    })).toContain("detail.undressed");
+  });
+
+  it("never blocks a publish, since drawing extents first is a way to work", () => {
+    const r = validateModel(parseModel({ building, levels: [level], rooms: [detail] }), warningRules);
+    expect(r.errorCount).toBe(0);
+  });
+
+  it("says nothing about an undressed room, which needs no model", () => {
+    expect(codes({ rooms: [{ ...detail, id: "L1-shop", kind: "room" }] }))
+      .not.toContain("detail.undressed");
+  });
 });

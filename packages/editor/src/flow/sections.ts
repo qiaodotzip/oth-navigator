@@ -60,9 +60,20 @@ export function stepSections(steps: readonly ChecklistStep[]): StepSection[] {
     };
   });
 
+  const dressing = byId.get("dressing");
+
   return [
     ...required,
-    { id: "dressing", label: LABELS.dressing, status: null, detail: "", steps: [], issues: [] },
+    {
+      id: "dressing",
+      label: LABELS.dressing,
+      // Deliberately no status: placed assets are polish, not something a level
+      // is incomplete without. It still carries its own warnings and its tool.
+      status: null,
+      detail: dressing?.detail ?? "",
+      steps: dressing ? [dressing] : [],
+      issues: dressing?.issues ?? [],
+    },
   ];
 }
 

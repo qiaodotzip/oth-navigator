@@ -79,9 +79,31 @@ const placementsOutsideAnchor: Rule = model => {
   return issues;
 };
 
+/**
+ * A detail with nothing modelled on it yet.
+ *
+ * A warning and never an error: drawing the extents of a whole floor before any
+ * modelling starts is a legitimate way to work, and blocking publish on it
+ * would punish exactly that.
+ */
+const undressedDetails: Rule = model => {
+  const dressed = new Set(live(model.placements).map(p => p.roomId));
+  return live(model.rooms)
+    .filter(r => r.kind === "detail" && !dressed.has(r.id))
+    .map<ValidationIssue>(r => ({
+      severity: "warning",
+      code: "detail.undressed",
+      message: `Detail "${r.nameEn || r.id}" has no model placed on it yet.`,
+      entityType: "room",
+      entityId: r.id,
+      levelId: r.levelId,
+    }));
+};
+
 export const warningRules: Rule[] = [
   unnamedRooms,
   unverifiedTenants,
   levelsWithoutPortals,
   placementsOutsideAnchor,
+  undressedDetails,
 ];

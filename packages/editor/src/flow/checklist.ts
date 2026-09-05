@@ -2,7 +2,8 @@ import type { MapModel, ValidationIssue, ValidationReport } from "@oth/model";
 import type { LevelImage } from "../api/client";
 import type { Tool } from "../state/store";
 
-export type StepId = "floorplan" | "scale" | "rooms" | "connect" | "entrances" | "portals";
+export type StepId =
+  | "floorplan" | "scale" | "rooms" | "connect" | "entrances" | "portals" | "dressing";
 export type StepStatus = "todo" | "done";
 
 export type ChecklistStep = {
@@ -42,6 +43,8 @@ export function stepForCode(code: string): StepId | null {
   if (code.startsWith("pathway.") || code.startsWith("doorway.")) return "connect";
   if (code.startsWith("building.entrances") || code.startsWith("entrance.")) return "entrances";
   if (code.startsWith("level.portals") || code.startsWith("portal")) return "portals";
+  // A detail with no model, or a model that overhangs one, is fixed in Dressing.
+  if (code.startsWith("detail.") || code.startsWith("placement.")) return "dressing";
   return null;
 }
 
@@ -54,6 +57,9 @@ export function levelChecklist(input: ChecklistInput): ChecklistStep[] {
 
   const rooms = model && levelId ? model.rooms.filter(r => r.levelId === levelId) : [];
   const pathways = model && levelId ? model.pathways.filter(p => p.levelId === levelId) : [];
+  const details = rooms.filter(r => r.kind === "detail");
+  const dressed = new Set((model?.placements ?? []).map(p => p.roomId));
+  const undressed = details.filter(d => !dressed.has(d.id)).length;
   const entrances = model?.entrances ?? [];
   const endpoints = model && levelId ? model.portalEndpoints.filter(p => p.levelId === levelId) : [];
 
@@ -136,6 +142,19 @@ export function levelChecklist(input: ChecklistInput): ChecklistStep[] {
           : "none serving this level",
       tools: ["place-portal"],
       issues: issuesFor("portals"),
+    },
+    {
+      id: "dressing",
+      label: "Add details",
+      // Dressing carries no status dot in the panel — a level is not incomplete
+      // without polish — so this status is only ever the type's requirement.
+      status: undressed === 0 ? "done" : "todo",
+      detail:
+        details.length === 0
+          ? "none yet"
+          : `${plural(details.length, "detail")}, ${undressed} undressed`,
+      tools: ["draw-detail"],
+      issues: issuesFor("dressing"),
     },
   ];
 }

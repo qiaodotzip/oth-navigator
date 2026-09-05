@@ -4,6 +4,21 @@ import { modelToThree } from "./coords";
 import { PlacementMesh } from "./PlacementMesh";
 import { RoomMesh } from "./RoomMesh";
 
+/**
+ * Which rooms draw geometry of their own.
+ *
+ * A detail's block is a placeholder for a mesh that does not exist yet. Once
+ * one is placed on it the block would sit inside the vending machines, so it
+ * stops being drawn. A room is never replaced by the furniture standing in it.
+ */
+export function roomsToDraw(
+  rooms: readonly Room[],
+  placements: readonly Placement[],
+): Room[] {
+  const dressed = new Set(placements.map(p => p.roomId));
+  return rooms.filter(r => r.kind !== "detail" || !dressed.has(r.id));
+}
+
 export function LevelGroup({
   level, rooms, placements = [], assetUrl, ghosted = false, selectedId, onSelect,
 }: {
@@ -20,7 +35,7 @@ export function LevelGroup({
 
   return (
     <group position={[x, y, z]}>
-      {rooms.map(room => (
+      {roomsToDraw(rooms, placements).map(room => (
         <RoomMesh
           key={room.id}
           room={room}

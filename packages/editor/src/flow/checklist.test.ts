@@ -48,10 +48,12 @@ function steps(input: Parameters<typeof levelChecklist>[0]) {
 }
 
 describe("levelChecklist", () => {
-  it("returns the six steps in order", () => {
+  it("returns the seven steps in order", () => {
     const ids = levelChecklist({ model: model(), levelId: "oth-L1", image: null, report: emptyReport })
       .map(s => s.id);
-    expect(ids).toEqual(["floorplan", "scale", "rooms", "connect", "entrances", "portals"]);
+    expect(ids).toEqual([
+      "floorplan", "scale", "rooms", "connect", "entrances", "portals", "dressing",
+    ]);
   });
 
   it("marks the floorplan done once an image exists", () => {
@@ -150,7 +152,7 @@ describe("levelChecklist", () => {
   });
 
   it("survives a model that has not loaded yet", () => {
-    expect(levelChecklist({ model: null, levelId: null, image: null, report: null })).toHaveLength(6);
+    expect(levelChecklist({ model: null, levelId: null, image: null, report: null })).toHaveLength(7);
   });
 });
 
@@ -164,7 +166,13 @@ describe("stepForCode", () => {
   });
 
   it("returns null for a code no step owns", () => {
-    expect(stepForCode("placement.asset.missing")).toBeNull();
+    // Tenants are not part of the guided sequence, so nothing claims them.
+    expect(stepForCode("tenant.unverified")).toBeNull();
+  });
+
+  it("files a placement problem under dressing, where it is fixed", () => {
+    expect(stepForCode("placement.outsideAnchorRoom")).toBe("dressing");
+    expect(stepForCode("detail.undressed")).toBe("dressing");
   });
 });
 
@@ -236,5 +244,40 @@ describe("the tools a step offers", () => {
   it("offers none for the floorplan, which is done in a panel", () => {
     const s = steps({ model: model(), levelId: "oth-L1", image: null, report: emptyReport });
     expect(s.floorplan?.tools).toEqual([]);
+  });
+});
+
+describe("the dressing step", () => {
+  const detail = { ...room, id: "L1-vend", kind: "detail", walkable: false };
+  const asset = {
+    id: "asset_1", filename: "v.glb", storagePath: "a", checksum: "c",
+    sizeBytes: 10, triangleCount: 5,
+    bbox: { minX: 0, minY: 0, minZ: 0, maxX: 1, maxY: 1, maxZ: 1 },
+  };
+
+  it("counts the details and how many are still undressed", () => {
+    const m = model({ rooms: [detail, { ...detail, id: "L1-b" }] });
+    expect(steps({ model: m, levelId: "oth-L1", image: null, report: emptyReport }).dressing?.detail)
+      .toBe("2 details, 2 undressed");
+  });
+
+  it("stops counting one as undressed when a model is placed on it", () => {
+    const m = model({
+      rooms: [detail],
+      assets: [asset],
+      placements: [{ id: "pl_1", levelId: "oth-L1", assetId: "asset_1", roomId: "L1-vend", position: [0, 0, 0] }],
+    });
+    expect(steps({ model: m, levelId: "oth-L1", image: null, report: emptyReport }).dressing?.detail)
+      .toBe("1 detail, 0 undressed");
+  });
+
+  it("says so plainly when there are no details at all", () => {
+    expect(steps({ model: model(), levelId: "oth-L1", image: null, report: emptyReport }).dressing?.detail)
+      .toBe("none yet");
+  });
+
+  it("offers the detail tool, since details are dressing", () => {
+    expect(steps({ model: model(), levelId: "oth-L1", image: null, report: emptyReport }).dressing?.tools)
+      .toEqual(["draw-detail"]);
   });
 });
