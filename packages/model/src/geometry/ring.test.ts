@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Ring } from "../primitives";
-import { normaliseRing, ringArea, ringIsClockwise, ringIsSimple } from "./ring";
+import { normaliseRing, ringArea, ringCentroid, ringIsClockwise, ringIsSimple } from "./ring";
 
 const unitSquareCCW: Ring = [[0, 0], [1, 0], [1, 1], [0, 1]];
 const unitSquareCW: Ring = [[0, 0], [0, 1], [1, 1], [1, 0]];
@@ -73,5 +73,35 @@ describe("ringIsSimple", () => {
 
   it("rejects a ring containing a duplicate vertex", () => {
     expect(ringIsSimple([[0, 0], [1, 0], [1, 0], [1, 1], [0, 1]])).toBe(false);
+  });
+});
+
+describe("ringCentroid", () => {
+  it("finds the middle of a square", () => {
+    expect(ringCentroid([[0, 0], [4, 0], [4, 4], [0, 4]])).toEqual([2, 2]);
+  });
+
+  it("is area-weighted, not a vertex average", () => {
+    // Extra vertices bunched along one edge would drag a vertex average toward
+    // them, and a footprint traced by hand has exactly that shape.
+    const traced: Ring = [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 4], [0, 4]];
+    expect(ringCentroid(traced)[0]).toBeCloseTo(2, 6);
+  });
+
+  it("does not care which way the ring winds", () => {
+    expect(ringCentroid([[0, 0], [0, 4], [4, 4], [4, 0]])).toEqual([2, 2]);
+  });
+
+  it("falls back to the vertex average for a degenerate ring of no area", () => {
+    expect(ringCentroid([[0, 0], [2, 0], [4, 0]])).toEqual([2, 0]);
+  });
+
+  it("sits inside an L shape's own bounds", () => {
+    const l: Ring = [[0, 0], [6, 0], [6, 2], [2, 2], [2, 6], [0, 6]];
+    const [x, y] = ringCentroid(l);
+    expect(x).toBeGreaterThan(0);
+    expect(x).toBeLessThan(6);
+    expect(y).toBeGreaterThan(0);
+    expect(y).toBeLessThan(6);
   });
 });

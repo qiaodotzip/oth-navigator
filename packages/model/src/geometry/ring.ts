@@ -67,3 +67,36 @@ export function ringIsSimple(ring: Ring): boolean {
   }
   return true;
 }
+
+/**
+ * The area-weighted centroid of a ring.
+ *
+ * Not the average of the vertices: a hand-traced footprint often has several
+ * points bunched along one edge, and a vertex average would be dragged toward
+ * them. A ring with no area — every point collinear — has no meaningful
+ * centroid, so the vertex average is the honest fallback there.
+ */
+export function ringCentroid(ring: Ring): Vec2 {
+  let twiceArea = 0;
+  let x = 0;
+  let y = 0;
+
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i]!;
+    const b = ring[(i + 1) % ring.length]!;
+    const cross = a[0] * b[1] - b[0] * a[1];
+    twiceArea += cross;
+    x += (a[0] + b[0]) * cross;
+    y += (a[1] + b[1]) * cross;
+  }
+
+  if (twiceArea === 0) {
+    const n = ring.length;
+    return [
+      ring.reduce((sum, p) => sum + p[0], 0) / n,
+      ring.reduce((sum, p) => sum + p[1], 0) / n,
+    ];
+  }
+
+  return [x / (3 * twiceArea), y / (3 * twiceArea)];
+}
