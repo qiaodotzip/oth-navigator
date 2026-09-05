@@ -37,6 +37,8 @@ export type ChecklistInput = {
 export function stepForCode(code: string): StepId | null {
   if (code.startsWith("room.footprint") || code.startsWith("room.hole")) return "rooms";
   if (code === "room.name.missing" || code === "room.id.duplicate") return "rooms";
+  // A place with no room, or a room nobody has seen, is answered while tracing.
+  if (code.startsWith("place.") || code === "room.unsurveyed") return "rooms";
   // A room with no access is fixed by drawing a pathway to it, so it belongs
   // to the pathways step rather than to tracing.
   if (code === "area.unreachable" || code === "room.noAccess") return "connect";

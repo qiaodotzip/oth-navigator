@@ -7,6 +7,7 @@ import { useCollaboration } from "./collab/useCollaboration";
 import { layerEntityType, type LayerItem } from "./flow/layers";
 import { newPathway, newSpace } from "./flow/newSpace";
 import { AssetLibrary } from "./panels/AssetLibrary";
+import { BindPlacePanel } from "./panels/BindPlacePanel";
 import { ConflictBanner } from "./panels/ConflictBanner";
 import { LockBanner } from "./panels/LockBanner";
 import { PresenceBar } from "./panels/PresenceBar";
@@ -119,6 +120,7 @@ export function App() {
             sections={{
               floorplan: <FloorplanPanel api={api} saver={saver} />,
               rooms: (
+                <div className="space-y-3">
                 <Inspector
                   onRename={(id, version, nameEn) =>
                     void saver.update("room", id, version, { nameEn })
@@ -127,6 +129,23 @@ export function App() {
                     void saver.update("room", id, version, { heightM })
                   }
                 />
+                <div className="px-3">
+                  <BindPlacePanel
+                    onBind={({ place, roomId, roomVersion, evidence }) => {
+                      void saver.update("place", place.id, place.version, { roomId });
+                      // The first thing in this project to move an entity off
+                      // "unverified": the room is now a place someone has seen.
+                      void saver.update("room", roomId, roomVersion, {
+                        verification: {
+                          status: "photo",
+                          evidence,
+                          verifiedAt: new Date().toISOString(),
+                        },
+                      });
+                    }}
+                  />
+                </div>
+                </div>
               ),
               dressing: (
                 <div className="space-y-2">

@@ -281,3 +281,17 @@ describe("the dressing step", () => {
       .toEqual(["draw-detail"]);
   });
 });
+
+describe("survey codes", () => {
+  it("files an unbound place under tracing, where a room would be drawn for it", () => {
+    expect(stepForCode("place.unbound")).toBe("rooms");
+  });
+
+  it("files an unsurveyed room under tracing too", () => {
+    expect(stepForCode("room.unsurveyed")).toBe("rooms");
+  });
+
+  it("files a broken adjacency under tracing, since the footprint is the suspect", () => {
+    expect(stepForCode("place.adjacencyBroken")).toBe("rooms");
+  });
+});
