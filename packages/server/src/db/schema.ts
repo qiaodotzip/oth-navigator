@@ -227,5 +227,7 @@ export const pathways = pgTable("pathways", {
   polyline: jsonb("polyline").$type<[number, number][]>().notNull(),
   widthM: doublePrecision("width_m").notNull().default(2.4),
   stepFree: boolean("step_free").notNull().default(true),
+  nameEn: text("name_en").notNull().default(""),
+  nameZh: text("name_zh").notNull().default(""),
   ...auditColumns,
 }, t => ({ levelIdx: index("pathways_level_idx").on(t.levelId) }));

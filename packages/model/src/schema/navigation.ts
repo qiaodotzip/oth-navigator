@@ -85,6 +85,13 @@ export const PathwaySchema = AuditFieldsSchema.extend({
   polyline: z.array(Vec2Schema).min(2),
   widthM: z.number().positive().default(DEFAULT_PATHWAY_WIDTH_M),
   stepFree: z.boolean().default(true),
+  /**
+   * Optional, unlike a room's. Most pathways are anonymous stretches of floor,
+   * but the ones people actually say out loud — "the link bridge", "the
+   * concourse" — need to be nameable.
+   */
+  nameEn: z.string().default(""),
+  nameZh: z.string().default(""),
 });
 
 export type Doorway = z.infer<typeof DoorwaySchema>;

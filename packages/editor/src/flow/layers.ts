@@ -80,10 +80,11 @@ export function levelLayers(model: MapModel | null, levelId: string | null): Lay
     byType.get("pathway")!.push({
       type: "pathway",
       id: p.id,
-      // A pathway has no name; its shape is what tells one from another.
-      label: `${p.polyline.length} points · ${p.widthM} m wide`,
+      // Most pathways are anonymous, so the shape is the fallback label — but
+      // the ones people say out loud can be named like anything else.
+      label: p.nameEn || `${p.polyline.length} points · ${p.widthM} m wide`,
       version: p.version,
-      renamable: false,
+      renamable: true,
     });
   }
 

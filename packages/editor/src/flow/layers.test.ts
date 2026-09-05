@@ -114,8 +114,23 @@ describe("areas and pathways", () => {
     expect(g("oth-L1").room?.items.map(i => i.id)).toEqual(["L1-shop"]);
   });
 
-  it("describes a pathway by its shape, since it has no name", () => {
+  it("describes an unnamed pathway by its shape", () => {
     expect(g("oth-L1").pathway?.items[0]?.label).toBe("3 points · 3 m wide");
-    expect(g("oth-L1").pathway?.items[0]?.renamable).toBe(false);
+  });
+
+  it("can be renamed, since some stretches of floor have names people use", () => {
+    expect(g("oth-L1").pathway?.items[0]?.renamable).toBe(true);
+  });
+
+  it("prefers a pathway's name over its shape once it has one", () => {
+    const named = parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [
+        { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 },
+      ],
+      pathways: [{ id: "L1-p", levelId: "oth-L1", polyline: [[0, 0], [10, 0]], nameEn: "Link Bridge" }],
+    });
+    expect(levelLayers(named, "oth-L1").find(x => x.type === "pathway")?.items[0]?.label)
+      .toBe("Link Bridge");
   });
 });

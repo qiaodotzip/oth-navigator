@@ -99,6 +99,18 @@ describe("pathway routes", () => {
     expect(res.status).toBe(201);
   });
 
+  it("renames a pathway, which is a partial update of a name it did not have", async () => {
+    await post("/api/entities/pathway", {
+      data: { id: "L1-path", levelId: "oth-L1", polyline: [[0, 0], [10, 0]] },
+    });
+    const res = await patch("/api/entities/pathway/L1-path", {
+      expectedVersion: 0,
+      data: { nameEn: "Link Bridge" },
+    });
+    expect(res.status).toBe(200);
+    expect((await json<{ entity: { nameEn: string } }>(res)).entity.nameEn).toBe("Link Bridge");
+  });
+
   it("422s a pathway with a single point", async () => {
     const res = await post("/api/entities/pathway", {
       data: { id: "L1-bad", levelId: "oth-L1", polyline: [[0, 0]] },
