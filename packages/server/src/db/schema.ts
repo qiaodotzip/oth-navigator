@@ -216,3 +216,16 @@ export const levelImages = pgTable("level_images", {
   uploadedBy: text("uploaded_by"),
   ...auditColumns,
 }, t => ({ levelIdx: index("level_images_level_idx").on(t.levelId) }));
+
+/**
+ * Walkable surface drawn by hand. See navigation.ts in @oth/model for why this
+ * exists rather than deriving walkability from room adjacency.
+ */
+export const pathways = pgTable("pathways", {
+  id: text("id").primaryKey(),
+  levelId: text("level_id").notNull(),
+  polyline: jsonb("polyline").$type<[number, number][]>().notNull(),
+  widthM: doublePrecision("width_m").notNull().default(2.4),
+  stepFree: boolean("step_free").notNull().default(true),
+  ...auditColumns,
+}, t => ({ levelIdx: index("pathways_level_idx").on(t.levelId) }));

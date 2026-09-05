@@ -1,5 +1,5 @@
 import {
-  DoorwaySchema, EntranceSchema, LevelSchema, NavHintSchema,
+  DoorwaySchema, EntranceSchema, LevelSchema, NavHintSchema, PathwaySchema,
   PlacementSchema, PortalEndpointSchema, PortalSchema, RoomSchema, TenantSchema,
 } from "@oth/model";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
@@ -8,7 +8,7 @@ import * as schema from "../db/schema";
 
 export const ENTITY_TYPES = [
   "level", "room", "doorway", "entrance",
-  "portal", "portalEndpoint", "navHint", "placement", "tenant",
+  "portal", "portalEndpoint", "navHint", "pathway", "placement", "tenant",
 ] as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[number];
@@ -35,6 +35,7 @@ export const entityRegistry: Record<EntityType, { table: EntityTable; schema: Zo
   portal: { table: schema.portals as EntityTable, schema: PortalSchema },
   portalEndpoint: { table: schema.portalEndpoints as EntityTable, schema: PortalEndpointSchema },
   navHint: { table: schema.navHints as EntityTable, schema: NavHintSchema },
+  pathway: { table: schema.pathways as EntityTable, schema: PathwaySchema },
   placement: { table: schema.placements as EntityTable, schema: PlacementSchema },
   tenant: { table: schema.tenants as EntityTable, schema: TenantSchema },
 };

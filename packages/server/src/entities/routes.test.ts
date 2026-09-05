@@ -90,3 +90,19 @@ describe("entity routes", () => {
     expect((await json<{ entity: { updatedBy: string } }>(res)).entity.updatedBy).toMatch(/^user_/);
   });
 });
+
+describe("pathway routes", () => {
+  it("creates a pathway through the generic entity route", async () => {
+    const res = await post("/api/entities/pathway", {
+      data: { id: "L1-path", levelId: "oth-L1", polyline: [[0, 0], [10, 0], [10, 8]] },
+    });
+    expect(res.status).toBe(201);
+  });
+
+  it("422s a pathway with a single point", async () => {
+    const res = await post("/api/entities/pathway", {
+      data: { id: "L1-bad", levelId: "oth-L1", polyline: [[0, 0]] },
+    });
+    expect(res.status).toBe(422);
+  });
+});

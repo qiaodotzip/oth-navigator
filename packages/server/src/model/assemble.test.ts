@@ -56,3 +56,21 @@ describe("assembleModel", () => {
     expect(validateModel(await assembleModel(db)).ok).toBe(true);
   });
 });
+
+describe("pathways", () => {
+  const path = { id: "L1-path", levelId: "oth-L1", polyline: [[0, 0], [10, 0]] };
+
+  it("assembles pathways for the model", async () => {
+    await createEntity(db, "room", lobby, "user_1");
+    await createEntity(db, "pathway", path, "user_1");
+    const model = await assembleModel(db);
+    expect(model.pathways).toHaveLength(1);
+    expect(model.pathways[0]?.widthM).toBe(2.4);
+  });
+
+  it("omits a soft-deleted pathway", async () => {
+    await createEntity(db, "pathway", path, "user_1");
+    await softDeleteEntity(db, "pathway", "L1-path", 0, "user_1");
+    expect((await assembleModel(db)).pathways).toHaveLength(0);
+  });
+});
