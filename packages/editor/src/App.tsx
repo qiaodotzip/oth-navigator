@@ -3,10 +3,13 @@ import { MapScene } from "@oth/renderer";
 import { useEffect, useMemo, useState } from "react";
 import { createApi } from "./api/client";
 import { LoginScreen } from "./auth/LoginScreen";
+import { useCollaboration } from "./collab/useCollaboration";
 import { layerEntityType, type LayerItem } from "./flow/layers";
 import { newPathway, newSpace } from "./flow/newSpace";
 import { AssetLibrary } from "./panels/AssetLibrary";
 import { ConflictBanner } from "./panels/ConflictBanner";
+import { LockBanner } from "./panels/LockBanner";
+import { PresenceBar } from "./panels/PresenceBar";
 import { ContextExportButton } from "./panels/ContextExportButton";
 import { DxfImportButton } from "./panels/DxfImportButton";
 import { FloorplanPanel } from "./panels/FloorplanPanel";
@@ -40,6 +43,10 @@ export function App() {
     if (user) void saver.refresh();
   }, [user, saver]);
 
+  // Before the early returns below, since hooks cannot be conditional — the
+  // flag is what keeps it quiet on the login screen.
+  useCollaboration(api, Boolean(user));
+
   if (!checked) return <div className="p-6 text-sm text-stone-500">Loading…</div>;
   if (!user) return <LoginScreen api={api} onSignedIn={setUser} />;
 
@@ -57,11 +64,14 @@ export function App() {
         <h1 className="text-sm font-semibold">OTH Map Editor</h1>
         <LevelTabs />
         <div className="ml-auto flex items-center gap-3 text-sm">
+          <PresenceBar />
           <span className="text-stone-500">{user.displayName}</span>
           <PublishButton api={api} />
         </div>
       </header>
 
+      {/* The advisory warning sits above the one that means a save failed. */}
+      <LockBanner />
       <ConflictBanner onReload={() => void saver.refresh()} />
       <Toolbar />
 

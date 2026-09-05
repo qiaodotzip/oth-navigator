@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { lockFor } from "../collab/locks";
 import type { LayerItem } from "../flow/layers";
 import { layerEntityType, levelLayers } from "../flow/layers";
 import { useEditorStore } from "../state/store";
@@ -14,6 +15,8 @@ export function LayersPanel({
   const levelId = useEditorStore(s => s.activeLevelId);
   const selection = useEditorStore(s => s.selection);
   const select = useEditorStore(s => s.select);
+  const locks = useEditorStore(s => s.locks);
+  const me = useEditorStore(s => s.user);
   const [editing, setEditing] = useState<string | null>(null);
 
   const groups = levelLayers(model, levelId);
@@ -38,6 +41,13 @@ export function LayersPanel({
             <ul>
               {group.items.map(item => {
                 const isSelected = selection?.id === item.id;
+                // Locks are held on the entity, so an area is looked up as the
+                // room it really is.
+                const heldBy = lockFor(
+                  locks,
+                  { type: layerEntityType(item.type), id: item.id },
+                  me?.id ?? null,
+                );
                 return (
                   <li
                     key={item.id}
@@ -70,6 +80,15 @@ export function LayersPanel({
                       >
                         {item.label}
                       </button>
+                    )}
+
+                    {heldBy && (
+                      <span
+                        className="shrink-0 text-xs"
+                        title={`${heldBy.lockedByName} is editing this`}
+                      >
+                        🔒 {heldBy.lockedByName}
+                      </span>
                     )}
 
                     {item.renamable && editing !== item.id && (

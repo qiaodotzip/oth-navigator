@@ -92,3 +92,36 @@ describe("LayersPanel", () => {
     expect(screen.getAllByText("none yet").length).toBeGreaterThan(0);
   });
 });
+
+describe("locks in the layers list", () => {
+  const me = { id: "user_me", email: "m@e.com", displayName: "Me" };
+
+  it("marks a row someone else is holding", () => {
+    useEditorStore.getState().setUser(me);
+    useEditorStore.getState().setLocks([
+      { entityType: "room", entityId: "L1-lobby", lockedBy: "user_wei", lockedByName: "Wei" },
+    ]);
+    setup();
+    expect(screen.getByTestId("layer-L1-lobby").textContent).toContain("Wei");
+  });
+
+  it("does not mark a row I am holding myself", () => {
+    useEditorStore.getState().setUser(me);
+    useEditorStore.getState().setLocks([
+      { entityType: "room", entityId: "L1-lobby", lockedBy: "user_me", lockedByName: "Me" },
+    ]);
+    setup();
+    expect(screen.getByTestId("layer-L1-lobby").textContent).not.toContain("🔒");
+  });
+
+  it("marks an area by its room identity, since that is what is locked", () => {
+    useEditorStore.getState().setUser(me);
+    useEditorStore.getState().setLocks([
+      { entityType: "room", entityId: "L1-lobby", lockedBy: "user_wei", lockedByName: "Wei" },
+    ]);
+    setup();
+    // L1-lobby is kind "area", so the panel lists it under Areas — but the lock
+    // is held on the room entity.
+    expect(screen.getByTestId("layer-L1-lobby").textContent).toContain("🔒");
+  });
+});

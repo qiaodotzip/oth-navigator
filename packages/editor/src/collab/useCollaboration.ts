@@ -14,13 +14,16 @@ const POLL_MS = 5_000;
  * that works in jsdom, which has no EventSource. Five seconds of staleness is
  * invisible for a team of four. Wire the stream when that stops being true.
  */
-export function useCollaboration(api: Api): void {
+export function useCollaboration(api: Api, enabled = true): void {
   const activeLevelId = useEditorStore(s => s.activeLevelId);
   const selection = useEditorStore(s => s.selection);
   const setPresence = useEditorStore(s => s.setPresence);
   const setLocks = useEditorStore(s => s.setLocks);
 
   useEffect(() => {
+    // The editor renders a login screen before anyone is signed in, and polling
+    // through that would be a stream of 401s nobody can act on.
+    if (!enabled) return;
     let cancelled = false;
 
     async function poll() {
@@ -42,15 +45,15 @@ export function useCollaboration(api: Api): void {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [api, activeLevelId, setPresence, setLocks]);
+  }, [api, enabled, activeLevelId, setPresence, setLocks]);
 
   useEffect(() => {
-    if (!selection) return;
+    if (!enabled || !selection) return;
     const { type, id } = selection;
     // Refusal is fine: the lock only warns, and the next poll shows who holds it.
     void api.acquireLock(type, id).catch(() => {});
     return () => {
       void api.releaseLock(type, id).catch(() => {});
     };
-  }, [api, selection]);
+  }, [api, enabled, selection]);
 }

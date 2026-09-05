@@ -19,8 +19,8 @@ function fakeApi(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function Probe({ api }: { api: Api }) {
-  useCollaboration(api);
+function Probe({ api, enabled = true }: { api: Api; enabled?: boolean }) {
+  useCollaboration(api, enabled);
   return null;
 }
 
@@ -79,6 +79,17 @@ describe("useCollaboration", () => {
     const api = fakeApi();
     render(<Probe api={as(api)} />);
     await waitFor(() => expect(api.listLocks).toHaveBeenCalled());
+    expect(api.acquireLock).not.toHaveBeenCalled();
+  });
+
+  it("does nothing at all while signed out", async () => {
+    // The login screen renders before anyone is signed in, and polling through
+    // it would be a stream of 401s nobody can act on.
+    const api = fakeApi();
+    render(<Probe api={as(api)} enabled={false} />);
+    useEditorStore.getState().select({ type: "room", id: "L1-x" });
+    await new Promise(r => setTimeout(r, 30));
+    expect(api.heartbeat).not.toHaveBeenCalled();
     expect(api.acquireLock).not.toHaveBeenCalled();
   });
 
