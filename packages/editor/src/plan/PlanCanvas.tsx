@@ -1,11 +1,13 @@
-import type { Ring, Vec2 } from "@oth/model";
+import type { Ring, Room, Vec2 } from "@oth/model";
 import { roomColor } from "@oth/renderer";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore } from "../state/store";
 import { imageCalibration, imageForLevel, underlayBBox } from "../state/underlay";
 import { contentBBox, hasArea } from "./content";
-import { Underlay } from "./Underlay";
+import { DrawingHint } from "./DrawingHint";
 import { snapPoint } from "./snapping";
+import { Underlay } from "./Underlay";
+import { VertexHandles } from "./VertexHandles";
 import { fitViewport, screenToWorld, worldToScreen, zoomViewport } from "./viewport";
 
 const SNAP_TOLERANCE_PX = 10;
@@ -17,21 +19,32 @@ export type PlanCanvasProps = {
   onCommitRoom?: (ring: Ring) => void;
   onCommitDoorway?: (a: Vec2, b: Vec2) => void;
   onCommitPoint?: (p: Vec2) => void;
+  onReshapeRoom?: (room: Room, ring: Ring) => void;
   /** Resolves a level image id to a URL. */
   imageUrl?: (imageId: string) => string;
 };
 
 export function PlanCanvas({
-  width, height, onCommitRoom, onCommitDoorway, onCommitPoint, imageUrl,
+  width,
+  height,
+  onCommitRoom,
+  onCommitDoorway,
+  onCommitPoint,
+  onReshapeRoom,
+  imageUrl,
 }: PlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const state = useEditorStore();
   const rooms = roomsOnActiveLevel(state);
   const rings = ringsOnActiveLevel(state);
+  const [cursor, setCursor] = useState<Vec2 | null>(null);
 
   const image = imageForLevel(state.levelImages, state.activeLevelId);
   const calibration = imageCalibration(image);
   const underlay = underlayBBox(image);
+
+  const selectedRoom =
+    state.selection?.type === "room" ? rooms.find(r => r.id === state.selection?.id) ?? null : null;
 
   // Fit once per level, not on every render. Refitting continuously would snap
   // the canvas back the instant anyone panned, which is worse than not fitting.
@@ -47,31 +60,58 @@ export function PlanCanvas({
     state.setViewport(fitViewport(box, width, height));
   }, [fitKey, state, rings, underlay, width, height]);
 
-  function pointerWorld(event: { clientX: number; clientY: number }): Vec2 {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (!state.draft) return;
+      if (event.key === "Escape") {
+        state.clearDraft();
+        setCursor(null);
+      }
+      if (event.key === "Backspace") {
+        event.preventDefault();
+        state.popDraftPoint();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state]);
+
+  function rawWorld(event: { clientX: number; clientY: number }): Vec2 {
     const rect = svgRef.current?.getBoundingClientRect();
-    const sx = event.clientX - (rect?.left ?? 0);
-    const sy = event.clientY - (rect?.top ?? 0);
-    const world = screenToWorld(state.viewport, [sx, sy]);
+    return screenToWorld(state.viewport, [
+      event.clientX - (rect?.left ?? 0),
+      event.clientY - (rect?.top ?? 0),
+    ]);
+  }
+
+  function pointerWorld(event: { clientX: number; clientY: number }): Vec2 {
     // Tolerance is expressed in pixels so snapping feels the same at every zoom.
-    return snapPoint(world, { rings }, {
+    return snapPoint(rawWorld(event), { rings }, {
       toleranceM: SNAP_TOLERANCE_PX / state.viewport.scale,
       gridM: GRID_M,
     }).point;
+  }
+
+  function commitDraft() {
+    const draft = state.draft;
+    if (!draft) return;
+    // Below three points it is not a ring, and the model would reject it.
+    if (state.tool === "draw-room" && draft.length >= 3) onCommitRoom?.(draft);
+    if (state.tool === "draw-doorway" && draft.length >= 2) {
+      onCommitDoorway?.(draft[0]!, draft[draft.length - 1]!);
+    }
+    state.clearDraft();
+    setCursor(null);
   }
 
   function onSurfaceClick(event: React.MouseEvent) {
     if (state.tool === "select") return;
 
     if (state.tool === "calibrate") {
-      // Raw and unsnapped: you are measuring the image, not the geometry.
-      const rect = svgRef.current?.getBoundingClientRect();
-      const raw = screenToWorld(state.viewport, [
-        event.clientX - (rect?.left ?? 0),
-        event.clientY - (rect?.top ?? 0),
-      ]);
-      // A third click starts a fresh measurement rather than extending the old one.
+      // Raw and unsnapped: you are measuring the image, not the geometry, and
+      // snapping to a room corner would silently corrupt the measurement.
       if ((state.calibrationDraft?.length ?? 0) >= 2) state.beginCalibration();
-      state.pushCalibrationPoint(raw);
+      state.pushCalibrationPoint(rawWorld(event));
       return;
     }
 
@@ -88,94 +128,151 @@ export function PlanCanvas({
     }
   }
 
-  function onSurfaceDoubleClick() {
-    const draft = state.draft;
-    if (!draft) return;
-
-    if (state.tool === "draw-room") {
-      // Below three points it is not a ring, and the model would reject it.
-      if (draft.length >= 3) onCommitRoom?.(draft);
-    }
-    if (state.tool === "draw-doorway" && draft.length >= 2) {
-      onCommitDoorway?.(draft[0]!, draft[draft.length - 1]!);
-    }
-    state.clearDraft();
-  }
-
   function onWheel(event: React.WheelEvent) {
     const rect = svgRef.current?.getBoundingClientRect();
     const anchor: Vec2 = [event.clientX - (rect?.left ?? 0), event.clientY - (rect?.top ?? 0)];
     state.setViewport(zoomViewport(state.viewport, event.deltaY < 0 ? 1.1 : 1 / 1.1, anchor));
   }
 
-  const ringPoints = (ring: Ring) =>
+  const ringPoints = (ring: readonly Vec2[]) =>
     ring.map(p => worldToScreen(state.viewport, p).join(",")).join(" ");
 
   return (
-    <svg
-      ref={svgRef}
-      data-testid="plan-canvas"
-      width={width}
-      height={height}
-      className="bg-stone-50"
-      onWheel={onWheel}
-    >
-      {image && calibration && imageUrl && (
-        <Underlay
-          src={imageUrl(image.id)}
-          calibration={calibration}
-          viewport={state.viewport}
-          widthPx={image.widthPx}
-          heightPx={image.heightPx}
-          opacity={image.opacity}
-        />
-      )}
+    <div className="relative" style={{ width, height }}>
+      <svg
+        ref={svgRef}
+        data-testid="plan-canvas"
+        width={width}
+        height={height}
+        className="bg-stone-50"
+        onWheel={onWheel}
+      >
+        {image && calibration && imageUrl && (
+          <Underlay
+            src={imageUrl(image.id)}
+            calibration={calibration}
+            viewport={state.viewport}
+            widthPx={image.widthPx}
+            heightPx={image.heightPx}
+            opacity={image.opacity}
+          />
+        )}
 
-      <rect
-        data-testid="plan-surface"
-        x={0} y={0} width={width} height={height}
-        fill="transparent"
-        onClick={onSurfaceClick}
-        onDoubleClick={onSurfaceDoubleClick}
-      />
-
-      {rooms.map(room => (
-        <polygon
-          key={room.id}
-          data-testid={`room-${room.id}`}
-          points={ringPoints(room.footprint)}
-          fill={roomColor(room.kind, { selected: state.selection?.id === room.id })}
-          stroke="#57534e"
-          strokeWidth={1}
-          onClick={event => {
-            // Drawing tools own the surface; clicking a room must not steal the point.
-            if (state.tool !== "select") return;
-            event.stopPropagation();
-            state.select({ type: "room", id: room.id });
+        <rect
+          data-testid="plan-surface"
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          fill="transparent"
+          onClick={onSurfaceClick}
+          onDoubleClick={commitDraft}
+          onMouseMove={event => {
+            if (state.tool === "select") return;
+            setCursor(state.tool === "calibrate" ? rawWorld(event) : pointerWorld(event));
           }}
         />
-      ))}
 
-      {state.calibrationDraft && state.calibrationDraft.length > 0 && (
-        <polyline
-          data-testid="calibration-line"
-          points={ringPoints(state.calibrationDraft)}
-          fill="none"
-          stroke="#2563eb"
-          strokeWidth={2}
-          strokeDasharray="6 4"
-        />
-      )}
+        {rooms.map(room => (
+          <polygon
+            key={room.id}
+            data-testid={`room-${room.id}`}
+            points={ringPoints(room.footprint)}
+            fill={roomColor(room.kind, { selected: state.selection?.id === room.id })}
+            stroke="#57534e"
+            strokeWidth={1}
+            onClick={event => {
+              // Drawing tools own the surface; clicking a room must not steal the point.
+              if (state.tool !== "select") return;
+              event.stopPropagation();
+              state.select({ type: "room", id: room.id });
+            }}
+          />
+        ))}
 
-      {state.draft && state.draft.length > 0 && (
-        <polyline
-          data-testid="draft"
-          points={ringPoints(state.draft)}
-          fill="rgba(242,163,60,0.2)"
-          stroke="#f2a33c"
-          strokeWidth={2}
-        />
+        {state.tool === "select" && selectedRoom && (
+          <VertexHandles
+            room={selectedRoom}
+            viewport={state.viewport}
+            toWorld={pointerWorld}
+            onCommit={ring => onReshapeRoom?.(selectedRoom, ring)}
+          />
+        )}
+
+        {state.calibrationDraft && state.calibrationDraft.length > 0 && (
+          <polyline
+            data-testid="calibration-line"
+            points={ringPoints(state.calibrationDraft)}
+            fill="none"
+            stroke="#2563eb"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+          />
+        )}
+
+        {state.draft && state.draft.length > 0 && (
+          <polyline
+            data-testid="draft"
+            points={ringPoints(state.draft)}
+            fill="rgba(242,163,60,0.2)"
+            stroke="#f2a33c"
+            strokeWidth={2}
+          />
+        )}
+
+        {state.draft && state.draft.length > 0 && cursor && (
+          <polyline
+            data-testid="rubber-band"
+            points={ringPoints([state.draft[state.draft.length - 1]!, cursor])}
+            fill="none"
+            stroke="#f2a33c"
+            strokeWidth={1.5}
+            strokeDasharray="4 4"
+          />
+        )}
+
+        {state.draft?.map((p, i) => {
+          const [cx, cy] = worldToScreen(state.viewport, p);
+          return (
+            <circle
+              key={`draft-${i}`}
+              data-testid={`draft-vertex-${i}`}
+              cx={cx}
+              cy={cy}
+              r={i === 0 ? 6 : 4}
+              fill={i === 0 ? "#f2a33c" : "#ffffff"}
+              stroke="#b45309"
+              strokeWidth={2}
+              style={{ cursor: i === 0 ? "pointer" : "default" }}
+              onClick={event => {
+                // Clicking the first corner closes the shape.
+                if (i !== 0) return;
+                event.stopPropagation();
+                commitDraft();
+              }}
+            />
+          );
+        })}
+
+        {cursor && (
+          // Snapping you cannot see is indistinguishable from the canvas moving
+          // your click somewhere you did not intend.
+          <circle
+            data-testid="snap-indicator"
+            cx={worldToScreen(state.viewport, cursor)[0]}
+            cy={worldToScreen(state.viewport, cursor)[1]}
+            r={7}
+            fill="none"
+            stroke="#2563eb"
+            strokeWidth={2}
+            pointerEvents="none"
+          />
+        )}
+      </svg>
+
+      {state.tool !== "select" && (
+        <DrawingHint tool={state.tool} pointCount={state.draft?.length ?? 0} />
       )}
-    </svg>
+    </div>
   );
 }

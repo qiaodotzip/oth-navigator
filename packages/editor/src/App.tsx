@@ -60,6 +60,9 @@ export function App() {
             width={900}
             height={700}
             imageUrl={api.levelImageFileUrl}
+            onReshapeRoom={(room, footprint) =>
+              void saver.update("room", room.id, room.version, { footprint })
+            }
             onCommitRoom={ring => {
               if (!activeLevelId) return;
               void saver.create("room", {

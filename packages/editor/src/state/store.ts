@@ -48,6 +48,7 @@ export type EditorState = {
   setTool: (t: Tool) => void;
   beginDraft: () => void;
   pushDraftPoint: (p: Vec2) => void;
+  popDraftPoint: () => void;
   clearDraft: () => void;
   setViewport: (v: Viewport) => void;
   setConflict: (c: Conflict) => void;
@@ -110,6 +111,10 @@ export const useEditorStore = create<EditorState>(set => ({
 
   beginDraft: () => set({ draft: [] }),
   pushDraftPoint: p => set(state => ({ draft: [...(state.draft ?? []), p] })),
+  popDraftPoint: () =>
+    set(state => ({
+      draft: state.draft && state.draft.length > 0 ? state.draft.slice(0, -1) : state.draft,
+    })),
   clearDraft: () => set({ draft: null }),
 
   setViewport: viewport => set({ viewport }),

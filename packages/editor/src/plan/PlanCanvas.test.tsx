@@ -193,3 +193,101 @@ describe("underlay", () => {
     expect(sy).toBeLessThan(600);
   });
 });
+
+describe("drawing feedback", () => {
+  beforeEach(() => useEditorStore.getState().setTool("draw-room"));
+
+  it("explains what to do while drawing", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("drawing-hint").textContent).toMatch(/click/i);
+  });
+
+  it("shows a dot for each placed point", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 100 });
+    expect(screen.getAllByTestId(/^draft-vertex-/)).toHaveLength(2);
+  });
+
+  it("rubber-bands from the last point to the cursor", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(surface, { clientX: 300, clientY: 220 });
+    expect(screen.getByTestId("rubber-band")).toBeTruthy();
+  });
+
+  it("highlights what the cursor will snap to", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.mouseMove(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100 });
+    expect(screen.getByTestId("snap-indicator")).toBeTruthy();
+  });
+
+  it("shows no snap indicator before the pointer has moved", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.queryByTestId("snap-indicator")).toBeNull();
+  });
+
+  it("closes the shape when the first corner is clicked", () => {
+    const onCommitRoom = vi.fn();
+    render(<PlanCanvas width={800} height={600} onCommitRoom={onCommitRoom} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 200 });
+    fireEvent.click(screen.getByTestId("draft-vertex-0"));
+    expect(onCommitRoom).toHaveBeenCalledTimes(1);
+    expect(useEditorStore.getState().draft).toBeNull();
+  });
+
+  it("removes the last point on Backspace", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    fireEvent.click(surface, { clientX: 200, clientY: 100 });
+    fireEvent.keyDown(window, { key: "Backspace" });
+    expect(useEditorStore.getState().draft).toHaveLength(1);
+  });
+
+  it("cancels the whole shape on Escape", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.click(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100 });
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(useEditorStore.getState().draft).toBeNull();
+  });
+
+  it("shows no hint with the select tool", () => {
+    useEditorStore.getState().setTool("select");
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.queryByTestId("drawing-hint")).toBeNull();
+  });
+});
+
+describe("vertex handles on the canvas", () => {
+  it("appear for the selected room with the select tool", () => {
+    useEditorStore.getState().setTool("select");
+    useEditorStore.getState().select({ type: "room", id: "L1-a" });
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getAllByTestId(/^vertex-/)).toHaveLength(4);
+  });
+
+  it("stay hidden while a drawing tool is active", () => {
+    useEditorStore.getState().select({ type: "room", id: "L1-a" });
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.queryByTestId("vertex-0")).toBeNull();
+  });
+
+  it("saves a reshaped footprint", () => {
+    const onReshapeRoom = vi.fn();
+    useEditorStore.getState().setTool("select");
+    useEditorStore.getState().select({ type: "room", id: "L1-a" });
+    render(<PlanCanvas width={800} height={600} onReshapeRoom={onReshapeRoom} />);
+    fireEvent.mouseDown(screen.getByTestId("vertex-0"), { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(window, { clientX: 150, clientY: 130 });
+    fireEvent.mouseUp(window, { clientX: 150, clientY: 130 });
+    expect(onReshapeRoom).toHaveBeenCalledTimes(1);
+    expect(onReshapeRoom.mock.calls[0]![0].id).toBe("L1-a");
+  });
+});
