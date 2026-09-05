@@ -75,7 +75,7 @@ npm run invite --workspace @oth/server -- you@example.com "Your Name"
 
 # two terminals
 npm run start --workspace @oth/server   # API on :3000
-npm run dev   --workspace @oth/editor   # editor on :5174
+npm run dev   --workspace @oth/editor   # editor on :5180
 ```
 
 Locally the server falls back to file-backed PGlite, the same engine the tests

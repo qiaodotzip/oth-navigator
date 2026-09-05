@@ -38,5 +38,21 @@ if (command === "seed") {
   process.exit(0);
 }
 
-serve({ fetch: createApp({ db }).fetch, port: config.PORT });
-console.log(`oth server listening on :${config.PORT}`);
+// Log from the listen callback, not before it: binding is asynchronous, so
+// logging on the previous line claimed success even when the port was taken.
+const server = serve(
+  { fetch: createApp({ db }).fetch, port: config.PORT },
+  info => console.log(`oth server listening on :${info.port}`),
+);
+
+server.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(
+      `Port ${config.PORT} is already in use.
+` +
+        "Stop whatever is holding it, or run with a different port: PORT=3001 npm run dev --workspace @oth/server",
+    );
+    process.exit(1);
+  }
+  throw err;
+});
