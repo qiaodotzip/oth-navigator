@@ -12,7 +12,6 @@ import { Inspector } from "./panels/Inspector";
 import { LevelSwitcher } from "./panels/LevelSwitcher";
 import { PublishButton } from "./panels/PublishButton";
 import { Toolbar } from "./panels/Toolbar";
-import { ValidationPanel } from "./panels/ValidationPanel";
 import { PlanCanvas } from "./plan/PlanCanvas";
 import { createSaver } from "./state/save";
 import { useEditorStore } from "./state/store";
