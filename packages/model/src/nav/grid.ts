@@ -136,6 +136,27 @@ function carveDoorways(grid: NavGrid, model: MapModel, rooms: readonly Room[]): 
   }
 }
 
+/**
+ * Opens every cell within half a pathway's width, wherever it is.
+ *
+ * Deliberately unrestricted, unlike `carveDoorways`, which may only open cells
+ * inside the two rooms it joins. That restriction is exactly what makes a
+ * doorway depend on footprints abutting exactly; a pathway is a human asserting
+ * that people walk here, and it is carved last so no wall rule can override it.
+ */
+function carvePathways(grid: NavGrid, model: MapModel): void {
+  for (const p of live(model.pathways).filter(x => x.levelId === grid.levelId)) {
+    for (let i = 0; i + 1 < p.polyline.length; i++) {
+      const a = p.polyline[i];
+      const b = p.polyline[i + 1];
+      if (!a || !b) continue;
+      forEachCellNearSegment(grid, a, b, p.widthM / 2, (col, row) => {
+        navGridSet(grid, col, row, true);
+      });
+    }
+  }
+}
+
 export type BakeOptions = {
   cellSizeM?: number;
   wallHalfThicknessM?: number;
@@ -147,21 +168,33 @@ export type BakeOptions = {
  * 1. Every cell starts blocked.
  * 2. Cells inside a walkable room (and outside its holes) become walkable.
  * 3. Cells within half a wall thickness of any room boundary are blocked again —
- *    this is what stops two abutting rooms from being freely connected.
- * 4. Doorways re-open their opening.
+ *    this is what stops two abutting areas from being freely connected.
+ * 4. Doorways re-open their opening, restricted to the rooms they join.
+ * 5. Pathways carve, unrestricted, last.
  */
 export function bakeNavGrid(model: MapModel, levelId: string, opts: BakeOptions = {}): NavGrid {
   const cellSizeM = opts.cellSizeM ?? NAV_CELL_SIZE_M;
   const wallHalf = opts.wallHalfThicknessM ?? WALL_HALF_THICKNESS_M;
 
   const rooms = live(model.rooms).filter(r => r.levelId === levelId && r.walkable);
-  if (rooms.length === 0) return emptyGrid(levelId, cellSizeM);
+  const pathways = live(model.pathways).filter(p => p.levelId === levelId);
+  // A level being drawn often has a pathway before it has any area.
+  if (rooms.length === 0 && pathways.length === 0) return emptyGrid(levelId, cellSizeM);
 
-  const bbox = bboxOfRings(rooms.map(r => r.footprint));
-  const originX = Math.floor((bbox.minX - GRID_PAD_M) / cellSizeM) * cellSizeM;
-  const originY = Math.floor((bbox.minY - GRID_PAD_M) / cellSizeM) * cellSizeM;
-  const cols = Math.ceil((bbox.maxX + GRID_PAD_M - originX) / cellSizeM);
-  const rows = Math.ceil((bbox.maxY + GRID_PAD_M - originY) / cellSizeM);
+  const extents: Ring[] = [
+    ...rooms.map(r => r.footprint),
+    // A polyline is not a ring, but bboxOfRings only reads coordinates, and a
+    // pathway's extent still has to fall inside the grid.
+    ...pathways.map(p => p.polyline),
+  ];
+  const bbox = bboxOfRings(extents);
+  // Pad by the widest pathway so one running near the edge is not clipped.
+  const widestM = pathways.reduce((w, p) => Math.max(w, p.widthM), 0);
+  const pad = GRID_PAD_M + widestM / 2;
+  const originX = Math.floor((bbox.minX - pad) / cellSizeM) * cellSizeM;
+  const originY = Math.floor((bbox.minY - pad) / cellSizeM) * cellSizeM;
+  const cols = Math.ceil((bbox.maxX + pad - originX) / cellSizeM);
+  const rows = Math.ceil((bbox.maxY + pad - originY) / cellSizeM);
 
   const grid: NavGrid = {
     levelId, originX, originY, cols, rows, cellSizeM,
@@ -169,8 +202,17 @@ export function bakeNavGrid(model: MapModel, levelId: string, opts: BakeOptions 
   };
 
   for (const room of rooms) {
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
+    // Only the cells the room could possibly cover. Scanning the whole grid per
+    // room made baking O(rooms x cells) — about half a million point-in-polygon
+    // tests per room on a hub-sized floor, on every save.
+    const rb = bboxOfRings([room.footprint]);
+    const c0 = Math.max(0, Math.floor((rb.minX - originX) / cellSizeM));
+    const c1 = Math.min(cols - 1, Math.ceil((rb.maxX - originX) / cellSizeM));
+    const r0 = Math.max(0, Math.floor((rb.minY - originY) / cellSizeM));
+    const r1 = Math.min(rows - 1, Math.ceil((rb.maxY - originY) / cellSizeM));
+
+    for (let row = r0; row <= r1; row++) {
+      for (let col = c0; col <= c1; col++) {
         if (navGridGet(grid, col, row)) continue;
         if (pointInPolygon(cellCentre(grid, col, row), room.footprint, room.holes)) {
           navGridSet(grid, col, row, true);
@@ -189,6 +231,9 @@ export function bakeNavGrid(model: MapModel, levelId: string, opts: BakeOptions 
   }
 
   carveDoorways(grid, model, rooms);
+  // Last, and unconditional: nothing a wall rule did may close a route a human
+  // asserted.
+  carvePathways(grid, model);
 
   return grid;
 }
