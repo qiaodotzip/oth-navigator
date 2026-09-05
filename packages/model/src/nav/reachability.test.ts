@@ -12,7 +12,7 @@ const levels = [
 ];
 
 const l1Lobby = {
-  id: "L1-lobby", levelId: "oth-L1", kind: "atrium",
+  id: "L1-lobby", levelId: "oth-L1", kind: "area",
   footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 6, walkable: true,
 };
 const l1Back = {
@@ -20,7 +20,7 @@ const l1Back = {
   footprint: [[10, 0], [20, 0], [20, 10], [10, 10]], heightM: 6, walkable: true,
 };
 const l2Hall = {
-  id: "L2-hall", levelId: "oth-L2", kind: "corridor",
+  id: "L2-hall", levelId: "oth-L2", kind: "area",
   footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 4.5, walkable: true,
 };
 

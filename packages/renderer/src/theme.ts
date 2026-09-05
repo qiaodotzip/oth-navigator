@@ -3,15 +3,14 @@ import type { RoomKind } from "@oth/model";
 /**
  * A restrained, legible palette. The visual target is "recognise where you are",
  * so structure reads as calm background and the dressing layer plus the route
- * carry attention. Corridors are deliberately distinct from rooms because that
- * is the distinction people navigate by.
+ * carry attention. Areas are deliberately distinct from rooms: one is space you
+ * cross, the other somewhere you arrive.
  */
 const BASE: Record<RoomKind, string> = {
+  // A destination reads as a solid block; an area reads as open floor you cross.
   room: "#e7ddc7",
-  corridor: "#cfc3a5",
-  atrium: "#f0e8d6",
+  area: "#f0e8d6",
   service: "#d3d3cc",
-  outdoor: "#cfe0c3",
   void: "#9aa0a6",
 };
 

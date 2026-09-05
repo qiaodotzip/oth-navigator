@@ -1,12 +1,21 @@
 import { z } from "zod";
 import { AuditFieldsSchema, RingSchema, SlugSchema, VerificationSchema } from "../primitives";
 
+/**
+ * The spatial character of a space, not what it is used for.
+ *
+ * A shop is a `room` with a retail tenant — occupancy belongs to the semantics
+ * layer, and making it a kind here would invite `kiosk`, `restaurant` and no
+ * principle for stopping. `corridor` is gone because a corridor is a pathway.
+ */
 export const RoomKindSchema = z.enum([
+  /** Enclosed, entered from outside itself: meeting room, studio, shop unit. */
   "room",
-  "corridor",
-  "atrium",
+  /** Open space you cross freely: town square, event space, stadium floor. */
+  "area",
+  /** Back of house, not public. */
   "service",
-  "outdoor",
+  /** A hole — lightwell, atrium opening. */
   "void",
 ]);
 

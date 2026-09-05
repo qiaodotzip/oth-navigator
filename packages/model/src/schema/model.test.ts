@@ -46,7 +46,7 @@ describe("parseModel", () => {
       {
         id: "L1-corridor-main",
         levelId: "oth-L1",
-        kind: "corridor",
+        kind: "area",
         footprint: [[0, 0], [20, 0], [20, 4], [0, 4]],
         heightM: 6,
         walkable: true,

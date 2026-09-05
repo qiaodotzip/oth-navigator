@@ -9,7 +9,7 @@ const level = LevelSchema.parse({
 });
 
 const lobby = RoomSchema.parse({
-  id: "L2-lobby", levelId: "oth-L2", kind: "atrium",
+  id: "L2-lobby", levelId: "oth-L2", kind: "area",
   footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
   heightM: 4.5, walkable: true, nameEn: "Lobby", nameZh: "大堂",
 });

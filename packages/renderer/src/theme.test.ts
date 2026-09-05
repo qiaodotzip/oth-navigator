@@ -3,13 +3,13 @@ import { roomColor } from "./theme";
 
 describe("roomColor", () => {
   it("gives every room kind a colour", () => {
-    for (const kind of ["room", "corridor", "atrium", "service", "outdoor", "void"] as const) {
+    for (const kind of ["room", "area", "service", "void"] as const) {
       expect(roomColor(kind)).toMatch(/^#[0-9a-f]{6}$/i);
     }
   });
 
-  it("distinguishes corridors from rooms, since that is the distinction users navigate by", () => {
-    expect(roomColor("corridor")).not.toBe(roomColor("room"));
+  it("distinguishes an area from a room, since one is crossed and one is entered", () => {
+    expect(roomColor("area")).not.toBe(roomColor("room"));
   });
 
   it("dims a room that is not on the active level", () => {

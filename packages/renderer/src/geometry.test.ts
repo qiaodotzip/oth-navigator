@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { roomGeometry, roomShape } from "./geometry";
 
 const square = RoomSchema.parse({
-  id: "L1-lobby", levelId: "oth-L1", kind: "atrium",
+  id: "L1-lobby", levelId: "oth-L1", kind: "area",
   footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
   heightM: 6, walkable: true,
 });

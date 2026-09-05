@@ -9,7 +9,7 @@ const model = parseModel({
     { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 },
   ],
   rooms: [
-    { id: "L1-lobby", levelId: "oth-L1", kind: "atrium", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 6, walkable: true, nameEn: "Town Square", nameZh: "广场" },
+    { id: "L1-lobby", levelId: "oth-L1", kind: "area", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 6, walkable: true, nameEn: "Town Square", nameZh: "广场" },
     { id: "L1-nameless", levelId: "oth-L1", kind: "room", footprint: [[20, 0], [30, 0], [30, 10]], heightM: 3, walkable: true },
     { id: "L2-a", levelId: "oth-L2", kind: "room", footprint: [[0, 0], [5, 0], [5, 5]], heightM: 3, walkable: true },
   ],

@@ -14,7 +14,7 @@ const level = {
   nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6,
 };
 const lobby = {
-  id: "L1-lobby", levelId: "oth-L1", kind: "atrium",
+  id: "L1-lobby", levelId: "oth-L1", kind: "area",
   footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
   heightM: 6, walkable: true, nameEn: "Lobby", nameZh: "大堂",
 };

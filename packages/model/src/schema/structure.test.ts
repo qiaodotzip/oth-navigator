@@ -27,14 +27,29 @@ describe("RoomSchema", () => {
     const atrium = RoomSchema.parse({
       ...room,
       id: "L2-atrium-central",
-      kind: "atrium",
+      kind: "area",
       holes: [[[3, 3], [6, 3], [6, 5], [3, 5]]],
     });
     expect(atrium.holes).toHaveLength(1);
     expect(atrium.holes[0]).toHaveLength(4);
   });
 
-  it("rejects an unknown kind", () => {
+  it("accepts the four spatial kinds", () => {
+    for (const kind of ["room", "area", "service", "void"] as const) {
+      expect(RoomSchema.parse({ ...room, kind }).kind).toBe(kind);
+    }
+  });
+
+  it("rejects corridor, which is a pathway now", () => {
+    expect(() => RoomSchema.parse({ ...room, kind: "corridor" })).toThrow();
+  });
+
+  it("rejects atrium and outdoor, which fold into area", () => {
+    expect(() => RoomSchema.parse({ ...room, kind: "atrium" })).toThrow();
+    expect(() => RoomSchema.parse({ ...room, kind: "outdoor" })).toThrow();
+  });
+
+  it("rejects shop, which is a tenant category rather than a kind", () => {
     expect(() => RoomSchema.parse({ ...room, kind: "shop" })).toThrow();
   });
 
