@@ -231,3 +231,52 @@ export const pathways = pgTable("pathways", {
   nameZh: text("name_zh").notNull().default(""),
   ...auditColumns,
 }, t => ({ levelIdx: index("pathways_level_idx").on(t.levelId) }));
+
+/**
+ * The survey layer: the evidence behind what the map claims.
+ *
+ * A capture's bytes are never stored — the browser extracts frames locally and
+ * uploads only those, so what is kept here is enough to recognise the source
+ * file when a teammate is asked for it again.
+ */
+export const captures = pgTable("captures", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull(),
+  filename: text("filename").notNull(),
+  durationMs: integer("duration_ms"),
+  levelId: text("level_id"),
+  notes: text("notes").notNull().default(""),
+  ...auditColumns,
+});
+
+export const keyframes = pgTable("keyframes", {
+  id: text("id").primaryKey(),
+  captureId: text("capture_id").notNull(),
+  timeMs: integer("time_ms"),
+  imageId: text("image_id").notNull(),
+  storagePath: text("storage_path").notNull(),
+  checksum: text("checksum").notNull(),
+  widthPx: integer("width_px").notNull(),
+  heightPx: integer("height_px").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  ...auditColumns,
+}, t => ({ captureIdx: index("keyframes_capture_idx").on(t.captureId) }));
+
+export const places = pgTable("places", {
+  id: text("id").primaryKey(),
+  nameEn: text("name_en").notNull(),
+  nameZh: text("name_zh").notNull().default(""),
+  category: text("category").notNull(),
+  levelId: text("level_id"),
+  roomId: text("room_id"),
+  notes: text("notes").notNull().default(""),
+  ...auditColumns,
+});
+
+export const sightings = pgTable("sightings", {
+  id: text("id").primaryKey(),
+  placeId: text("place_id").notNull(),
+  keyframeId: text("keyframe_id").notNull(),
+  box: jsonb("box").$type<{ x: number; y: number; w: number; h: number }>(),
+  ...auditColumns,
+}, t => ({ placeIdx: index("sightings_place_idx").on(t.placeId) }));

@@ -18,7 +18,8 @@ export class ConflictError extends ApiError {
 
 export type EntityType =
   | "level" | "room" | "pathway" | "doorway" | "entrance"
-  | "portal" | "portalEndpoint" | "navHint" | "placement" | "tenant";
+  | "portal" | "portalEndpoint" | "navHint" | "placement" | "tenant"
+  | "capture" | "place" | "sighting";
 
 export type SessionUser = { id: string; email: string; displayName: string };
 

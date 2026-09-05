@@ -36,6 +36,13 @@
       "when": 1788590155907,
       "tag": "0004_tiny_boom_boom",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788592645766,
+      "tag": "0005_silent_richard_fisk",
+      "breakpoints": true
     }
   ]
 }

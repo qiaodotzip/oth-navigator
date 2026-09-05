@@ -36,5 +36,12 @@ export async function assembleModel(db: Database): Promise<MapModel> {
     assets: await liveRows(db, schema.assets as EntityTable),
     placements: await liveRows(db, schema.placements as EntityTable),
     tenants: await liveRows(db, schema.tenants as EntityTable),
+
+    // The survey layer. Assembled so validation can check it against the
+    // rooms; the bundle builder names what it writes, so it never ships.
+    captures: await liveRows(db, schema.captures as EntityTable),
+    keyframes: await liveRows(db, schema.keyframes as EntityTable),
+    places: await liveRows(db, schema.places as EntityTable),
+    sightings: await liveRows(db, schema.sightings as EntityTable),
   });
 }

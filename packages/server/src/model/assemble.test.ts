@@ -74,3 +74,24 @@ describe("pathways", () => {
     expect((await assembleModel(db)).pathways).toHaveLength(0);
   });
 });
+
+describe("the survey layer", () => {
+  it("assembles places and sightings for validation", async () => {
+    await createEntity(db, "place", { id: "pl_1", nameEn: "NTUC", category: "retail" }, "user_1");
+    const model = await assembleModel(db);
+    expect(model.places).toHaveLength(1);
+    expect(model.places[0]?.nameEn).toBe("NTUC");
+  });
+
+  it("omits a soft-deleted place", async () => {
+    await createEntity(db, "place", { id: "pl_1", nameEn: "NTUC", category: "retail" }, "user_1");
+    await softDeleteEntity(db, "place", "pl_1", 0, "user_1");
+    expect((await assembleModel(db)).places).toHaveLength(0);
+  });
+
+  it("drops the storage bookkeeping a keyframe row carries", async () => {
+    // storagePath and checksum are the server's business, not the model's.
+    const model = await assembleModel(db);
+    expect(model.keyframes).toEqual([]);
+  });
+});
