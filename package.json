@@ -13,7 +13,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b",
-    "build:editor": "npm run build --workspace @oth/editor",
     "build": "npm run build --workspace @oth/editor"
   },
   "devDependencies": {
