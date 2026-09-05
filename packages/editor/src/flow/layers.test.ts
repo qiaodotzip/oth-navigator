@@ -38,21 +38,23 @@ const groups = (levelId: string | null) =>
 describe("levelLayers", () => {
   it("keeps every group even when empty, so nothing looks unsupported", () => {
     const g = levelLayers(null, null);
-    expect(g.map(x => x.type)).toEqual(["room", "doorway", "entrance", "portalEndpoint", "placement"]);
+    expect(g.map(x => x.type))
+      .toEqual(["area", "room", "pathway", "doorway", "entrance", "portalEndpoint", "placement"]);
     expect(g.every(x => x.items.length === 0)).toBe(true);
   });
 
-  it("lists rooms on the active level only", () => {
-    expect(groups("oth-L1").room?.items.map(i => i.id)).toEqual(["L1-lobby", "L1-nameless"]);
+  it("lists spaces on the active level only", () => {
+    expect(groups("oth-L1").area?.items.map(i => i.id)).toEqual(["L1-lobby"]);
+    expect(groups("oth-L1").room?.items.map(i => i.id)).toEqual(["L1-nameless"]);
     expect(groups("oth-L2").room?.items.map(i => i.id)).toEqual(["L2-a"]);
   });
 
-  it("labels a room by its name", () => {
-    expect(groups("oth-L1").room?.items[0]?.label).toBe("Town Square");
+  it("labels a space by its name", () => {
+    expect(groups("oth-L1").area?.items[0]?.label).toBe("Town Square");
   });
 
-  it("falls back to the id when a room has no name", () => {
-    expect(groups("oth-L1").room?.items[1]?.label).toBe("L1-nameless");
+  it("falls back to the id when a space has no name", () => {
+    expect(groups("oth-L1").room?.items[0]?.label).toBe("L1-nameless");
   });
 
   it("labels a doorway by what it connects, since it has no name of its own", () => {
@@ -69,6 +71,7 @@ describe("levelLayers", () => {
 
   it("marks only named entities as renamable", () => {
     const g = groups("oth-L1");
+    expect(g.area?.items[0]?.renamable).toBe(true);
     expect(g.room?.items[0]?.renamable).toBe(true);
     expect(g.entrance?.items[0]?.renamable).toBe(true);
     expect(g.doorway?.items[0]?.renamable).toBe(false);
@@ -76,10 +79,43 @@ describe("levelLayers", () => {
   });
 
   it("carries the version, so delete and rename can be optimistically locked", () => {
-    expect(groups("oth-L1").room?.items[0]?.version).toBe(0);
+    expect(groups("oth-L1").area?.items[0]?.version).toBe(0);
   });
 
   it("scopes portal endpoints to the level, not the portal", () => {
     expect(groups("oth-L1").portalEndpoint?.items.map(i => i.id)).toEqual(["p1-L1"]);
+  });
+});
+
+describe("areas and pathways", () => {
+  const withPaths = parseModel({
+    building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+    levels: [
+      { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 },
+    ],
+    rooms: [
+      { id: "L1-square", levelId: "oth-L1", kind: "area", footprint: [[0, 0], [10, 0], [10, 10]], heightM: 6, walkable: true, nameEn: "Town Square", nameZh: "广场" },
+      { id: "L1-shop", levelId: "oth-L1", kind: "room", footprint: [[20, 0], [30, 0], [30, 10]], heightM: 3, walkable: false, nameEn: "Shop", nameZh: "店" },
+    ],
+    pathways: [{ id: "L1-p", levelId: "oth-L1", polyline: [[0, 0], [10, 0], [20, 0]], widthM: 3 }],
+  });
+
+  const g = (levelId: string | null) =>
+    Object.fromEntries(levelLayers(withPaths, levelId).map(x => [x.type, x]));
+
+  it("separates areas from rooms, since they are drawn with different tools", () => {
+    const types = levelLayers(withPaths, "oth-L1").map(x => x.type);
+    expect(types).toContain("area");
+    expect(types).toContain("pathway");
+  });
+
+  it("files a space under the group its kind belongs to", () => {
+    expect(g("oth-L1").area?.items.map(i => i.id)).toEqual(["L1-square"]);
+    expect(g("oth-L1").room?.items.map(i => i.id)).toEqual(["L1-shop"]);
+  });
+
+  it("describes a pathway by its shape, since it has no name", () => {
+    expect(g("oth-L1").pathway?.items[0]?.label).toBe("3 points · 3 m wide");
+    expect(g("oth-L1").pathway?.items[0]?.renamable).toBe(false);
   });
 });

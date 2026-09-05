@@ -1,8 +1,8 @@
 import { MapScene } from "@oth/renderer";
 import { useEffect, useMemo, useState } from "react";
-import { createApi, type EntityType } from "./api/client";
+import { createApi } from "./api/client";
 import { LoginScreen } from "./auth/LoginScreen";
-import type { LayerItem } from "./flow/layers";
+import { layerEntityType, type LayerItem } from "./flow/layers";
 import { AssetLibrary } from "./panels/AssetLibrary";
 import { ConflictBanner } from "./panels/ConflictBanner";
 import { ContextExportButton } from "./panels/ContextExportButton";
@@ -41,12 +41,12 @@ export function App() {
   if (!user) return <LoginScreen api={api} onSignedIn={setUser} />;
 
   const renameLayer = (item: LayerItem, nameEn: string) =>
-    void saver.update(item.type as EntityType, item.id, item.version, { nameEn });
+    void saver.update(layerEntityType(item.type), item.id, item.version, { nameEn });
 
   const deleteLayer = (item: LayerItem) =>
     // Soft delete: recoverable and recorded in the audit log, so no confirmation
     // dialog on every click.
-    void saver.remove(item.type as EntityType, item.id, item.version);
+    void saver.remove(layerEntityType(item.type), item.id, item.version);
 
   return (
     <div className="flex h-full flex-col">

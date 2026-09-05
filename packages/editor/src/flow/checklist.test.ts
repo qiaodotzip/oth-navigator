@@ -84,17 +84,17 @@ describe("levelChecklist", () => {
       .toBe("1 room");
   });
 
-  it("is not done connecting while a room is unreachable", () => {
+  it("is not done connecting while an area is unreachable", () => {
     const r = report([{
-      severity: "error", code: "room.unreachable", message: "cut off",
+      severity: "error", code: "area.unreachable", message: "cut off",
       entityType: "room", entityId: "L1-a", levelId: "oth-L1",
     }]);
     const s = steps({ model: model({ rooms: [room] }), levelId: "oth-L1", image: null, report: r });
     expect(s.connect?.status).toBe("todo");
-    expect(s.connect?.detail).toContain("1 room");
+    expect(s.connect?.detail).toContain("1 space");
   });
 
-  it("counts a single room as connected, since there is nothing to connect it to", () => {
+  it("counts a single space as connected, since there is nothing to connect it to", () => {
     const s = steps({ model: model({ rooms: [room] }), levelId: "oth-L1", image: null, report: emptyReport });
     expect(s.connect?.status).toBe("done");
   });
@@ -160,7 +160,7 @@ describe("stepForCode", () => {
   });
 
   it("routes reachability to connecting", () => {
-    expect(stepForCode("room.unreachable")).toBe("connect");
+    expect(stepForCode("area.unreachable")).toBe("connect");
   });
 
   it("returns null for a code no step owns", () => {
@@ -173,5 +173,68 @@ describe("connect status with nothing traced", () => {
     // Showing "done" before anything exists reads as though it were handled.
     expect(steps({ model: model(), levelId: "oth-L1", image: null, report: emptyReport }).connect?.status)
       .toBe("todo");
+  });
+});
+
+describe("the pathways step", () => {
+  const area = { ...room, id: "L1-area", kind: "area" };
+  const path = { id: "L1-p", levelId: "oth-L1", polyline: [[0, 0], [10, 0]] };
+
+  it("counts pathways rather than doorways", () => {
+    const m = model({ rooms: [area], pathways: [path] });
+    expect(steps({ model: m, levelId: "oth-L1", image: null, report: emptyReport }).connect?.detail)
+      .toBe("1 pathway");
+  });
+
+  it("is not done until a pathway exists", () => {
+    const m = model({ rooms: [area, { ...area, id: "L1-b" }] });
+    expect(steps({ model: m, levelId: "oth-L1", image: null, report: emptyReport }).connect?.status)
+      .toBe("todo");
+  });
+
+  it("is done once a pathway exists and nothing is unreachable", () => {
+    const m = model({ rooms: [area, { ...area, id: "L1-b" }], pathways: [path] });
+    expect(steps({ model: m, levelId: "oth-L1", image: null, report: emptyReport }).connect?.status)
+      .toBe("done");
+  });
+
+  it("counts pathways on this level only", () => {
+    const m = model({
+      levels: [
+        { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 },
+        { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 },
+      ],
+      rooms: [area],
+      pathways: [path, { ...path, id: "L2-p", levelId: "oth-L2" }],
+    });
+    expect(steps({ model: m, levelId: "oth-L1", image: null, report: emptyReport }).connect?.detail)
+      .toBe("1 pathway");
+  });
+
+  it("uses the pathway tool", () => {
+    const m = model({ rooms: [area] });
+    expect(steps({ model: m, levelId: "oth-L1", image: null, report: emptyReport }).connect?.tools)
+      .toEqual(["draw-pathway"]);
+  });
+
+  it("owns the pathway and area validation codes", () => {
+    expect(stepForCode("pathway.disconnected")).toBe("connect");
+    expect(stepForCode("area.unreachable")).toBe("connect");
+  });
+
+  it("files a room access warning under pathways, since a pathway is the fix", () => {
+    expect(stepForCode("room.noAccess")).toBe("connect");
+  });
+});
+
+describe("the tools a step offers", () => {
+  it("offers both drawing tools for areas and rooms, which are one pass", () => {
+    const s = steps({ model: model(), levelId: "oth-L1", image: null, report: emptyReport });
+    expect(s.rooms?.tools).toEqual(["draw-area", "draw-room"]);
+  });
+
+  it("offers none for the floorplan, which is done in a panel", () => {
+    const s = steps({ model: model(), levelId: "oth-L1", image: null, report: emptyReport });
+    expect(s.floorplan?.tools).toEqual([]);
   });
 });

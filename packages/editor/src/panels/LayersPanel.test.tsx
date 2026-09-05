@@ -33,7 +33,9 @@ beforeEach(() => {
 describe("LayersPanel", () => {
   it("lists every entity group with its count", () => {
     setup();
-    expect(screen.getByText("Rooms (2)")).toBeTruthy();
+    expect(screen.getByText("Areas (1)")).toBeTruthy();
+    expect(screen.getByText("Rooms (1)")).toBeTruthy();
+    expect(screen.getByText("Pathways (0)")).toBeTruthy();
     expect(screen.getByText("Doorways (1)")).toBeTruthy();
     expect(screen.getByText("Entrances (0)")).toBeTruthy();
   });
@@ -51,13 +53,15 @@ describe("LayersPanel", () => {
   it("selects an entity when its row is clicked", () => {
     setup();
     fireEvent.click(screen.getByText("Town Square"));
+    // An area is a room entity; only the grouping differs, so the selection
+    // stays something the canvas can put vertex handles on.
     expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-lobby" });
   });
 
   it("deletes with the entity's current version, so the write is locked", () => {
     const { onDelete } = setup();
     fireEvent.click(screen.getByLabelText("Delete Town Square"));
-    expect(onDelete.mock.calls[0]![0]).toMatchObject({ id: "L1-lobby", version: 0, type: "room" });
+    expect(onDelete.mock.calls[0]![0]).toMatchObject({ id: "L1-lobby", version: 0, type: "area" });
   });
 
   it("renames a room in place", () => {

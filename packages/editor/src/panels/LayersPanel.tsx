@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { LayerItem } from "../flow/layers";
-import { levelLayers } from "../flow/layers";
+import { layerEntityType, levelLayers } from "../flow/layers";
 import { useEditorStore } from "../state/store";
 
 export function LayersPanel({
@@ -66,7 +66,7 @@ export function LayersPanel({
                       <button
                         className="min-w-0 flex-1 truncate text-left"
                         title={item.id}
-                        onClick={() => select({ type: item.type, id: item.id })}
+                        onClick={() => select({ type: layerEntityType(item.type), id: item.id })}
                       >
                         {item.label}
                       </button>

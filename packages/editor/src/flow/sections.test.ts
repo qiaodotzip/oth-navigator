@@ -3,14 +3,14 @@ import type { ChecklistStep, StepId, StepStatus } from "./checklist";
 import { nextSectionId, stepSections } from "./sections";
 
 function step(id: StepId, status: StepStatus, detail = ""): ChecklistStep {
-  return { id, label: id, status, detail, tool: null, issues: [] };
+  return { id, label: id, status, detail, tools: [], issues: [] };
 }
 
 const allTodo: ChecklistStep[] = [
   step("floorplan", "todo", "none yet"),
   step("scale", "todo", "not set"),
   step("rooms", "todo", "none yet"),
-  step("connect", "todo", "0 doorways"),
+  step("connect", "todo", "0 pathways"),
   step("entrances", "todo", "none yet"),
   step("portals", "todo", "none serving this level"),
 ];

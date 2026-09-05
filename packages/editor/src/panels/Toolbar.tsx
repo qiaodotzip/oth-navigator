@@ -1,12 +1,5 @@
-import { useEditorStore, type Tool } from "../state/store";
-
-const TOOLS: { id: Tool; label: string }[] = [
-  { id: "select", label: "Select" },
-  { id: "draw-room", label: "Draw room" },
-  { id: "draw-doorway", label: "Doorway" },
-  { id: "place-entrance", label: "Entrance" },
-  { id: "place-portal", label: "Portal" },
-];
+import { useEditorStore } from "../state/store";
+import { TOOL_LABELS, TOOLBAR_TOOLS } from "../state/tools";
 
 export function Toolbar() {
   const tool = useEditorStore(s => s.tool);
@@ -14,15 +7,15 @@ export function Toolbar() {
 
   return (
     <div className="flex gap-1 border-b bg-white p-2">
-      {TOOLS.map(t => (
+      {TOOLBAR_TOOLS.map(t => (
         <button
-          key={t.id}
-          onClick={() => setTool(t.id)}
+          key={t}
+          onClick={() => setTool(t)}
           className={`rounded px-3 py-1 text-sm ${
-            tool === t.id ? "bg-stone-800 text-white" : "hover:bg-stone-200"
+            tool === t ? "bg-stone-800 text-white" : "hover:bg-stone-200"
           }`}
         >
-          {t.label}
+          {TOOL_LABELS[t]}
         </button>
       ))}
     </div>

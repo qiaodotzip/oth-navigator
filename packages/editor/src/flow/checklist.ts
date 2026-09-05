@@ -10,8 +10,12 @@ export type ChecklistStep = {
   label: string;
   status: StepStatus;
   detail: string;
-  /** The tool this step is done with, if any. */
-  tool: Tool | null;
+  /**
+   * The tools this step is done with. More than one where a step is genuinely
+   * two gestures — an area and a room are drawn differently but traced in the
+   * same pass — and empty where the step is done in a panel instead.
+   */
+  tools: Tool[];
   issues: ValidationIssue[];
 };
 
@@ -32,7 +36,10 @@ export type ChecklistInput = {
 export function stepForCode(code: string): StepId | null {
   if (code.startsWith("room.footprint") || code.startsWith("room.hole")) return "rooms";
   if (code === "room.name.missing" || code === "room.id.duplicate") return "rooms";
-  if (code === "room.unreachable" || code.startsWith("doorway.")) return "connect";
+  // A room with no access is fixed by drawing a pathway to it, so it belongs
+  // to the pathways step rather than to tracing.
+  if (code === "area.unreachable" || code === "room.noAccess") return "connect";
+  if (code.startsWith("pathway.") || code.startsWith("doorway.")) return "connect";
   if (code.startsWith("building.entrances") || code.startsWith("entrance.")) return "entrances";
   if (code.startsWith("level.portals") || code.startsWith("portal")) return "portals";
   return null;
@@ -46,7 +53,7 @@ export function levelChecklist(input: ChecklistInput): ChecklistStep[] {
   const { model, levelId, image, report } = input;
 
   const rooms = model && levelId ? model.rooms.filter(r => r.levelId === levelId) : [];
-  const doorways = model && levelId ? model.doorways.filter(d => d.levelId === levelId) : [];
+  const pathways = model && levelId ? model.pathways.filter(p => p.levelId === levelId) : [];
   const entrances = model?.entrances ?? [];
   const endpoints = model && levelId ? model.portalEndpoints.filter(p => p.levelId === levelId) : [];
 
@@ -60,7 +67,7 @@ export function levelChecklist(input: ChecklistInput): ChecklistStep[] {
   }
   const issuesFor = (id: StepId) => byStep.get(id) ?? [];
 
-  const unreachable = issuesFor("connect").filter(i => i.code === "room.unreachable");
+  const unreachable = issuesFor("connect").filter(i => i.code === "area.unreachable");
 
   return [
     {
@@ -68,7 +75,7 @@ export function levelChecklist(input: ChecklistInput): ChecklistStep[] {
       label: "Add floorplan",
       status: image ? "done" : "todo",
       detail: image ? image.filename : "none yet",
-      tool: null,
+      tools: [],
       issues: [],
     },
     {
@@ -79,32 +86,35 @@ export function levelChecklist(input: ChecklistInput): ChecklistStep[] {
         image?.metresPerPixel != null
           ? `${image.metresPerPixel.toFixed(4)} m per pixel`
           : "not set",
-      tool: "calibrate",
+      tools: ["calibrate"],
       issues: [],
     },
     {
       id: "rooms",
-      label: "Trace rooms",
+      label: "Trace areas and rooms",
       status: rooms.length > 0 ? "done" : "todo",
       detail: rooms.length > 0 ? plural(rooms.length, "room") : "none yet",
-      tool: "draw-room",
+      tools: ["draw-area", "draw-room"],
       issues: issuesFor("rooms"),
     },
     {
       id: "connect",
-      label: "Connect them",
-      // A single room has nothing to connect to, so it counts as done. Zero
-      // rooms does not: showing "done" before anything exists reads as though
-      // the step were already handled.
+      label: "Draw pathways",
+      // Pathways are what make anything reachable now; doorways are a leftover
+      // primitive that no longer drives the flow.
+      //
+      // A lone space needs no pathway — an entrance inside it is enough. More
+      // than one, and something has to join them. Zero spaces is not done:
+      // showing "done" before anything exists reads as already handled.
       status:
-        rooms.length > 0 && unreachable.length === 0 && (rooms.length === 1 || doorways.length > 0)
+        rooms.length > 0 && unreachable.length === 0 && (rooms.length === 1 || pathways.length > 0)
           ? "done"
           : "todo",
       detail:
         unreachable.length > 0
-          ? `${plural(unreachable.length, "room")} unreachable`
-          : plural(doorways.length, "doorway"),
-      tool: "draw-doorway",
+          ? `${plural(unreachable.length, "space")} unreachable`
+          : plural(pathways.length, "pathway"),
+      tools: ["draw-pathway"],
       issues: issuesFor("connect"),
     },
     {
@@ -113,7 +123,7 @@ export function levelChecklist(input: ChecklistInput): ChecklistStep[] {
       // Building-wide: an entrance on L1 is what makes the whole building reachable.
       status: entrances.length > 0 ? "done" : "todo",
       detail: entrances.length > 0 ? plural(entrances.length, "entrance") : "none yet",
-      tool: "place-entrance",
+      tools: ["place-entrance"],
       issues: issuesFor("entrances"),
     },
     {
@@ -124,7 +134,7 @@ export function levelChecklist(input: ChecklistInput): ChecklistStep[] {
         endpoints.length > 0
           ? `${plural(endpoints.length, "endpoint")} here`
           : "none serving this level",
-      tool: "place-portal",
+      tools: ["place-portal"],
       issues: issuesFor("portals"),
     },
   ];

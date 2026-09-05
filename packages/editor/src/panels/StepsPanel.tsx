@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { levelChecklist } from "../flow/checklist";
 import { nextSectionId, stepSections, type SectionId } from "../flow/sections";
 import { useEditorStore } from "../state/store";
+import { TOOL_LABELS } from "../state/tools";
 import { imageForLevel } from "../state/underlay";
 
 const MARK = { done: "●", todo: "○" } as const;
@@ -51,14 +52,14 @@ export function StepsPanel({ sections: content }: { sections: Partial<Record<Sec
                 {section.steps.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {section.steps
-                      .filter(step => step.tool)
-                      .map(step => (
+                      .flatMap(step => step.tools)
+                      .map(t => (
                         <button
-                          key={step.id}
+                          key={t}
                           className="rounded border bg-white px-2 py-1 text-xs hover:bg-stone-100"
-                          onClick={() => step.tool && setTool(step.tool)}
+                          onClick={() => setTool(t)}
                         >
-                          {step.label}
+                          {TOOL_LABELS[t]}
                         </button>
                       ))}
                   </div>

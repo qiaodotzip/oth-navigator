@@ -29,7 +29,7 @@ beforeEach(() => {
 describe("StepsPanel", () => {
   it("shows every section header", () => {
     render(<StepsPanel sections={{}} />);
-    for (const label of ["Floorplan", "Rooms", "Connections", "Entrances", "Lifts & stairs", "Dressing"]) {
+    for (const label of ["Floorplan", "Areas & rooms", "Pathways", "Entrances", "Lifts & stairs", "Dressing"]) {
       expect(screen.getByText(label)).toBeTruthy();
     }
   });
@@ -58,7 +58,7 @@ describe("StepsPanel", () => {
 
   it("opens a section when its header is clicked", () => {
     render(<StepsPanel sections={{ rooms: <div>room controls</div> }} />);
-    fireEvent.click(screen.getByText("Rooms"));
+    fireEvent.click(screen.getByText("Areas & rooms"));
     expect(screen.getByText("room controls")).toBeTruthy();
   });
 
@@ -70,7 +70,7 @@ describe("StepsPanel", () => {
 
   it("keeps a hand-opened section open rather than snapping back to the next one", () => {
     render(<StepsPanel sections={{ rooms: <div>room controls</div> }} />);
-    fireEvent.click(screen.getByText("Rooms"));
+    fireEvent.click(screen.getByText("Areas & rooms"));
     // Progress elsewhere must not yank the panel away mid-task.
     useEditorStore.getState().setLevelImages([image]);
     expect(screen.getByText("room controls")).toBeTruthy();
@@ -78,8 +78,11 @@ describe("StepsPanel", () => {
 
   it("switches tool from a step button inside a section", () => {
     render(<StepsPanel sections={{}} />);
-    fireEvent.click(screen.getByText("Rooms"));
-    fireEvent.click(screen.getByRole("button", { name: "Trace rooms" }));
+    fireEvent.click(screen.getByText("Areas & rooms"));
+    // The step is two gestures, so it offers both tools by their toolbar names.
+    fireEvent.click(screen.getByRole("button", { name: "Draw area" }));
+    expect(useEditorStore.getState().tool).toBe("draw-area");
+    fireEvent.click(screen.getByRole("button", { name: "Draw room" }));
     expect(useEditorStore.getState().tool).toBe("draw-room");
   });
 
@@ -106,13 +109,13 @@ describe("StepsPanel", () => {
   it("selects the room an issue names", () => {
     useEditorStore.getState().setReport({
       issues: [{
-        severity: "error", code: "room.unreachable", message: "cut off",
+        severity: "error", code: "area.unreachable", message: "cut off",
         entityType: "room", entityId: "L1-a", levelId: "oth-L1",
       }],
       errorCount: 1, warningCount: 0, ok: false,
     });
     render(<StepsPanel sections={{}} />);
-    fireEvent.click(screen.getByText("Connections"));
+    fireEvent.click(screen.getByText("Pathways"));
     fireEvent.click(screen.getByText("cut off"));
     expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-a" });
   });

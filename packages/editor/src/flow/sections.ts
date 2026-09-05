@@ -24,8 +24,8 @@ const MEMBERS: Record<Exclude<SectionId, "dressing">, StepId[]> = {
 
 const LABELS: Record<SectionId, string> = {
   floorplan: "Floorplan",
-  rooms: "Rooms",
-  connect: "Connections",
+  rooms: "Areas & rooms",
+  connect: "Pathways",
   entrances: "Entrances",
   portals: "Lifts & stairs",
   dressing: "Dressing",
