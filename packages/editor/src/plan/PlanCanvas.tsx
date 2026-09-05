@@ -1,9 +1,10 @@
 import type { Ring, Vec2 } from "@oth/model";
 import { roomColor } from "@oth/renderer";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore } from "../state/store";
+import { contentBBox, hasArea } from "./content";
 import { snapPoint } from "./snapping";
-import { screenToWorld, worldToScreen, zoomViewport } from "./viewport";
+import { fitViewport, screenToWorld, worldToScreen, zoomViewport } from "./viewport";
 
 const SNAP_TOLERANCE_PX = 10;
 const GRID_M = 0.25;
@@ -23,6 +24,19 @@ export function PlanCanvas({
   const state = useEditorStore();
   const rooms = roomsOnActiveLevel(state);
   const rings = ringsOnActiveLevel(state);
+
+  // Fit once per level, not on every render. Refitting continuously would snap
+  // the canvas back the instant anyone panned, which is worse than not fitting.
+  const fittedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    const levelId = state.activeLevelId;
+    if (!levelId || fittedFor.current === levelId) return;
+    const box = contentBBox(rings, null);
+    if (!hasArea(box)) return;
+    fittedFor.current = levelId;
+    state.setViewport(fitViewport(box, width, height));
+  }, [state, rings, width, height]);
 
   function pointerWorld(event: { clientX: number; clientY: number }): Vec2 {
     const rect = svgRef.current?.getBoundingClientRect();

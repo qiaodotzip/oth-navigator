@@ -1,17 +1,27 @@
 import { parseModel } from "@oth/model";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEditorStore } from "../state/store";
 import { PlanCanvas } from "./PlanCanvas";
 
 const model = parseModel({
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
-  levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
-  rooms: [{
-    id: "L1-a", levelId: "oth-L1", kind: "room",
-    footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
-    heightM: 3, walkable: true, nameEn: "Room A", nameZh: "A",
-  }],
+  levels: [
+    { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 },
+    { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 },
+  ],
+  rooms: [
+    {
+      id: "L1-a", levelId: "oth-L1", kind: "room",
+      footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
+      heightM: 3, walkable: true, nameEn: "Room A", nameZh: "A",
+    },
+    {
+      id: "L2-a", levelId: "oth-L2", kind: "room",
+      footprint: [[50, 50], [70, 50], [70, 70], [50, 70]],
+      heightM: 3, walkable: true, nameEn: "Room B", nameZh: "B",
+    },
+  ],
 });
 
 beforeEach(() => {
@@ -84,5 +94,48 @@ describe("PlanCanvas", () => {
     render(<PlanCanvas width={800} height={600} onCommitPoint={onCommitPoint} />);
     fireEvent.click(screen.getByTestId("plan-surface"), { clientX: 120, clientY: 140 });
     expect(onCommitPoint).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("framing", () => {
+  it("puts the level's rooms inside the visible canvas", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    const vp = useEditorStore.getState().viewport;
+    // The room spans 0..10 m. With the default viewport it renders entirely
+    // above the canvas, which is what made the editor look empty.
+    const [sx, sy] = [vp.originX + 5 * vp.scale, vp.originY - 5 * vp.scale];
+    expect(sx).toBeGreaterThan(0);
+    expect(sx).toBeLessThan(800);
+    expect(sy).toBeGreaterThan(0);
+    expect(sy).toBeLessThan(600);
+  });
+
+  it("re-frames when the level changes", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    // act() so React flushes the fitting effect before the assertion.
+    act(() => {
+      useEditorStore.getState().setViewport({ originX: -9999, originY: -9999, scale: 1 });
+      useEditorStore.getState().setActiveLevel("oth-L2");
+    });
+    expect(useEditorStore.getState().viewport.originX).not.toBe(-9999);
+  });
+
+  it("does not fight a manual pan on an unrelated re-render", () => {
+    const { rerender } = render(<PlanCanvas width={800} height={600} />);
+    useEditorStore.getState().setViewport({ originX: 123, originY: 456, scale: 7 });
+    rerender(<PlanCanvas width={800} height={600} />);
+    expect(useEditorStore.getState().viewport).toEqual({ originX: 123, originY: 456, scale: 7 });
+  });
+
+  it("leaves the viewport alone on a level with nothing to frame", () => {
+    useEditorStore.getState().setModel(
+      parseModel({
+        building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+        levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+      }),
+    );
+    const before = useEditorStore.getState().viewport;
+    render(<PlanCanvas width={800} height={600} />);
+    expect(useEditorStore.getState().viewport).toEqual(before);
   });
 });
