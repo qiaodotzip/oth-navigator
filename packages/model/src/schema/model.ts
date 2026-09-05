@@ -10,6 +10,7 @@ import {
   PortalSchema,
 } from "./navigation";
 import { TenantSchema } from "./semantics";
+import { CaptureSchema, KeyframeSchema, PlaceSchema, SightingSchema } from "./survey";
 import { RoomSchema } from "./structure";
 
 /** The whole authored model as one plain object. Every later module is a pure function of this. */
@@ -26,6 +27,14 @@ export const MapModelSchema = z.object({
   assets: z.array(AssetSchema).default([]),
   placements: z.array(PlacementSchema).default([]),
   tenants: z.array(TenantSchema).default([]),
+
+  // The evidence layer. Deliberately absent from the published bundle, which
+  // names every entity it writes — photographs of the interior are internal
+  // working material.
+  captures: z.array(CaptureSchema).default([]),
+  keyframes: z.array(KeyframeSchema).default([]),
+  places: z.array(PlaceSchema).default([]),
+  sightings: z.array(SightingSchema).default([]),
 });
 
 export type MapModel = z.infer<typeof MapModelSchema>;

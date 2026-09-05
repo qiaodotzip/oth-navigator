@@ -99,3 +99,27 @@ describe("buildBundle", () => {
     expect(l1).not.toContain("L1-old");
   });
 });
+
+describe("what the bundle deliberately omits", () => {
+  const surveyed = parseModel({
+    building, levels: [level], rooms: [lobby], entrances: [entrance],
+    captures: [{ id: "cap_1", kind: "video", filename: "L1 walk.mp4" }],
+    keyframes: [{ id: "kf_1", captureId: "cap_1", timeMs: 100, imageId: "kf_1", widthPx: 640, heightPx: 480 }],
+    places: [{ id: "pl_1", nameEn: "NTUC", category: "retail", roomId: "L1-lobby" }],
+    sightings: [{ id: "sg_1", placeId: "pl_1", keyframeId: "kf_1" }],
+  });
+
+  it("never ships survey evidence to visitors", () => {
+    // Photographs of the building's interior are internal working material and
+    // the bundle is public, so the survey layer stays server-side.
+    const all = buildBundle(surveyed, meta).map(f => f.contents).join("");
+    expect(all).not.toContain("kf_1");
+    expect(all).not.toContain("cap_1");
+    expect(all).not.toContain("sighting");
+  });
+
+  it("still ships the rooms the survey confirmed", () => {
+    const all = buildBundle(surveyed, meta).map(f => f.contents).join("");
+    expect(all).toContain("L1-lobby");
+  });
+});

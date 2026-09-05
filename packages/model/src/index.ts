@@ -6,6 +6,7 @@ export * from "./schema/structure";
 export * from "./schema/navigation";
 export * from "./schema/dressing";
 export * from "./schema/semantics";
+export * from "./schema/survey";
 export * from "./schema/model";
 
 export * from "./geometry/ring";
