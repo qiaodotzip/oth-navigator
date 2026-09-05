@@ -1,5 +1,6 @@
 import type { MapModel } from "@oth/model";
 import { OrbitControls } from "@react-three/drei";
+import { bboxOfRings } from "@oth/model";
 import { Canvas } from "@react-three/fiber";
 import { useMemo } from "react";
 import { LevelGroup } from "./LevelGroup";
@@ -26,8 +27,31 @@ export function MapScene({
 
   const roomsFor = (levelId: string) => model.rooms.filter(r => r.levelId === levelId);
 
+  /**
+   * Frame the level's geometry.
+   *
+   * A fixed camera aimed at the origin showed the building edge-on from
+   * outside whenever the model did not happen to sit at (0,0) — which it never
+   * does, since footprints are traced wherever the floorplan put them.
+   */
+  const view = useMemo(() => {
+    const rings = active ? roomsFor(active.id).map(r => r.footprint) : [];
+    if (rings.length === 0) {
+      return { target: [0, 0, 0] as const, position: [60, 70, 60] as const };
+    }
+    const b = bboxOfRings(rings);
+    const cx = (b.minX + b.maxX) / 2;
+    const cy = (b.minY + b.maxY) / 2;
+    const span = Math.max(b.maxX - b.minX, b.maxY - b.minY, 10);
+    const elevation = active?.elevationM ?? 0;
+    return {
+      target: [cx, elevation, -cy] as const,
+      position: [cx + span * 0.8, elevation + span * 0.9, -cy + span * 0.8] as const,
+    };
+  }, [model.rooms, active]);
+
   return (
-    <Canvas shadows camera={{ position: [80, 90, 80], fov: 45 }}>
+    <Canvas shadows camera={{ position: [...view.position], fov: 45 }}>
       <ambientLight intensity={0.7} />
       <directionalLight position={[60, 120, 40]} intensity={1.1} castShadow />
       {showLevelBelow && below && (
@@ -43,7 +67,7 @@ export function MapScene({
           onSelect={onSelect}
         />
       )}
-      <OrbitControls makeDefault />
+      <OrbitControls makeDefault target={[...view.target]} />
     </Canvas>
   );
 }

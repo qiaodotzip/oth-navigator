@@ -265,6 +265,24 @@ describe("drawing feedback", () => {
     expect(useEditorStore.getState().draft).toBeNull();
   });
 
+  it("clears the snap indicator when switching back to Select", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.mouseMove(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100 });
+    expect(screen.getByTestId("snap-indicator")).toBeTruthy();
+    // Otherwise it freezes where the pointer last was and follows you into
+    // Select, looking like the canvas is still armed.
+    act(() => useEditorStore.getState().setTool("select"));
+    expect(screen.queryByTestId("snap-indicator")).toBeNull();
+  });
+
+  it("clears the snap indicator when the pointer leaves the canvas", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.mouseMove(surface, { clientX: 100, clientY: 100 });
+    fireEvent.mouseLeave(surface);
+    expect(screen.queryByTestId("snap-indicator")).toBeNull();
+  });
+
   it("shows no hint with the select tool", () => {
     useEditorStore.getState().setTool("select");
     render(<PlanCanvas width={800} height={600} />);

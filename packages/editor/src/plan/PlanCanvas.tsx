@@ -97,6 +97,13 @@ export function PlanCanvas({
     };
   });
 
+  // The snap indicator belongs to a drawing tool. Without this it freezes
+  // wherever the pointer last was and follows you into Select, looking like the
+  // canvas is still armed.
+  useEffect(() => {
+    if (state.tool === "select") setCursor(null);
+  }, [state.tool]);
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (!state.draft) return;
@@ -208,6 +215,7 @@ export function PlanCanvas({
             if (state.tool === "select") return;
             setCursor(state.tool === "calibrate" ? rawWorld(event) : pointerWorld(event));
           }}
+          onMouseLeave={() => setCursor(null)}
         />
 
         {rooms.map(room => (

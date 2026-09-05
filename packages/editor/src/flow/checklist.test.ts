@@ -167,3 +167,11 @@ describe("stepForCode", () => {
     expect(stepForCode("placement.asset.missing")).toBeNull();
   });
 });
+
+describe("connect status with nothing traced", () => {
+  it("is not done when the level has no rooms at all", () => {
+    // Showing "done" before anything exists reads as though it were handled.
+    expect(steps({ model: model(), levelId: "oth-L1", image: null, report: emptyReport }).connect?.status)
+      .toBe("todo");
+  });
+});

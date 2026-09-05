@@ -93,9 +93,13 @@ export function levelChecklist(input: ChecklistInput): ChecklistStep[] {
     {
       id: "connect",
       label: "Connect them",
-      // A single room has nothing to be connected to, so it counts as done.
+      // A single room has nothing to connect to, so it counts as done. Zero
+      // rooms does not: showing "done" before anything exists reads as though
+      // the step were already handled.
       status:
-        unreachable.length === 0 && (rooms.length <= 1 || doorways.length > 0) ? "done" : "todo",
+        rooms.length > 0 && unreachable.length === 0 && (rooms.length === 1 || doorways.length > 0)
+          ? "done"
+          : "todo",
       detail:
         unreachable.length > 0
           ? `${plural(unreachable.length, "room")} unreachable`
