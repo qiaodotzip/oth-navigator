@@ -6,6 +6,7 @@ import { AssetLibrary } from "./panels/AssetLibrary";
 import { ContextExportButton } from "./panels/ContextExportButton";
 import { DxfImportButton } from "./panels/DxfImportButton";
 import { FloorplanPanel } from "./panels/FloorplanPanel";
+import { ChecklistPanel } from "./panels/ChecklistPanel";
 import { ConflictBanner } from "./panels/ConflictBanner";
 import { Inspector } from "./panels/Inspector";
 import { LevelSwitcher } from "./panels/LevelSwitcher";
@@ -90,12 +91,11 @@ export function App() {
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
+            <ChecklistPanel />
             <FloorplanPanel api={api} saver={saver} />
             <Inspector
               onRename={(id, version, nameEn) => void saver.update("room", id, version, { nameEn })}
             />
-            <ValidationPanel />
-
             <div className="space-y-2 border-t p-3">
               <ContextExportButton />
               <DxfImportButton saver={saver} />
