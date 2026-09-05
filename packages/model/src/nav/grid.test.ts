@@ -210,3 +210,20 @@ describe("bakeNavGrid — cost", () => {
     }
   });
 });
+
+describe("bakeNavGrid — details", () => {
+  it("gives a detail no cells, walkable or blocked", () => {
+    // A vending machine is furniture. Blocking routes on approximate geometry
+    // is a worse failure than a route that clips a bench.
+    const area = {
+      id: "L1-sq", levelId: "oth-L1", kind: "area",
+      footprint: [[0, 0], [20, 0], [20, 20], [0, 20]], heightM: 6, walkable: true,
+    };
+    const detail = {
+      id: "L1-vend", levelId: "oth-L1", kind: "detail",
+      footprint: [[8, 8], [12, 8], [12, 12], [8, 12]], heightM: 1.9, walkable: false,
+    };
+    const g = bakeNavGrid(parseModel({ building, levels: [level], rooms: [area, detail] }), "oth-L1");
+    expect(navGridWalkableAt(g, [10, 10])).toBe(true);
+  });
+});

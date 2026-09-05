@@ -13,6 +13,12 @@ export const RoomKindSchema = z.enum([
   "room",
   /** Open space you cross freely: town square, event space, stadium floor. */
   "area",
+  /**
+   * Furniture, not architecture: a bounded thing standing on a floor — seating,
+   * planters, a bank of vending machines, a charging point. Drawn to brief a
+   * modeller with real dimensions and to anchor the mesh they build.
+   */
+  "detail",
   /** Back of house, not public. */
   "service",
   /** A hole — lightwell, atrium opening. */

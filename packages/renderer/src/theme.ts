@@ -10,6 +10,8 @@ const BASE: Record<RoomKind, string> = {
   // A destination reads as a solid block; an area reads as open floor you cross.
   room: "#e7ddc7",
   area: "#f0e8d6",
+  // Reads as an object standing on a floor rather than a piece of floor.
+  detail: "#c8bfa8",
   service: "#d3d3cc",
   void: "#9aa0a6",
 };

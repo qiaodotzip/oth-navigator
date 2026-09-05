@@ -68,3 +68,24 @@ describe("warning rules", () => {
     }).issues.map(i => i.code)).toContain("placement.outsideAnchorRoom");
   });
 });
+
+describe("details", () => {
+  const detail = {
+    id: "L1-seats", levelId: "oth-L1", kind: "detail",
+    footprint: [[0, 0], [4, 0], [4, 2], [0, 2]],
+    heightM: 1.2, walkable: false,
+  };
+
+  const codes = (extra: Record<string, unknown>) =>
+    validateModel(parseModel({ building, levels: [level], ...extra }), warningRules)
+      .issues.map(i => i.code);
+
+  it("needs no name, since 'seating block 3' is not a place you go", () => {
+    expect(codes({ rooms: [detail] })).not.toContain("room.name.missing");
+  });
+
+  it("still warns about an unnamed room, which is a place you go", () => {
+    expect(codes({ rooms: [{ ...detail, id: "L1-shop", kind: "room" }] }))
+      .toContain("room.name.missing");
+  });
+});

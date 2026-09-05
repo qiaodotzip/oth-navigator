@@ -5,6 +5,8 @@ import type { Rule, ValidationIssue } from "../types";
 /** Warnings surface quality problems without blocking a publish. */
 const unnamedRooms: Rule = model =>
   live(model.rooms)
+    // A detail is not somewhere you go, so it needs no name to be announced by.
+    .filter(r => r.kind !== "detail")
     .filter(r => r.nameEn.trim() === "" && r.nameZh.trim() === "")
     .map<ValidationIssue>(r => ({
       severity: "warning",

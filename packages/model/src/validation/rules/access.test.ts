@@ -60,6 +60,11 @@ describe("room access", () => {
     expect(codes({ rooms: [area] })).not.toContain("room.noAccess");
   });
 
+  it("says nothing about a detail, which nobody routes to", () => {
+    const d = { ...shop, id: "L1-detail", kind: "detail", walkable: false };
+    expect(codes({ rooms: [d] })).not.toContain("room.noAccess");
+  });
+
   it("says nothing about a void", () => {
     expect(codes({ rooms: [{ ...shop, id: "L1-void", kind: "void" }] })).not.toContain("room.noAccess");
   });
