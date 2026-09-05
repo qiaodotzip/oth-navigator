@@ -38,6 +38,7 @@ Smaller or later additions that went straight to a plan:
 - [`plans/2026-05-26-real-counter-data-besttime.md`](plans/2026-05-26-real-counter-data-besttime.md) — pulling **real foot-traffic** from the BestTime API (off by default; the app ships with modeled curves).
 - [`plans/2026-05-26-offsite-services-plan.md`](plans/2026-05-26-offsite-services-plan.md) — handling services that live **outside** OTH ("Start in App" hand-off).
 - [`plans/2026-05-26-fragmentation-dashboard-plan.md`](plans/2026-05-26-fragmentation-dashboard-plan.md) — the **ops analytics dashboard** side-quest (visitor flow / counter loads).
+- [`plans/2026-09-05-presence-and-locks.md`](plans/2026-09-05-presence-and-locks.md) — **who else is in the editor** and what they are holding; the client half of §10 of the map-model spec.
 
 ---
 
