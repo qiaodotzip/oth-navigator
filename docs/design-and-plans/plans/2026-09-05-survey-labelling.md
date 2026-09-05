@@ -10,6 +10,13 @@
 
 **Spec:** [`docs/design-and-plans/specs/2026-09-05-survey-labelling-design.md`](../specs/2026-09-05-survey-labelling-design.md)
 
+> **Status:** complete, 2026-09-05. Two things the plan did not anticipate:
+> jsdom implements neither `URL.createObjectURL` nor a canvas, so the video
+> component takes a `grab` seam and the tests stub the object URL rather than
+> the component being weakened for them; and the upload-failure path is not
+> reachable in jsdom at all, since the real `captureFrame` rejects first — so
+> that test asserts what a browser unable to read video would actually show.
+
 ## Global Constraints
 
 - **Survey data never ships to visitors.** `buildBundle` picks entities explicitly; do not add these four, and assert it.
@@ -49,7 +56,7 @@
 **Interfaces:**
 - Produces: `CaptureSchema`, `KeyframeSchema`, `PlaceSchema`, `SightingSchema`, `BoxSchema`; `MapModel` gains `captures`, `keyframes`, `places`, `sightings`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/model/src/schema/survey.test.ts`:
 
@@ -133,12 +140,12 @@ it("never ships survey evidence to visitors", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch them fail**
+- [x] **Step 2: Run and watch them fail**
 
 Run: `npx vitest run packages/model`
 Expected: FAIL — no `./survey` module.
 
-- [ ] **Step 3: Write the schemas**
+- [x] **Step 3: Write the schemas**
 
 `packages/model/src/schema/survey.ts`:
 
@@ -210,7 +217,7 @@ export type Sighting = z.infer<typeof SightingSchema>;
 export type Box = z.infer<typeof BoxSchema>;
 ```
 
-- [ ] **Step 4: Add them to the model**
+- [x] **Step 4: Add them to the model**
 
 In `packages/model/src/schema/model.ts`, import the four and add to `MapModelSchema`:
 
@@ -223,7 +230,7 @@ In `packages/model/src/schema/model.ts`, import the four and add to `MapModelSch
 
 Add `export * from "./schema/survey";` to `packages/model/src/index.ts`. Leave `bundle/build.ts` alone — it names every entity it writes, so the four stay out by construction, which is what the new test locks.
 
-- [ ] **Step 5: Run and commit**
+- [x] **Step 5: Run and commit**
 
 ```bash
 npx vitest run packages/model
@@ -245,7 +252,7 @@ git commit -m "feat(model): the survey layer — captures, keyframes, places, si
 - Consumes: the four schemas (Task 1).
 - Produces: `POST /api/keyframes` (multipart `file` + `captureId` + optional `timeMs`) → `{ keyframe }`; `GET /api/keyframes/:id/file` → the JPEG. The other three go through `/api/entities/:type` unchanged.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/server/src/survey/routes.test.ts`, following `images/routes.test.ts` for setup (a signed-in cookie and a `pngBytes()` helper):
 
@@ -270,12 +277,12 @@ it("serves the stored frame back", async () => { /* GET .../file is 200, image/*
 it("creates a place through the generic entity route", async () => { /* 201 */ });
 ```
 
-- [ ] **Step 2: Run and watch them fail**
+- [x] **Step 2: Run and watch them fail**
 
 Run: `npx vitest run packages/server/src/survey`
 Expected: FAIL — no such route, and `capture` is not an entity type.
 
-- [ ] **Step 3: The four tables**
+- [x] **Step 3: The four tables**
 
 In `packages/server/src/db/schema.ts`, following `pathways` for shape and `...auditColumns`:
 
@@ -331,13 +338,13 @@ Generate the migration:
 cd packages/server && npx drizzle-kit generate
 ```
 
-- [ ] **Step 4: Register three of the four**
+- [x] **Step 4: Register three of the four**
 
 In `packages/server/src/entities/registry.ts` add `"capture"`, `"place"`, `"sighting"` to `ENTITY_TYPES` and the registry. **Not `keyframe`** — a keyframe arrives as multipart bytes, not JSON, so it has its own route and generic CRUD would be a way to create one with no image behind it.
 
 Mirror the three in `packages/editor/src/api/client.ts`'s `EntityType`.
 
-- [ ] **Step 5: The keyframe route**
+- [x] **Step 5: The keyframe route**
 
 `packages/server/src/survey/routes.ts`, modelled closely on `images/routes.ts`:
 
@@ -394,11 +401,11 @@ plus a `GET /:id/file` copied from the level-image file route, and `requireUser`
 
 Register in `app.ts`: `app.route("/api/keyframes", surveyRoutes);` before the static handler.
 
-- [ ] **Step 6: Assemble them**
+- [x] **Step 6: Assemble them**
 
 In `packages/server/src/model/assemble.ts`, add the four tables to the assembly exactly as `pathways` is done, mapping through `toModelRow`.
 
-- [ ] **Step 7: Run and commit**
+- [x] **Step 7: Run and commit**
 
 ```bash
 npx vitest run packages/server
@@ -422,7 +429,7 @@ git commit -m "feat(server): survey tables, keyframe upload, and assembly"
   - rules `place.unbound`, `place.adjacencyBroken`, `room.unsurveyed`
 - `EntityType` in `validation/types.ts` gains `"place"`.
 
-- [ ] **Step 1: Write the failing derivation tests**
+- [x] **Step 1: Write the failing derivation tests**
 
 `packages/model/src/survey/graph.test.ts`:
 
@@ -468,7 +475,7 @@ describe("sequentialPairs", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch fail**, then **Step 3: implement**
+- [x] **Step 2: Run and watch fail**, then **Step 3: implement**
 
 `packages/model/src/survey/graph.ts`:
 
@@ -540,7 +547,7 @@ export function sequentialPairs(model: MapModel): Pair[] {
 }
 ```
 
-- [ ] **Step 4: Write the failing rule tests**
+- [x] **Step 4: Write the failing rule tests**
 
 `packages/model/src/validation/rules/survey.test.ts` — one passing and one failing case each for:
 
@@ -554,7 +561,7 @@ it("warns about a traced room nobody has surveyed", () => { /* room.unsurveyed *
 it("never blocks a publish on any of the three", () => { expect(report.errorCount).toBe(0); });
 ```
 
-- [ ] **Step 5: Implement the rules**
+- [x] **Step 5: Implement the rules**
 
 `packages/model/src/validation/rules/survey.ts`:
 
@@ -569,7 +576,7 @@ export const CO_VISIBLE_MAX_M = 40;
 
 All three `severity: "warning"`. Add `surveyRules` to `validate.ts`, and `"place"` to `EntityType`.
 
-- [ ] **Step 6: Run and commit**
+- [x] **Step 6: Run and commit**
 
 ```bash
 npx vitest run packages/model
@@ -593,7 +600,7 @@ git commit -m "feat(model): adjacency from co-visibility and sequence, and the r
   - `captureFrame(video, canvas): Promise<Blob>` — thin, uncovered
   - `api.uploadKeyframe(file, captureId, timeMs?)`, `api.keyframeFileUrl(id)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/editor/src/route.test.ts`:
 
@@ -623,7 +630,7 @@ describe("orderFrames", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch fail. Step 3: implement routing**
+- [x] **Step 2: Run and watch fail. Step 3: implement routing**
 
 `packages/editor/src/route.ts`:
 
@@ -660,11 +667,11 @@ export function navigate(path: string): void {
 
 `main.tsx` renders `<SurveyApp />` when the route starts with `/survey`, else `<App />`.
 
-- [ ] **Step 4: The pure frame helpers**
+- [x] **Step 4: The pure frame helpers**
 
 `packages/editor/src/survey/frames.ts` — `frameFilename` slugifies the capture name, strips the extension and formats `mm`/`ss`; `orderFrames` sorts by `timeMs` when present and leaves photos alone.
 
-- [ ] **Step 5: The video component**
+- [x] **Step 5: The video component**
 
 `packages/editor/src/survey/CaptureVideo.tsx` — a file input, a `<video>` on an object URL, a hidden `<canvas>`, and a Grab button plus the Space key. The extraction itself:
 
@@ -685,7 +692,7 @@ export function captureFrame(video: HTMLVideoElement, canvas: HTMLCanvasElement)
 
 Revoke the object URL on unmount; the video is never uploaded.
 
-- [ ] **Step 6: Run and commit**
+- [x] **Step 6: Run and commit**
 
 ```bash
 npx vitest run packages/editor
@@ -705,7 +712,7 @@ git commit -m "feat(editor): a /survey route, and frames grabbed without uploadi
 **Interfaces:**
 - Produces: `matchPlaces(places, query): Place[]` — the autocomplete, pure and tested; `PlaceTagger` props `{ keyframe, places, onTag }`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `places.test.ts`:
 
@@ -731,7 +738,7 @@ it("refuses to tag with an empty name", () => { /* onTag not called */ });
 
 Drags use **mouse** events, not pointer events — jsdom builds `PointerEvent` with no coordinates.
 
-- [ ] **Step 2: Run and watch fail. Steps 3–4: implement**
+- [x] **Step 2: Run and watch fail. Steps 3–4: implement**
 
 `matchPlaces` — case-insensitive substring over `nameEn` and `nameZh`, prefix matches sorted first.
 
@@ -739,7 +746,7 @@ Drags use **mouse** events, not pointer events — jsdom builds `PointerEvent` w
 
 `SurveyApp` — the three-column shell from the spec: captures on the left, the frame in the middle with the filmstrip beneath, places on the right with sighting counts and an unbound total.
 
-- [ ] **Step 5: Run and commit**
+- [x] **Step 5: Run and commit**
 
 ```bash
 npx vitest run packages/editor
@@ -761,7 +768,7 @@ git commit -m "feat(editor): label a frame, naming places by autocomplete"
 - Consumes: `place.roomId` (Task 1), the survey rules (Task 3).
 - Produces: `BindPlacePanel` in the editor's rooms section — bind the selected room to a surveyed place.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```tsx
 it("offers only places nothing else has claimed", () => { /* bound place absent from the list */ });
@@ -771,7 +778,7 @@ it("moves the room off unverified once bound", () => { /* status === "photo" */ 
 it("says so when nothing has been surveyed yet", () => { /* empty state, not an empty select */ });
 ```
 
-- [ ] **Step 2: Run and watch fail. Step 3: implement**
+- [x] **Step 2: Run and watch fail. Step 3: implement**
 
 Binding is two writes through the existing saver, both optimistically locked:
 
@@ -788,11 +795,11 @@ void saver.update("room", room.id, room.version, {
 });
 ```
 
-- [ ] **Step 4: Route the codes**
+- [x] **Step 4: Route the codes**
 
 In `packages/editor/src/flow/checklist.ts`, `stepForCode`: `place.*` and `room.unsurveyed` belong to `"rooms"` — the tracing step is where you would act on them.
 
-- [ ] **Step 5: Run everything and commit**
+- [x] **Step 5: Run everything and commit**
 
 ```bash
 npm test
