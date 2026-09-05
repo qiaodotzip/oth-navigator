@@ -10,6 +10,15 @@
 
 **Spec:** [`docs/design-and-plans/specs/2026-09-05-pathways-and-space-kinds-design.md`](../specs/2026-09-05-pathways-and-space-kinds-design.md)
 
+> **Status:** complete, 2026-09-05 (`c99ba63`..`e6523b4`).
+> Two things the plan did not anticipate, both found while executing it and
+> both fixed in the commits above:
+> - **Access had to be measured edge to edge.** Measuring from footprint
+>   vertices reported a pathway running down the middle of a shop as 5 m away.
+> - **A checklist step needed more than one tool.** "Areas & rooms" is one
+>   tracing pass done with two gestures; offering only "Draw room" would have
+>   left anyone following the guided flow unable to draw walkable floor at all.
+
 ## Global Constraints
 
 - **Pathways carve unconditionally**, after wall blocking and after doorways. A doorway may only open cells inside the two rooms it joins; a pathway opens every cell within half its width, wherever it is.
@@ -63,7 +72,7 @@
 **Interfaces:**
 - Produces: `RoomKindSchema = z.enum(["room", "area", "service", "void"])`; `RoomKind` narrows accordingly.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Replace the kind tests in `packages/model/src/schema/structure.test.ts`:
 
@@ -88,12 +97,12 @@ Replace the kind tests in `packages/model/src/schema/structure.test.ts`:
   });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/model/src/schema/structure.test.ts`
 Expected: FAIL — `"area"` is rejected and `"corridor"` is accepted.
 
-- [ ] **Step 3: Change the enum**
+- [x] **Step 3: Change the enum**
 
 In `packages/model/src/schema/structure.ts`:
 
@@ -117,7 +126,7 @@ export const RoomKindSchema = z.enum([
 ]);
 ```
 
-- [ ] **Step 4: Update the renderer's palette**
+- [x] **Step 4: Update the renderer's palette**
 
 `packages/renderer/src/theme.ts` keys a `Record<RoomKind, string>`, so the compiler will name the gap. Replace `BASE`:
 
@@ -145,7 +154,7 @@ with the distinction test rewritten, since corridors no longer exist:
   });
 ```
 
-- [ ] **Step 5: Fix every other call site**
+- [x] **Step 5: Fix every other call site**
 
 `corridor` and `atrium` and `outdoor` appear in 18 files, almost all tests. They are all fixtures, so the mapping is mechanical:
 
@@ -160,7 +169,7 @@ Then check the seed, which is not a test:
 grep -rn '"corridor"\|"atrium"\|"outdoor"' packages/server/src/cli/ || echo "seed is clean"
 ```
 
-- [ ] **Step 6: Run everything**
+- [x] **Step 6: Run everything**
 
 ```bash
 npm run typecheck
@@ -169,7 +178,7 @@ npx vitest run
 
 Expected: PASS. The typecheck is the real gate here — `Record<RoomKind, …>` and every `kind:` literal are checked.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/model packages/renderer packages/editor packages/server
@@ -187,7 +196,7 @@ git commit -m "feat(model): space kinds become room, area, service, void"
 **Interfaces:**
 - Produces: `PathwaySchema`, `Pathway`, `DEFAULT_PATHWAY_WIDTH_M`; `MapModel` gains `pathways: Pathway[]`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/model/src/schema/navigation.test.ts`:
 
@@ -234,12 +243,12 @@ Append to `packages/model/src/schema/model.test.ts`, inside the `emptyModel` tes
     expect(m.pathways).toEqual([]);
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/model/src/schema`
 Expected: FAIL — `PathwaySchema` is not exported.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `packages/model/src/schema/navigation.ts`:
 
@@ -273,7 +282,7 @@ In `packages/model/src/schema/model.ts`, import `PathwaySchema` alongside the ot
   pathways: z.array(PathwaySchema).default([]),
 ```
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 ```bash
 npx vitest run packages/model
@@ -293,7 +302,7 @@ git commit -m "feat(model): pathway entity — walkable surface asserted directl
 **Interfaces:**
 - Produces: `pathways` Drizzle table; `"pathway"` in `ENTITY_TYPES`; `assembleModel` returns pathways.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/server/src/model/assemble.test.ts`:
 
@@ -337,12 +346,12 @@ Append to `packages/server/src/entities/routes.test.ts`:
   });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/server/src/model packages/server/src/entities`
 Expected: FAIL — `"pathway"` is not a known entity type.
 
-- [ ] **Step 3: Add the table**
+- [x] **Step 3: Add the table**
 
 Append to `packages/server/src/db/schema.ts`:
 
@@ -361,7 +370,7 @@ export const pathways = pgTable("pathways", {
 }, t => ({ levelIdx: index("pathways_level_idx").on(t.levelId) }));
 ```
 
-- [ ] **Step 4: Register the entity type**
+- [x] **Step 4: Register the entity type**
 
 In `packages/server/src/entities/registry.ts`, add `"pathway"` to `ENTITY_TYPES` after `"navHint"`, import `PathwaySchema` from `@oth/model`, and add to `entityRegistry`:
 
@@ -369,7 +378,7 @@ In `packages/server/src/entities/registry.ts`, add `"pathway"` to `ENTITY_TYPES`
   pathway: { table: schema.pathways as EntityTable, schema: PathwaySchema },
 ```
 
-- [ ] **Step 5: Assemble them**
+- [x] **Step 5: Assemble them**
 
 In `packages/server/src/model/assemble.ts`, add after `navHints`:
 
@@ -377,7 +386,7 @@ In `packages/server/src/model/assemble.ts`, add after `navHints`:
     pathways: await liveRows(db, schema.pathways as EntityTable),
 ```
 
-- [ ] **Step 6: Generate the migration, run, commit**
+- [x] **Step 6: Generate the migration, run, commit**
 
 ```bash
 npm run db:generate --workspace @oth/server
@@ -399,7 +408,7 @@ git commit -m "feat(server): pathways table, entity type and assembly"
 - Consumes: `forEachCellNearSegment`, `navGridSet` (already private to `grid.ts`).
 - Produces: `bakeNavGrid` now carves pathways last; the grid's extent includes them.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/model/src/nav/grid.test.ts`:
 
@@ -471,12 +480,12 @@ describe("bakeNavGrid — pathways", () => {
 
 The "only a pathway and no rooms" case matters: it is the state a level is in the moment someone starts drawing, and the old bake returned an empty grid whenever there were no walkable rooms.
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/model/src/nav/grid.test.ts`
 Expected: FAIL — pathways are not baked, and a level with no walkable rooms returns an empty grid.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `packages/model/src/nav/grid.ts`, add the carve function after `carveDoorways`:
 
@@ -542,7 +551,7 @@ Finally, carve pathways last, replacing the tail of `bakeNavGrid`:
   return grid;
 ```
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 ```bash
 npx vitest run packages/model
@@ -562,7 +571,7 @@ git commit -m "feat(model): pathways carve the nav grid last and unconditionally
 **Interfaces:**
 - No signature changes. `bakeNavGrid` must produce an identical grid.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 This is a refactor, so the test is a behaviour lock plus a cost bound. Append to `grid.test.ts`:
 
@@ -610,12 +619,12 @@ Note what the second test does **not** do: re-count the same grid and compare it
 to itself. The lock has to be independent of the implementation, so it asserts
 cells whose state follows from the geometry alone.
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/model/src/nav/grid.test.ts`
 Expected: FAIL on the cost test — thirty rooms across a 180 m frontage builds a grid of roughly 730 × 40 cells, scanned once per room.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `bakeNavGrid`, replace the rasterisation loop. It currently walks the entire grid for every room:
 
@@ -656,7 +665,7 @@ with a scan bounded by each room's own extent:
   }
 ```
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 ```bash
 npx vitest run packages/model/src/nav
@@ -678,7 +687,7 @@ git commit -m "perf(model): bake each room over its own bbox, not the whole grid
 - Also widens `EntityType` in `src/validation/types.ts` with `"pathway"`, so a pathway issue can name itself honestly.
 - `reachability.ts` now reports `area.unreachable` for walkable spaces; `room.unreachable` is gone.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `packages/model/src/validation/rules/access.test.ts`:
 
@@ -777,12 +786,12 @@ describe("pathway connectivity", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/model/src/validation/rules/access.test.ts`
 Expected: FAIL — cannot resolve `./access`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `packages/model/src/validation/rules/access.ts`:
 
@@ -888,13 +897,13 @@ const pathwayConnectivity: Rule = model => {
 export const accessRules: Rule[] = [roomAccess, pathwayConnectivity];
 ```
 
-- [ ] **Step 3a: Let an issue name a pathway**
+- [x] **Step 3a: Let an issue name a pathway**
 
 `ValidationIssue.entityType` is a closed union, so a pathway issue currently has
 nothing honest to call itself. In `packages/model/src/validation/types.ts` add
 `"pathway"` to `EntityType`, after `"navHint"`.
 
-- [ ] **Step 4: Rename the reachability rule to areas**
+- [x] **Step 4: Rename the reachability rule to areas**
 
 In `packages/model/src/validation/rules/reachability.ts`, the rule already filters on `walkable`, which now means areas. Change the code and message so they say so:
 
@@ -911,7 +920,7 @@ and the no-entrance message:
 
 Update `packages/model/src/nav/reachability.test.ts` accordingly: `room.unreachable` becomes `area.unreachable`, and the fixtures' `kind` values become `area` where they are walkable.
 
-- [ ] **Step 5: Register the rules**
+- [x] **Step 5: Register the rules**
 
 In `packages/model/src/validation/validate.ts`:
 
@@ -929,7 +938,7 @@ export const ALL_RULES: Rule[] = [
 ];
 ```
 
-- [ ] **Step 6: Run and commit**
+- [x] **Step 6: Run and commit**
 
 ```bash
 npx vitest run packages/model
@@ -952,7 +961,7 @@ git commit -m "feat(model): room access warning, pathway connectivity error, are
 - `PlanCanvasProps` gains `onCommitPathway?: (polyline: Vec2[]) => void`.
 - Produces: `PathwayShape` props `{ polyline: Vec2[]; widthM: number; viewport: Viewport; selected?: boolean }`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/editor/src/plan/PlanCanvas.test.tsx`:
 
@@ -1015,12 +1024,12 @@ describe("pathways", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/editor/src/plan/PlanCanvas.test.tsx`
 Expected: FAIL — `"draw-pathway"` is not a Tool.
 
-- [ ] **Step 3: Add the tools**
+- [x] **Step 3: Add the tools**
 
 In `packages/editor/src/state/store.ts`:
 
@@ -1036,7 +1045,7 @@ export type Tool =
   | "calibrate";
 ```
 
-- [ ] **Step 4: Implement the shape**
+- [x] **Step 4: Implement the shape**
 
 `packages/editor/src/plan/PathwayShape.tsx`:
 
@@ -1073,7 +1082,7 @@ export function PathwayShape({
 }
 ```
 
-- [ ] **Step 5: Render and commit them in the canvas**
+- [x] **Step 5: Render and commit them in the canvas**
 
 In `PlanCanvas.tsx` add the prop:
 
@@ -1126,7 +1135,7 @@ with the matching prop `onCommitArea?: (ring: Ring) => void;`, and render pathwa
           ))}
 ```
 
-- [ ] **Step 6: Teach the hint about the new tools**
+- [x] **Step 6: Teach the hint about the new tools**
 
 In `DrawingHint.tsx`, extend `WHAT`:
 
@@ -1150,7 +1159,7 @@ and `howTo`:
   }
 ```
 
-- [ ] **Step 7: Wire the App**
+- [x] **Step 7: Wire the App**
 
 In `App.tsx`, add to `PlanCanvas`:
 
@@ -1187,7 +1196,7 @@ and change the existing `onCommitRoom` so a room is a destination:
                 walkable: false,
 ```
 
-- [ ] **Step 8: Run and commit**
+- [x] **Step 8: Run and commit**
 
 ```bash
 npx vitest run packages/editor
@@ -1208,7 +1217,7 @@ git commit -m "feat(editor): draw pathways and areas, rendered at real width"
 - `StepId` `"connect"` keeps its name but becomes the pathways step.
 - `LayerEntityType` gains `"pathway"`; rooms and areas become separate groups.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/editor/src/flow/checklist.test.ts`:
 
@@ -1264,12 +1273,12 @@ describe("areas and pathways", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/editor/src/flow`
 Expected: FAIL — the step still counts doorways and there is no `pathway` layer group.
 
-- [ ] **Step 3: Rework the step**
+- [x] **Step 3: Rework the step**
 
 In `packages/editor/src/flow/checklist.ts`, replace the doorway count with pathways:
 
@@ -1311,7 +1320,7 @@ with the old `room.unreachable` line removed, and `unreachable` recomputed again
   const unreachable = issuesFor("connect").filter(i => i.code === "area.unreachable");
 ```
 
-- [ ] **Step 4: Split the layer groups**
+- [x] **Step 4: Split the layer groups**
 
 In `packages/editor/src/flow/layers.ts`, widen the type and labels:
 
@@ -1368,7 +1377,7 @@ Note `LayerItem.type` feeds `saver.update`/`saver.remove`, which take an `Entity
     void saver.remove(entityTypeFor(item), item.id, item.version);
 ```
 
-- [ ] **Step 5: Update the toolbar and the section label**
+- [x] **Step 5: Update the toolbar and the section label**
 
 `packages/editor/src/panels/Toolbar.tsx`:
 
@@ -1398,7 +1407,7 @@ and the rooms section, which now covers both:
   rooms: "Areas & rooms",
 ```
 
-- [ ] **Step 6: Run everything and commit**
+- [x] **Step 6: Run everything and commit**
 
 ```bash
 npm test
