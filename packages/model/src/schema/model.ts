@@ -5,6 +5,7 @@ import {
   DoorwaySchema,
   EntranceSchema,
   NavHintSchema,
+  PathwaySchema,
   PortalEndpointSchema,
   PortalSchema,
 } from "./navigation";
@@ -21,6 +22,7 @@ export const MapModelSchema = z.object({
   portals: z.array(PortalSchema).default([]),
   portalEndpoints: z.array(PortalEndpointSchema).default([]),
   navHints: z.array(NavHintSchema).default([]),
+  pathways: z.array(PathwaySchema).default([]),
   assets: z.array(AssetSchema).default([]),
   placements: z.array(PlacementSchema).default([]),
   tenants: z.array(TenantSchema).default([]),

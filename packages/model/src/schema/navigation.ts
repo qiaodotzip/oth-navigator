@@ -67,7 +67,28 @@ export const NavHintSchema = AuditFieldsSchema.extend({
   polyline: z.array(Vec2Schema).min(2),
 });
 
+/** Roughly a two-person corridor. */
+export const DEFAULT_PATHWAY_WIDTH_M = 2.4;
+
+/**
+ * Walkable surface asserted directly: the centre line of somewhere people walk,
+ * with a width.
+ *
+ * Unlike a doorway, which only connects two rooms whose footprints abut, a
+ * pathway is correct by construction — a line down the middle of a corridor is
+ * right no matter how wrong the traced footprints around it are. That is the
+ * whole point on an approximate floorplan.
+ */
+export const PathwaySchema = AuditFieldsSchema.extend({
+  id: SlugSchema,
+  levelId: SlugSchema,
+  polyline: z.array(Vec2Schema).min(2),
+  widthM: z.number().positive().default(DEFAULT_PATHWAY_WIDTH_M),
+  stepFree: z.boolean().default(true),
+});
+
 export type Doorway = z.infer<typeof DoorwaySchema>;
+export type Pathway = z.infer<typeof PathwaySchema>;
 export type Entrance = z.infer<typeof EntranceSchema>;
 export type PortalKind = z.infer<typeof PortalKindSchema>;
 export type Portal = z.infer<typeof PortalSchema>;

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_PATHWAY_WIDTH_M,
   DoorwaySchema,
   EntranceSchema,
   NavHintSchema,
   PortalEndpointSchema,
+  PathwaySchema,
   PortalSchema,
 } from "./navigation";
 
@@ -125,5 +127,38 @@ describe("NavHintSchema", () => {
     expect(() =>
       NavHintSchema.parse({ id: "h", levelId: "oth-L2", polyline: [[0, 0]] }),
     ).toThrow();
+  });
+});
+
+describe("PathwaySchema", () => {
+  const pathway = {
+    id: "L1-path-main",
+    levelId: "oth-L1",
+    polyline: [[0, 0], [20, 0], [20, 15]],
+  };
+
+  it("accepts a centre line", () => {
+    expect(PathwaySchema.parse(pathway).polyline).toHaveLength(3);
+  });
+
+  it("defaults to a two-person corridor width", () => {
+    expect(PathwaySchema.parse(pathway).widthM).toBe(DEFAULT_PATHWAY_WIDTH_M);
+    expect(DEFAULT_PATHWAY_WIDTH_M).toBe(2.4);
+  });
+
+  it("accepts an explicit width", () => {
+    expect(PathwaySchema.parse({ ...pathway, widthM: 6 }).widthM).toBe(6);
+  });
+
+  it("defaults to step-free, since most of a hub is level", () => {
+    expect(PathwaySchema.parse(pathway).stepFree).toBe(true);
+  });
+
+  it("rejects a single point, which is not a path", () => {
+    expect(() => PathwaySchema.parse({ ...pathway, polyline: [[0, 0]] })).toThrow();
+  });
+
+  it("rejects a non-positive width", () => {
+    expect(() => PathwaySchema.parse({ ...pathway, widthM: 0 })).toThrow();
   });
 });

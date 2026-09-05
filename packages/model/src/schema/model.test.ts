@@ -16,6 +16,7 @@ describe("emptyModel", () => {
     expect(m.portals).toEqual([]);
     expect(m.portalEndpoints).toEqual([]);
     expect(m.navHints).toEqual([]);
+    expect(m.pathways).toEqual([]);
     expect(m.assets).toEqual([]);
     expect(m.placements).toEqual([]);
     expect(m.tenants).toEqual([]);
