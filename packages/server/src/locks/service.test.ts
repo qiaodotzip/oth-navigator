@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { createUser } from "../auth/users";
 import type { Database } from "../db/client";
 import { createTestDb } from "../testing/harness";
 import { acquireLock, activeLocks, releaseLock } from "./service";
@@ -43,5 +44,20 @@ describe("locks", () => {
   it("keeps locks on different entities independent", async () => {
     await acquireLock(db, "room", "a", "user_1", 300);
     expect(await acquireLock(db, "room", "b", "user_2", 300)).not.toBeNull();
+  });
+});
+
+describe("who holds a lock", () => {
+  it("names the holder, since a user id tells a teammate nothing", async () => {
+    const user = await createUser(db, {
+      email: "wei@example.com", password: "passphrase", displayName: "Wei",
+    });
+    await acquireLock(db, "room", "L1-a", user.id, 300);
+    expect((await activeLocks(db))[0]?.lockedByName).toBe("Wei");
+  });
+
+  it("falls back to the id when the holder no longer exists", async () => {
+    await acquireLock(db, "room", "L1-b", "user_gone", 300);
+    expect((await activeLocks(db))[0]?.lockedByName).toBe("user_gone");
   });
 });

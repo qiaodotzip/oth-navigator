@@ -1,6 +1,6 @@
 import { and, eq, gt } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { entityLocks } from "../db/schema";
+import { entityLocks, users } from "../db/schema";
 
 export type Lock = {
   entityType: string;
@@ -9,6 +9,15 @@ export type Lock = {
   lockedAt: Date;
   expiresAt: Date;
 };
+
+/**
+ * A lock as someone else sees it.
+ *
+ * Only the listing carries the holder's name: whoever just acquired one is the
+ * holder and already knows who they are, while a teammate shown a raw user id
+ * learns nothing at all.
+ */
+export type HeldLock = Lock & { lockedByName: string };
 
 /**
  * Advisory only. Optimistic locking on `version` is the real correctness
@@ -55,6 +64,14 @@ export async function releaseLock(
   return rows.length > 0;
 }
 
-export async function activeLocks(db: Database): Promise<Lock[]> {
-  return db.select().from(entityLocks).where(gt(entityLocks.expiresAt, new Date()));
+export async function activeLocks(db: Database): Promise<HeldLock[]> {
+  const rows = await db
+    .select({ lock: entityLocks, displayName: users.displayName })
+    .from(entityLocks)
+    // A left join, so a lock held by a since-removed user still lists rather
+    // than vanishing and leaving the entity looking free.
+    .leftJoin(users, eq(entityLocks.lockedBy, users.id))
+    .where(gt(entityLocks.expiresAt, new Date()));
+
+  return rows.map(r => ({ ...r.lock, lockedByName: r.displayName ?? r.lock.lockedBy }));
 }
