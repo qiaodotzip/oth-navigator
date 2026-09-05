@@ -27,6 +27,16 @@ describe("storeAsset", () => {
     expect(b.storagePath).not.toBe(a.storagePath);
   });
 
+  it("defaults to .glb, as meshes were the original caller", async () => {
+    const a = await storeAsset(await dir(), new Uint8Array([1, 2, 3]));
+    expect(a.storagePath.endsWith(".glb")).toBe(true);
+  });
+
+  it("honours an explicit extension so images are stored honestly", async () => {
+    const a = await storeAsset(await dir(), new Uint8Array([1, 2, 3]), "png");
+    expect(a.storagePath.endsWith(".png")).toBe(true);
+  });
+
   it("actually writes the bytes", async () => {
     const d = await dir();
     const a = await storeAsset(d, new Uint8Array([7, 7]));

@@ -81,6 +81,17 @@ describe("publish", () => {
     expect(latest.version).toBe(first.version);
   });
 
+  it("never puts a level image in the bundle", async () => {
+    // Level images are authoring aids. This guards against a later change
+    // quietly starting to publish them.
+    await seedPublishable();
+    const result = await publish(db, dir, { createdBy: "user_1" });
+    const files = await readdir(join(dir, "published", result.version));
+    expect(files).not.toContain("levelImages.json");
+    const building = await readFile(join(dir, "published", result.version, "building.json"), "utf8");
+    expect(building).not.toContain("level_images");
+  });
+
   it("writes a level file named by the level code", async () => {
     await seedPublishable();
     const result = await publish(db, dir, { createdBy: "user_1" });

@@ -189,3 +189,30 @@ export const entityLocks = pgTable("entity_locks", {
   lockedAt: timestamp("locked_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 }, t => ({ pk: uniqueIndex("entity_locks_pk").on(t.entityType, t.entityId) }));
+
+/**
+ * The floorplan a level is traced over, with its calibration on the same row.
+ *
+ * Server-side rather than local because teammates must trace the same picture;
+ * a local-only underlay would let two people draw against different images and
+ * disagree silently. At most one live row per level — uploading a replacement
+ * soft-deletes the previous one.
+ */
+export const levelImages = pgTable("level_images", {
+  id: text("id").primaryKey(),
+  levelId: text("level_id").notNull(),
+  filename: text("filename").notNull(),
+  storagePath: text("storage_path").notNull(),
+  checksum: text("checksum").notNull(),
+  widthPx: integer("width_px").notNull(),
+  heightPx: integer("height_px").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  /** Null until someone measures a known dimension. */
+  metresPerPixel: doublePrecision("metres_per_pixel"),
+  /** World metres of the image's top-left pixel. */
+  offsetX: doublePrecision("offset_x").notNull().default(0),
+  offsetY: doublePrecision("offset_y").notNull().default(0),
+  opacity: doublePrecision("opacity").notNull().default(0.6),
+  uploadedBy: text("uploaded_by"),
+  ...auditColumns,
+}, t => ({ levelIdx: index("level_images_level_idx").on(t.levelId) }));

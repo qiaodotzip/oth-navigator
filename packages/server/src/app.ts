@@ -5,6 +5,7 @@ import type { User } from "./auth/users";
 import { loadConfig } from "./config";
 import type { Database } from "./db/client";
 import { entityRoutes } from "./entities/routes";
+import { levelImageRoutes } from "./images/routes";
 import { lockRoutes } from "./locks/routes";
 import { modelRoutes } from "./model/routes";
 import { presenceRoutes } from "./presence/routes";
@@ -41,6 +42,7 @@ export function createApp(deps: AppDeps) {
   app.route("/api/model", modelRoutes);
   app.route("/api/locks", lockRoutes);
   app.route("/api/assets", assetRoutes);
+  app.route("/api/level-images", levelImageRoutes);
   app.route("/api", publishRoutes);
 
   // Defaults to a fresh tracker so every createApp({ db }) call site keeps working.
