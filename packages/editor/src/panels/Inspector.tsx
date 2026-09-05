@@ -2,8 +2,10 @@ import { roomsOnActiveLevel, useEditorStore } from "../state/store";
 
 export function Inspector({
   onRename,
+  onResize,
 }: {
   onRename: (id: string, version: number, nameEn: string) => void;
+  onResize: (id: string, version: number, heightM: number) => void;
 }) {
   const state = useEditorStore();
   const selection = state.selection;
@@ -17,7 +19,7 @@ export function Inspector({
   return (
     <div className="space-y-3 p-3 text-sm">
       <div>
-        <div className="text-xs uppercase tracking-wide text-stone-500">Room</div>
+        <div className="text-xs uppercase tracking-wide text-stone-500">{room.kind}</div>
         <div className="font-mono text-xs">{room.id}</div>
       </div>
       <label className="block">
@@ -26,6 +28,25 @@ export function Inspector({
           className="mt-1 w-full rounded border px-2 py-1"
           defaultValue={room.nameEn}
           onBlur={e => onRename(room.id, room.version, e.target.value)}
+        />
+      </label>
+      <label className="block">
+        Height (m)
+        <input
+          aria-label="Height (m)"
+          type="number"
+          min={0.1}
+          step={0.1}
+          className="mt-1 w-full rounded border px-2 py-1"
+          defaultValue={room.heightM}
+          onBlur={e => {
+            const next = Number(e.target.value);
+            // For a detail this is the dimension a modeller works to, so a typo
+            // that silently saved zero would be worse than ignoring it.
+            if (Number.isFinite(next) && next > 0 && next !== room.heightM) {
+              onResize(room.id, room.version, next);
+            }
+          }}
         />
       </label>
       <div className="text-xs text-stone-500">

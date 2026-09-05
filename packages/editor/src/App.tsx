@@ -1,3 +1,4 @@
+import { ringCentroid } from "@oth/model";
 import { MapScene } from "@oth/renderer";
 import { useEffect, useMemo, useState } from "react";
 import { createApi } from "./api/client";
@@ -16,6 +17,7 @@ import { PlacementInspector } from "./panels/PlacementInspector";
 import { PublishButton } from "./panels/PublishButton";
 import { StepsPanel } from "./panels/StepsPanel";
 import { Toolbar } from "./panels/Toolbar";
+import { DetailExportButton } from "./panels/DetailExportButton";
 import { PlanCanvas } from "./plan/PlanCanvas";
 import { createSaver } from "./state/save";
 import { useEditorStore } from "./state/store";
@@ -111,11 +113,15 @@ export function App() {
                   onRename={(id, version, nameEn) =>
                     void saver.update("room", id, version, { nameEn })
                   }
+                  onResize={(id, version, heightM) =>
+                    void saver.update("room", id, version, { heightM })
+                  }
                 />
               ),
               dressing: (
                 <div className="space-y-2">
                   <ContextExportButton />
+                  <DetailExportButton />
                   <DxfImportButton saver={saver} />
                   <PlacementInspector
                     onChange={(placement, patch) =>
@@ -125,17 +131,27 @@ export function App() {
                   <AssetLibrary
                     api={api}
                     onPlace={assetId => {
-                      const selection = useEditorStore.getState().selection;
+                      const state = useEditorStore.getState();
+                      const selection = state.selection;
                       if (!activeLevelId || !selection || selection.type !== "room") {
-                        useEditorStore.getState().setStatus("Select a room first.");
+                        state.setStatus("Select a room or detail first.");
                         return;
                       }
+                      const anchor = state.model?.rooms.find(r => r.id === selection.id);
+                      // The position is the offset the export used: zero for a
+                      // level context mesh, which is authored in building
+                      // coordinates, and the centroid for a detail mesh, which
+                      // is authored about its own middle.
+                      const position: [number, number, number] =
+                        anchor?.kind === "detail"
+                          ? [...ringCentroid(anchor.footprint), 0]
+                          : [0, 0, 0];
                       void saver.create("placement", {
                         id: `${activeLevelId}-place-${Date.now()}`,
                         levelId: activeLevelId,
                         assetId,
                         roomId: selection.id,
-                        position: [0, 0, 0],
+                        position,
                       });
                     }}
                   />
