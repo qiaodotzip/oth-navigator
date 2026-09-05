@@ -12,6 +12,12 @@
 [`specs/2026-09-04-oth-map-model-design.md`](../specs/2026-09-04-oth-map-model-design.md) §10,
 so the decisions that needed making are recorded below rather than in a separate document.
 
+> **Status:** complete, 2026-09-05. Two things the plan did not anticipate:
+> `acquireLock` returns a row with no display name, so `Lock` and `HeldLock`
+> became separate types rather than one gaining a field it cannot fill; and the
+> hook needed an `enabled` flag, since hooks cannot sit below the editor's
+> signed-out early return and polling the login screen would be a stream of 401s.
+
 ## Design decisions
 
 **Locks warn, they never block.** `version` is the real correctness guarantee — a
@@ -63,7 +69,7 @@ invisible. Wire the stream when the team is large enough for that to be false.
 **Interfaces:**
 - Produces: `Lock` gains `lockedByName: string`. `GET /api/locks` returns it unchanged otherwise.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/server/src/locks/service.test.ts`:
 
@@ -82,12 +88,12 @@ it("falls back to the id when the user has been removed", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/server/src/locks`
 Expected: FAIL — `lockedByName` is undefined.
 
-- [ ] **Step 3: Join the users table**
+- [x] **Step 3: Join the users table**
 
 In `packages/server/src/locks/service.ts`:
 
@@ -121,7 +127,7 @@ export async function activeLocks(db: Database): Promise<Lock[]> {
 
 Import `users` from `../db/schema`.
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 ```bash
 npx vitest run packages/server
@@ -147,7 +153,7 @@ git commit -m "feat(server): locks carry the holder's display name"
   - `lockFor(locks, selection, myUserId): LockEntry | null`
   - `useCollaboration(api: Api): void`
 
-- [ ] **Step 1: Write the failing pure test**
+- [x] **Step 1: Write the failing pure test**
 
 `packages/editor/src/collab/locks.test.ts`:
 
@@ -184,12 +190,12 @@ describe("lockFor", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 Run: `npx vitest run packages/editor/src/collab`
 Expected: FAIL — no such module.
 
-- [ ] **Step 3: Implement the lookup**
+- [x] **Step 3: Implement the lookup**
 
 `packages/editor/src/collab/locks.ts`:
 
@@ -221,7 +227,7 @@ export function lockFor(
 }
 ```
 
-- [ ] **Step 4: Store and client**
+- [x] **Step 4: Store and client**
 
 In `packages/editor/src/state/store.ts` add `locks: LockEntry[]` to the state, `setLocks: (l: LockEntry[]) => void`, `locks: []` to `initial`, and `setLocks: locks => set({ locks })`.
 
@@ -235,7 +241,7 @@ In `packages/editor/src/api/client.ts`, beside the existing lock calls:
       (await request<{ presence: PresenceEntry[] }>("/api/presence")).presence,
 ```
 
-- [ ] **Step 5: Write the failing hook test**
+- [x] **Step 5: Write the failing hook test**
 
 `packages/editor/src/collab/useCollaboration.test.tsx`:
 
@@ -316,7 +322,7 @@ describe("useCollaboration", () => {
 });
 ```
 
-- [ ] **Step 6: Implement the hook**
+- [x] **Step 6: Implement the hook**
 
 `packages/editor/src/collab/useCollaboration.ts`:
 
@@ -379,7 +385,7 @@ export function useCollaboration(api: Api): void {
 }
 ```
 
-- [ ] **Step 7: Run and commit**
+- [x] **Step 7: Run and commit**
 
 ```bash
 npx vitest run packages/editor
@@ -400,7 +406,7 @@ git commit -m "feat(editor): one timer for presence, locks and the heartbeat"
 - Consumes: `store.presence`, `store.user`.
 - Produces: `PresenceBar` — no props.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `packages/editor/src/panels/PresenceBar.test.tsx`:
 
@@ -456,12 +462,12 @@ describe("PresenceBar", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 Run: `npx vitest run packages/editor/src/panels/PresenceBar.test.tsx`
 Expected: FAIL — no such module.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 `packages/editor/src/panels/PresenceBar.tsx`:
 
@@ -502,7 +508,7 @@ export function PresenceBar() {
 }
 ```
 
-- [ ] **Step 4: Wire it and run**
+- [x] **Step 4: Wire it and run**
 
 In `App.tsx`, call `useCollaboration(api)` beside the other hooks, and put
 `<PresenceBar />` in the header after `<LevelTabs />`, inside a `flex-1` spacer
@@ -527,7 +533,7 @@ git commit -m "feat(editor): show who else is here and which floor they are on"
 - Consumes: `lockFor` (Task 2), `store.locks`, `store.user`.
 - Produces: `LockBanner` — no props.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/editor/src/panels/LockBanner.test.tsx`:
 
@@ -590,12 +596,12 @@ Append to `packages/editor/src/panels/LayersPanel.test.tsx`:
   });
 ```
 
-- [ ] **Step 2: Run and watch them fail**
+- [x] **Step 2: Run and watch them fail**
 
 Run: `npx vitest run packages/editor/src/panels`
 Expected: FAIL — no `LockBanner`, no lock marker in the layers row.
 
-- [ ] **Step 3: Implement the banner**
+- [x] **Step 3: Implement the banner**
 
 `packages/editor/src/panels/LockBanner.tsx`:
 
@@ -628,7 +634,7 @@ export function LockBanner() {
 }
 ```
 
-- [ ] **Step 4: Mark the layer rows**
+- [x] **Step 4: Mark the layer rows**
 
 In `LayersPanel.tsx`, read the locks and the current user, then per item:
 
@@ -651,12 +657,12 @@ and inside the row, after the label button:
                     )}
 ```
 
-- [ ] **Step 5: Wire the banner**
+- [x] **Step 5: Wire the banner**
 
 In `App.tsx`, put `<LockBanner />` directly above `<ConflictBanner />` — the
 advisory warning sits above the one that means a save actually failed.
 
-- [ ] **Step 6: Run everything and commit**
+- [x] **Step 6: Run everything and commit**
 
 ```bash
 npm test
