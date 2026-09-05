@@ -10,6 +10,14 @@ const model = parseModel({
     { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 },
     { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 },
   ],
+  assets: [{
+    id: "asset_1", filename: "arch.glb", storagePath: "a", checksum: "c",
+    sizeBytes: 10, triangleCount: 5,
+    bbox: { minX: 0, minY: 0, minZ: 0, maxX: 1, maxY: 1, maxZ: 1 },
+  }],
+  placements: [{
+    id: "pl_1", levelId: "oth-L1", assetId: "asset_1", position: [5, 5, 0],
+  }],
   rooms: [
     {
       id: "L1-a", levelId: "oth-L1", kind: "room",
@@ -289,5 +297,49 @@ describe("vertex handles on the canvas", () => {
     fireEvent.mouseUp(window, { clientX: 150, clientY: 130 });
     expect(onReshapeRoom).toHaveBeenCalledTimes(1);
     expect(onReshapeRoom.mock.calls[0]![0].id).toBe("L1-a");
+  });
+});
+
+describe("placements on the canvas", () => {
+  beforeEach(() => useEditorStore.getState().setTool("select"));
+
+  it("renders a marker for each placement on the level", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("placement-pl_1")).toBeTruthy();
+  });
+
+  it("selects a placement when pressed", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.mouseDown(screen.getByTestId("placement-pl_1"), { clientX: 100, clientY: 100 });
+    expect(useEditorStore.getState().selection).toEqual({ type: "placement", id: "pl_1" });
+  });
+
+  it("drags a placement and saves once on release", () => {
+    const onMovePlacement = vi.fn();
+    render(<PlanCanvas width={800} height={600} onMovePlacement={onMovePlacement} />);
+    fireEvent.mouseDown(screen.getByTestId("placement-pl_1"), { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(window, { clientX: 140, clientY: 130 });
+    expect(onMovePlacement).not.toHaveBeenCalled();
+    fireEvent.mouseUp(window, { clientX: 140, clientY: 130 });
+    expect(onMovePlacement).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the placement's height when dragged in plan view", () => {
+    const onMovePlacement = vi.fn();
+    render(<PlanCanvas width={800} height={600} onMovePlacement={onMovePlacement} />);
+    fireEvent.mouseDown(screen.getByTestId("placement-pl_1"), { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(window, { clientX: 140, clientY: 130 });
+    fireEvent.mouseUp(window, { clientX: 140, clientY: 130 });
+    expect(onMovePlacement.mock.calls[0]![1][2]).toBe(0);
+  });
+
+  it("does not drag with a drawing tool active", () => {
+    const onMovePlacement = vi.fn();
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} onMovePlacement={onMovePlacement} />);
+    fireEvent.mouseDown(screen.getByTestId("placement-pl_1"), { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(window, { clientX: 140, clientY: 130 });
+    fireEvent.mouseUp(window, { clientX: 140, clientY: 130 });
+    expect(onMovePlacement).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,7 @@ import { ChecklistPanel } from "./panels/ChecklistPanel";
 import { ConflictBanner } from "./panels/ConflictBanner";
 import { Inspector } from "./panels/Inspector";
 import { LevelSwitcher } from "./panels/LevelSwitcher";
+import { PlacementInspector } from "./panels/PlacementInspector";
 import { PublishButton } from "./panels/PublishButton";
 import { Toolbar } from "./panels/Toolbar";
 import { PlanCanvas } from "./plan/PlanCanvas";
@@ -63,6 +64,9 @@ export function App() {
             onReshapeRoom={(room, footprint) =>
               void saver.update("room", room.id, room.version, { footprint })
             }
+            onMovePlacement={(placement, position) =>
+              void saver.update("placement", placement.id, placement.version, { position })
+            }
             onCommitRoom={ring => {
               if (!activeLevelId) return;
               void saver.create("room", {
@@ -95,6 +99,11 @@ export function App() {
           <div className="min-h-0 flex-1 overflow-auto">
             <ChecklistPanel />
             <FloorplanPanel api={api} saver={saver} />
+            <PlacementInspector
+              onChange={(placement, patch) =>
+                void saver.update("placement", placement.id, placement.version, patch)
+              }
+            />
             <Inspector
               onRename={(id, version, nameEn) => void saver.update("room", id, version, { nameEn })}
             />

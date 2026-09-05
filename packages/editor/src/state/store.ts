@@ -12,7 +12,7 @@ export type Tool =
   | "calibrate";
 
 export type Selection =
-  | { type: "room" | "doorway" | "entrance" | "portalEndpoint"; id: string }
+  | { type: "room" | "doorway" | "entrance" | "portalEndpoint" | "placement"; id: string }
   | null;
 
 export type Conflict =

@@ -1,4 +1,4 @@
-import type { Ring, Room, Vec2 } from "@oth/model";
+import type { Placement, Ring, Room, Vec2 } from "@oth/model";
 import { roomColor } from "@oth/renderer";
 import { useEffect, useRef, useState } from "react";
 import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore } from "../state/store";
@@ -20,6 +20,7 @@ export type PlanCanvasProps = {
   onCommitDoorway?: (a: Vec2, b: Vec2) => void;
   onCommitPoint?: (p: Vec2) => void;
   onReshapeRoom?: (room: Room, ring: Ring) => void;
+  onMovePlacement?: (placement: Placement, position: [number, number, number]) => void;
   /** Resolves a level image id to a URL. */
   imageUrl?: (imageId: string) => string;
 };
@@ -31,6 +32,7 @@ export function PlanCanvas({
   onCommitDoorway,
   onCommitPoint,
   onReshapeRoom,
+  onMovePlacement,
   imageUrl,
 }: PlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -38,6 +40,8 @@ export function PlanCanvas({
   const rooms = roomsOnActiveLevel(state);
   const rings = ringsOnActiveLevel(state);
   const [cursor, setCursor] = useState<Vec2 | null>(null);
+  const [draggingPlacement, setDraggingPlacement] = useState<string | null>(null);
+  const [placementAt, setPlacementAt] = useState<Vec2 | null>(null);
 
   const image = imageForLevel(state.levelImages, state.activeLevelId);
   const calibration = imageCalibration(image);
@@ -59,6 +63,39 @@ export function PlanCanvas({
     fittedFor.current = fitKey;
     state.setViewport(fitViewport(box, width, height));
   }, [fitKey, state, rings, underlay, width, height]);
+
+  /**
+   * Placement dragging.
+   *
+   * Mouse events rather than pointer events: jsdom gives PointerEvent no
+   * coordinates, so a pointer-based drag cannot be tested.
+   *
+   * Deliberately no dependency array. The handlers must close over the current
+   * viewport and drag position, and re-deriving them each render is the simplest
+   * way to guarantee that. It costs nothing when idle because the early return
+   * below attaches no listener unless a drag is actually in progress.
+   */
+  useEffect(() => {
+    if (!draggingPlacement) return;
+    const placement = state.model?.placements.find(p => p.id === draggingPlacement);
+    if (!placement) return;
+
+    const onMove = (event: MouseEvent) => setPlacementAt(pointerWorld(event));
+    const onUp = () => {
+      const at = placementAt;
+      setDraggingPlacement(null);
+      setPlacementAt(null);
+      // One save per gesture, as with vertex dragging.
+      if (at) onMovePlacement?.(placement, [at[0], at[1], placement.position[2]]);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  });
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -198,6 +235,35 @@ export function PlanCanvas({
             onCommit={ring => onReshapeRoom?.(selectedRoom, ring)}
           />
         )}
+
+        {state.model?.placements
+          .filter(p => p.levelId === state.activeLevelId)
+          .map(p => {
+            const at = draggingPlacement === p.id && placementAt
+              ? placementAt
+              : ([p.position[0], p.position[1]] as Vec2);
+            const [x, y] = worldToScreen(state.viewport, at);
+            return (
+              <rect
+                key={p.id}
+                data-testid={`placement-${p.id}`}
+                x={x - 5}
+                y={y - 5}
+                width={10}
+                height={10}
+                fill={state.selection?.id === p.id ? "#f2a33c" : "#8b5cf6"}
+                stroke="#4c1d95"
+                strokeWidth={1}
+                style={{ cursor: state.tool === "select" ? "move" : "default" }}
+                onMouseDown={event => {
+                  if (state.tool !== "select") return;
+                  event.stopPropagation();
+                  state.select({ type: "placement", id: p.id });
+                  setDraggingPlacement(p.id);
+                }}
+              />
+            );
+          })}
 
         {state.calibrationDraft && state.calibrationDraft.length > 0 && (
           <polyline
