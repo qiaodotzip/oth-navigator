@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createApi } from "./api/client";
 import { LoginScreen } from "./auth/LoginScreen";
 import { layerEntityType, type LayerItem } from "./flow/layers";
+import { newArea, newPathway, newRoom } from "./flow/newSpace";
 import { AssetLibrary } from "./panels/AssetLibrary";
 import { ConflictBanner } from "./panels/ConflictBanner";
 import { ContextExportButton } from "./panels/ContextExportButton";
@@ -93,36 +94,13 @@ export function App() {
               void saver.update("placement", placement.id, placement.version, { position })
             }
             onCommitRoom={ring => {
-              if (!activeLevelId) return;
-              void saver.create("room", {
-                id: `${activeLevelId}-room-${Date.now()}`,
-                levelId: activeLevelId,
-                kind: "room",
-                footprint: ring,
-                heightM: 3.5,
-                // A room is somewhere you arrive, not somewhere you route through.
-                walkable: false,
-              });
+              if (activeLevelId) void saver.create("room", newRoom(activeLevelId, ring));
             }}
             onCommitArea={ring => {
-              if (!activeLevelId) return;
-              void saver.create("room", {
-                id: `${activeLevelId}-area-${Date.now()}`,
-                levelId: activeLevelId,
-                kind: "area",
-                footprint: ring,
-                heightM: 5,
-                // Set from the tool, so nobody has to know the checkbox exists.
-                walkable: true,
-              });
+              if (activeLevelId) void saver.create("room", newArea(activeLevelId, ring));
             }}
             onCommitPathway={polyline => {
-              if (!activeLevelId) return;
-              void saver.create("pathway", {
-                id: `${activeLevelId}-path-${Date.now()}`,
-                levelId: activeLevelId,
-                polyline,
-              });
+              if (activeLevelId) void saver.create("pathway", newPathway(activeLevelId, polyline));
             }}
           />
         </main>
