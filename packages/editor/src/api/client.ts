@@ -129,6 +129,21 @@ export function createApi(options: ApiOptions = {}) {
       return body.entity;
     },
 
+    /** Uploads one extracted frame. The video it came from is never sent. */
+    async uploadKeyframe(blob: Blob, captureId: string, timeMs?: number, filename = "frame.jpg") {
+      const form = new FormData();
+      form.append("file", blob, filename);
+      form.append("captureId", captureId);
+      if (timeMs !== undefined) form.append("timeMs", String(Math.round(timeMs)));
+      const body = await request<{ keyframe: Record<string, unknown> }>("/api/keyframes", {
+        method: "POST",
+        body: form,
+      });
+      return body.keyframe;
+    },
+
+    keyframeFileUrl: (id: string) => `${base}/api/keyframes/${id}/file`,
+
     listLocks: async (): Promise<LockEntry[]> =>
       (await request<{ locks: LockEntry[] }>("/api/locks")).locks,
 
