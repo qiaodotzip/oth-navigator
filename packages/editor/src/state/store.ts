@@ -1,6 +1,7 @@
 import type { Level, MapModel, Ring, Room, ValidationReport, Vec2 } from "@oth/model";
 import { create } from "zustand";
 import type { AssetRecord, LevelImage, SessionUser } from "../api/client";
+import type { LockEntry, PresenceEntry } from "../collab/types";
 import { DEFAULT_VIEWPORT, type Viewport } from "../plan/viewport";
 
 export type Tool =
@@ -25,8 +26,6 @@ export type Conflict =
   | { entityType: string; entityId: string; current: Record<string, unknown> | null }
   | null;
 
-export type PresenceEntry = { userId: string; displayName: string; levelId: string | null };
-
 export type EditorState = {
   user: SessionUser | null;
   model: MapModel | null;
@@ -39,6 +38,8 @@ export type EditorState = {
   viewport: Viewport;
   conflict: Conflict;
   presence: PresenceEntry[];
+  /** Advisory locks held by anyone, refreshed on the collaboration timer. */
+  locks: LockEntry[];
   status: string | null;
   assets: AssetRecord[];
   selectedAssetId: string | null;
@@ -59,6 +60,7 @@ export type EditorState = {
   setViewport: (v: Viewport) => void;
   setConflict: (c: Conflict) => void;
   setPresence: (p: PresenceEntry[]) => void;
+  setLocks: (l: LockEntry[]) => void;
   setStatus: (s: string | null) => void;
   setAssets: (a: AssetRecord[]) => void;
   setLevelImages: (i: LevelImage[]) => void;
@@ -85,6 +87,7 @@ const initial = {
   viewport: DEFAULT_VIEWPORT,
   conflict: null,
   presence: [],
+  locks: [],
   status: null,
   assets: [],
   selectedAssetId: null,
@@ -126,6 +129,7 @@ export const useEditorStore = create<EditorState>(set => ({
   setViewport: viewport => set({ viewport }),
   setConflict: conflict => set({ conflict }),
   setPresence: presence => set({ presence }),
+  setLocks: locks => set({ locks }),
   setStatus: status => set({ status }),
   setAssets: assets => set({ assets }),
   setLevelImages: levelImages => set({ levelImages }),

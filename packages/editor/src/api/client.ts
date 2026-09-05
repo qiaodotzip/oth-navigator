@@ -1,4 +1,5 @@
 import type { MapModel, ValidationReport } from "@oth/model";
+import type { LockEntry, PresenceEntry } from "../collab/types";
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly body: unknown) {
@@ -126,6 +127,12 @@ export function createApi(options: ApiOptions = {}) {
       });
       return body.entity;
     },
+
+    listLocks: async (): Promise<LockEntry[]> =>
+      (await request<{ locks: LockEntry[] }>("/api/locks")).locks,
+
+    listPresence: async (): Promise<PresenceEntry[]> =>
+      (await request<{ presence: PresenceEntry[] }>("/api/presence")).presence,
 
     acquireLock: (type: string, id: string) =>
       request<{ lock: unknown }>(`/api/locks/${type}/${id}`, { method: "POST" }),
