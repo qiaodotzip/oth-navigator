@@ -3,13 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
-  "engines": { "node": ">=20" },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b",
-    "build:editor": "npm run build --workspace @oth/editor"
+    "build:editor": "npm run build --workspace @oth/editor",
+    "build": "npm run build --workspace @oth/editor"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

@@ -10,12 +10,15 @@ import { modelRoutes } from "./model/routes";
 import { presenceRoutes } from "./presence/routes";
 import { PresenceTracker } from "./presence/service";
 import { publishRoutes } from "./publish/routes";
+import { staticRoutes } from "./static";
 
 export type AppDeps = {
   db: Database;
   presence?: PresenceTracker;
   /** Where assets and published bundles live. Injected so tests stay hermetic. */
   dataDir?: string;
+  /** Built editor to serve. Defaults to packages/editor/dist. */
+  editorDist?: string;
 };
 
 export type AppEnv = { Variables: { db: Database; user: User; dataDir: string } };
@@ -42,6 +45,9 @@ export function createApp(deps: AppDeps) {
 
   // Defaults to a fresh tracker so every createApp({ db }) call site keeps working.
   app.route("/api/presence", presenceRoutes(deps.presence ?? new PresenceTracker()));
+
+  // Registered last so every /api route wins first.
+  app.route("/", staticRoutes(deps.editorDist));
 
   app.notFound(c => c.json({ error: "not found" }, 404));
   app.onError((err, c) => c.json({ error: err.message }, 500));
