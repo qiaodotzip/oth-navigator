@@ -30,6 +30,27 @@ export type AssetRecord = {
   bbox: { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number };
 };
 
+export type LevelImage = {
+  id: string;
+  levelId: string;
+  filename: string;
+  widthPx: number;
+  heightPx: number;
+  sizeBytes: number;
+  metresPerPixel: number | null;
+  offsetX: number;
+  offsetY: number;
+  opacity: number;
+  version: number;
+};
+
+export type LevelImagePatch = {
+  metresPerPixel?: number | null;
+  offsetX?: number;
+  offsetY?: number;
+  opacity?: number;
+};
+
 export type ApiOptions = { fetchImpl?: typeof fetch; baseUrl?: string };
 
 export function createApi(options: ApiOptions = {}) {
@@ -131,6 +152,32 @@ export function createApi(options: ApiOptions = {}) {
     },
 
     assetFileUrl: (id: string) => `${base}/api/assets/${id}/file`,
+
+    async listLevelImages(): Promise<LevelImage[]> {
+      return (await request<{ items: LevelImage[] }>("/api/level-images")).items;
+    },
+
+    async uploadLevelImage(levelId: string, file: File): Promise<LevelImage> {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("levelId", levelId);
+      // No content-type header: the browser must set the multipart boundary.
+      const body = await request<{ image: LevelImage }>("/api/level-images", {
+        method: "POST",
+        body: form,
+      });
+      return body.image;
+    },
+
+    async patchLevelImage(id: string, expectedVersion: number, data: LevelImagePatch) {
+      const body = await request<{ image: LevelImage }>(`/api/level-images/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ expectedVersion, data }),
+      });
+      return body.image;
+    },
+
+    levelImageFileUrl: (id: string) => `${base}/api/level-images/${id}/file`,
 
     publish: (notes?: string) =>
       request<{ version: string; warningCount: number }>("/api/publish", {

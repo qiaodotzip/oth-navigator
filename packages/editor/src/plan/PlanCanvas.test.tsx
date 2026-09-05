@@ -139,3 +139,57 @@ describe("framing", () => {
     expect(useEditorStore.getState().viewport).toEqual(before);
   });
 });
+
+const levelImage = {
+  id: "img_1", levelId: "oth-L1", filename: "L1.png",
+  widthPx: 1000, heightPx: 500, sizeBytes: 10,
+  metresPerPixel: 0.1 as number | null, offsetX: 0, offsetY: 0, opacity: 0.6, version: 0,
+};
+
+describe("underlay", () => {
+  const url = (id: string) => `/api/level-images/${id}/file`;
+
+  it("renders the level's floorplan", () => {
+    useEditorStore.getState().setLevelImages([levelImage]);
+    render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    expect(screen.getByTestId("underlay")).toBeTruthy();
+  });
+
+  it("renders no underlay for a level without one", () => {
+    useEditorStore.getState().setLevelImages([{ ...levelImage, levelId: "oth-L2" }]);
+    render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    expect(screen.queryByTestId("underlay")).toBeNull();
+  });
+
+  it("does not render an uncalibrated image, which has no size in metres", () => {
+    useEditorStore.getState().setLevelImages([{ ...levelImage, metresPerPixel: null }]);
+    render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    expect(screen.queryByTestId("underlay")).toBeNull();
+  });
+
+  it("draws the underlay behind the rooms", () => {
+    useEditorStore.getState().setLevelImages([levelImage]);
+    const { container } = render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    const ids = Array.from(container.querySelectorAll("[data-testid]"))
+      .map(n => n.getAttribute("data-testid"));
+    expect(ids.indexOf("underlay")).toBeLessThan(ids.indexOf("room-L1-a"));
+  });
+
+  it("frames the underlay, so a level with an image but no rooms is not blank", () => {
+    useEditorStore.getState().setModel(
+      parseModel({
+        building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+        levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+      }),
+    );
+    useEditorStore.getState().setLevelImages([levelImage]);
+    render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    const vp = useEditorStore.getState().viewport;
+    // The image spans 0..100 m east and -50..0 north; its centre must be on screen.
+    const [sx, sy] = [vp.originX + 50 * vp.scale, vp.originY - -25 * vp.scale];
+    expect(sx).toBeGreaterThan(0);
+    expect(sx).toBeLessThan(800);
+    expect(sy).toBeGreaterThan(0);
+    expect(sy).toBeLessThan(600);
+  });
+});

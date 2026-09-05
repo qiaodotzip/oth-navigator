@@ -15,6 +15,7 @@ function fakeApi(overrides: Record<string, unknown> = {}) {
   return {
     getModel: vi.fn(async () => model),
     validate: vi.fn(async () => report),
+    listLevelImages: vi.fn(async () => []),
     createEntity: vi.fn(async () => ({ id: "new", version: 0 })),
     updateEntity: vi.fn(async () => ({ id: "L1-a", version: 1 })),
     deleteEntity: vi.fn(async () => ({ id: "L1-a", version: 1 })),
@@ -35,6 +36,15 @@ describe("saver", () => {
     const getModel = vi.fn(async () => model);
     await createSaver(fakeApi({ getModel })).create("room", { id: "x" });
     expect(getModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads level images alongside the model", async () => {
+    const image = {
+      id: "img_1", levelId: "oth-L1", filename: "a.png", widthPx: 1, heightPx: 1,
+      sizeBytes: 1, metresPerPixel: null, offsetX: 0, offsetY: 0, opacity: 0.6, version: 0,
+    };
+    await createSaver(fakeApi({ listLevelImages: vi.fn(async () => [image]) })).refresh();
+    expect(useEditorStore.getState().levelImages).toEqual([image]);
   });
 
   it("update returns true on success", async () => {

@@ -16,9 +16,14 @@ export function createSaver(api: Api) {
   const store = useEditorStore;
 
   async function refresh(): Promise<void> {
-    const [model, report] = await Promise.all([api.getModel(), api.validate()]);
+    const [model, report, levelImages] = await Promise.all([
+      api.getModel(),
+      api.validate(),
+      api.listLevelImages(),
+    ]);
     store.getState().setModel(model);
     store.getState().setReport(report);
+    store.getState().setLevelImages(levelImages);
   }
 
   async function guard(

@@ -1,6 +1,6 @@
 import type { Level, MapModel, Ring, Room, ValidationReport, Vec2 } from "@oth/model";
 import { create } from "zustand";
-import type { AssetRecord, SessionUser } from "../api/client";
+import type { AssetRecord, LevelImage, SessionUser } from "../api/client";
 import { DEFAULT_VIEWPORT, type Viewport } from "../plan/viewport";
 
 export type Tool =
@@ -36,6 +36,9 @@ export type EditorState = {
   status: string | null;
   assets: AssetRecord[];
   selectedAssetId: string | null;
+  levelImages: LevelImage[];
+  /** The two points of an in-progress scale measurement, in world units. */
+  calibrationDraft: Vec2[] | null;
 
   setUser: (u: SessionUser | null) => void;
   setModel: (m: MapModel) => void;
@@ -51,6 +54,10 @@ export type EditorState = {
   setPresence: (p: PresenceEntry[]) => void;
   setStatus: (s: string | null) => void;
   setAssets: (a: AssetRecord[]) => void;
+  setLevelImages: (i: LevelImage[]) => void;
+  beginCalibration: () => void;
+  pushCalibrationPoint: (p: Vec2) => void;
+  clearCalibration: () => void;
   selectAsset: (id: string | null) => void;
   reset: () => void;
 };
@@ -74,6 +81,8 @@ const initial = {
   status: null,
   assets: [],
   selectedAssetId: null,
+  levelImages: [],
+  calibrationDraft: null,
 };
 
 export const useEditorStore = create<EditorState>(set => ({
@@ -96,7 +105,8 @@ export const useEditorStore = create<EditorState>(set => ({
   select: selection => set({ selection }),
 
   // A half-drawn shape must never survive a tool change.
-  setTool: tool => set({ tool, draft: null }),
+  setTool: tool =>
+    set({ tool, draft: null, calibrationDraft: tool === "calibrate" ? [] : null }),
 
   beginDraft: () => set({ draft: [] }),
   pushDraftPoint: p => set(state => ({ draft: [...(state.draft ?? []), p] })),
@@ -107,6 +117,12 @@ export const useEditorStore = create<EditorState>(set => ({
   setPresence: presence => set({ presence }),
   setStatus: status => set({ status }),
   setAssets: assets => set({ assets }),
+  setLevelImages: levelImages => set({ levelImages }),
+
+  beginCalibration: () => set({ tool: "calibrate", calibrationDraft: [] }),
+  pushCalibrationPoint: p =>
+    set(state => ({ calibrationDraft: [...(state.calibrationDraft ?? []), p] })),
+  clearCalibration: () => set({ calibrationDraft: null }),
   selectAsset: selectedAssetId => set({ selectedAssetId }),
 
   reset: () => set(initial),

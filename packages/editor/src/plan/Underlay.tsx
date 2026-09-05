@@ -2,8 +2,9 @@ import type { Calibration } from "./calibration";
 import { worldToScreen, type Viewport } from "./viewport";
 
 /**
- * The reference floor plan, positioned by its calibration rather than eyeballed.
- * Rendered inside the same SVG as the geometry so it pans and zooms with it.
+ * The reference floorplan, positioned by its calibration rather than eyeballed.
+ * Rendered inside the same SVG as the geometry so it pans and zooms with it, and
+ * first so it sits behind the rooms.
  */
 export function Underlay({
   src, calibration, viewport, widthPx, heightPx, opacity = 0.6,
@@ -21,6 +22,7 @@ export function Underlay({
 
   return (
     <image
+      data-testid="underlay"
       href={src}
       x={x}
       y={y}
@@ -28,6 +30,7 @@ export function Underlay({
       height={heightPx * scale}
       opacity={opacity}
       style={{ pointerEvents: "none" }}
+      preserveAspectRatio="none"
     />
   );
 }

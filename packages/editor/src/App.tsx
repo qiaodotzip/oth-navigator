@@ -5,6 +5,7 @@ import { LoginScreen } from "./auth/LoginScreen";
 import { AssetLibrary } from "./panels/AssetLibrary";
 import { ContextExportButton } from "./panels/ContextExportButton";
 import { DxfImportButton } from "./panels/DxfImportButton";
+import { FloorplanPanel } from "./panels/FloorplanPanel";
 import { ConflictBanner } from "./panels/ConflictBanner";
 import { Inspector } from "./panels/Inspector";
 import { LevelSwitcher } from "./panels/LevelSwitcher";
@@ -58,6 +59,7 @@ export function App() {
           <PlanCanvas
             width={900}
             height={700}
+            imageUrl={api.levelImageFileUrl}
             onCommitRoom={ring => {
               if (!activeLevelId) return;
               void saver.create("room", {
@@ -88,6 +90,7 @@ export function App() {
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
+            <FloorplanPanel api={api} saver={saver} />
             <Inspector
               onRename={(id, version, nameEn) => void saver.update("room", id, version, { nameEn })}
             />

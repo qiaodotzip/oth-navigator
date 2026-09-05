@@ -2,7 +2,9 @@ import type { Ring, Vec2 } from "@oth/model";
 import { roomColor } from "@oth/renderer";
 import { useEffect, useRef } from "react";
 import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore } from "../state/store";
+import { imageCalibration, imageForLevel, underlayBBox } from "../state/underlay";
 import { contentBBox, hasArea } from "./content";
+import { Underlay } from "./Underlay";
 import { snapPoint } from "./snapping";
 import { fitViewport, screenToWorld, worldToScreen, zoomViewport } from "./viewport";
 
@@ -15,28 +17,35 @@ export type PlanCanvasProps = {
   onCommitRoom?: (ring: Ring) => void;
   onCommitDoorway?: (a: Vec2, b: Vec2) => void;
   onCommitPoint?: (p: Vec2) => void;
+  /** Resolves a level image id to a URL. */
+  imageUrl?: (imageId: string) => string;
 };
 
 export function PlanCanvas({
-  width, height, onCommitRoom, onCommitDoorway, onCommitPoint,
+  width, height, onCommitRoom, onCommitDoorway, onCommitPoint, imageUrl,
 }: PlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const state = useEditorStore();
   const rooms = roomsOnActiveLevel(state);
   const rings = ringsOnActiveLevel(state);
 
+  const image = imageForLevel(state.levelImages, state.activeLevelId);
+  const calibration = imageCalibration(image);
+  const underlay = underlayBBox(image);
+
   // Fit once per level, not on every render. Refitting continuously would snap
   // the canvas back the instant anyone panned, which is worse than not fitting.
   const fittedFor = useRef<string | null>(null);
+  // Keyed on the image too, so adding a floorplan re-frames to include it.
+  const fitKey = `${state.activeLevelId ?? ""}:${image?.id ?? ""}`;
 
   useEffect(() => {
-    const levelId = state.activeLevelId;
-    if (!levelId || fittedFor.current === levelId) return;
-    const box = contentBBox(rings, null);
+    if (!state.activeLevelId || fittedFor.current === fitKey) return;
+    const box = contentBBox(rings, underlay);
     if (!hasArea(box)) return;
-    fittedFor.current = levelId;
+    fittedFor.current = fitKey;
     state.setViewport(fitViewport(box, width, height));
-  }, [state, rings, width, height]);
+  }, [fitKey, state, rings, underlay, width, height]);
 
   function pointerWorld(event: { clientX: number; clientY: number }): Vec2 {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -52,6 +61,19 @@ export function PlanCanvas({
 
   function onSurfaceClick(event: React.MouseEvent) {
     if (state.tool === "select") return;
+
+    if (state.tool === "calibrate") {
+      // Raw and unsnapped: you are measuring the image, not the geometry.
+      const rect = svgRef.current?.getBoundingClientRect();
+      const raw = screenToWorld(state.viewport, [
+        event.clientX - (rect?.left ?? 0),
+        event.clientY - (rect?.top ?? 0),
+      ]);
+      // A third click starts a fresh measurement rather than extending the old one.
+      if ((state.calibrationDraft?.length ?? 0) >= 2) state.beginCalibration();
+      state.pushCalibrationPoint(raw);
+      return;
+    }
 
     const p = pointerWorld(event);
 
@@ -98,6 +120,17 @@ export function PlanCanvas({
       className="bg-stone-50"
       onWheel={onWheel}
     >
+      {image && calibration && imageUrl && (
+        <Underlay
+          src={imageUrl(image.id)}
+          calibration={calibration}
+          viewport={state.viewport}
+          widthPx={image.widthPx}
+          heightPx={image.heightPx}
+          opacity={image.opacity}
+        />
+      )}
+
       <rect
         data-testid="plan-surface"
         x={0} y={0} width={width} height={height}
@@ -122,6 +155,17 @@ export function PlanCanvas({
           }}
         />
       ))}
+
+      {state.calibrationDraft && state.calibrationDraft.length > 0 && (
+        <polyline
+          data-testid="calibration-line"
+          points={ringPoints(state.calibrationDraft)}
+          fill="none"
+          stroke="#2563eb"
+          strokeWidth={2}
+          strokeDasharray="6 4"
+        />
+      )}
 
       {state.draft && state.draft.length > 0 && (
         <polyline
