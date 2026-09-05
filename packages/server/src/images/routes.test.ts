@@ -26,7 +26,7 @@ function png(width: number, height: number): Uint8Array {
 
 function upload(bytes: Uint8Array, levelId = "oth-L1", filename = "L1.png") {
   const form = new FormData();
-  form.append("file", new Blob([bytes as BlobPart]), filename);
+  form.append("file", new Blob([bytes]), filename);
   form.append("levelId", levelId);
   return app.request("/api/level-images", { method: "POST", headers: { cookie }, body: form });
 }
