@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { captureFrame } from "./captureFrame";
+import { MAX_FRAMES, SAMPLE_EVERY_MS, isNewScene, samplePlan } from "./autoFrames";
+import { captureFrame, frameThumbnail, seekTo } from "./captureFrame";
 
 /**
  * Plays a local video and grabs frames from it.
@@ -22,6 +23,8 @@ export function CaptureVideo({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number; kept: number } | null>(null);
+  const cancelled = useRef(false);
 
   // Revoke on unmount, or the file stays pinned in memory for the session.
   useEffect(() => () => {
@@ -38,6 +41,49 @@ export function CaptureVideo({
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  /**
+   * Walks the whole recording and keeps the frames that show something new.
+   *
+   * This is the job, not grabbing frames by hand: eight floors of walkthrough is
+   * hours of scrubbing, and a person doing it will stop long before the footage
+   * does. Near-identical frames are dropped, because labelling the same
+   * shopfront forty times buries the frames that show something else.
+   */
+  async function extractAll() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || !url) return;
+
+    const plan = samplePlan(video.duration * 1000, SAMPLE_EVERY_MS, MAX_FRAMES);
+    if (plan.length === 0) {
+      setError("The video's length is not known yet — give it a moment and try again.");
+      return;
+    }
+
+    cancelled.current = false;
+    setError(null);
+    let kept = 0;
+    let previous: Uint8ClampedArray | null = null;
+
+    for (const [i, timeMs] of plan.entries()) {
+      if (cancelled.current) break;
+      setProgress({ done: i, total: plan.length, kept });
+      try {
+        await seekTo(video, timeMs / 1000);
+        const thumb = frameThumbnail(video, canvas);
+        if (!isNewScene(previous, thumb)) continue;
+        previous = thumb;
+        onGrab(await grab(video, canvas), timeMs);
+        kept++;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        break;
+      }
+    }
+
+    setProgress(null);
   }
 
   return (
@@ -75,12 +121,35 @@ export function CaptureVideo({
               }
             }}
           />
-          <button
-            className="w-full rounded bg-stone-800 px-3 py-1.5 text-sm text-white"
-            onClick={() => void takeFrame()}
-          >
-            Grab this frame
-          </button>
+          {progress ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="flex-1">
+                Looking through the video — {progress.done} of {progress.total} checked,{" "}
+                {progress.kept} kept.
+              </span>
+              <button
+                className="rounded border px-3 py-1"
+                onClick={() => { cancelled.current = true; }}
+              >
+                Stop
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                className="flex-1 rounded bg-stone-800 px-3 py-1.5 text-sm text-white"
+                onClick={() => void extractAll()}
+              >
+                Find frames automatically
+              </button>
+              <button
+                className="rounded border px-3 py-1.5 text-sm"
+                onClick={() => void takeFrame()}
+              >
+                Grab this one
+              </button>
+            </div>
+          )}
         </>
       )}
 

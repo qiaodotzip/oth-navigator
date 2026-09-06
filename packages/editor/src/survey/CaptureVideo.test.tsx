@@ -57,4 +57,19 @@ describe("CaptureVideo", () => {
     render(<CaptureVideo filename="a.mp4" onGrab={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /grab/i })).toBeNull();
   });
+
+  it("offers to find frames itself, which is the job for hours of walkthrough", () => {
+    render(<CaptureVideo filename="a.mp4" onGrab={vi.fn()} />);
+    open();
+    expect(screen.getByRole("button", { name: /find frames automatically/i })).toBeTruthy();
+  });
+
+  it("says so when the video's length is not known yet", async () => {
+    // jsdom reports duration NaN, which is also what a real browser does until
+    // metadata loads — sampling that would spin forever.
+    render(<CaptureVideo filename="a.mp4" onGrab={vi.fn()} grab={vi.fn()} />);
+    open();
+    fireEvent.click(screen.getByRole("button", { name: /find frames automatically/i }));
+    await waitFor(() => expect(screen.getByText(/length is not known/i)).toBeTruthy());
+  });
 });
