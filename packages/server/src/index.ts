@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { inviteUser } from "./cli/invite";
 import { seedBuilding } from "./cli/seed";
+import { tracePlansIntoModel } from "./cli/trace";
 import { loadConfig } from "./config";
 import { createPostgresDb } from "./db/client";
 import { createDevDb } from "./db/dev";
@@ -29,6 +30,15 @@ if (command === "invite") {
   if (!email || !displayName) throw new Error('usage: invite <email> "<display name>"');
   const { password } = await inviteUser(db, email, displayName);
   console.log(`invited ${email}. One-time password: ${password}`);
+  process.exit(0);
+}
+
+if (command === "trace") {
+  const { created, skipped } = await tracePlansIntoModel(db);
+  console.log(
+    `traced ${created} zone(s) from the 2020 storey plans` +
+    (skipped ? `; left ${skipped} already in the model alone` : ""),
+  );
   process.exit(0);
 }
 
