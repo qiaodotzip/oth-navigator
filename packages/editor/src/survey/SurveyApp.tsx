@@ -8,6 +8,8 @@ import { CaptureVideo } from "./CaptureVideo";
 import { frameFilename, orderFrames } from "./frames";
 import { PlaceTagger, type Tag } from "./PlaceTagger";
 import { sightingCounts } from "./places";
+import { ReviewPanel } from "./ReviewPanel";
+import { reviewProgress } from "./review";
 
 /**
  * The survey tool: footage in, named places and adjacency out.
@@ -21,6 +23,7 @@ export function SurveyApp({ api }: { api: Api }) {
   const status = useEditorStore(s => s.status);
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [frameId, setFrameId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"places" | "review">("places");
 
   useEffect(() => {
     void saver.refresh();
@@ -37,6 +40,7 @@ export function SurveyApp({ api }: { api: Api }) {
   const frame = frames.find(f => f.id === frameId) ?? frames[frames.length - 1] ?? null;
   const counts = sightingCounts(model?.sightings ?? []);
   const unbound = places.filter(p => !p.roomId).length;
+  const waiting = reviewProgress(model).proposed;
 
   async function addCapture() {
     const filename = window.prompt("What is the file called?");
@@ -173,10 +177,24 @@ export function SurveyApp({ api }: { api: Api }) {
           )}
         </main>
 
-        <aside className="w-64 overflow-auto border-l bg-white p-2 text-sm">
-          <h2 className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-stone-500">
-            Places ({places.length})
-          </h2>
+        <aside className="w-72 overflow-auto border-l bg-white text-sm">
+          <div className="flex border-b">
+            {(["places", "review"] as const).map(id => (
+              <button
+                key={id}
+                data-testid={`tab-${id}`}
+                className={`flex-1 px-2 py-2 text-xs uppercase tracking-wide ${
+                  tab === id ? "border-b-2 border-stone-800 font-semibold" : "text-stone-500"
+                }`}
+                onClick={() => setTab(id)}
+              >
+                {id === "places" ? `Places (${places.length})` : `Review (${waiting})`}
+              </button>
+            ))}
+          </div>
+
+          {tab === "review" ? <ReviewPanel api={api} saver={saver} /> : (
+          <div className="p-2">
           <ul>
             {places.map(p => (
               <li key={p.id} data-testid={`place-${p.id}`} className="flex gap-2 px-1 py-0.5">
@@ -187,6 +205,8 @@ export function SurveyApp({ api }: { api: Api }) {
           </ul>
           {places.length > 0 && (
             <p className="px-1 pt-2 text-xs text-stone-500">{unbound} not yet bound to a room</p>
+          )}
+          </div>
           )}
         </aside>
       </div>
