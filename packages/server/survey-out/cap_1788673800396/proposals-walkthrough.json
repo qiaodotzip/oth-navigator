@@ -878,7 +878,7 @@
    "note": "Wall graphic starting to read 'DANCE STUDIO'."
   },
   {
-   "keyframeId": "kf_f06ec681-9af1-4c63-a1b6-9863b202413a",
+   "keyframeId": "kf_f06ec681-9af1-4c63-a1b5-9863b202413a",
    "nameEn": "Dance Studio 3",
    "category": "community",
    "box": {
@@ -1056,6 +1056,4074 @@
     "h": 0.4
    },
    "note": "Board headed 'FITNESS C…' with rules and equipment pictograms — an outdoor fitness area."
+  },
+  {
+   "keyframeId": "kf_b84c9b45-3899-45bf-a2e0-6a192f6257d6",
+   "nameEn": "Gate 1",
+   "category": "facility",
+   "box": {
+    "x": 0.22,
+    "y": 0.05,
+    "w": 0.11,
+    "h": 0.07
+   },
+   "note": "Stadium gate signed 'GATE 1'."
+  },
+  {
+   "keyframeId": "kf_b84c9b45-3899-45bf-a2e0-6a192f6257d6",
+   "nameEn": "Fitness Corner",
+   "category": "sports",
+   "box": {
+    "x": 0.2,
+    "y": 0.12,
+    "w": 0.18,
+    "h": 0.3
+   },
+   "note": "Board headed 'FITNESS @ GATE 1' with rules and regulations — this names the fitness area seen earlier."
+  },
+  {
+   "keyframeId": "kf_82a0b52e-3e4c-4093-8ff2-b4297e91f45f",
+   "nameEn": "Gate 1",
+   "category": "facility",
+   "box": {
+    "x": 0.76,
+    "y": 0.05,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_82a0b52e-3e4c-4093-8ff2-b4297e91f45f",
+   "nameEn": "Fitness Corner",
+   "category": "sports",
+   "box": {
+    "x": 0.9,
+    "y": 0.12,
+    "w": 0.1,
+    "h": 0.28
+   },
+   "note": "Second sighting of the Fitness @ Gate 1 board."
+  },
+  {
+   "keyframeId": "kf_44c05a65-7bc2-4bf3-8c2a-053baa357d14",
+   "nameEn": "Red sculpture (Gate 1 forecourt)",
+   "category": "community",
+   "box": {
+    "x": 0.18,
+    "y": 0.3,
+    "w": 0.1,
+    "h": 0.18
+   },
+   "note": "Large red abstract artwork on the forecourt. A landmark; its own plaque is not legible from here."
+  },
+  {
+   "keyframeId": "kf_0041debf-f63d-49df-8dd5-d913ce4b0b3a",
+   "nameEn": "Red sculpture (Gate 1 forecourt)",
+   "category": "community",
+   "box": {
+    "x": 0.88,
+    "y": 0.22,
+    "w": 0.12,
+    "h": 0.26
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_c717ba86-f687-4279-952b-41cce203f5a3",
+   "nameEn": "Red sculpture (Gate 1 forecourt)",
+   "category": "community",
+   "box": {
+    "x": 0.3,
+    "y": 0.32,
+    "w": 0.15,
+    "h": 0.28
+   },
+   "note": "Third sighting, square on."
+  },
+  {
+   "keyframeId": "kf_aaae37c7-4222-43cf-bf99-3138efe88adb",
+   "nameEn": "Red sculpture (Gate 1 forecourt)",
+   "category": "community",
+   "box": {
+    "x": 0.18,
+    "y": 0.28,
+    "w": 0.24,
+    "h": 0.34
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_2227a7db-332f-490d-8a0e-5415fbbcc9dc",
+   "nameEn": "Escalator (Gate 1 forecourt)",
+   "category": "facility",
+   "box": {
+    "x": 0.82,
+    "y": 0.3,
+    "w": 0.13,
+    "h": 0.22
+   },
+   "note": "Escalator up from the forecourt."
+  },
+  {
+   "keyframeId": "kf_c9d03fc5-1ba8-4ca8-a4e0-73265a571648",
+   "nameEn": "Escalator (Gate 1 forecourt)",
+   "category": "facility",
+   "box": {
+    "x": 0.6,
+    "y": 0.35,
+    "w": 0.15,
+    "h": 0.2
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_d0a88c48-1e97-45d1-967b-5df562386fde",
+   "nameEn": "Escalator (Gate 1 forecourt)",
+   "category": "facility",
+   "box": {
+    "x": 0.85,
+    "y": 0.28,
+    "w": 0.15,
+    "h": 0.22
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_a20f11af-c28d-4938-9d61-15d6b05fee77",
+   "nameEn": "Gate 1",
+   "category": "facility",
+   "box": {
+    "x": 0.25,
+    "y": 0.08,
+    "w": 0.09,
+    "h": 0.06
+   },
+   "note": "Third sighting; a second GATE 1 sign is visible to its right in the same frame."
+  },
+  {
+   "keyframeId": "kf_8c529dc9-4252-4565-b768-d57e50f72c78",
+   "nameEn": "Gate 1",
+   "category": "facility",
+   "box": {
+    "x": 0.58,
+    "y": 0.06,
+    "w": 0.1,
+    "h": 0.06
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_8c529dc9-4252-4565-b768-d57e50f72c78",
+   "nameEn": "Festive Walk seating",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.52,
+    "w": 0.2,
+    "h": 0.22
+   },
+   "note": "Third sighting of the bench run."
+  },
+  {
+   "keyframeId": "kf_3ed2f3b8-f15d-4298-92a2-52e3f1602e79",
+   "nameEn": "Escalator (Gate 1 forecourt)",
+   "category": "facility",
+   "box": {
+    "x": 0.2,
+    "y": 0.32,
+    "w": 0.12,
+    "h": 0.18
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_6d4b9a79-84ee-4084-8d50-d14bb73851e1",
+   "nameEn": "Escalator (Gate 1 forecourt)",
+   "category": "facility",
+   "box": {
+    "x": 0.72,
+    "y": 0.3,
+    "w": 0.13,
+    "h": 0.18
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_92f721ab-cbb3-4141-a796-f397c85991c6",
+   "nameEn": "Escalator (Gate 1 forecourt)",
+   "category": "facility",
+   "box": {
+    "x": 0.22,
+    "y": 0.3,
+    "w": 0.14,
+    "h": 0.22
+   },
+   "note": "Sixth sighting, at the head of the mural corridor."
+  },
+  {
+   "keyframeId": "kf_8d32ecab-bab4-4ba7-a1f1-15485a48bb4e",
+   "nameEn": "Escalator (Gate 1 forecourt)",
+   "category": "facility",
+   "box": {
+    "x": 0.03,
+    "y": 0.28,
+    "w": 0.15,
+    "h": 0.27
+   },
+   "note": "Seventh sighting."
+  },
+  {
+   "keyframeId": "kf_b7142059-b205-4a8a-a208-efb175aa49c6",
+   "nameEn": "Recycling bin (mural corridor)",
+   "category": "facility",
+   "box": {
+    "x": 0.5,
+    "y": 0.68,
+    "w": 0.1,
+    "h": 0.24
+   },
+   "note": "'Put waste in the right place' bin. Same family as the one at Town Square Gate 1."
+  },
+  {
+   "keyframeId": "kf_1623f7f4-71b7-45a5-81a9-bfa1df393f90",
+   "nameEn": "Fire extinguisher (mural corridor)",
+   "category": "facility",
+   "box": {
+    "x": 0.62,
+    "y": 0.6,
+    "w": 0.06,
+    "h": 0.15
+   },
+   "note": "Wall-mounted extinguisher."
+  },
+  {
+   "keyframeId": "kf_5a4ee858-a8a3-4e47-832b-aeeb0c5c33a7",
+   "nameEn": "Escalator (Gate 1 forecourt)",
+   "category": "facility",
+   "box": {
+    "x": 0.05,
+    "y": 0.1,
+    "w": 0.4,
+    "h": 0.5
+   },
+   "note": "Eighth sighting, riding past the balustrade."
+  },
+  {
+   "keyframeId": "kf_ac317811-a086-4491-9e9d-d2c77a61c722",
+   "nameEn": "Escalator (Gate 1 forecourt)",
+   "category": "facility",
+   "box": {
+    "x": 0.0,
+    "y": 0.42,
+    "w": 0.28,
+    "h": 0.33
+   },
+   "note": "Ninth sighting, with a caution notice on the balustrade."
+  },
+  {
+   "keyframeId": "kf_932c9327-891f-42ab-882f-3af88d2f0256",
+   "nameEn": "Gate 16",
+   "category": "facility",
+   "box": {
+    "x": 0.26,
+    "y": 0.22,
+    "w": 0.1,
+    "h": 0.06
+   },
+   "note": "Stadium gate signed 'GATE 16'. The overhead directory earlier listed Town Square Gates 4, 3 and 16."
+  },
+  {
+   "keyframeId": "kf_82bcda46-e4ce-499d-bea3-1a0e93d8ce1c",
+   "nameEn": "Gate 16",
+   "category": "facility",
+   "box": {
+    "x": 0.78,
+    "y": 0.2,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Second sighting: 'GATE 16 — Authorised Access only'."
+  },
+  {
+   "keyframeId": "kf_018467e5-a8ec-4066-a05c-f8794c9efa94",
+   "nameEn": "Gate 16 service door",
+   "category": "facility",
+   "box": {
+    "x": 0.38,
+    "y": 0.4,
+    "w": 0.08,
+    "h": 0.12
+   },
+   "note": "Door marked 'NO ACCESS' beside the gate. Back of house."
+  },
+  {
+   "keyframeId": "kf_88d65012-004c-450f-b514-1fdcb9fd4f11",
+   "nameEn": "Children's playground (Festive Walk)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.03,
+    "y": 0.42,
+    "w": 0.17,
+    "h": 0.33
+   },
+   "note": "Red climbing and swing frame on the walk."
+  },
+  {
+   "keyframeId": "kf_88d65012-004c-450f-b514-1fdcb9fd4f11",
+   "nameEn": "Giraffe mural",
+   "category": "community",
+   "box": {
+    "x": 0.82,
+    "y": 0.3,
+    "w": 0.18,
+    "h": 0.45
+   },
+   "note": "Long painted wall with giraffes, running beside the playground."
+  },
+  {
+   "keyframeId": "kf_e90e561c-9453-4eaa-9216-68df08c37daf",
+   "nameEn": "Giraffe mural",
+   "category": "community",
+   "box": {
+    "x": 0.62,
+    "y": 0.3,
+    "w": 0.38,
+    "h": 0.55
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_1336ce89-a042-4898-ac74-a8a8d66a527c",
+   "nameEn": "Giraffe mural",
+   "category": "community",
+   "box": {
+    "x": 0.6,
+    "y": 0.28,
+    "w": 0.4,
+    "h": 0.52
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_b1f51c29-2152-418b-a9e5-8025d3aba728",
+   "nameEn": "Children's playground (Festive Walk)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.1,
+    "y": 0.28,
+    "w": 0.18,
+    "h": 0.24
+   },
+   "note": "Second sighting: swing frames beside the planting."
+  },
+  {
+   "keyframeId": "kf_b1f51c29-2152-418b-a9e5-8025d3aba728",
+   "nameEn": "Giraffe mural",
+   "category": "community",
+   "box": {
+    "x": 0.55,
+    "y": 0.1,
+    "w": 0.45,
+    "h": 0.75
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_f7867a4d-8a16-4b56-9c81-522a38a3427c",
+   "nameEn": "Children's playground (Festive Walk)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.42,
+    "y": 0.28,
+    "w": 0.23,
+    "h": 0.27
+   },
+   "note": "Third sighting: a yellow climbing frame."
+  },
+  {
+   "keyframeId": "kf_f7867a4d-8a16-4b56-9c81-522a38a3427c",
+   "nameEn": "Giraffe mural",
+   "category": "community",
+   "box": {
+    "x": 0.75,
+    "y": 0.05,
+    "w": 0.25,
+    "h": 0.7
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_73a00183-8bcf-455b-bc2e-2fd42063e0de",
+   "nameEn": "Children's playground (Festive Walk)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.02,
+    "y": 0.35,
+    "w": 0.18,
+    "h": 0.3
+   },
+   "note": "Fourth sighting: a blue swing frame in use."
+  },
+  {
+   "keyframeId": "kf_385ad4ac-0d14-4d91-a64b-919d8c29c8ac",
+   "nameEn": "Children's playground (Festive Walk)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.02,
+    "y": 0.38,
+    "w": 0.12,
+    "h": 0.22
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_97935bbf-98b6-46ed-80d9-cc53a4bd6632",
+   "nameEn": "Gate 15",
+   "category": "facility",
+   "box": {
+    "x": 0.72,
+    "y": 0.28,
+    "w": 0.13,
+    "h": 0.08
+   },
+   "note": "Stadium gate signed 'GATE 15 — Authorised Access'."
+  },
+  {
+   "keyframeId": "kf_2b79b238-790b-4288-aafb-fa9b0b425733",
+   "nameEn": "Festive Walk seating",
+   "category": "facility",
+   "box": {
+    "x": 0.15,
+    "y": 0.6,
+    "w": 0.27,
+    "h": 0.25
+   },
+   "note": "Fourth sighting of the bench and table run."
+  },
+  {
+   "keyframeId": "kf_77a9a999-84f9-4fdc-9d0c-09e383501974",
+   "nameEn": "Festive Walk seating",
+   "category": "facility",
+   "box": {
+    "x": 0.62,
+    "y": 0.42,
+    "w": 0.33,
+    "h": 0.26
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_cd42aa72-ac07-4cab-be56-f8743d8bec49",
+   "nameEn": "Festive Walk seating",
+   "category": "facility",
+   "box": {
+    "x": 0.05,
+    "y": 0.62,
+    "w": 0.3,
+    "h": 0.23
+   },
+   "note": "Sixth sighting."
+  },
+  {
+   "keyframeId": "kf_1ea9bac6-b92e-4a52-bd23-13dedcf3e939",
+   "nameEn": "Festive Walk seating",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.4,
+    "w": 0.28,
+    "h": 0.35
+   },
+   "note": "Seventh sighting."
+  },
+  {
+   "keyframeId": "kf_97f5270d-4310-4287-ab9d-b69917cc9a86",
+   "nameEn": "Festive Walk seating",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.55,
+    "w": 0.22,
+    "h": 0.28
+   },
+   "note": "Eighth sighting."
+  },
+  {
+   "keyframeId": "kf_73f52826-01a3-44cc-aef9-9d90d85147ea",
+   "nameEn": "Lobby J",
+   "category": "facility",
+   "box": {
+    "x": 0.42,
+    "y": 0.42,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Door signed 'Lobby J'."
+  },
+  {
+   "keyframeId": "kf_73f52826-01a3-44cc-aef9-9d90d85147ea",
+   "nameEn": "Tapestry (artwork)",
+   "category": "community",
+   "box": {
+    "x": 0.86,
+    "y": 0.42,
+    "w": 0.14,
+    "h": 0.2
+   },
+   "note": "Plaque headed 'TAPESTRY' with a coordinate pair — a titled public artwork, and the only thing in the footage carrying its own lat/long."
+  },
+  {
+   "keyframeId": "kf_73f52826-01a3-44cc-aef9-9d90d85147ea",
+   "nameEn": "Gate 14",
+   "category": "facility",
+   "box": {
+    "x": 0.72,
+    "y": 0.36,
+    "w": 0.08,
+    "h": 0.06
+   },
+   "note": "Gate sign, partly hidden by the shutter."
+  },
+  {
+   "keyframeId": "kf_bfbc6fa2-1753-4e3c-8d53-e2e178dd496a",
+   "nameEn": "Gate 14",
+   "category": "facility",
+   "box": {
+    "x": 0.28,
+    "y": 0.1,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Second sighting: 'GATE 14' in full."
+  },
+  {
+   "keyframeId": "kf_bfbc6fa2-1753-4e3c-8d53-e2e178dd496a",
+   "nameEn": "Lobby J",
+   "category": "facility",
+   "box": {
+    "x": 0.15,
+    "y": 0.36,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_bfbc6fa2-1753-4e3c-8d53-e2e178dd496a",
+   "nameEn": "Tampines Regional Library",
+   "category": "community",
+   "box": {
+    "x": 0.08,
+    "y": 0.24,
+    "w": 0.2,
+    "h": 0.1
+   },
+   "note": "Second sighting: a screen above Lobby J advertising the library. Suggests the library is entered from here."
+  },
+  {
+   "keyframeId": "kf_836b9563-2304-4d27-a872-461608f4b46e",
+   "nameEn": "Lobby J",
+   "category": "facility",
+   "box": {
+    "x": 0.88,
+    "y": 0.3,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Third sighting, on the return."
+  },
+  {
+   "keyframeId": "kf_afe1cb73-61c5-4a4c-96e6-edda29fbbfbc",
+   "nameEn": "Escalator (Lobby J concourse)",
+   "category": "facility",
+   "box": {
+    "x": 0.28,
+    "y": 0.08,
+    "w": 0.24,
+    "h": 0.27
+   },
+   "note": "Escalator pair beside Lobby J."
+  },
+  {
+   "keyframeId": "kf_134297eb-55bf-4c18-82ec-3c9bcc42554d",
+   "nameEn": "Bicycle Bays",
+   "category": "facility",
+   "box": {
+    "x": 0.55,
+    "y": 0.18,
+    "w": 0.25,
+    "h": 0.12
+   },
+   "note": "Second sighting of racks, here beside the drop-off."
+  },
+  {
+   "keyframeId": "kf_a47a5b12-a2d6-4b77-9530-0991a64420b2",
+   "nameEn": "Vehicle drop-off (Lobby J)",
+   "category": "facility",
+   "box": {
+    "x": 0.0,
+    "y": 0.32,
+    "w": 0.15,
+    "h": 0.2
+   },
+   "note": "Cars pulled up under the canopy — the set-down point on this side."
+  },
+  {
+   "keyframeId": "kf_a47a5b12-a2d6-4b77-9530-0991a64420b2",
+   "nameEn": "Bicycle Bays",
+   "category": "facility",
+   "box": {
+    "x": 0.3,
+    "y": 0.35,
+    "w": 0.25,
+    "h": 0.15
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_8dc3c434-1c36-4b61-a49b-10ba34499c8f",
+   "nameEn": "Cyclists dismount marker",
+   "category": "facility",
+   "box": {
+    "x": 0.55,
+    "y": 0.35,
+    "w": 0.25,
+    "h": 0.5
+   },
+   "note": "Third sighting, close up: 'CYCLISTS DISMOUNT YOUR BIKE'."
+  },
+  {
+   "keyframeId": "kf_8dc3c434-1c36-4b61-a49b-10ba34499c8f",
+   "nameEn": "Escalator (Lobby J concourse)",
+   "category": "facility",
+   "box": {
+    "x": 0.28,
+    "y": 0.12,
+    "w": 0.27,
+    "h": 0.33
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_653ba33f-9723-45c5-8de7-7310f6bf2b5e",
+   "nameEn": "Crowd barrier store",
+   "category": "facility",
+   "box": {
+    "x": 0.35,
+    "y": 0.42,
+    "w": 0.27,
+    "h": 0.2
+   },
+   "note": "Stacked barriers and trolleys kept beside the ramp. Back of house, but it explains what this corner is for."
+  },
+  {
+   "keyframeId": "kf_0e23cce2-a7d7-4bcb-8549-4cc8de57a2a3",
+   "nameEn": "Crowd barrier store",
+   "category": "facility",
+   "box": {
+    "x": 0.3,
+    "y": 0.55,
+    "w": 0.25,
+    "h": 0.25
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_850266b6-cc8c-4d65-9ccd-0fa55c60bc3c",
+   "nameEn": "Gate 13",
+   "category": "facility",
+   "box": {
+    "x": 0.42,
+    "y": 0.1,
+    "w": 0.13,
+    "h": 0.08
+   },
+   "note": "Stadium gate signed 'GATE 13'."
+  },
+  {
+   "keyframeId": "kf_850266b6-cc8c-4d65-9ccd-0fa55c60bc3c",
+   "nameEn": "Fire engine access route",
+   "category": "facility",
+   "box": {
+    "x": 0.05,
+    "y": 0.3,
+    "w": 0.09,
+    "h": 0.12
+   },
+   "note": "'Fire Engine Access — Keep Clear' notice. Worth knowing: this run must not be furnished."
+  },
+  {
+   "keyframeId": "kf_321a5708-fbda-40db-a811-3f134c781340",
+   "nameEn": "Fire engine access route",
+   "category": "facility",
+   "box": {
+    "x": 0.68,
+    "y": 0.28,
+    "w": 0.12,
+    "h": 0.14
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_94213a10-9016-4fda-9555-b8c70772121a",
+   "nameEn": "Festive Walk overhead directory",
+   "category": "facility",
+   "box": {
+    "x": 0.65,
+    "y": 0.15,
+    "w": 0.35,
+    "h": 0.1
+   },
+   "note": "Second sighting, a different sign: Hawker Centre, Public Service Centre, Festive Plaza, Town Square Gates 3-11."
+  },
+  {
+   "keyframeId": "kf_94213a10-9016-4fda-9555-b8c70772121a",
+   "nameEn": "Recycling bin (Festive Walk)",
+   "category": "facility",
+   "box": {
+    "x": 0.52,
+    "y": 0.45,
+    "w": 0.1,
+    "h": 0.23
+   },
+   "note": "Illustrated bin, same family as the others."
+  },
+  {
+   "keyframeId": "kf_c4960eb6-b0e1-4707-bcd9-79bab1823268",
+   "nameEn": "Vending machine (Festive Walk)",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.35,
+    "w": 0.13,
+    "h": 0.27
+   },
+   "note": "Drinks machine set into the wall."
+  },
+  {
+   "keyframeId": "kf_2afc5b19-2cab-4894-883d-a2030293c984",
+   "nameEn": "Gate 12",
+   "category": "facility",
+   "box": {
+    "x": 0.72,
+    "y": 0.1,
+    "w": 0.13,
+    "h": 0.08
+   },
+   "note": "Stadium gate signed 'GATE 12'."
+  },
+  {
+   "keyframeId": "kf_2afc5b19-2cab-4894-883d-a2030293c984",
+   "nameEn": "OTH programmes display",
+   "category": "facility",
+   "box": {
+    "x": 0.86,
+    "y": 0.3,
+    "w": 0.14,
+    "h": 0.3
+   },
+   "note": "Screen inviting people to follow OTH for upcoming programmes and events."
+  },
+  {
+   "keyframeId": "kf_4d67e07a-8105-4e56-acef-6fba09a9895c",
+   "nameEn": "Dry riser inlet (Festive Walk)",
+   "category": "facility",
+   "box": {
+    "x": 0.62,
+    "y": 0.28,
+    "w": 0.16,
+    "h": 0.27
+   },
+   "note": "Red cabinet marked 'Dry Riser Breeching Inlet — for dry rising main, Blk 24-33'. Fire service equipment."
+  },
+  {
+   "keyframeId": "kf_55e5c70e-1b09-4fc7-901f-3a0725f73dfc",
+   "nameEn": "Fire alarm call point (Festive Walk)",
+   "category": "facility",
+   "box": {
+    "x": 0.72,
+    "y": 0.35,
+    "w": 0.1,
+    "h": 0.27
+   },
+   "note": "Red alarm panel on the wall."
+  },
+  {
+   "keyframeId": "kf_3ec4a226-3358-4f60-9e41-45a5ab47a170",
+   "nameEn": "Festive Walk poster wall",
+   "category": "community",
+   "box": {
+    "x": 0.62,
+    "y": 0.2,
+    "w": 0.23,
+    "h": 0.35
+   },
+   "note": "Run of event posters along the walk; this one for a TikTok-related event."
+  },
+  {
+   "keyframeId": "kf_2f96ebf7-a36b-41df-9865-c454a1b3884c",
+   "nameEn": "Recycling bin (Festive Walk)",
+   "category": "facility",
+   "box": {
+    "x": 0.05,
+    "y": 0.62,
+    "w": 0.11,
+    "h": 0.23
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_6c6f1597-885e-4a1c-96de-52a13f2f4c64",
+   "nameEn": "Festive Walk overhead directory",
+   "category": "facility",
+   "box": {
+    "x": 0.55,
+    "y": 0.2,
+    "w": 0.27,
+    "h": 0.1
+   },
+   "note": "Third sighting: Town Square Gates 3-11, Festive Plaza, Public Service Centre, Hawker Centre."
+  },
+  {
+   "keyframeId": "kf_6c6f1597-885e-4a1c-96de-52a13f2f4c64",
+   "nameEn": "Gate 11",
+   "category": "facility",
+   "box": {
+    "x": 0.85,
+    "y": 0.22,
+    "w": 0.13,
+    "h": 0.08
+   },
+   "note": "Stadium gate signed 'GATE 11'."
+  },
+  {
+   "keyframeId": "kf_6c6f1597-885e-4a1c-96de-52a13f2f4c64",
+   "nameEn": "Recycling bin (Festive Walk)",
+   "category": "facility",
+   "box": {
+    "x": 0.08,
+    "y": 0.6,
+    "w": 0.14,
+    "h": 0.35
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_6cee888b-d32a-4b59-b69b-b9f86445d84b",
+   "nameEn": "Gate 11",
+   "category": "facility",
+   "box": {
+    "x": 0.18,
+    "y": 0.05,
+    "w": 0.12,
+    "h": 0.07
+   },
+   "note": "Second sighting: 'GATE 11 — Authorised Access only'."
+  },
+  {
+   "keyframeId": "kf_6cee888b-d32a-4b59-b69b-b9f86445d84b",
+   "nameEn": "Town Square access notice (Gate 11)",
+   "category": "facility",
+   "box": {
+    "x": 0.12,
+    "y": 0.18,
+    "w": 0.09,
+    "h": 0.12
+   },
+   "note": "'NO ACCESS — access to Town Square via Gate 1'. Directly useful for routing: this gate is not a way in."
+  },
+  {
+   "keyframeId": "kf_b5aca18c-2ccd-438b-a0a7-94235a1e56a7",
+   "nameEn": "Town Square access notice (Gate 11)",
+   "category": "facility",
+   "box": {
+    "x": 0.72,
+    "y": 0.1,
+    "w": 0.11,
+    "h": 0.13
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_508ac8be-7a70-45e7-8e40-f4695a822814",
+   "nameEn": "Calm Room",
+   "category": "healthcare",
+   "box": {
+    "x": 0.62,
+    "y": 0.28,
+    "w": 0.12,
+    "h": 0.14
+   },
+   "note": "Door badged 'Calm Room' — a quiet space. Worth routing to, and easy to miss."
+  },
+  {
+   "keyframeId": "kf_5d97ebf3-50d2-4ff5-b764-2d410dfcc63f",
+   "nameEn": "Our Tampines Hub wall sign",
+   "category": "facility",
+   "box": {
+    "x": 0.06,
+    "y": 0.2,
+    "w": 0.1,
+    "h": 0.35
+   },
+   "note": "OTH wordmark on a walk column."
+  },
+  {
+   "keyframeId": "kf_c8d3ec1c-0cea-4260-b8cd-27c280b48421",
+   "nameEn": "Our Tampines Hub wall sign",
+   "category": "facility",
+   "box": {
+    "x": 0.14,
+    "y": 0.28,
+    "w": 0.09,
+    "h": 0.3
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_d2112ede-38d5-4cee-a6fa-cdea788a52f6",
+   "nameEn": "Fire equipment cabinets (Arena walk)",
+   "category": "facility",
+   "box": {
+    "x": 0.24,
+    "y": 0.35,
+    "w": 0.2,
+    "h": 0.2
+   },
+   "note": "Run of red cabinets along the service wall."
+  },
+  {
+   "keyframeId": "kf_231c59b6-f133-433d-b8af-6d0cdf12b61b",
+   "nameEn": "Rainbow walkway",
+   "category": "community",
+   "box": {
+    "x": 0.25,
+    "y": 0.55,
+    "w": 0.6,
+    "h": 0.35
+   },
+   "note": "Painted rainbow path leading along the arena's flank. A landmark people will describe by colour, not by name."
+  },
+  {
+   "keyframeId": "kf_024a0efd-400e-4fc2-a6b4-a0b94de6b4ab",
+   "nameEn": "Rainbow walkway",
+   "category": "community",
+   "box": {
+    "x": 0.2,
+    "y": 0.6,
+    "w": 0.5,
+    "h": 0.35
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_a8698582-9bbf-4766-9fff-ff8c0d09f1b9",
+   "nameEn": "Arena @ OTH",
+   "category": "sports",
+   "box": {
+    "x": 0.68,
+    "y": 0.42,
+    "w": 0.14,
+    "h": 0.08
+   },
+   "note": "Wall lettering beginning to read 'ARENA'. The facilities directory lists Arena @ OTH on L1."
+  },
+  {
+   "keyframeId": "kf_c356710b-ad51-4828-bce6-b9ac0d340b7b",
+   "nameEn": "Arena @ OTH",
+   "category": "sports",
+   "box": {
+    "x": 0.18,
+    "y": 0.42,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_307dda75-f59f-4ca0-bd28-26b222884d69",
+   "nameEn": "Arena @ OTH",
+   "category": "sports",
+   "box": {
+    "x": 0.62,
+    "y": 0.42,
+    "w": 0.18,
+    "h": 0.08
+   },
+   "note": "Third sighting: 'ARENA @ OTH'."
+  },
+  {
+   "keyframeId": "kf_7385c423-9cd7-4831-bc71-ce1dec89bf37",
+   "nameEn": "Arena @ OTH",
+   "category": "sports",
+   "box": {
+    "x": 0.1,
+    "y": 0.42,
+    "w": 0.18,
+    "h": 0.08
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_15580eb5-91d0-4b39-bf11-3107d9590fa3",
+   "nameEn": "Rep. Kopitiam @ OTH",
+   "category": "retail",
+   "box": {
+    "x": 0.78,
+    "y": 0.28,
+    "w": 0.22,
+    "h": 0.14
+   },
+   "note": "Orange fascia reading 'Rep. Kopitiam @ OTH' with seating outside."
+  },
+  {
+   "keyframeId": "kf_15580eb5-91d0-4b39-bf11-3107d9590fa3",
+   "nameEn": "Arena @ OTH",
+   "category": "sports",
+   "box": {
+    "x": 0.55,
+    "y": 0.4,
+    "w": 0.15,
+    "h": 0.08
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_5965a806-b6f1-438c-b204-f475ff42128f",
+   "nameEn": "Arena @ OTH",
+   "category": "sports",
+   "box": {
+    "x": 0.0,
+    "y": 0.08,
+    "w": 0.14,
+    "h": 0.1
+   },
+   "note": "Sixth sighting."
+  },
+  {
+   "keyframeId": "kf_5965a806-b6f1-438c-b204-f475ff42128f",
+   "nameEn": "Rep. Kopitiam @ OTH",
+   "category": "retail",
+   "box": {
+    "x": 0.6,
+    "y": 0.1,
+    "w": 0.4,
+    "h": 0.3
+   },
+   "note": "Second sighting: the orange frontage with outdoor tables in use."
+  },
+  {
+   "keyframeId": "kf_e80b44f5-577a-46c3-b620-69b48b2c59e8",
+   "nameEn": "Rep. Kopitiam @ OTH",
+   "category": "retail",
+   "box": {
+    "x": 0.68,
+    "y": 0.05,
+    "w": 0.32,
+    "h": 0.35
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_21f3080e-504b-43ad-bec3-b0e78809dccc",
+   "nameEn": "Rainbow walkway",
+   "category": "community",
+   "box": {
+    "x": 0.2,
+    "y": 0.35,
+    "w": 0.65,
+    "h": 0.5
+   },
+   "note": "Third sighting, the full sweep of the curve."
+  },
+  {
+   "keyframeId": "kf_187ed55f-3af7-4141-919c-92b03c28ccc0",
+   "nameEn": "Rainbow walkway",
+   "category": "community",
+   "box": {
+    "x": 0.2,
+    "y": 0.4,
+    "w": 0.6,
+    "h": 0.5
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_00457270-0746-4196-b646-66218b761a9f",
+   "nameEn": "Rainbow walkway",
+   "category": "community",
+   "box": {
+    "x": 0.15,
+    "y": 0.45,
+    "w": 0.6,
+    "h": 0.5
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_282c402a-acb8-42a8-a150-a6b5058cc7c8",
+   "nameEn": "Rainbow walkway",
+   "category": "community",
+   "box": {
+    "x": 0.3,
+    "y": 0.5,
+    "w": 0.55,
+    "h": 0.45
+   },
+   "note": "Sixth sighting, running under the canopy."
+  },
+  {
+   "keyframeId": "kf_7d3c1ebe-1409-4ec7-ac59-0185235a2e96",
+   "nameEn": "Arena forecourt seating",
+   "category": "facility",
+   "box": {
+    "x": 0.5,
+    "y": 0.42,
+    "w": 0.25,
+    "h": 0.2
+   },
+   "note": "Tables and benches in the covered space at the end of the rainbow walk, against a green wall."
+  },
+  {
+   "keyframeId": "kf_eeb8dc46-bb45-4c61-ad8f-3dee9543b569",
+   "nameEn": "Arena forecourt seating",
+   "category": "facility",
+   "box": {
+    "x": 0.05,
+    "y": 0.48,
+    "w": 0.25,
+    "h": 0.24
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_9ec4846f-279f-42f3-b0cf-e130c079d5c3",
+   "nameEn": "Community photo displays",
+   "category": "community",
+   "box": {
+    "x": 0.3,
+    "y": 0.18,
+    "w": 0.35,
+    "h": 0.25
+   },
+   "note": "Round framed photographs of community groups, hung along the glazing."
+  },
+  {
+   "keyframeId": "kf_c2fdd58c-6006-400e-959a-996b88745c3e",
+   "nameEn": "RE CYC Zone",
+   "category": "facility",
+   "box": {
+    "x": 0.8,
+    "y": 0.05,
+    "w": 0.15,
+    "h": 0.5
+   },
+   "note": "Column lettered 'RE CYC ZONE' with a recycling mark — a recycling point."
+  },
+  {
+   "keyframeId": "kf_c2fdd58c-6006-400e-959a-996b88745c3e",
+   "nameEn": "Bicycle Bays",
+   "category": "facility",
+   "box": {
+    "x": 0.62,
+    "y": 0.35,
+    "w": 0.2,
+    "h": 0.2
+   },
+   "note": "Fourth sighting: racks inside the covered area."
+  },
+  {
+   "keyframeId": "kf_9becf7f4-57bb-4e00-9a9a-627e43ccee94",
+   "nameEn": "RE CYC Zone",
+   "category": "facility",
+   "box": {
+    "x": 0.82,
+    "y": 0.15,
+    "w": 0.13,
+    "h": 0.45
+   },
+   "note": "Second sighting, with a 'three easy steps to get rewarded' notice beside it."
+  },
+  {
+   "keyframeId": "kf_9becf7f4-57bb-4e00-9a9a-627e43ccee94",
+   "nameEn": "Bicycle Bays",
+   "category": "facility",
+   "box": {
+    "x": 0.58,
+    "y": 0.55,
+    "w": 0.2,
+    "h": 0.2
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_f9a07ad1-b6aa-4f21-8870-4f338803415c",
+   "nameEn": "Fire exit (arena concourse)",
+   "category": "facility",
+   "box": {
+    "x": 0.28,
+    "y": 0.42,
+    "w": 0.1,
+    "h": 0.08
+   },
+   "note": "Green EXIT sign over a door."
+  },
+  {
+   "keyframeId": "kf_c8c52455-4baa-4729-b9a9-00d691ba0fca",
+   "nameEn": "Community photo displays",
+   "category": "community",
+   "box": {
+    "x": 0.72,
+    "y": 0.2,
+    "w": 0.28,
+    "h": 0.4
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_bfcc6643-9da3-4421-aeef-9c356425aeb9",
+   "nameEn": "Green wall (arena concourse)",
+   "category": "community",
+   "box": {
+    "x": 0.15,
+    "y": 0.3,
+    "w": 0.4,
+    "h": 0.42
+   },
+   "note": "Planted wall with painted trees, lining the concourse."
+  },
+  {
+   "keyframeId": "kf_a313abe9-d51c-4b74-8165-a039c91eec29",
+   "nameEn": "Green wall (arena concourse)",
+   "category": "community",
+   "box": {
+    "x": 0.5,
+    "y": 0.28,
+    "w": 0.4,
+    "h": 0.4
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_16edf868-6519-4b40-b81e-f1890646ae67",
+   "nameEn": "Green wall (arena concourse)",
+   "category": "community",
+   "box": {
+    "x": 0.05,
+    "y": 0.2,
+    "w": 0.2,
+    "h": 0.22
+   },
+   "note": "Third sighting, with the OTH mark on it."
+  },
+  {
+   "keyframeId": "kf_daa6f0be-45b8-4a53-aec9-f2558c66966c",
+   "nameEn": "Event stage (arena concourse)",
+   "category": "community",
+   "box": {
+    "x": 0.62,
+    "y": 0.28,
+    "w": 0.28,
+    "h": 0.2
+   },
+   "note": "Low platform with track lighting over it — a performance stage. The LED banner elsewhere named this end 'Festive Plaza', but no sign here says so."
+  },
+  {
+   "keyframeId": "kf_dc3a3976-7772-4b21-b9e3-4539e8e8a46f",
+   "nameEn": "Event stage (arena concourse)",
+   "category": "community",
+   "box": {
+    "x": 0.22,
+    "y": 0.35,
+    "w": 0.28,
+    "h": 0.15
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_d0084e25-f0b9-4954-864b-aa7d9720dbf5",
+   "nameEn": "Event stage (arena concourse)",
+   "category": "community",
+   "box": {
+    "x": 0.62,
+    "y": 0.28,
+    "w": 0.33,
+    "h": 0.2
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_943b4a3d-a181-4a30-8624-16790a17a7ce",
+   "nameEn": "Event stage (arena concourse)",
+   "category": "community",
+   "box": {
+    "x": 0.02,
+    "y": 0.25,
+    "w": 0.4,
+    "h": 0.25
+   },
+   "note": "Fourth sighting, square on."
+  },
+  {
+   "keyframeId": "kf_23494012-199b-45bb-9353-177bf288f9a7",
+   "nameEn": "Community photo displays",
+   "category": "community",
+   "box": {
+    "x": 0.02,
+    "y": 0.35,
+    "w": 0.53,
+    "h": 0.27
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_463036f9-36ad-4e6e-9575-c3d2c2844d5a",
+   "nameEn": "Event stage (arena concourse)",
+   "category": "community",
+   "box": {
+    "x": 0.62,
+    "y": 0.35,
+    "w": 0.23,
+    "h": 0.2
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_9a665e03-875c-494e-a6b8-0eda251e659a",
+   "nameEn": "Grand Opening photo wall",
+   "category": "community",
+   "box": {
+    "x": 0.62,
+    "y": 0.15,
+    "w": 0.38,
+    "h": 0.3
+   },
+   "note": "Display of photographs captioned 'residents young and old enjoyed themselves at our Grand Opening'. Heritage content, not a tenant."
+  },
+  {
+   "keyframeId": "kf_8f7bb55c-10f9-4755-ab9a-aa9e8fd547c7",
+   "nameEn": "Grand Opening photo wall",
+   "category": "community",
+   "box": {
+    "x": 0.2,
+    "y": 0.28,
+    "w": 0.42,
+    "h": 0.24
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_5d12e335-555f-4cf3-a64c-a3fbfea6f5d0",
+   "nameEn": "Information totem (arena concourse)",
+   "category": "facility",
+   "box": {
+    "x": 0.18,
+    "y": 0.35,
+    "w": 0.1,
+    "h": 0.27
+   },
+   "note": "Freestanding information post."
+  },
+  {
+   "keyframeId": "kf_68a2a814-6d2d-4cba-92ba-85c3e6fbfcc1",
+   "nameEn": "K-pop record display",
+   "category": "community",
+   "box": {
+    "x": 0.82,
+    "y": 0.3,
+    "w": 0.18,
+    "h": 0.32
+   },
+   "note": "Panel reading 'Records were broken! We achieved the biggest gathering of KPop-X participants in Singapore'."
+  },
+  {
+   "keyframeId": "kf_68a2a814-6d2d-4cba-92ba-85c3e6fbfcc1",
+   "nameEn": "Staircase (arena concourse)",
+   "category": "facility",
+   "box": {
+    "x": 0.42,
+    "y": 0.3,
+    "w": 0.23,
+    "h": 0.3
+   },
+   "note": "Stair and escalator pair up from the concourse."
+  },
+  {
+   "keyframeId": "kf_988eaeb1-181d-4294-aedb-6c3877648a66",
+   "nameEn": "Staircase (arena concourse)",
+   "category": "facility",
+   "box": {
+    "x": 0.08,
+    "y": 0.3,
+    "w": 0.27,
+    "h": 0.3
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_0c260138-dcb0-4abf-967c-cfead4a56a75",
+   "nameEn": "Staircase (arena concourse)",
+   "category": "facility",
+   "box": {
+    "x": 0.55,
+    "y": 0.35,
+    "w": 0.3,
+    "h": 0.27
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_72e97c4c-5639-425a-965c-f3f0ed94f645",
+   "nameEn": "Crowd barrier store",
+   "category": "facility",
+   "box": {
+    "x": 0.35,
+    "y": 0.3,
+    "w": 0.35,
+    "h": 0.45
+   },
+   "note": "Third sighting, barriers stacked at the exit."
+  },
+  {
+   "keyframeId": "kf_8ac2f1be-5611-46b6-967b-dbddae7b706b",
+   "nameEn": "Festive Walk overhead directory",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.28,
+    "w": 0.33,
+    "h": 0.08
+   },
+   "note": "Fourth sighting: 'Festive Arts Theatre / Library / Town Square Gate 1'."
+  },
+  {
+   "keyframeId": "kf_23658224-d78a-4b3f-aab2-ce7e81905d3d",
+   "nameEn": "Happy Birthday Singapore display",
+   "category": "community",
+   "box": {
+    "x": 0.68,
+    "y": 0.3,
+    "w": 0.14,
+    "h": 0.22
+   },
+   "note": "Decorated sphere with a butterfly, captioned 'Happy Birthday Singapore'. Seasonal, so likely gone by now — but a landmark while it stands."
+  },
+  {
+   "keyframeId": "kf_18a44d65-562b-4cc1-9e4a-8ba32c8b5232",
+   "nameEn": "Happy Birthday Singapore display",
+   "category": "community",
+   "box": {
+    "x": 0.0,
+    "y": 0.28,
+    "w": 0.2,
+    "h": 0.36
+   },
+   "note": "Second sighting, close up."
+  },
+  {
+   "keyframeId": "kf_555a6098-5f4f-4884-99e0-2259883de8b6",
+   "nameEn": "Toilets (hawker centre)",
+   "category": "facility",
+   "box": {
+    "x": 0.92,
+    "y": 0.28,
+    "w": 0.08,
+    "h": 0.09
+   },
+   "note": "Directional sign for toilets at the hawker centre end."
+  },
+  {
+   "keyframeId": "kf_555a6098-5f4f-4884-99e0-2259883de8b6",
+   "nameEn": "Bicycle Bays",
+   "category": "facility",
+   "box": {
+    "x": 0.92,
+    "y": 0.38,
+    "w": 0.08,
+    "h": 0.1
+   },
+   "note": "Sixth sighting: a 'Bicycle Parking' sign."
+  },
+  {
+   "keyframeId": "kf_1f54e145-2e32-4a45-af45-a8a00befdf04",
+   "nameEn": "Hawker Centre seating hall",
+   "category": "facility",
+   "box": {
+    "x": 0.1,
+    "y": 0.3,
+    "w": 0.35,
+    "h": 0.25
+   },
+   "note": "Second sighting: the seating hall from its west end."
+  },
+  {
+   "keyframeId": "kf_fdba96b7-3926-437b-a90a-7d4636d378b4",
+   "nameEn": "Chicken rice stall (Hawker Centre)",
+   "category": "retail",
+   "box": {
+    "x": 0.68,
+    "y": 0.32,
+    "w": 0.22,
+    "h": 0.16
+   },
+   "note": "Stall signed for chicken rice. The trading name is not readable from here."
+  },
+  {
+   "keyframeId": "kf_92180fff-3293-4620-82d9-b440c505c3da",
+   "nameEn": "Chicken rice stall (Hawker Centre)",
+   "category": "retail",
+   "box": {
+    "x": 0.62,
+    "y": 0.35,
+    "w": 0.28,
+    "h": 0.17
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_924c94b2-816c-4241-b673-40779bf9821a",
+   "nameEn": "Happy Birthday Singapore display",
+   "category": "community",
+   "box": {
+    "x": 0.85,
+    "y": 0.05,
+    "w": 0.15,
+    "h": 0.3
+   },
+   "note": "Third sighting, as a hanging banner."
+  },
+  {
+   "keyframeId": "kf_1b4f449d-c506-499f-b208-601575b4862a",
+   "nameEn": "Chicken rice stall (Hawker Centre)",
+   "category": "retail",
+   "box": {
+    "x": 0.28,
+    "y": 0.02,
+    "w": 0.14,
+    "h": 0.07
+   },
+   "note": "Third sighting: the fascia simply reads 'CHICKEN RICE'."
+  },
+  {
+   "keyframeId": "kf_ad2fa5a5-ed93-4209-bc77-3f035b025a02",
+   "nameEn": "Tray return point (Hawker Centre)",
+   "category": "facility",
+   "box": {
+    "x": 0.68,
+    "y": 0.15,
+    "w": 0.1,
+    "h": 0.14
+   },
+   "note": "Second sighting: the tray-return mascot and its 'return your tray' notice."
+  },
+  {
+   "keyframeId": "kf_2a9986fe-7c53-47f8-b191-50b6771d533c",
+   "nameEn": "Tray return point (Hawker Centre)",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.28,
+    "w": 0.13,
+    "h": 0.25
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_b038439b-7387-4419-835b-071267e7f673",
+   "nameEn": "Best Zaika",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.24,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Hawker stall fascia reading 'BEST ZAIKA'."
+  },
+  {
+   "keyframeId": "kf_b038439b-7387-4419-835b-071267e7f673",
+   "nameEn": "Raj Salim Food Stall",
+   "category": "retail",
+   "box": {
+    "x": 0.76,
+    "y": 0.25,
+    "w": 0.17,
+    "h": 0.06
+   },
+   "note": "Hawker stall fascia reading 'RAJ SALIM FOOD STALL', with Arabic script above."
+  },
+  {
+   "keyframeId": "kf_b038439b-7387-4419-835b-071267e7f673",
+   "nameEn": "Indian Cuisine stall",
+   "category": "retail",
+   "box": {
+    "x": 0.66,
+    "y": 0.26,
+    "w": 0.09,
+    "h": 0.06
+   },
+   "note": "Stall signed 'INDIAN'; the full name reads 'Indian Cuisine' in a later frame."
+  },
+  {
+   "keyframeId": "kf_58980b3a-cfe3-4f91-b204-b13b69d776c6",
+   "nameEn": "Mr. Islamic Power Rojak",
+   "category": "retail",
+   "box": {
+    "x": 0.55,
+    "y": 0.2,
+    "w": 0.3,
+    "h": 0.1
+   },
+   "note": "Green fascia reading 'MR. ISLAMIC POWER ROJAK — Shenton Way famous mee rebus, rojak'."
+  },
+  {
+   "keyframeId": "kf_58980b3a-cfe3-4f91-b204-b13b69d776c6",
+   "nameEn": "Best Zaika",
+   "category": "retail",
+   "box": {
+    "x": 0.16,
+    "y": 0.26,
+    "w": 0.13,
+    "h": 0.06
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_58980b3a-cfe3-4f91-b204-b13b69d776c6",
+   "nameEn": "Raj Salim Food Stall",
+   "category": "retail",
+   "box": {
+    "x": 0.24,
+    "y": 0.27,
+    "w": 0.19,
+    "h": 0.06
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_3eb9fc44-baa0-41a1-ac02-d4aa01b0c815",
+   "nameEn": "Mr. Islamic Power Rojak",
+   "category": "retail",
+   "box": {
+    "x": 0.82,
+    "y": 0.2,
+    "w": 0.18,
+    "h": 0.09
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_3eb9fc44-baa0-41a1-ac02-d4aa01b0c815",
+   "nameEn": "Best Zaika",
+   "category": "retail",
+   "box": {
+    "x": 0.6,
+    "y": 0.24,
+    "w": 0.13,
+    "h": 0.06
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_3eb9fc44-baa0-41a1-ac02-d4aa01b0c815",
+   "nameEn": "Raj Salim Food Stall",
+   "category": "retail",
+   "box": {
+    "x": 0.68,
+    "y": 0.25,
+    "w": 0.19,
+    "h": 0.06
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_f98ec0ca-4c63-43ac-b8a2-864e8a580e89",
+   "nameEn": "Punjabi Kitchen stall",
+   "category": "retail",
+   "box": {
+    "x": 0.1,
+    "y": 0.02,
+    "w": 0.26,
+    "h": 0.07
+   },
+   "note": "Fascia ends '…from Punjabi Kitchen'; the leading word is cut off by the frame."
+  },
+  {
+   "keyframeId": "kf_5d0febbd-e9b5-451f-a78b-6fffc79a9e86",
+   "nameEn": "Jian Fa Xiang",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.22,
+    "w": 0.14,
+    "h": 0.08
+   },
+   "note": "Stall signed in Chinese and romanised as 'JIAN FA XIANG'. Shuttered at the time of filming."
+  },
+  {
+   "keyframeId": "kf_5d0febbd-e9b5-451f-a78b-6fffc79a9e86",
+   "nameEn": "Hadramawt Kitchen",
+   "category": "retail",
+   "box": {
+    "x": 0.92,
+    "y": 0.22,
+    "w": 0.08,
+    "h": 0.08
+   },
+   "note": "Fascia beginning to read 'HADRAMAWT KITCHEN'."
+  },
+  {
+   "keyframeId": "kf_72a8a7a1-45ab-4e8b-b7b0-cf16ddb23dfa",
+   "nameEn": "Hadramawt Kitchen",
+   "category": "retail",
+   "box": {
+    "x": 0.16,
+    "y": 0.22,
+    "w": 0.15,
+    "h": 0.06
+   },
+   "note": "Second sighting, in full."
+  },
+  {
+   "keyframeId": "kf_72a8a7a1-45ab-4e8b-b7b0-cf16ddb23dfa",
+   "nameEn": "Indian Cuisine stall",
+   "category": "retail",
+   "box": {
+    "x": 0.32,
+    "y": 0.22,
+    "w": 0.13,
+    "h": 0.06
+   },
+   "note": "Second sighting: 'INDIAN CUISINE' in full."
+  },
+  {
+   "keyframeId": "kf_6a94b6fa-7a37-48dd-9e85-bd66f728d036",
+   "nameEn": "Indian Cuisine stall",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.02,
+    "w": 0.11,
+    "h": 0.09
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_6a94b6fa-7a37-48dd-9e85-bd66f728d036",
+   "nameEn": "Mommy Rendang",
+   "category": "retail",
+   "box": {
+    "x": 0.27,
+    "y": 0.1,
+    "w": 0.1,
+    "h": 0.06
+   },
+   "note": "Stall fascia reading 'mommy RENDANG'."
+  },
+  {
+   "keyframeId": "kf_c1a5eac4-fd5d-42b8-9633-73c0273d4daa",
+   "nameEn": "Mommy Rendang",
+   "category": "retail",
+   "box": {
+    "x": 0.52,
+    "y": 0.05,
+    "w": 0.16,
+    "h": 0.07
+   },
+   "note": "Second sighting, square on."
+  },
+  {
+   "keyframeId": "kf_73689cbe-8dd5-4ce8-88ba-96d6ade7ffbe",
+   "nameEn": "Lobster King Pao Fan",
+   "category": "retail",
+   "box": {
+    "x": 0.05,
+    "y": 0.12,
+    "w": 0.14,
+    "h": 0.08
+   },
+   "note": "Stall fascia reading 'LOBSTER KING PAO FAN' with Chinese above."
+  },
+  {
+   "keyframeId": "kf_ab1d4e8f-335a-4629-b083-1034ef1711cd",
+   "nameEn": "Lobster King Pao Fan",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.05,
+    "w": 0.18,
+    "h": 0.1
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_ab1d4e8f-335a-4629-b083-1034ef1711cd",
+   "nameEn": "Social Bite",
+   "category": "retail",
+   "box": {
+    "x": 0.28,
+    "y": 0.1,
+    "w": 0.13,
+    "h": 0.06
+   },
+   "note": "Red fascia reading 'SOCIAL BITE' with Chinese characters."
+  },
+  {
+   "keyframeId": "kf_8ffd2630-1159-46e7-b188-0e4cd536cee6",
+   "nameEn": "Social Bite",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.05,
+    "w": 0.13,
+    "h": 0.09
+   },
+   "note": "Second sighting, square on."
+  },
+  {
+   "keyframeId": "kf_8ffd2630-1159-46e7-b188-0e4cd536cee6",
+   "nameEn": "Jue Jhi Lor Mee",
+   "category": "retail",
+   "box": {
+    "x": 0.6,
+    "y": 0.12,
+    "w": 0.13,
+    "h": 0.08
+   },
+   "note": "Blue fascia reading 'JUE JHI LOR MEE' with Chinese above."
+  },
+  {
+   "keyframeId": "kf_8be6f2e1-c07a-4b35-a585-3daa14dcb4cb",
+   "nameEn": "Jue Jhi Lor Mee",
+   "category": "retail",
+   "box": {
+    "x": 0.35,
+    "y": 0.12,
+    "w": 0.11,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_8be6f2e1-c07a-4b35-a585-3daa14dcb4cb",
+   "nameEn": "Freshgreens",
+   "category": "retail",
+   "box": {
+    "x": 0.2,
+    "y": 0.1,
+    "w": 0.11,
+    "h": 0.05
+   },
+   "note": "Small fascia reading 'freshgreens'."
+  },
+  {
+   "keyframeId": "kf_336c258f-b44a-4657-8b3d-e379bb438055",
+   "nameEn": "Jue Jhi Lor Mee",
+   "category": "retail",
+   "box": {
+    "x": 0.78,
+    "y": 0.1,
+    "w": 0.13,
+    "h": 0.08
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_d0f179db-c953-4022-a44b-cc631adb6c26",
+   "nameEn": "Jue Jhi Lor Mee",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.05,
+    "w": 0.11,
+    "h": 0.09
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_d0f179db-c953-4022-a44b-cc631adb6c26",
+   "nameEn": "Hainanese Chicken Rice & Claypot Rice",
+   "category": "retail",
+   "box": {
+    "x": 0.35,
+    "y": 0.42,
+    "w": 0.16,
+    "h": 0.08
+   },
+   "note": "Stall signed in Chinese and English for Hainanese chicken rice and claypot rice. Distinct from the 'CHICKEN RICE' stall seen earlier."
+  },
+  {
+   "keyframeId": "kf_3b21979c-e5c6-4903-9896-01743672fe13",
+   "nameEn": "Tian Xin Dessert",
+   "category": "retail",
+   "box": {
+    "x": 0.62,
+    "y": 0.1,
+    "w": 0.18,
+    "h": 0.1
+   },
+   "note": "Green fascia reading '甜心' with 'dessert' beneath."
+  },
+  {
+   "keyframeId": "kf_7acb3453-92d0-4242-bfb6-4dab6415884b",
+   "nameEn": "Xiang Rice",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.05,
+    "w": 0.13,
+    "h": 0.11
+   },
+   "note": "Red fascia ending '…XIANG RICE'; the leading word is out of frame."
+  },
+  {
+   "keyframeId": "kf_7acb3453-92d0-4242-bfb6-4dab6415884b",
+   "nameEn": "Fa Fa Fu",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.1,
+    "w": 0.14,
+    "h": 0.08
+   },
+   "note": "Stall signed '發發福'. No romanisation on the fascia; this is a transliteration."
+  },
+  {
+   "keyframeId": "kf_666a3543-e56b-417a-bcb1-8c77a9d9c19d",
+   "nameEn": "Fa Fa Fu",
+   "category": "retail",
+   "box": {
+    "x": 0.05,
+    "y": 0.05,
+    "w": 0.16,
+    "h": 0.09
+   },
+   "note": "Second sighting, square on."
+  },
+  {
+   "keyframeId": "kf_226961b1-a953-40c3-9760-5d0d05437db4",
+   "nameEn": "Munchi",
+   "category": "retail",
+   "box": {
+    "x": 0.42,
+    "y": 0.05,
+    "w": 0.15,
+    "h": 0.09
+   },
+   "note": "Stall fascia reading 'Munchi'."
+  },
+  {
+   "keyframeId": "kf_226961b1-a953-40c3-9760-5d0d05437db4",
+   "nameEn": "Man Na La",
+   "category": "retail",
+   "box": {
+    "x": 0.66,
+    "y": 0.1,
+    "w": 0.15,
+    "h": 0.08
+   },
+   "note": "Korean stall signed '만나라' with 'MAN NA LA' beneath."
+  },
+  {
+   "keyframeId": "kf_df0b407d-53e4-4154-b2bb-c1d46f096cb1",
+   "nameEn": "Man Na La",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.05,
+    "w": 0.15,
+    "h": 0.1
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_df0b407d-53e4-4154-b2bb-c1d46f096cb1",
+   "nameEn": "P&J Western Food",
+   "category": "retail",
+   "box": {
+    "x": 0.1,
+    "y": 0.12,
+    "w": 0.15,
+    "h": 0.08
+   },
+   "note": "Red fascia reading 'P&J WESTERN FOOD'."
+  },
+  {
+   "keyframeId": "kf_01fee468-e49b-4e75-98fc-ff49c22e83fb",
+   "nameEn": "P&J Western Food",
+   "category": "retail",
+   "box": {
+    "x": 0.05,
+    "y": 0.05,
+    "w": 0.18,
+    "h": 0.09
+   },
+   "note": "Second sighting, square on."
+  },
+  {
+   "keyframeId": "kf_47f28107-30b4-4ae1-ad7b-ade58f699202",
+   "nameEn": "Rojak Popiah",
+   "category": "retail",
+   "box": {
+    "x": 0.46,
+    "y": 0.3,
+    "w": 0.14,
+    "h": 0.06
+   },
+   "note": "Stall signed '啵吔·薄餅' with 'ROJAK · POPIAH' beneath."
+  },
+  {
+   "keyframeId": "kf_47f28107-30b4-4ae1-ad7b-ade58f699202",
+   "nameEn": "Ah Kong Homemade Ban Mian",
+   "category": "retail",
+   "box": {
+    "x": 0.62,
+    "y": 0.29,
+    "w": 0.16,
+    "h": 0.06
+   },
+   "note": "Stall signed '阿公刀麻切 — AH KONG HOMEMADE BAN MIAN'."
+  },
+  {
+   "keyframeId": "kf_47f28107-30b4-4ae1-ad7b-ade58f699202",
+   "nameEn": "Ah Fat Braised Duck",
+   "category": "retail",
+   "box": {
+    "x": 0.82,
+    "y": 0.29,
+    "w": 0.13,
+    "h": 0.07
+   },
+   "note": "Stall signed '啊肥卤鸭 — AH FAT BRAISED DUCK'."
+  },
+  {
+   "keyframeId": "kf_6a26a584-6dcc-49b0-8b39-1be6926a1a79",
+   "nameEn": "Rojak Popiah",
+   "category": "retail",
+   "box": {
+    "x": 0.62,
+    "y": 0.3,
+    "w": 0.18,
+    "h": 0.07
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_10bfd369-fdc1-4f25-ad58-6a65b94a8929",
+   "nameEn": "Chinatown Mala Hotpot",
+   "category": "retail",
+   "box": {
+    "x": 0.55,
+    "y": 0.05,
+    "w": 0.3,
+    "h": 0.1
+   },
+   "note": "Stall signed '川·串·水麻辣香锅 — Chinatown Mala Hotpot'."
+  },
+  {
+   "keyframeId": "kf_0751ad6e-e235-45b7-938f-e9b061fec9b7",
+   "nameEn": "Day Night Herbal Soup",
+   "category": "retail",
+   "box": {
+    "x": 0.16,
+    "y": 0.05,
+    "w": 0.26,
+    "h": 0.1
+   },
+   "note": "Stall signed 'DAY NIGHT HERBAL SOUP'."
+  },
+  {
+   "keyframeId": "kf_17d0d32c-f002-48a5-a376-a3223c0516e7",
+   "nameEn": "Festive Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.0,
+    "y": 0.3,
+    "w": 0.13,
+    "h": 0.06
+   },
+   "note": "Signed 'FESTIVE PLAZA'. This is the space the LED banner named earlier, so the event stage belongs to it."
+  },
+  {
+   "keyframeId": "kf_24eb0923-7a45-42bd-ab56-5fc9d20236b4",
+   "nameEn": "Festive Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.72,
+    "y": 0.42,
+    "w": 0.2,
+    "h": 0.06
+   },
+   "note": "Second sighting, across the void."
+  },
+  {
+   "keyframeId": "kf_d585eb57-6771-4d6c-ac7b-24e9e4447982",
+   "nameEn": "Wanton noodle stall",
+   "category": "retail",
+   "box": {
+    "x": 0.8,
+    "y": 0.2,
+    "w": 0.15,
+    "h": 0.08
+   },
+   "note": "Stall signed '云吞面'. No romanised trading name visible."
+  },
+  {
+   "keyframeId": "kf_d585eb57-6771-4d6c-ac7b-24e9e4447982",
+   "nameEn": "Children's ride (Festive Plaza)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.42,
+    "y": 0.3,
+    "w": 0.22,
+    "h": 0.16
+   },
+   "note": "Coin-operated vehicle ride beside the plaza."
+  },
+  {
+   "keyframeId": "kf_caf60dd7-e8e1-4029-9045-3422bab8ad44",
+   "nameEn": "Children's ride (Festive Plaza)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.72,
+    "y": 0.55,
+    "w": 0.25,
+    "h": 0.28
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_0f82f3fa-6992-4f60-a1c9-479b454db763",
+   "nameEn": "Kopi Kiosk",
+   "category": "retail",
+   "box": {
+    "x": 0.5,
+    "y": 0.05,
+    "w": 0.3,
+    "h": 0.11
+   },
+   "note": "Neon fascia reading 'KOPI KIOSK'."
+  },
+  {
+   "keyframeId": "kf_0f82f3fa-6992-4f60-a1c9-479b454db763",
+   "nameEn": "Soya bean stall",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.2,
+    "w": 0.15,
+    "h": 0.1
+   },
+   "note": "Adjacent stall signed in Chinese for soya bean drinks."
+  },
+  {
+   "keyframeId": "kf_b9755f50-c931-4db0-9bc7-20ed66414559",
+   "nameEn": "Escalator (hawker centre)",
+   "category": "facility",
+   "box": {
+    "x": 0.15,
+    "y": 0.2,
+    "w": 0.3,
+    "h": 0.5
+   },
+   "note": "Escalator up from the hawker centre level."
+  },
+  {
+   "keyframeId": "kf_8c8cc2b8-5061-4973-b004-ad3e5904f688",
+   "nameEn": "Our Tampines Hub wall sign",
+   "category": "facility",
+   "box": {
+    "x": 0.78,
+    "y": 0.02,
+    "w": 0.22,
+    "h": 0.1
+   },
+   "note": "Third sighting, on a column at the hawker centre exit."
+  },
+  {
+   "keyframeId": "kf_db24b8ae-0d0e-44a7-90c9-decabe184508",
+   "nameEn": "Ahjuma Econ Bee Hoon",
+   "category": "retail",
+   "box": {
+    "x": 0.42,
+    "y": 0.05,
+    "w": 0.16,
+    "h": 0.08
+   },
+   "note": "Stall signed '靓嫂经济米粉 — AHJUMA ECON BEE HOON'."
+  },
+  {
+   "keyframeId": "kf_ef7787cf-6ab7-4bdf-a962-f52297447a6e",
+   "nameEn": "Ahjuma Econ Bee Hoon",
+   "category": "retail",
+   "box": {
+    "x": 0.16,
+    "y": 0.1,
+    "w": 0.16,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_890dba3c-23ce-46c0-85b4-be740d036348",
+   "nameEn": "Ahjuma Econ Bee Hoon",
+   "category": "retail",
+   "box": {
+    "x": 0.28,
+    "y": 0.02,
+    "w": 0.27,
+    "h": 0.1
+   },
+   "note": "Third sighting, square on and fully legible."
+  },
+  {
+   "keyframeId": "kf_561fcdc5-2cae-409b-a831-c44f602b1439",
+   "nameEn": "F&B directory board",
+   "category": "facility",
+   "box": {
+    "x": 0.42,
+    "y": 0.22,
+    "w": 0.26,
+    "h": 0.1
+   },
+   "note": "Board headed 'F&B at Our Tampines Hub' carrying a grid of tenant logos. Worth revisiting at full resolution: it is a complete list of the food tenants, which no single frame of shopfronts can give."
+  },
+  {
+   "keyframeId": "kf_c6fc9975-c8d6-46f3-b73b-0b8801c04e4a",
+   "nameEn": "F&B directory board",
+   "category": "facility",
+   "box": {
+    "x": 0.28,
+    "y": 0.22,
+    "w": 0.17,
+    "h": 0.1
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_c6fc9975-c8d6-46f3-b73b-0b8801c04e4a",
+   "nameEn": "Return the tray mural",
+   "category": "community",
+   "box": {
+    "x": 0.02,
+    "y": 0.28,
+    "w": 0.18,
+    "h": 0.14
+   },
+   "note": "Painted wall reading 'Return the tray / Eat from the tray'."
+  },
+  {
+   "keyframeId": "kf_8b38aa50-6cac-4725-bfcf-c020161fb654",
+   "nameEn": "F&B directory board",
+   "category": "facility",
+   "box": {
+    "x": 0.42,
+    "y": 0.22,
+    "w": 0.3,
+    "h": 0.16
+   },
+   "note": "Third sighting, close and square on — the best frame for reading the tenant list."
+  },
+  {
+   "keyframeId": "kf_f04a8ff9-779c-413d-950d-914a84cadf15",
+   "nameEn": "F&B directory board",
+   "category": "facility",
+   "box": {
+    "x": 0.05,
+    "y": 0.22,
+    "w": 0.35,
+    "h": 0.33
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_18341feb-0fbf-4b9e-b2f8-2c7c1741c299",
+   "nameEn": "Free parking display",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.02,
+    "w": 0.18,
+    "h": 0.13
+   },
+   "note": "Screen advertising free parking. Useful for arrival by car."
+  },
+  {
+   "keyframeId": "kf_6707d91e-8f92-49f8-b256-25a2a1d35a8c",
+   "nameEn": "North Plaza",
+   "category": "facility",
+   "box": {
+    "x": 0.6,
+    "y": 0.22,
+    "w": 0.15,
+    "h": 0.06
+   },
+   "note": "Signed 'NORTH PLAZA' over the exit to the road."
+  },
+  {
+   "keyframeId": "kf_6707d91e-8f92-49f8-b256-25a2a1d35a8c",
+   "nameEn": "Trolley bay (North Plaza)",
+   "category": "facility",
+   "box": {
+    "x": 0.0,
+    "y": 0.3,
+    "w": 0.2,
+    "h": 0.3
+   },
+   "note": "Rank of supermarket trolleys by the exit."
+  },
+  {
+   "keyframeId": "kf_533063b7-6ee9-445a-a0f5-a72d2f0a958a",
+   "nameEn": "North Plaza",
+   "category": "facility",
+   "box": {
+    "x": 0.52,
+    "y": 0.2,
+    "w": 0.16,
+    "h": 0.06
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_533063b7-6ee9-445a-a0f5-a72d2f0a958a",
+   "nameEn": "Taxi stand (North Plaza)",
+   "category": "facility",
+   "box": {
+    "x": 0.78,
+    "y": 0.1,
+    "w": 0.1,
+    "h": 0.08
+   },
+   "note": "Signed taxi stand at the north exit."
+  },
+  {
+   "keyframeId": "kf_dd47db65-2eec-4917-841b-4309e5d713e3",
+   "nameEn": "Taxi stand (North Plaza)",
+   "category": "facility",
+   "box": {
+    "x": 0.1,
+    "y": 0.28,
+    "w": 0.1,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_68b73847-670a-47ea-9bd2-e9f607f3f1dd",
+   "nameEn": "Ramen Hitoyoshi",
+   "category": "retail",
+   "box": {
+    "x": 0.2,
+    "y": 0.3,
+    "w": 0.3,
+    "h": 0.08
+   },
+   "note": "Glazed shopfront signed 'RAMEN HITOYOSHI'."
+  },
+  {
+   "keyframeId": "kf_68b73847-670a-47ea-9bd2-e9f607f3f1dd",
+   "nameEn": "Bee mascot statue",
+   "category": "community",
+   "box": {
+    "x": 0.22,
+    "y": 0.42,
+    "w": 0.09,
+    "h": 0.2
+   },
+   "note": "Third sighting: a second bee figure, this one at North Plaza."
+  },
+  {
+   "keyframeId": "kf_319c2c59-2692-4944-a3b7-04f1d80a6bc5",
+   "nameEn": "North Plaza directory",
+   "category": "facility",
+   "box": {
+    "x": 0.85,
+    "y": 0.35,
+    "w": 0.13,
+    "h": 0.15
+   },
+   "note": "Freestanding directory panel headed 'North Plaza'."
+  },
+  {
+   "keyframeId": "kf_57b94a83-dd0b-4136-9bd1-932b73d4f6c1",
+   "nameEn": "Ramen Hitoyoshi",
+   "category": "retail",
+   "box": {
+    "x": 0.3,
+    "y": 0.25,
+    "w": 0.25,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_118c6639-b2e2-4ef8-b736-8e1ef3651440",
+   "nameEn": "Ramen Hitoyoshi",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.2,
+    "w": 0.38,
+    "h": 0.1
+   },
+   "note": "Third sighting, square on."
+  },
+  {
+   "keyframeId": "kf_118c6639-b2e2-4ef8-b736-8e1ef3651440",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.3,
+    "w": 0.13,
+    "h": 0.08
+   },
+   "note": "Second sighting: the mall entrance from North Plaza."
+  },
+  {
+   "keyframeId": "kf_bc3d4ab2-345d-4a13-bb98-a6f06093cb8c",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.02,
+    "w": 0.2,
+    "h": 0.12
+   },
+   "note": "Third sighting: 'Festive Mall @ Our Tampines Hub' over the entrance."
+  },
+  {
+   "keyframeId": "kf_bc3d4ab2-345d-4a13-bb98-a6f06093cb8c",
+   "nameEn": "Festive Mall wayfinding",
+   "category": "facility",
+   "box": {
+    "x": 0.62,
+    "y": 0.3,
+    "w": 0.23,
+    "h": 0.08
+   },
+   "note": "Directional signs for Central Plaza, Town Square and Lobby A."
+  },
+  {
+   "keyframeId": "kf_7f392ef2-00f7-452d-8de1-23136a187b8c",
+   "nameEn": "Timezone",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.28,
+    "y": 0.02,
+    "w": 0.09,
+    "h": 0.28
+   },
+   "note": "Red column branded TIMEZONE with 'FUN STARTS AT #B1-13' — the arcade, and its unit number."
+  },
+  {
+   "keyframeId": "kf_7f392ef2-00f7-452d-8de1-23136a187b8c",
+   "nameEn": "Festive Mall wayfinding",
+   "category": "facility",
+   "box": {
+    "x": 0.08,
+    "y": 0.02,
+    "w": 0.23,
+    "h": 0.07
+   },
+   "note": "Second sighting: Festive Mall, Central Plaza, Town Square, Lobby A."
+  },
+  {
+   "keyframeId": "kf_cf72d5be-8880-404a-885e-440a5afb789c",
+   "nameEn": "Timezone",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.78,
+    "y": 0.02,
+    "w": 0.11,
+    "h": 0.28
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_5da4166f-fd20-420f-b1b4-d9e16060308e",
+   "nameEn": "Timezone",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.0,
+    "y": 0.05,
+    "w": 0.17,
+    "h": 0.5
+   },
+   "note": "Third sighting, close up."
+  },
+  {
+   "keyframeId": "kf_5da4166f-fd20-420f-b1b4-d9e16060308e",
+   "nameEn": "#LoveOTH installation",
+   "category": "community",
+   "box": {
+    "x": 0.2,
+    "y": 0.35,
+    "w": 0.13,
+    "h": 0.1
+   },
+   "note": "Freestanding '#♥OTH' letters — a photo spot."
+  },
+  {
+   "keyframeId": "kf_2254e0c2-9706-4062-bce0-1741c656287b",
+   "nameEn": "Bakery (Festive Mall)",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.35,
+    "w": 0.28,
+    "h": 0.25
+   },
+   "note": "Open bread racks facing the walkway. The fascia is out of frame, so the trading name is unknown."
+  },
+  {
+   "keyframeId": "kf_ee3a6aa7-1163-4999-84f5-55f0365b6928",
+   "nameEn": "Festive Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.78,
+    "y": 0.28,
+    "w": 0.17,
+    "h": 0.06
+   },
+   "note": "Third sighting, signed over the atrium."
+  },
+  {
+   "keyframeId": "kf_669d3319-cee9-4016-bc71-7832e3b61227",
+   "nameEn": "Festive Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.72,
+    "y": 0.22,
+    "w": 0.18,
+    "h": 0.06
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_669d3319-cee9-4016-bc71-7832e3b61227",
+   "nameEn": "Festive Plaza event seating",
+   "category": "facility",
+   "box": {
+    "x": 0.75,
+    "y": 0.35,
+    "w": 0.25,
+    "h": 0.15
+   },
+   "note": "Rows of children's tables and chairs set out for an event."
+  },
+  {
+   "keyframeId": "kf_83799773-f759-4417-af6d-240a0c462408",
+   "nameEn": "Festive Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.22,
+    "y": 0.22,
+    "w": 0.16,
+    "h": 0.06
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_83799773-f759-4417-af6d-240a0c462408",
+   "nameEn": "Festive Plaza event seating",
+   "category": "facility",
+   "box": {
+    "x": 0.25,
+    "y": 0.38,
+    "w": 0.4,
+    "h": 0.17
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_a365de89-7fe5-4b86-a92b-023eb2f92dd8",
+   "nameEn": "Festive Plaza event seating",
+   "category": "facility",
+   "box": {
+    "x": 0.3,
+    "y": 0.38,
+    "w": 0.45,
+    "h": 0.2
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_57f51ad5-694c-418e-b8a2-0b19d0ef3336",
+   "nameEn": "Service Centre",
+   "category": "government",
+   "box": {
+    "x": 0.02,
+    "y": 0.28,
+    "w": 0.14,
+    "h": 0.07
+   },
+   "note": "Signed 'SERVICE CENTRE' over a counter off the plaza. Likely the Public Service Centre the directory names on L1."
+  },
+  {
+   "keyframeId": "kf_d183828c-8aa1-4528-b0f7-99be2fa6fe7c",
+   "nameEn": "Service Centre",
+   "category": "government",
+   "box": {
+    "x": 0.78,
+    "y": 0.18,
+    "w": 0.18,
+    "h": 0.06
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_e45b9d27-9d84-4bc0-9df2-b2795267656d",
+   "nameEn": "Gate 9",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.3,
+    "w": 0.1,
+    "h": 0.06
+   },
+   "note": "Stadium gate signed 'GATE 9', opening onto Festive Plaza."
+  },
+  {
+   "keyframeId": "kf_e45b9d27-9d84-4bc0-9df2-b2795267656d",
+   "nameEn": "Service Centre",
+   "category": "government",
+   "box": {
+    "x": 0.55,
+    "y": 0.3,
+    "w": 0.2,
+    "h": 0.06
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_8a862597-c17e-41eb-925f-413d5bbf46bb",
+   "nameEn": "Gate 9",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.28,
+    "w": 0.1,
+    "h": 0.06
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_8a862597-c17e-41eb-925f-413d5bbf46bb",
+   "nameEn": "Festive Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.55,
+    "y": 0.2,
+    "w": 0.3,
+    "h": 0.08
+   },
+   "note": "Sixth sighting."
+  },
+  {
+   "keyframeId": "kf_4c78aead-7de5-47a9-aed0-668c79a8a4d2",
+   "nameEn": "Our Tampines Hub wall sign",
+   "category": "facility",
+   "box": {
+    "x": 0.04,
+    "y": 0.28,
+    "w": 0.22,
+    "h": 0.08
+   },
+   "note": "Fourth sighting: the full mark, 'Our Tampines Hub — Part of the People's Association'."
+  },
+  {
+   "keyframeId": "kf_4c78aead-7de5-47a9-aed0-668c79a8a4d2",
+   "nameEn": "Service Centre",
+   "category": "government",
+   "box": {
+    "x": 0.42,
+    "y": 0.28,
+    "w": 0.18,
+    "h": 0.06
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_222c621a-d9a7-4c7a-b46d-25164dba4ee8",
+   "nameEn": "Service Centre",
+   "category": "government",
+   "box": {
+    "x": 0.55,
+    "y": 0.28,
+    "w": 0.18,
+    "h": 0.06
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_fc5e86fd-caf2-43be-917f-ee0831507389",
+   "nameEn": "Central Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.05,
+    "y": 0.05,
+    "w": 0.19,
+    "h": 0.15
+   },
+   "note": "Board headed 'CENTRAL PLAZA' with a programme schedule — another named space in the mall."
+  },
+  {
+   "keyframeId": "kf_1552ad6b-281f-461e-8d6d-d441e3078020",
+   "nameEn": "Lobby B",
+   "category": "facility",
+   "box": {
+    "x": 0.1,
+    "y": 0.05,
+    "w": 0.13,
+    "h": 0.07
+   },
+   "note": "Door signed 'Lobby B'. Lobby J was seen earlier on the other side of the building."
+  },
+  {
+   "keyframeId": "kf_d5479979-047d-4e16-80ce-14ef788618fe",
+   "nameEn": "Lobby B",
+   "category": "facility",
+   "box": {
+    "x": 0.52,
+    "y": 0.05,
+    "w": 0.24,
+    "h": 0.1
+   },
+   "note": "Second sighting, square on."
+  },
+  {
+   "keyframeId": "kf_e4aa3a35-8685-4bbb-b494-c24e0f48ea75",
+   "nameEn": "Welcome sign (Central Plaza)",
+   "category": "facility",
+   "box": {
+    "x": 0.72,
+    "y": 0.1,
+    "w": 0.28,
+    "h": 0.07
+   },
+   "note": "Overhead sign reading 'WELCOME TO OUR TAMPINES HUB'."
+  },
+  {
+   "keyframeId": "kf_32e41a56-907b-44f4-a880-d639a08a48a0",
+   "nameEn": "Gate 10",
+   "category": "facility",
+   "box": {
+    "x": 0.05,
+    "y": 0.2,
+    "w": 0.14,
+    "h": 0.07
+   },
+   "note": "Stadium gate signed 'GATE 10'."
+  },
+  {
+   "keyframeId": "kf_32e41a56-907b-44f4-a880-d639a08a48a0",
+   "nameEn": "Town Square access notice (Gate 10)",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.28,
+    "w": 0.13,
+    "h": 0.15
+   },
+   "note": "'NO ACCESS — access to Town Square via Gate 3'. Note this differs from Gate 11's notice, which sends people to Gate 1."
+  },
+  {
+   "keyframeId": "kf_32e41a56-907b-44f4-a880-d639a08a48a0",
+   "nameEn": "Family Nexus",
+   "category": "government",
+   "box": {
+    "x": 0.24,
+    "y": 0.32,
+    "w": 0.09,
+    "h": 0.06
+   },
+   "note": "Unit fascia reading 'Family Nexus' — a government family services point."
+  },
+  {
+   "keyframeId": "kf_feffb4c8-8a21-4b05-bb30-900134ad2388",
+   "nameEn": "Service Centre",
+   "category": "government",
+   "box": {
+    "x": 0.42,
+    "y": 0.15,
+    "w": 0.33,
+    "h": 0.1
+   },
+   "note": "Sixth sighting: 'SERVICE CENTRE @ Our Tampines Hub' in full."
+  },
+  {
+   "keyframeId": "kf_c04f12e2-4fea-4289-a5fe-6e80bce793f5",
+   "nameEn": "Service Centre",
+   "category": "government",
+   "box": {
+    "x": 0.0,
+    "y": 0.05,
+    "w": 0.14,
+    "h": 0.09
+   },
+   "note": "Seventh sighting."
+  },
+  {
+   "keyframeId": "kf_c7c74b56-6fe6-43d3-99c5-f9e82db527e5",
+   "nameEn": "E-Lobby",
+   "category": "facility",
+   "box": {
+    "x": 0.05,
+    "y": 0.28,
+    "w": 0.1,
+    "h": 0.06
+   },
+   "note": "Signed 'E-Lobby' — a lift lobby off Central Plaza."
+  },
+  {
+   "keyframeId": "kf_c7c74b56-6fe6-43d3-99c5-f9e82db527e5",
+   "nameEn": "National Day event stage",
+   "category": "community",
+   "box": {
+    "x": 0.28,
+    "y": 0.18,
+    "w": 0.27,
+    "h": 0.12
+   },
+   "note": "Stage under a 'Happy Birthday Singapore' arch, set up in Central Plaza. Seasonal."
+  },
+  {
+   "keyframeId": "kf_8e935860-1f92-42f0-8cc5-a83713e572a8",
+   "nameEn": "E-Lobby",
+   "category": "facility",
+   "box": {
+    "x": 0.62,
+    "y": 0.28,
+    "w": 0.1,
+    "h": 0.06
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_2cf9d38f-ee47-47f5-a1d8-91cd564152a8",
+   "nameEn": "E-Lobby",
+   "category": "facility",
+   "box": {
+    "x": 0.1,
+    "y": 0.28,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_c418465a-3e01-4ec4-90e7-051166b512a4",
+   "nameEn": "Lobby C",
+   "category": "facility",
+   "box": {
+    "x": 0.5,
+    "y": 0.28,
+    "w": 0.12,
+    "h": 0.07
+   },
+   "note": "Another lettered lobby off Central Plaza; the letter is partly obscured."
+  },
+  {
+   "keyframeId": "kf_8ef86ca6-3ed6-43cc-8dad-2c092a417301",
+   "nameEn": "National Day event stage",
+   "category": "community",
+   "box": {
+    "x": 0.28,
+    "y": 0.18,
+    "w": 0.34,
+    "h": 0.11
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_f1decf9c-fb7a-455e-8350-972dd3e54bd7",
+   "nameEn": "National Day event stage",
+   "category": "community",
+   "box": {
+    "x": 0.55,
+    "y": 0.18,
+    "w": 0.35,
+    "h": 0.12
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_99fd6f25-13a0-47d4-ad09-8eb88f35d22f",
+   "nameEn": "Service Centre",
+   "category": "government",
+   "box": {
+    "x": 0.38,
+    "y": 0.28,
+    "w": 0.15,
+    "h": 0.06
+   },
+   "note": "Eighth sighting, across the plaza."
+  },
+  {
+   "keyframeId": "kf_ef7be812-0e8f-4a65-976a-88d483e0b0b8",
+   "nameEn": "OTH mascot plush",
+   "category": "community",
+   "box": {
+    "x": 0.42,
+    "y": 0.62,
+    "w": 0.13,
+    "h": 0.23
+   },
+   "note": "Large soft toy of the hub mascot on a plinth, beside the event."
+  },
+  {
+   "keyframeId": "kf_702c6c5e-fe58-4a98-880b-2783daa704b3",
+   "nameEn": "Lobby A",
+   "category": "facility",
+   "box": {
+    "x": 0.75,
+    "y": 0.28,
+    "w": 0.08,
+    "h": 0.08
+   },
+   "note": "Lift lobby signed 'Lobby A'."
+  },
+  {
+   "keyframeId": "kf_702c6c5e-fe58-4a98-880b-2783daa704b3",
+   "nameEn": "Escalator (Festive Mall)",
+   "category": "facility",
+   "box": {
+    "x": 0.78,
+    "y": 0.3,
+    "w": 0.22,
+    "h": 0.32
+   },
+   "note": "Escalator pair in the mall, marked with a caution notice."
+  },
+  {
+   "keyframeId": "kf_c1e6534f-7ec5-40af-919d-c2b3b82b7227",
+   "nameEn": "Lobby A",
+   "category": "facility",
+   "box": {
+    "x": 0.55,
+    "y": 0.3,
+    "w": 0.08,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_e9f33a84-5962-43af-9c5f-0b0fdba0c899",
+   "nameEn": "Lobby A",
+   "category": "facility",
+   "box": {
+    "x": 0.5,
+    "y": 0.28,
+    "w": 0.1,
+    "h": 0.12
+   },
+   "note": "Third sighting, with a note that the lift serves B2, L1 and L3."
+  },
+  {
+   "keyframeId": "kf_e9f33a84-5962-43af-9c5f-0b0fdba0c899",
+   "nameEn": "#LoveOTH installation",
+   "category": "community",
+   "box": {
+    "x": 0.75,
+    "y": 0.3,
+    "w": 0.25,
+    "h": 0.3
+   },
+   "note": "Second sighting: the illuminated 'OTH' letters, here from the mall side."
+  },
+  {
+   "keyframeId": "kf_39346487-1f52-4dc0-8a91-e734e01b64a7",
+   "nameEn": "#LoveOTH installation",
+   "category": "community",
+   "box": {
+    "x": 0.62,
+    "y": 0.35,
+    "w": 0.23,
+    "h": 0.2
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_39346487-1f52-4dc0-8a91-e734e01b64a7",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.1,
+    "y": 0.2,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_9a0940a0-343d-4424-8d14-a542288b0594",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.55,
+    "y": 0.15,
+    "w": 0.2,
+    "h": 0.1
+   },
+   "note": "Fifth sighting: 'Festive Mall @ Our Tampines Hub'."
+  },
+  {
+   "keyframeId": "kf_9a0940a0-343d-4424-8d14-a542288b0594",
+   "nameEn": "Timezone",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.85,
+    "y": 0.1,
+    "w": 0.15,
+    "h": 0.5
+   },
+   "note": "Fourth sighting of the '#B1-13' column."
+  },
+  {
+   "keyframeId": "kf_7afb676d-fbc3-4a5d-8f8f-aa13ea966f51",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.16,
+    "y": 0.02,
+    "w": 0.18,
+    "h": 0.08
+   },
+   "note": "Sixth sighting: the glazed entrance from Central Plaza."
+  },
+  {
+   "keyframeId": "kf_ec9f42dc-c251-454e-a1aa-b8c0e62248da",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.55,
+    "y": 0.02,
+    "w": 0.3,
+    "h": 0.08
+   },
+   "note": "Seventh sighting."
+  },
+  {
+   "keyframeId": "kf_66bd1985-f36f-4d3f-9bb5-d3047ec69e2d",
+   "nameEn": "Ramen Hitoyoshi",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.02,
+    "w": 0.14,
+    "h": 0.08
+   },
+   "note": "Fourth sighting, from inside the mall."
+  },
+  {
+   "keyframeId": "kf_66bd1985-f36f-4d3f-9bb5-d3047ec69e2d",
+   "nameEn": "Valu$",
+   "category": "retail",
+   "box": {
+    "x": 0.62,
+    "y": 0.28,
+    "w": 0.23,
+    "h": 0.47
+   },
+   "note": "Second sighting: the shop's shelving spilling into the mall walkway."
+  },
+  {
+   "keyframeId": "kf_66bd1985-f36f-4d3f-9bb5-d3047ec69e2d",
+   "nameEn": "Makan Malah",
+   "category": "retail",
+   "box": {
+    "x": 0.16,
+    "y": 0.3,
+    "w": 0.06,
+    "h": 0.25
+   },
+   "note": "Second sighting: the MAKANMALAH wall lettering."
+  },
+  {
+   "keyframeId": "kf_08db0d8b-6b2e-4253-9fa5-b2cd2b356629",
+   "nameEn": "Valu$",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.3,
+    "w": 0.28,
+    "h": 0.55
+   },
+   "note": "Third sighting, with 'lowest prices in Singapore' signage."
+  },
+  {
+   "keyframeId": "kf_08db0d8b-6b2e-4253-9fa5-b2cd2b356629",
+   "nameEn": "Makan Malah",
+   "category": "retail",
+   "box": {
+    "x": 0.05,
+    "y": 0.3,
+    "w": 0.09,
+    "h": 0.25
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_cb1932a7-8e08-43a5-bc55-efdbe5da2624",
+   "nameEn": "Valu$",
+   "category": "retail",
+   "box": {
+    "x": 0.55,
+    "y": 0.28,
+    "w": 0.25,
+    "h": 0.52
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_59855d57-e8f3-407d-bc70-79c245ac7792",
+   "nameEn": "Makan Malah",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.05,
+    "w": 0.26,
+    "h": 0.25
+   },
+   "note": "Fourth sighting: the full 'MAKAN MALAH!' graphic."
+  },
+  {
+   "keyframeId": "kf_9566d958-5fcc-4e05-8fcf-393fe5d0d3ce",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.85,
+    "w": 0.25,
+    "h": 0.1
+   },
+   "note": "Eighth sighting: a floor graphic reading '…Friendly Mall'."
+  },
+  {
+   "keyframeId": "kf_2e15b886-a349-4e6a-a0ae-7b195db3047d",
+   "nameEn": "Al Barakah",
+   "category": "retail",
+   "box": {
+    "x": 0.62,
+    "y": 0.02,
+    "w": 0.18,
+    "h": 0.09
+   },
+   "note": "Clothing shop signed 'AL BARAKAH', with mannequins out front."
+  },
+  {
+   "keyframeId": "kf_4f302de8-b751-4eac-b7a7-e1a1e4552127",
+   "nameEn": "Flymax",
+   "category": "retail",
+   "box": {
+    "x": 0.52,
+    "y": 0.05,
+    "w": 0.13,
+    "h": 0.07
+   },
+   "note": "Sports shop signed 'Flymax', stocking Li-Ning."
+  },
+  {
+   "keyframeId": "kf_95865c51-e23c-4a09-b12a-2a0f345ca933",
+   "nameEn": "Guzman y Gomez",
+   "category": "retail",
+   "box": {
+    "x": 0.05,
+    "y": 0.28,
+    "w": 0.16,
+    "h": 0.12
+   },
+   "note": "Yellow roundel and fascia reading 'GUZMAN Y GOMEZ'."
+  },
+  {
+   "keyframeId": "kf_95865c51-e23c-4a09-b12a-2a0f345ca933",
+   "nameEn": "Ray-Ban",
+   "category": "retail",
+   "box": {
+    "x": 0.78,
+    "y": 0.35,
+    "w": 0.14,
+    "h": 0.07
+   },
+   "note": "Eyewear counter branded Ray-Ban."
+  },
+  {
+   "keyframeId": "kf_9bc224ba-7464-4e38-bf46-dcb86e9cb079",
+   "nameEn": "Ray-Ban",
+   "category": "retail",
+   "box": {
+    "x": 0.85,
+    "y": 0.32,
+    "w": 0.15,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_9bc224ba-7464-4e38-bf46-dcb86e9cb079",
+   "nameEn": "Guzman y Gomez",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.2,
+    "w": 0.3,
+    "h": 0.2
+   },
+   "note": "Second sighting: the menu boards over the counter."
+  },
+  {
+   "keyframeId": "kf_47a9f50f-91cb-4698-bbce-7d401411e7be",
+   "nameEn": "Ray-Ban",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.28,
+    "w": 0.16,
+    "h": 0.08
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_6a1a5cdd-2ffe-442a-953e-ab6dccb9fb88",
+   "nameEn": "Mall food kiosk (Festive Mall)",
+   "category": "retail",
+   "box": {
+    "x": 0.4,
+    "y": 0.2,
+    "w": 0.35,
+    "h": 0.25
+   },
+   "note": "Counter with 'two great deals' boards and stools. Its fascia name is not in any frame; needs confirming on site."
+  },
+  {
+   "keyframeId": "kf_558d47bd-2fe6-4212-a3b2-7f942142c867",
+   "nameEn": "Drinks collection counter",
+   "category": "retail",
+   "box": {
+    "x": 0.05,
+    "y": 0.55,
+    "w": 0.3,
+    "h": 0.2
+   },
+   "note": "Counter signed 'Drinks Collection' — an order pickup point."
+  },
+  {
+   "keyframeId": "kf_d2da94af-4a58-4767-a4f8-e1cb6a06bea7",
+   "nameEn": "Jinjja Kitchen",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.02,
+    "w": 0.15,
+    "h": 0.07
+   },
+   "note": "Korean restaurant; the fascia reads '…SSAI KITCHEN' at this angle and is most likely Jinjja Kitchen. Worth confirming."
+  },
+  {
+   "keyframeId": "kf_a934884d-a27f-41ea-a682-559f83d0a9e8",
+   "nameEn": "Roll Sip Repeat",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.28,
+    "w": 0.2,
+    "h": 0.08
+   },
+   "note": "Wall lettering reading 'ROLL.SIP.' — the full slogan appears in the next frame."
+  },
+  {
+   "keyframeId": "kf_4cb1e6fc-269e-4803-ac64-3565397d2040",
+   "nameEn": "Roll Sip Repeat",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.28,
+    "w": 0.28,
+    "h": 0.08
+   },
+   "note": "Second sighting: 'ROLL.SIP.REPEAT' in full. A slogan rather than a fascia, so the trading name still needs confirming."
+  },
+  {
+   "keyframeId": "kf_1e19418b-7e8a-422c-b25b-667b007a9597",
+   "nameEn": "Tenderfresh",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.28,
+    "w": 0.15,
+    "h": 0.08
+   },
+   "note": "Fascia reading 'tenderfresh 可滋鲜'."
+  },
+  {
+   "keyframeId": "kf_ae0f34c1-00c8-4cbe-849a-198cfc24cfcf",
+   "nameEn": "Tenderfresh",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.28,
+    "w": 0.14,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_2587f5d2-cefd-4368-ad25-a95566cb7f75",
+   "nameEn": "Stuff'd",
+   "category": "retail",
+   "box": {
+    "x": 0.2,
+    "y": 0.3,
+    "w": 0.11,
+    "h": 0.07
+   },
+   "note": "Fascia reading \"stuff'd\"."
+  },
+  {
+   "keyframeId": "kf_2587f5d2-cefd-4368-ad25-a95566cb7f75",
+   "nameEn": "Popeyes",
+   "category": "retail",
+   "box": {
+    "x": 0.32,
+    "y": 0.3,
+    "w": 0.14,
+    "h": 0.08
+   },
+   "note": "Orange fascia reading 'Popeyes'."
+  },
+  {
+   "keyframeId": "kf_d4dcc74b-3a45-40b5-b942-e724c6d9a35f",
+   "nameEn": "Stuff'd",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.3,
+    "w": 0.14,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_d4dcc74b-3a45-40b5-b942-e724c6d9a35f",
+   "nameEn": "Sushiro",
+   "category": "retail",
+   "box": {
+    "x": 0.55,
+    "y": 0.32,
+    "w": 0.14,
+    "h": 0.07
+   },
+   "note": "Fifth sighting: the shopfront itself, at last, rather than its advertising pillar."
+  },
+  {
+   "keyframeId": "kf_83ca3066-1262-41cd-8381-e9e1af3a6319",
+   "nameEn": "Hugabo",
+   "category": "retail",
+   "box": {
+    "x": 0.28,
+    "y": 0.1,
+    "w": 0.11,
+    "h": 0.08
+   },
+   "note": "Fascia reading 'HUGABO 好8宝'."
+  },
+  {
+   "keyframeId": "kf_83ca3066-1262-41cd-8381-e9e1af3a6319",
+   "nameEn": "Sushiro",
+   "category": "retail",
+   "box": {
+    "x": 0.35,
+    "y": 0.1,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Sixth sighting."
+  },
+  {
+   "keyframeId": "kf_73f1a7ed-9923-4933-83a7-f31e5ab51ff6",
+   "nameEn": "Hugabo",
+   "category": "retail",
+   "box": {
+    "x": 0.85,
+    "y": 0.05,
+    "w": 0.15,
+    "h": 0.09
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_e85cbc82-f1ab-4f86-881d-2a556bd16c39",
+   "nameEn": "Old Chang Kee",
+   "category": "retail",
+   "box": {
+    "x": 0.82,
+    "y": 0.02,
+    "w": 0.18,
+    "h": 0.08
+   },
+   "note": "Fourth sighting: '老曾记 Old Chang Kee', a different unit from the one at the start of the walk."
+  },
+  {
+   "keyframeId": "kf_2c2e22d2-c00e-4fa2-a2e3-333897f994a2",
+   "nameEn": "Community Dining",
+   "category": "retail",
+   "box": {
+    "x": 0.16,
+    "y": 0.42,
+    "w": 0.1,
+    "h": 0.2
+   },
+   "note": "Column branded 'COMMUNITY DINING' — a named food zone opening onto the park."
+  },
+  {
+   "keyframeId": "kf_2c2e22d2-c00e-4fa2-a2e3-333897f994a2",
+   "nameEn": "Self-order kiosks (Community Dining)",
+   "category": "facility",
+   "box": {
+    "x": 0.3,
+    "y": 0.2,
+    "w": 0.3,
+    "h": 0.3
+   },
+   "note": "Counter signed 'ORDER HERE' with self-service screens."
+  },
+  {
+   "keyframeId": "kf_f7dc20f2-7003-437f-8282-506b27d33e43",
+   "nameEn": "Community Dining",
+   "category": "retail",
+   "box": {
+    "x": 0.6,
+    "y": 0.35,
+    "w": 0.12,
+    "h": 0.2
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_73cf5cad-2ea5-480c-a6de-2e2d4c55917c",
+   "nameEn": "Community Dining",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.38,
+    "w": 0.13,
+    "h": 0.22
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_73cf5cad-2ea5-480c-a6de-2e2d4c55917c",
+   "nameEn": "iTea",
+   "category": "retail",
+   "box": {
+    "x": 0.42,
+    "y": 0.38,
+    "w": 0.1,
+    "h": 0.24
+   },
+   "note": "Second sighting: an itea column with its mascot."
+  },
+  {
+   "keyframeId": "kf_1c6f0200-5c3c-4e39-8751-ae0a327f74e8",
+   "nameEn": "Kopifellas",
+   "category": "retail",
+   "box": {
+    "x": 0.88,
+    "y": 0.28,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_b125796a-f701-477d-b092-cf1e41dcfe2f",
+   "nameEn": "iTea",
+   "category": "retail",
+   "box": {
+    "x": 0.28,
+    "y": 0.02,
+    "w": 0.14,
+    "h": 0.53
+   },
+   "note": "Third sighting: the wrapped column reading 'itea — Hello Tampines'."
+  },
+  {
+   "keyframeId": "kf_886cfd83-e9d3-41cf-b103-aea92793b816",
+   "nameEn": "Ticket Counter",
+   "category": "facility",
+   "box": {
+    "x": 0.12,
+    "y": 0.35,
+    "w": 0.1,
+    "h": 0.15
+   },
+   "note": "Second sighting: still showing 'Sorry, we are closed'."
+  },
+  {
+   "keyframeId": "kf_886cfd83-e9d3-41cf-b103-aea92793b816",
+   "nameEn": "Unit #B1-27/28",
+   "category": "retail",
+   "box": {
+    "x": 0.4,
+    "y": 0.42,
+    "w": 0.1,
+    "h": 0.08
+   },
+   "note": "An advertisement gives the unit number #B1-27/28 but the tenant name is not legible."
+  },
+  {
+   "keyframeId": "kf_808e6e99-1e58-45cf-8395-705712a00842",
+   "nameEn": "Ticket Counter",
+   "category": "facility",
+   "box": {
+    "x": 0.42,
+    "y": 0.32,
+    "w": 0.13,
+    "h": 0.16
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_e6ed4e6b-2cec-4864-b2b1-5ca720cf3aa1",
+   "nameEn": "Festive Walk overhead directory",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.28,
+    "w": 0.4,
+    "h": 0.07
+   },
+   "note": "Fifth sighting: 'Festive Arts Theatre / Library / Town Square Gate 1'."
+  },
+  {
+   "keyframeId": "kf_7343f995-f885-46fc-b13b-9131d55d6160",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.15,
+    "w": 0.2,
+    "h": 0.08
+   },
+   "note": "Ninth sighting: 'Festive Mall @ B1'."
+  },
+  {
+   "keyframeId": "kf_fc8cd711-38aa-409e-8ee9-407b61c58f3e",
+   "nameEn": "Blue face mural",
+   "category": "community",
+   "box": {
+    "x": 0.38,
+    "y": 0.2,
+    "w": 0.24,
+    "h": 0.42
+   },
+   "note": "Large painted face in sunglasses on the wall by the Gate 1 stair. A landmark people describe rather than name."
+  },
+  {
+   "keyframeId": "kf_30a488d7-2508-4aa7-9a49-2e0d2f8ff576",
+   "nameEn": "Blue face mural",
+   "category": "community",
+   "box": {
+    "x": 0.0,
+    "y": 0.15,
+    "w": 0.22,
+    "h": 0.6
+   },
+   "note": "Second sighting, close up."
+  },
+  {
+   "keyframeId": "kf_3d203e92-143d-42f8-9864-d2d0eb020514",
+   "nameEn": "Drinking fountain locations board",
+   "category": "facility",
+   "box": {
+    "x": 0.0,
+    "y": 0.02,
+    "w": 0.17,
+    "h": 0.19
+   },
+   "note": "Board listing every drinking fountain by level and lobby. Worth reading at full resolution — it is a ready-made list of a facility type visitors ask for."
+  },
+  {
+   "keyframeId": "kf_89b24fc5-dd1b-4ef0-bc1e-4c4b36946390",
+   "nameEn": "McDonald's",
+   "category": "retail",
+   "box": {
+    "x": 0.65,
+    "y": 0.05,
+    "w": 0.14,
+    "h": 0.16
+   },
+   "note": "'McSaver Meals from $5' poster on the shopfront."
+  },
+  {
+   "keyframeId": "kf_0e4b6c78-7b87-4bf4-a742-698b6d7980e9",
+   "nameEn": "McDonald's",
+   "category": "retail",
+   "box": {
+    "x": 0.7,
+    "y": 0.1,
+    "w": 0.16,
+    "h": 0.21
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_0ce3d338-699e-4fc7-9dbc-1724961febf4",
+   "nameEn": "Rabbit sculptures (Festive Plaza)",
+   "category": "community",
+   "box": {
+    "x": 0.3,
+    "y": 0.55,
+    "w": 0.14,
+    "h": 0.21
+   },
+   "note": "Pale rabbit figures used as seating on the boardwalk. Items, and a landmark children steer toward."
+  },
+  {
+   "keyframeId": "kf_3abfd172-0d7e-494c-bf85-82ee56a7b2b5",
+   "nameEn": "McDonald's",
+   "category": "retail",
+   "box": {
+    "x": 0.42,
+    "y": 0.1,
+    "w": 0.27,
+    "h": 0.45
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_c1a2609c-3ebe-4ee3-8b96-d24d1afa4a13",
+   "nameEn": "McDonald's",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.3,
+    "w": 0.11,
+    "h": 0.09
+   },
+   "note": "Fourth sighting: the McDelivery counter."
+  },
+  {
+   "keyframeId": "kf_c1a2609c-3ebe-4ee3-8b96-d24d1afa4a13",
+   "nameEn": "Cyberscape Adventure (event standee)",
+   "category": "community",
+   "box": {
+    "x": 0.35,
+    "y": 0.28,
+    "w": 0.14,
+    "h": 0.15
+   },
+   "note": "Fourth sighting: the same event, here as a stage backdrop."
+  },
+  {
+   "keyframeId": "kf_742bb2ec-67b5-472d-bb3f-72d81dc76147",
+   "nameEn": "McDonald's",
+   "category": "retail",
+   "box": {
+    "x": 0.68,
+    "y": 0.05,
+    "w": 0.15,
+    "h": 0.11
+   },
+   "note": "Fifth sighting: the golden arches over the entrance."
+  },
+  {
+   "keyframeId": "kf_21250e7a-ef18-45e6-886a-af2f40dd9f91",
+   "nameEn": "Festive Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.55,
+    "y": 0.42,
+    "w": 0.16,
+    "h": 0.07
+   },
+   "note": "Seventh sighting."
+  },
+  {
+   "keyframeId": "kf_0949ead9-c68e-48f4-975d-6d25c4231b31",
+   "nameEn": "Festive Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.2,
+    "y": 0.05,
+    "w": 0.13,
+    "h": 0.06
+   },
+   "note": "Eighth sighting."
+  },
+  {
+   "keyframeId": "kf_57e86024-ed12-4382-8bdd-2dd9ce847112",
+   "nameEn": "24 Hrs eatery",
+   "category": "retail",
+   "box": {
+    "x": 0.65,
+    "y": 0.02,
+    "w": 0.08,
+    "h": 0.06
+   },
+   "note": "Neon sign reading '24 HRS' over a glazed eatery. The trading name is not on this face."
+  },
+  {
+   "keyframeId": "kf_8564fb36-2b6b-42f4-b5d0-bf5d165fea8a",
+   "nameEn": "McDonald's",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.28,
+    "w": 0.09,
+    "h": 0.15
+   },
+   "note": "Sixth sighting: the arches at the plaza corner."
+  },
+  {
+   "keyframeId": "kf_8564fb36-2b6b-42f4-b5d0-bf5d165fea8a",
+   "nameEn": "Gate 8",
+   "category": "facility",
+   "box": {
+    "x": 0.18,
+    "y": 0.42,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Stadium gate signed 'GATE 8', reached from Festive Plaza."
+  },
+  {
+   "keyframeId": "kf_8564fb36-2b6b-42f4-b5d0-bf5d165fea8a",
+   "nameEn": "Rabbit sculptures (Festive Plaza)",
+   "category": "community",
+   "box": {
+    "x": 0.42,
+    "y": 0.62,
+    "w": 0.16,
+    "h": 0.2
+   },
+   "note": "Second sighting, in orange."
+  },
+  {
+   "keyframeId": "kf_49c4ca9b-ec85-4cf2-b789-ac347294d4ee",
+   "nameEn": "24 Hrs eatery",
+   "category": "retail",
+   "box": {
+    "x": 0.1,
+    "y": 0.28,
+    "w": 0.15,
+    "h": 0.09
+   },
+   "note": "Second sighting, square on."
+  },
+  {
+   "keyframeId": "kf_54e4082e-7b61-476c-9ce0-8d0e3fc450bd",
+   "nameEn": "Festive Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.52,
+    "y": 0.28,
+    "w": 0.2,
+    "h": 0.07
+   },
+   "note": "Ninth sighting."
+  },
+  {
+   "keyframeId": "kf_80d2d9c2-ec88-4fbf-83e2-751fa6d4fdd9",
+   "nameEn": "Festive Plaza exhibition",
+   "category": "community",
+   "box": {
+    "x": 0.55,
+    "y": 0.42,
+    "w": 0.35,
+    "h": 0.2
+   },
+   "note": "Run of photographic display boards set out along the plaza."
+  },
+  {
+   "keyframeId": "kf_f1e294ce-00ae-46e1-9653-c30dea957db4",
+   "nameEn": "Festive Plaza",
+   "category": "community",
+   "box": {
+    "x": 0.55,
+    "y": 0.25,
+    "w": 0.25,
+    "h": 0.08
+   },
+   "note": "Tenth sighting."
+  },
+  {
+   "keyframeId": "kf_eb6f920c-ed87-4461-830b-135cd5926603",
+   "nameEn": "E-Lobby",
+   "category": "facility",
+   "box": {
+    "x": 0.05,
+    "y": 0.42,
+    "w": 0.12,
+    "h": 0.07
+   },
+   "note": "Fourth sighting, from the upper walkway."
+  },
+  {
+   "keyframeId": "kf_417c546c-6255-4adc-a512-0beb5db6af5d",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.88,
+    "y": 0.22,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Tenth sighting."
+  },
+  {
+   "keyframeId": "kf_e1782374-1af5-41be-8d6c-5938e9b59538",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.55,
+    "y": 0.28,
+    "w": 0.18,
+    "h": 0.07
+   },
+   "note": "Eleventh sighting."
+  },
+  {
+   "keyframeId": "kf_2ac96b48-b33e-4fcd-8b4a-b77bf270c256",
+   "nameEn": "Custom shop (Festive Walk)",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.3,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Fascia beginning 'CUSTOM…'; the rest is out of frame."
+  },
+  {
+   "keyframeId": "kf_029a8659-69cc-4ae8-ad67-a54e84a20a74",
+   "nameEn": "Festive Walk",
+   "category": "community",
+   "box": {
+    "x": 0.42,
+    "y": 0.58,
+    "w": 0.16,
+    "h": 0.06
+   },
+   "note": "Signed 'FESTIVE WALK'. The facilities directory lists Festive Walk on L1; this confirms where it runs."
+  },
+  {
+   "keyframeId": "kf_9e3eac8e-19ea-4edf-b93c-9df4f1af5e0d",
+   "nameEn": "Festive Walk",
+   "category": "community",
+   "box": {
+    "x": 0.72,
+    "y": 0.55,
+    "w": 0.16,
+    "h": 0.07
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_7cb858e0-bd00-4084-bdc1-c2547d487010",
+   "nameEn": "Customers",
+   "category": "retail",
+   "box": {
+    "x": 0.18,
+    "y": 0.28,
+    "w": 0.14,
+    "h": 0.06
+   },
+   "note": "Neon fascia reading 'CUSTOMERS'. An unusual trading name, so worth confirming it is not part of a longer sign."
+  },
+  {
+   "keyframeId": "kf_e29670ee-ff15-4748-a430-6a949e80d707",
+   "nameEn": "Customers",
+   "category": "retail",
+   "box": {
+    "x": 0.1,
+    "y": 0.28,
+    "w": 0.2,
+    "h": 0.08
+   },
+   "note": "Second sighting, square on and clearly lit."
+  },
+  {
+   "keyframeId": "kf_9c00a52c-74a2-44fb-b6d6-49ffd3bc95a7",
+   "nameEn": "Customers",
+   "category": "retail",
+   "box": {
+    "x": 0.62,
+    "y": 0.22,
+    "w": 0.23,
+    "h": 0.08
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_15ee3612-919d-4001-957f-8fc4ca19d6c7",
+   "nameEn": "MOS Burger",
+   "category": "retail",
+   "box": {
+    "x": 0.55,
+    "y": 0.3,
+    "w": 0.13,
+    "h": 0.08
+   },
+   "note": "Green fascia reading 'MOS BURGER'."
+  },
+  {
+   "keyframeId": "kf_15ee3612-919d-4001-957f-8fc4ca19d6c7",
+   "nameEn": "Carnival (event)",
+   "category": "community",
+   "box": {
+    "x": 0.82,
+    "y": 0.35,
+    "w": 0.18,
+    "h": 0.2
+   },
+   "note": "Fairground-styled 'CARNIVAL' banner over a temporary attraction."
+  },
+  {
+   "keyframeId": "kf_43387836-ad18-4d6e-b301-5f60339c3d43",
+   "nameEn": "MOS Burger",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.28,
+    "w": 0.11,
+    "h": 0.1
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_43387836-ad18-4d6e-b301-5f60339c3d43",
+   "nameEn": "Heart Bowl",
+   "category": "retail",
+   "box": {
+    "x": 0.16,
+    "y": 0.35,
+    "w": 0.13,
+    "h": 0.1
+   },
+   "note": "Standee for 'Heart Bowl', a public service bowling promotion."
+  },
+  {
+   "keyframeId": "kf_97bfe9b4-4663-4a86-84c9-cd7d94f737d6",
+   "nameEn": "J'Kids Funland",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.78,
+    "y": 0.3,
+    "w": 0.15,
+    "h": 0.07
+   },
+   "note": "Fascia reading \"J'KIDS FUNLAND\" — an indoor play centre."
+  },
+  {
+   "keyframeId": "kf_97bfe9b4-4663-4a86-84c9-cd7d94f737d6",
+   "nameEn": "Carnival (event)",
+   "category": "community",
+   "box": {
+    "x": 0.75,
+    "y": 0.38,
+    "w": 0.25,
+    "h": 0.2
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_80b47b21-5a2a-46fa-851d-52d2d15a12cf",
+   "nameEn": "Mr Bean",
+   "category": "retail",
+   "box": {
+    "x": 0.12,
+    "y": 0.1,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Green fascia reading 'mr bean'."
+  },
+  {
+   "keyframeId": "kf_80b47b21-5a2a-46fa-851d-52d2d15a12cf",
+   "nameEn": "Heart Bowl",
+   "category": "retail",
+   "box": {
+    "x": 0.3,
+    "y": 0.05,
+    "w": 0.14,
+    "h": 0.07
+   },
+   "note": "Second sighting: an LED banner for 'From Heart to Bowl, with Love'."
+  },
+  {
+   "keyframeId": "kf_80e7a76f-3962-476a-8352-f1cec2052af9",
+   "nameEn": "Stuff'd",
+   "category": "retail",
+   "box": {
+    "x": 0.14,
+    "y": 0.42,
+    "w": 0.09,
+    "h": 0.06
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_d9782e5d-9a47-45de-a301-6c2399df8e08",
+   "nameEn": "Stuff'd",
+   "category": "retail",
+   "box": {
+    "x": 0.05,
+    "y": 0.42,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Fourth sighting, square on."
+  },
+  {
+   "keyframeId": "kf_d9782e5d-9a47-45de-a301-6c2399df8e08",
+   "nameEn": "J'Kids Amusement",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.85,
+    "y": 0.42,
+    "w": 0.15,
+    "h": 0.14
+   },
+   "note": "Standee for \"J'KIDS AMUSEMENT — family fun starts here\". Related to J'Kids Funland seen a moment earlier; possibly the same operator."
+  },
+  {
+   "keyframeId": "kf_b5939abc-ff5e-4929-8525-cd9acaf62710",
+   "nameEn": "J'Kids Amusement",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.42,
+    "y": 0.62,
+    "w": 0.14,
+    "h": 0.17
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_b5939abc-ff5e-4929-8525-cd9acaf62710",
+   "nameEn": "Unit #B1-27/28",
+   "category": "retail",
+   "box": {
+    "x": 0.08,
+    "y": 0.68,
+    "w": 0.11,
+    "h": 0.08
+   },
+   "note": "Second sighting of the unit number, here on a column wrap."
+  },
+  {
+   "keyframeId": "kf_d50f0c3c-b62c-4f50-9d26-069f93d3f39b",
+   "nameEn": "Unit #B1-27/28",
+   "category": "retail",
+   "box": {
+    "x": 0.5,
+    "y": 0.72,
+    "w": 0.13,
+    "h": 0.08
+   },
+   "note": "Third sighting. The wrap advertises a beauty treatment at $28 with 'no appointment, no packages', so the tenant is a beauty or skincare unit."
   }
  ]
 }
