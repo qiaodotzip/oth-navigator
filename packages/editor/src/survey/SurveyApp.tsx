@@ -29,6 +29,10 @@ export function SurveyApp({ api }: { api: Api }) {
     void saver.refresh();
   }, [saver]);
 
+  // Null means the model has never loaded — almost always a server that is not
+  // running. An empty list means it loaded and there is genuinely nothing, and
+  // saying "nothing yet" for both has sent someone hunting for lost data twice.
+  const loaded = model !== null;
   const captures: Capture[] = model?.captures ?? [];
   const places: Place[] = model?.places ?? [];
   const capture = captures.find(c => c.id === captureId) ?? null;
@@ -104,7 +108,13 @@ export function SurveyApp({ api }: { api: Api }) {
           <h2 className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-stone-500">
             Captures
           </h2>
-          {captures.length === 0 && (
+          {!loaded && (
+            <p data-testid="captures-unloaded" className="px-1 py-2 text-xs text-amber-700">
+              Nothing loaded. If this does not clear, the server is probably not
+              running — start it with <code>npm run dev</code>.
+            </p>
+          )}
+          {loaded && captures.length === 0 && (
             <p className="px-1 py-2 text-xs italic text-stone-400">
               Nothing yet. Add the walkthrough you filmed.
             </p>

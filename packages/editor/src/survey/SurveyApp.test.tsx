@@ -42,6 +42,26 @@ describe("SurveyApp", () => {
     await waitFor(() => expect(screen.getByTestId("capture-cap_1")).toBeTruthy());
   });
 
+  it("says the model never loaded, rather than that there is nothing", async () => {
+    // A server that is not running used to read as an empty survey, which sent
+    // someone hunting for data that was never lost.
+    const api = fakeApi({ getModel: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) });
+    render(<SurveyApp api={api} />);
+    await waitFor(() => expect(screen.getByTestId("captures-unloaded")).toBeTruthy());
+    expect(screen.getByTestId("captures-unloaded").textContent).toMatch(/npm run dev/);
+  });
+
+  it("says there is genuinely nothing once the model has loaded empty", async () => {
+    const api = fakeApi({
+      getModel: vi.fn().mockResolvedValue(parseModel({
+        building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      })),
+    });
+    render(<SurveyApp api={api} />);
+    await waitFor(() => expect(screen.getByText(/add the walkthrough you filmed/i)).toBeTruthy());
+    expect(screen.queryByTestId("captures-unloaded")).toBeNull();
+  });
+
   it("asks you to pick one before showing a video", async () => {
     render(<SurveyApp api={fakeApi()} />);
     await waitFor(() => expect(screen.getByText(/pick a capture/i)).toBeTruthy());
