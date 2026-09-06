@@ -70,12 +70,27 @@ npm test          # vitest across all packages
 npm run typecheck # tsc -b, strict
 
 # seed the building and 8 levels, then create yourself an account
-npm run seed   --workspace @oth/server
-npm run invite --workspace @oth/server -- you@example.com "Your Name"
+npm run seed
+npm run invite -- you@example.com "Your Name"
+npm run reset-password -- you@example.com   # if the one-time password is lost
 
-# two terminals
-npm run start --workspace @oth/server   # API on :3000
-npm run dev   --workspace @oth/editor   # editor on :5180
+# the server also serves the built editor, so this is all you need
+npm run dev             # API and editor on :3000
+
+# or, to work on the editor with hot reload, a second terminal
+npm run dev --workspace @oth/editor   # editor on :5180
+```
+
+Every command above also exists in the long `--workspace @oth/server` form.
+The short ones are here because the long ones are easy to mistype, and a
+mistyped one fails silently enough to look like the app is broken.
+
+Working with the map and the survey:
+
+```bash
+npm run trace                        # zones traced from the 2020 storey plans
+npm run survey:export -- <captureId> # frames + a brief for a labelling agent
+npm run survey:import -- <file.json> # the agent's proposals, for review
 ```
 
 Locally the server falls back to file-backed PGlite, the same engine the tests
