@@ -7,7 +7,7 @@ import { navigate } from "../route";
 import { CaptureVideo } from "./CaptureVideo";
 import { frameFilename, orderFrames } from "./frames";
 import { PlaceTagger, type Tag } from "./PlaceTagger";
-import { labelCounts, labelsForFrame } from "./labelled";
+import { labelCounts, labelsForFrame, type FrameLabel } from "./labelled";
 import { sightingCounts } from "./places";
 import { ReviewPanel } from "./ReviewPanel";
 import { reviewProgress } from "./review";
@@ -73,6 +73,17 @@ export function SurveyApp({ api }: { api: Api }) {
     } catch (err) {
       useEditorStore.getState().setStatus(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  /**
+   * Takes one tag off one frame.
+   *
+   * Only the sighting goes: the place stays, and so does every other frame it
+   * was seen in. Rejecting the place in Review is the blunt instrument; this is
+   * for the common case of one wrong tag among several right ones.
+   */
+  async function removeLabel(label: FrameLabel) {
+    await saver.remove("sighting", label.sighting.id, label.sighting.version);
   }
 
   async function tag(t: Tag) {
@@ -214,6 +225,7 @@ export function SurveyApp({ api }: { api: Api }) {
                   places={places}
                   labels={labelsForFrame(model, frame.id)}
                   onTag={t => void tag(t)}
+                  onRemoveLabel={l => void removeLabel(l)}
                 />
               )}
             </div>

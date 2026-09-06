@@ -26,6 +26,7 @@ export function PlaceTagger({
   places,
   labels,
   onTag,
+  onRemoveLabel,
 }: {
   keyframe: Keyframe;
   imageUrl: string;
@@ -33,6 +34,8 @@ export function PlaceTagger({
   /** What has already been said about this frame, drawn over it. */
   labels: readonly FrameLabel[];
   onTag: (tag: Tag) => void;
+  /** Remove one tag from this frame, without touching the place elsewhere. */
+  onRemoveLabel: (label: FrameLabel) => void;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [name, setName] = useState("");
@@ -143,11 +146,19 @@ export function PlaceTagger({
               }}
             >
               <span
-                className={`absolute -top-5 left-0 whitespace-nowrap rounded px-1 text-xs text-white ${
+                className={`pointer-events-auto absolute -top-5 left-0 flex items-center gap-1 whitespace-nowrap rounded px-1 text-xs text-white ${
                   place.status === "proposed" ? "bg-sky-500" : "bg-emerald-600"
                 }`}
               >
                 {place.nameEn}
+                <button
+                  aria-label={`Remove tag ${place.nameEn} from this frame`}
+                  title="Remove this tag"
+                  className="font-bold"
+                  onClick={() => onRemoveLabel({ sighting, place })}
+                >
+                  x
+                </button>
               </span>
             </div>
           );
@@ -162,11 +173,19 @@ export function PlaceTagger({
             {labels.filter(l => !l.sighting.box).map(({ sighting, place }) => (
               <span
                 key={sighting.id}
-                className={`rounded px-1 text-xs text-white ${
+                className={`pointer-events-auto flex items-center gap-1 rounded px-1 text-xs text-white ${
                   place.status === "proposed" ? "bg-sky-500/90" : "bg-emerald-600/90"
                 }`}
               >
                 {place.nameEn}
+                <button
+                  aria-label={`Remove tag ${place.nameEn} from this frame`}
+                  title="Remove this tag — it applies to the whole frame"
+                  className="font-bold"
+                  onClick={() => onRemoveLabel({ sighting, place })}
+                >
+                  x
+                </button>
               </span>
             ))}
           </div>
@@ -221,6 +240,31 @@ export function PlaceTagger({
       <p className="text-xs text-stone-500">
         {box ? "Tagging the boxed area." : "Tagging the whole frame — drag a box to be specific."}
       </p>
+
+      {labels.length > 0 && (
+        <div data-testid="tags-on-frame" className="space-y-1 border-t pt-2">
+          <p className="text-xs font-medium text-stone-500">
+            Tagged in this frame ({labels.length})
+          </p>
+          {labels.map(label => (
+            <div key={label.sighting.id} className="flex items-center gap-2 text-xs">
+              <span className="min-w-0 flex-1 truncate">
+                {label.place.nameEn}
+                <span className="ml-1 text-stone-400">
+                  {label.sighting.box ? "boxed" : "whole frame"}
+                </span>
+              </span>
+              <button
+                aria-label={`Remove ${label.place.nameEn} from this frame`}
+                className="rounded border px-2 py-0.5"
+                onClick={() => onRemoveLabel(label)}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

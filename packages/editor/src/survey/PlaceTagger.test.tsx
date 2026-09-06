@@ -15,12 +15,14 @@ const places = [
 
 function setup(existing = places, labels: FrameLabel[] = []) {
   const onTag = vi.fn();
+  const onRemoveLabel = vi.fn();
   render(
     <PlaceTagger
-      keyframe={keyframe} imageUrl="/f.jpg" places={existing} labels={labels} onTag={onTag}
+      keyframe={keyframe} imageUrl="/f.jpg" places={existing} labels={labels}
+      onTag={onTag} onRemoveLabel={onRemoveLabel}
     />,
   );
-  return { onTag };
+  return { onTag, onRemoveLabel };
 }
 
 const label = (id: string, place: Place, box?: Box): FrameLabel => ({
@@ -163,8 +165,8 @@ describe("PlaceTagger", () => {
 describe("what has already been identified", () => {
   it("draws a box where the thing was, named", () => {
     setup(places, [label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.3, h: 0.1 })]);
-    expect(screen.getByTestId("label-box-s1")).toBeTruthy();
-    expect(screen.getByText("NTUC FairPrice")).toBeTruthy();
+    const box = screen.getByTestId("label-box-s1");
+    expect(box.textContent).toContain("NTUC FairPrice");
   });
 
   it("places the box where the fractions say", () => {
@@ -184,5 +186,38 @@ describe("what has already been identified", () => {
   it("shows nothing when the frame has not been labelled", () => {
     setup();
     expect(screen.queryByTestId("whole-frame-labels")).toBeNull();
+  });
+});
+
+describe("taking a wrong tag off a frame", () => {
+  it("removes a whole-frame tag without touching the place elsewhere", () => {
+    // The case that prompted this: one frame-wide tag left over from a drag
+    // that never drew, sitting beside a correct boxed one.
+    const { onRemoveLabel } = setup(places, [label("s2", places[1]!)]);
+    fireEvent.click(screen.getByLabelText("Remove Public Library from this frame"));
+    expect(onRemoveLabel.mock.calls[0]![0].sighting.id).toBe("s2");
+  });
+
+  it("removes a boxed tag too", () => {
+    const { onRemoveLabel } = setup(places, [
+      label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.3, h: 0.1 }),
+    ]);
+    fireEvent.click(screen.getByLabelText("Remove NTUC FairPrice from this frame"));
+    expect(onRemoveLabel.mock.calls[0]![0].sighting.id).toBe("s1");
+  });
+
+  it("lists every tag on the frame, so removal does not mean hunting overlays", () => {
+    setup(places, [
+      label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.3, h: 0.1 }),
+      label("s2", places[1]!),
+    ]);
+    const list = screen.getByTestId("tags-on-frame");
+    expect(list.textContent).toContain("boxed");
+    expect(list.textContent).toContain("whole frame");
+  });
+
+  it("shows no tag list when the frame has none", () => {
+    setup();
+    expect(screen.queryByTestId("tags-on-frame")).toBeNull();
   });
 });
