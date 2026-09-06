@@ -14,7 +14,7 @@ const model = parseModel({
     { id: "kf_1", captureId: "cap_1", timeMs: 1000, imageId: "kf_1", widthPx: 640, heightPx: 480 },
   ],
   places: [{ id: "pl_1", nameEn: "NTUC FairPrice", category: "retail" }],
-  sightings: [{ id: "sg_1", placeId: "pl_1", keyframeId: "kf_1" }],
+  sightings: [{ id: "sg_1", placeId: "pl_1", keyframeId: "kf_1", box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }],
 });
 
 function fakeApi(overrides: Record<string, unknown> = {}) {
@@ -75,6 +75,25 @@ describe("SurveyApp", () => {
     const ids = [...strip.querySelectorAll("[data-testid^='filmstrip-']")]
       .map(el => el.getAttribute("data-testid"));
     expect(ids).toEqual(["filmstrip-kf_1", "filmstrip-kf_2"]);
+  });
+
+  it("marks which frames have been labelled, so coverage is visible at a glance", async () => {
+    // With hundreds of frames, "which of these have I done" is otherwise
+    // unanswerable and a stretch gets labelled twice while another is missed.
+    render(<SurveyApp api={fakeApi()} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByTestId("capture-cap_1"));
+    await screen.findByTestId("filmstrip");
+    expect(screen.getByTestId("labelled-kf_1").textContent).toBe("1");
+    expect(screen.queryByTestId("labelled-kf_2")).toBeNull();
+  });
+
+  it("draws what was identified on the frame itself", async () => {
+    render(<SurveyApp api={fakeApi()} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByTestId("capture-cap_1"));
+    fireEvent.click(await screen.findByTestId("filmstrip-kf_1"));
+    expect(screen.getByTestId("label-box-sg_1")).toBeTruthy();
   });
 
   it("lists places with how often each was seen", async () => {

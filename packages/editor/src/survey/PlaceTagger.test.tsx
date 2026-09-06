@@ -1,6 +1,7 @@
-import { KeyframeSchema, PlaceSchema } from "@oth/model";
+import { KeyframeSchema, PlaceSchema, SightingSchema, type Box, type Place } from "@oth/model";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { FrameLabel } from "./labelled";
 import { PlaceTagger } from "./PlaceTagger";
 
 const keyframe = KeyframeSchema.parse({
@@ -12,13 +13,20 @@ const places = [
   PlaceSchema.parse({ id: "p2", nameEn: "Public Library", category: "community" }),
 ];
 
-function setup(existing = places) {
+function setup(existing = places, labels: FrameLabel[] = []) {
   const onTag = vi.fn();
   render(
-    <PlaceTagger keyframe={keyframe} imageUrl="/f.jpg" places={existing} onTag={onTag} />,
+    <PlaceTagger
+      keyframe={keyframe} imageUrl="/f.jpg" places={existing} labels={labels} onTag={onTag}
+    />,
   );
   return { onTag };
 }
+
+const label = (id: string, place: Place, box?: Box): FrameLabel => ({
+  sighting: SightingSchema.parse({ id, placeId: place.id, keyframeId: "kf_1", ...(box ? { box } : {}) }),
+  place,
+});
 
 /** The frame reports a real size; jsdom gives every element zero by default. */
 beforeEach(() => {
@@ -116,5 +124,32 @@ describe("PlaceTagger", () => {
   it("says whether it is about to tag the frame or the box", () => {
     setup();
     expect(screen.getByText(/whole frame/i)).toBeTruthy();
+  });
+});
+
+describe("what has already been identified", () => {
+  it("draws a box where the thing was, named", () => {
+    setup(places, [label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.3, h: 0.1 })]);
+    expect(screen.getByTestId("label-box-s1")).toBeTruthy();
+    expect(screen.getByText("NTUC FairPrice")).toBeTruthy();
+  });
+
+  it("places the box where the fractions say", () => {
+    setup(places, [label("s1", places[0]!, { x: 0.25, y: 0.5, w: 0.2, h: 0.1 })]);
+    const box = screen.getByTestId("label-box-s1") as HTMLElement;
+    expect(box.style.left).toBe("25%");
+    expect(box.style.top).toBe("50%");
+    expect(box.style.width).toBe("20%");
+  });
+
+  it("still shows a label that applies to the whole frame", () => {
+    // No box does not mean nothing was said about the frame.
+    setup(places, [label("s2", places[1]!)]);
+    expect(screen.getByTestId("whole-frame-labels").textContent).toContain("Public Library");
+  });
+
+  it("shows nothing when the frame has not been labelled", () => {
+    setup();
+    expect(screen.queryByTestId("whole-frame-labels")).toBeNull();
   });
 });

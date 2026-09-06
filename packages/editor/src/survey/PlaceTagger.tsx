@@ -1,5 +1,6 @@
 import { TenantCategorySchema, type Box, type Keyframe, type Place } from "@oth/model";
 import { useRef, useState } from "react";
+import type { FrameLabel } from "./labelled";
 import { matchPlaces } from "./places";
 
 const CATEGORIES = TenantCategorySchema.options;
@@ -23,11 +24,14 @@ export function PlaceTagger({
   keyframe,
   imageUrl,
   places,
+  labels,
   onTag,
 }: {
   keyframe: Keyframe;
   imageUrl: string;
   places: readonly Place[];
+  /** What has already been said about this frame, drawn over it. */
+  labels: readonly FrameLabel[];
   onTag: (tag: Tag) => void;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
@@ -87,6 +91,57 @@ export function PlaceTagger({
         onMouseUp={() => setStart(null)}
       >
         <img src={imageUrl} alt={`frame ${keyframe.id}`} className="w-full" />
+
+        {/*
+          What was identified, drawn where it was identified. Without this the
+          only way to know whether a frame has been looked at is to read the
+          places list and guess.
+        */}
+        {labels.filter(l => l.sighting.box).map(({ sighting, place }) => {
+          const b = sighting.box!;
+          return (
+            <div
+              key={sighting.id}
+              data-testid={`label-box-${sighting.id}`}
+              className={`pointer-events-none absolute border-2 ${
+                place.status === "proposed" ? "border-sky-400" : "border-emerald-500"
+              }`}
+              style={{
+                left: `${b.x * 100}%`,
+                top: `${b.y * 100}%`,
+                width: `${b.w * 100}%`,
+                height: `${b.h * 100}%`,
+              }}
+            >
+              <span
+                className={`absolute -top-5 left-0 whitespace-nowrap rounded px-1 text-xs text-white ${
+                  place.status === "proposed" ? "bg-sky-500" : "bg-emerald-600"
+                }`}
+              >
+                {place.nameEn}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* Labels with no box still happened; they just apply to the whole frame. */}
+        {labels.some(l => !l.sighting.box) && (
+          <div
+            data-testid="whole-frame-labels"
+            className="pointer-events-none absolute bottom-1 left-1 flex flex-wrap gap-1"
+          >
+            {labels.filter(l => !l.sighting.box).map(({ sighting, place }) => (
+              <span
+                key={sighting.id}
+                className={`rounded px-1 text-xs text-white ${
+                  place.status === "proposed" ? "bg-sky-500/90" : "bg-emerald-600/90"
+                }`}
+              >
+                {place.nameEn}
+              </span>
+            ))}
+          </div>
+        )}
         {box && (
           <div
             data-testid="tag-box"

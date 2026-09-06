@@ -7,6 +7,7 @@ import { navigate } from "../route";
 import { CaptureVideo } from "./CaptureVideo";
 import { frameFilename, orderFrames } from "./frames";
 import { PlaceTagger, type Tag } from "./PlaceTagger";
+import { labelCounts, labelsForFrame } from "./labelled";
 import { sightingCounts } from "./places";
 import { ReviewPanel } from "./ReviewPanel";
 import { reviewProgress } from "./review";
@@ -43,6 +44,7 @@ export function SurveyApp({ api }: { api: Api }) {
   );
   const frame = frames.find(f => f.id === frameId) ?? frames[frames.length - 1] ?? null;
   const counts = sightingCounts(model?.sightings ?? []);
+  const labelled = labelCounts(model);
   const unbound = places.filter(p => !p.roomId).length;
   const waiting = reviewProgress(model).proposed;
 
@@ -162,6 +164,15 @@ export function SurveyApp({ api }: { api: Api }) {
                       >
                         <img src={api.keyframeFileUrl(f.id)} alt="" className="h-full" />
                       </button>
+                      {labelled.get(f.id) && (
+                        <span
+                          data-testid={`labelled-${f.id}`}
+                          title={`${labelled.get(f.id)} label(s)`}
+                          className="pointer-events-none absolute bottom-0 left-0 rounded-tr bg-emerald-600 px-1 text-xs text-white"
+                        >
+                          {labelled.get(f.id)}
+                        </span>
+                      )}
                       <button
                         aria-label={`Remove frame ${f.id}`}
                         title="Remove this frame"
@@ -180,6 +191,7 @@ export function SurveyApp({ api }: { api: Api }) {
                   keyframe={frame}
                   imageUrl={api.keyframeFileUrl(frame.id)}
                   places={places}
+                  labels={labelsForFrame(model, frame.id)}
                   onTag={t => void tag(t)}
                 />
               )}
