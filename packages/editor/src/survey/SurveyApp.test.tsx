@@ -23,6 +23,7 @@ function fakeApi(overrides: Record<string, unknown> = {}) {
     validate: vi.fn().mockResolvedValue({ issues: [], errorCount: 0, warningCount: 0, ok: true }),
     listLevelImages: vi.fn().mockResolvedValue([]),
     keyframeFileUrl: (id: string) => `/api/keyframes/${id}/file`,
+    deleteKeyframe: vi.fn().mockResolvedValue(undefined),
     uploadKeyframe: vi.fn().mockResolvedValue({}),
     createEntity: vi.fn().mockResolvedValue({}),
     ...overrides,
@@ -64,6 +65,25 @@ describe("SurveyApp", () => {
   it("says how many places still have no room", async () => {
     render(<SurveyApp api={fakeApi()} />);
     await waitFor(() => expect(screen.getByText(/1 not yet bound/)).toBeTruthy());
+  });
+
+  it("bins a frame that is not worth keeping", async () => {
+    const api = fakeApi();
+    render(<SurveyApp api={api} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByTestId("capture-cap_1"));
+    await screen.findByTestId("filmstrip");
+    fireEvent.click(screen.getByLabelText("Remove frame kf_1"));
+    await waitFor(() =>
+      expect((api as unknown as { deleteKeyframe: ReturnType<typeof vi.fn> }).deleteKeyframe)
+        .toHaveBeenCalledWith("kf_1"));
+  });
+
+  it("says the video will find its own frames, before a file is picked", async () => {
+    render(<SurveyApp api={fakeApi()} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByTestId("capture-cap_1"));
+    expect(screen.getByText(/find the frames for you/i)).toBeTruthy();
   });
 
   it("offers a way back to the map editor", async () => {

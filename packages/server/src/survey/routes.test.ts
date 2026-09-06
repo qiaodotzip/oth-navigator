@@ -132,3 +132,36 @@ describe("the rest of the survey layer goes through generic CRUD", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("removing a frame", () => {
+  it("retires the frame and everything said about it", async () => {
+    const kf = await json<{ keyframe: { id: string } }>(await grab(png(10, 10)));
+    await post("/api/entities/place", { data: { id: "pl_1", nameEn: "X", category: "retail" } });
+    await post("/api/entities/sighting", {
+      data: { id: "sg_1", placeId: "pl_1", keyframeId: kf.keyframe.id },
+    });
+
+    const res = await app.request(`/api/keyframes/${kf.keyframe.id}`, {
+      method: "DELETE", headers: { cookie },
+    });
+    expect(res.status).toBe(204);
+
+    const list = await app.request("/api/keyframes", { headers: { cookie } });
+    expect((await json<{ items: unknown[] }>(list)).items).toHaveLength(0);
+
+    // A label pointing at a frame nobody can see still counts toward a place.
+    const left = await app.request("/api/entities/sighting", { headers: { cookie } });
+    expect((await json<{ items: unknown[] }>(left)).items).toHaveLength(0);
+  });
+
+  it("404s a frame that is not there", async () => {
+    const res = await app.request("/api/keyframes/kf_nope", { method: "DELETE", headers: { cookie } });
+    expect(res.status).toBe(404);
+  });
+
+  it("requires authentication", async () => {
+    const kf = await json<{ keyframe: { id: string } }>(await grab(png(10, 10)));
+    const res = await app.request(`/api/keyframes/${kf.keyframe.id}`, { method: "DELETE" });
+    expect(res.status).toBe(401);
+  });
+});

@@ -55,6 +55,16 @@ export function SurveyApp({ api }: { api: Api }) {
     }
   }
 
+  async function removeFrame(id: string) {
+    try {
+      await api.deleteKeyframe(id);
+      if (frameId === id) setFrameId(null);
+      await saver.refresh();
+    } catch (err) {
+      useEditorStore.getState().setStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function tag(t: Tag) {
     if (!frame) return;
     let placeId = t.placeId;
@@ -128,16 +138,25 @@ export function SurveyApp({ api }: { api: Api }) {
               {frames.length > 0 && (
                 <div className="flex gap-1 overflow-x-auto border-t pt-2" data-testid="filmstrip">
                   {frames.map(f => (
-                    <button
-                      key={f.id}
-                      data-testid={`filmstrip-${f.id}`}
-                      className={`h-14 shrink-0 overflow-hidden rounded border-2 ${
-                        f.id === frame?.id ? "border-amber-400" : "border-transparent"
-                      }`}
-                      onClick={() => setFrameId(f.id)}
-                    >
-                      <img src={api.keyframeFileUrl(f.id)} alt="" className="h-full" />
-                    </button>
+                    <div key={f.id} className="group relative shrink-0">
+                      <button
+                        data-testid={`filmstrip-${f.id}`}
+                        className={`h-14 overflow-hidden rounded border-2 ${
+                          f.id === frame?.id ? "border-amber-400" : "border-transparent"
+                        }`}
+                        onClick={() => setFrameId(f.id)}
+                      >
+                        <img src={api.keyframeFileUrl(f.id)} alt="" className="h-full" />
+                      </button>
+                      <button
+                        aria-label={`Remove frame ${f.id}`}
+                        title="Remove this frame"
+                        className="absolute right-0 top-0 rounded bg-stone-900/80 px-1 text-xs text-white opacity-0 group-hover:opacity-100"
+                        onClick={() => void removeFrame(f.id)}
+                      >
+                        x
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

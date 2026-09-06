@@ -144,6 +144,9 @@ export function createApi(options: ApiOptions = {}) {
 
     keyframeFileUrl: (id: string) => `${base}/api/keyframes/${id}/file`,
 
+    deleteKeyframe: (id: string) =>
+      request<void>(`/api/keyframes/${id}`, { method: "DELETE" }),
+
     listLocks: async (): Promise<LockEntry[]> =>
       (await request<{ locks: LockEntry[] }>("/api/locks")).locks,
 

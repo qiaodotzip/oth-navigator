@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AppEnv } from "../app";
 import { readAsset, storeAsset } from "../assets/storage";
 import { requireUser } from "../auth/middleware";
-import { captures, keyframes } from "../db/schema";
+import { captures, keyframes, sightings } from "../db/schema";
 import { toModelRow } from "../db/rows";
 import { IMAGE_MAX_BYTES, InvalidImageError, readImageSize } from "../images/inspect";
 
@@ -72,6 +72,33 @@ keyframeRoutes.post("/", async c => {
 
   const [row] = await db.select().from(keyframes).where(eq(keyframes.id, id));
   return c.json({ keyframe: toModelRow(row!) }, 201);
+});
+
+/**
+ * Retires a frame and everything said about it.
+ *
+ * A soft delete, like every other removal here, so a frame binned by mistake is
+ * recoverable. The sightings go with it: a label pointing at a frame nobody can
+ * see is worse than no label, because it still counts toward a place.
+ */
+keyframeRoutes.delete("/:id", async c => {
+  const db = c.get("db");
+  const id = c.req.param("id");
+  const now = new Date();
+  const by = c.get("user").id;
+
+  const [row] = await db.select().from(keyframes).where(eq(keyframes.id, id));
+  if (!row) return c.json({ error: "not found" }, 404);
+
+  await db.update(sightings)
+    .set({ deletedAt: now, updatedBy: by, updatedAt: now })
+    .where(and(eq(sightings.keyframeId, id), isNull(sightings.deletedAt)));
+
+  await db.update(keyframes)
+    .set({ deletedAt: now, updatedBy: by, updatedAt: now })
+    .where(eq(keyframes.id, id));
+
+  return c.body(null, 204);
 });
 
 keyframeRoutes.get("/:id/file", async c => {

@@ -91,8 +91,11 @@ export function CaptureVideo({
       {!url && (
         <label className="block rounded border border-dashed p-4 text-center text-sm">
           <span className="block pb-2 text-stone-600">
-            Open <span className="font-medium">{filename}</span> from this computer.
-            It is never uploaded — only the frames you keep.
+            Open <span className="font-medium">{filename}</span> from this computer,
+            then let it find the frames for you.
+            <span className="mt-1 block text-xs text-stone-500">
+              The video is never uploaded — only the frames worth keeping are.
+            </span>
           </span>
           <input
             type="file"
