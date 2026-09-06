@@ -1,0 +1,29 @@
+{
+  "captureId": "cap_1788673800396",
+  "proposals": [
+    { "keyframeId": "kf_eaf2d9df-7f5c-4bb7-af64-9161cd409ab0", "nameEn": "Starbucks", "category": "retail", "levelId": "oth-L1",
+      "box": { "x": 0.83, "y": 0.23, "w": 0.17, "h": 0.07 },
+      "note": "Fascia reads STARBUCKS, running off the right edge of the frame. Confident on the name; the box is the sign, not the unit." },
+    { "keyframeId": "kf_eaf2d9df-7f5c-4bb7-af64-9161cd409ab0", "nameEn": "Welcome to Our Tampines mural", "category": "community", "levelId": "oth-L1",
+      "box": { "x": 0.10, "y": 0.00, "w": 0.70, "h": 0.62 },
+      "note": "Graffiti-style mural reading 'Welcome to Our Tampines'. A landmark worth routing to, not a tenant." },
+    { "keyframeId": "kf_eaf2d9df-7f5c-4bb7-af64-9161cd409ab0", "nameEn": "Fire extinguisher (mural wall)", "category": "facility", "levelId": "oth-L1",
+      "box": { "x": 0.69, "y": 0.60, "w": 0.06, "h": 0.19 },
+      "note": "Wall-mounted extinguisher cabinet. An item — becomes a detail once someone draws it." },
+    { "keyframeId": "kf_5eb320cd-e986-4952-bf85-9e552d37041f", "nameEn": "Sushiro", "category": "retail", "levelId": "oth-L1",
+      "box": { "x": 0.22, "y": 0.06, "w": 0.13, "h": 0.08 },
+      "note": "Advertising pillar reads SUSHIRO / スシロー and gives the unit as #103/103A. The shopfront itself is not in this frame, so the unit number is the useful part." },
+    { "keyframeId": "kf_5eb320cd-e986-4952-bf85-9e552d37041f", "nameEn": "Old Chang Kee", "category": "retail", "levelId": "oth-L1",
+      "box": { "x": 0.64, "y": 0.24, "w": 0.10, "h": 0.06 },
+      "note": "Shopfront fascia in the Old Chang Kee house style, read at an angle. Worth confirming the unit on site." },
+    { "keyframeId": "kf_5eb320cd-e986-4952-bf85-9e552d37041f", "nameEn": "iTea", "category": "retail", "levelId": "oth-L1",
+      "box": { "x": 0.44, "y": 0.43, "w": 0.05, "h": 0.05 },
+      "note": "Small 'itea' sign further down the walk. Legible but distant — capitalisation is a guess." },
+    { "keyframeId": "kf_5eb320cd-e986-4952-bf85-9e552d37041f", "nameEn": "Cyberscape Adventure (event standee)", "category": "community", "levelId": "oth-L1",
+      "box": { "x": 0.19, "y": 0.32, "w": 0.14, "h": 0.47 },
+      "note": "Wheeled standee for an event at Festive Walk East, 31 August to 6 September. Temporary — do not put it in the map, but it dates the footage." },
+    { "keyframeId": "kf_5eb320cd-e986-4952-bf85-9e552d37041f", "nameEn": "Our Tampines Hub wall sign", "category": "facility", "levelId": "oth-L1",
+      "box": { "x": 0.85, "y": 0.52, "w": 0.09, "h": 0.04 },
+      "note": "The OTH wordmark on the mural wall beside the stair." }
+  ]
+}
