@@ -1,5 +1,5 @@
 import { TenantCategorySchema, type Box, type Keyframe, type Place } from "@oth/model";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FrameLabel } from "./labelled";
 import { matchPlaces } from "./places";
 
@@ -40,6 +40,19 @@ export function PlaceTagger({
   const [start, setStart] = useState<{ x: number; y: number } | null>(null);
   const [box, setBox] = useState<Box | null>(null);
 
+  /**
+   * A drag that ends anywhere finishes the box.
+   *
+   * Releasing outside the frame is normal when boxing something at the edge,
+   * and without this the drag stayed live and the next click resized it.
+   */
+  useEffect(() => {
+    if (!start) return;
+    const up = () => setStart(null);
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, [start]);
+
   const matches = matchPlaces(places, name);
   const exact = places.find(p => p.nameEn.toLowerCase() === name.trim().toLowerCase());
 
@@ -56,11 +69,14 @@ export function PlaceTagger({
   function submit() {
     const trimmed = name.trim();
     if (trimmed === "") return;
+    // A stray click leaves a box of almost no size; that is not a box, and
+    // saving it would put a dot on the frame instead of an outline.
+    const drawn = box && box.w > 0.01 && box.h > 0.01 ? box : null;
     onTag({
       placeId: exact?.id ?? null,
       nameEn: trimmed,
       category: exact?.category ?? category,
-      ...(box ? { box } : {}),
+      ...(drawn ? { box: drawn } : {}),
     });
     setName("");
     setBox(null);
@@ -89,8 +105,21 @@ export function PlaceTagger({
           });
         }}
         onMouseUp={() => setStart(null)}
+        onDragStart={e => e.preventDefault()}
       >
-        <img src={imageUrl} alt={`frame ${keyframe.id}`} className="w-full" />
+        {/*
+          draggable={false} is load-bearing. A browser starts its own image
+          drag on mousedown and then stops delivering mousemove, so the box
+          never grew, no box was saved, and the label fell back to the
+          whole-frame chip in the corner — which looked like the box had moved.
+        */}
+        <img
+          src={imageUrl}
+          alt={`frame ${keyframe.id}`}
+          className="w-full"
+          draggable={false}
+          onDragStart={e => e.preventDefault()}
+        />
 
         {/*
           What was identified, drawn where it was identified. Without this the

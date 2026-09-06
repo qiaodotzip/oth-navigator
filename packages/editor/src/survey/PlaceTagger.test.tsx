@@ -121,6 +121,39 @@ describe("PlaceTagger", () => {
     expect(input.value).toBe("");
   });
 
+  it("stops the browser dragging the image instead of drawing a box", () => {
+    // Without this the browser starts its own image drag on mousedown and
+    // stops delivering mousemove, so no box is ever drawn and the label
+    // silently falls back to applying to the whole frame.
+    setup();
+    const img = screen.getByAltText("frame kf_1") as HTMLImageElement;
+    expect(img.draggable).toBe(false);
+  });
+
+  it("ignores a box too small to have been drawn on purpose", () => {
+    const { onTag } = setup();
+    const frame = screen.getByTestId("tag-frame");
+    fireEvent.mouseDown(frame, { clientX: 100, clientY: 60 });
+    fireEvent.mouseMove(frame, { clientX: 101, clientY: 61 });
+    fireEvent.mouseUp(frame);
+    fireEvent.change(screen.getByLabelText("Place name"), { target: { value: "Kopitiam" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tag" }));
+    expect(onTag.mock.calls[0]![0].box).toBeUndefined();
+  });
+
+  it("finishes a drag that is released outside the frame", () => {
+    // Boxing something at the edge means letting go off the image.
+    setup();
+    const frame = screen.getByTestId("tag-frame");
+    fireEvent.mouseDown(frame, { clientX: 100, clientY: 60 });
+    fireEvent.mouseMove(frame, { clientX: 300, clientY: 240 });
+    fireEvent.mouseUp(window);
+    fireEvent.mouseMove(frame, { clientX: 380, clientY: 300 });
+    const box = screen.getByTestId("tag-box") as HTMLElement;
+    // The box kept the size it had when the mouse was released.
+    expect(box.style.width).toBe("50%");
+  });
+
   it("says whether it is about to tag the frame or the box", () => {
     setup();
     expect(screen.getByText(/whole frame/i)).toBeTruthy();

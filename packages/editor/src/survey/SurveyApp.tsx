@@ -176,13 +176,34 @@ export function SurveyApp({ api }: { api: Api }) {
                       <button
                         aria-label={`Remove frame ${f.id}`}
                         title="Remove this frame"
-                        className="absolute right-0 top-0 rounded bg-stone-900/80 px-1 text-xs text-white opacity-0 group-hover:opacity-100"
+                        // Always visible on the frame being worked on. Hidden
+                        // behind hover everywhere it was unfindable.
+                        className={`absolute right-0 top-0 rounded bg-stone-900/80 px-1 text-xs text-white ${
+                          f.id === frame?.id ? "" : "opacity-0 group-hover:opacity-100"
+                        }`}
                         onClick={() => void removeFrame(f.id)}
                       >
                         x
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {frame && (
+                <div className="flex items-center gap-2 text-xs text-stone-500">
+                  <span className="flex-1">
+                    Frame {frames.findIndex(f => f.id === frame.id) + 1} of {frames.length}
+                    {frame.timeMs !== undefined
+                      ? ` — ${Math.floor(frame.timeMs / 60000)}m${String(Math.floor((frame.timeMs % 60000) / 1000)).padStart(2, "0")}s`
+                      : ""}
+                  </span>
+                  <button
+                    className="rounded border px-2 py-1"
+                    onClick={() => void removeFrame(frame.id)}
+                  >
+                    Delete this frame
+                  </button>
                 </div>
               )}
 

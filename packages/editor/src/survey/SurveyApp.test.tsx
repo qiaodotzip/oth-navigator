@@ -118,6 +118,26 @@ describe("SurveyApp", () => {
         .toHaveBeenCalledWith("kf_1"));
   });
 
+  it("offers a plain delete for the frame in view, not only a hover target", async () => {
+    const api = fakeApi();
+    render(<SurveyApp api={api} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByTestId("capture-cap_1"));
+    fireEvent.click(await screen.findByTestId("filmstrip-kf_1"));
+    fireEvent.click(screen.getByRole("button", { name: /delete this frame/i }));
+    await waitFor(() =>
+      expect((api as unknown as { deleteKeyframe: ReturnType<typeof vi.fn> }).deleteKeyframe)
+        .toHaveBeenCalledWith("kf_1"));
+  });
+
+  it("says which frame of how many is in view", async () => {
+    render(<SurveyApp api={fakeApi()} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByTestId("capture-cap_1"));
+    fireEvent.click(await screen.findByTestId("filmstrip-kf_1"));
+    expect(screen.getByText(/Frame 1 of 2/)).toBeTruthy();
+  });
+
   it("says the video will find its own frames, before a file is picked", async () => {
     render(<SurveyApp api={fakeApi()} />);
     await waitFor(() => screen.getByTestId("capture-cap_1"));
