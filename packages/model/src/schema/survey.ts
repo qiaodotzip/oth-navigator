@@ -13,6 +13,16 @@ import { TenantCategorySchema } from "./semantics";
 
 export const CaptureKindSchema = z.enum(["video", "photos"]);
 
+/**
+ * Whether a human has looked at this yet.
+ *
+ * A labelling agent reads a frame and proposes what is in it; nothing it writes
+ * is treated as true until someone confirms it. Rejecting is a soft delete
+ * rather than a third state, and the importer never resurrects an id that
+ * exists — so a wrong proposal, once thrown away, stays thrown away.
+ */
+export const ReviewStatusSchema = z.enum(["proposed", "confirmed"]);
+
 export const CaptureSchema = AuditFieldsSchema.extend({
   id: SlugSchema,
   kind: CaptureKindSchema,
@@ -51,6 +61,11 @@ export const PlaceSchema = AuditFieldsSchema.extend({
   /** Empty until someone binds this to a traced room. */
   roomId: SlugSchema.optional(),
   notes: z.string().default(""),
+  // Defaults to confirmed: anything a person typed in the survey tool is theirs
+  // already. The importer is the only thing that writes "proposed".
+  status: ReviewStatusSchema.default("confirmed"),
+  /** What the labeller thought it was reading, when it was not certain. */
+  proposedBy: z.string().default(""),
 });
 
 export const SightingSchema = AuditFieldsSchema.extend({
@@ -59,9 +74,12 @@ export const SightingSchema = AuditFieldsSchema.extend({
   keyframeId: SlugSchema,
   /** Absent when the whole frame is the thing; a box says which of two shops. */
   box: BoxSchema.optional(),
+  status: ReviewStatusSchema.default("confirmed"),
+  proposedBy: z.string().default(""),
 });
 
 export type CaptureKind = z.infer<typeof CaptureKindSchema>;
+export type ReviewStatus = z.infer<typeof ReviewStatusSchema>;
 export type Capture = z.infer<typeof CaptureSchema>;
 export type Keyframe = z.infer<typeof KeyframeSchema>;
 export type Box = z.infer<typeof BoxSchema>;

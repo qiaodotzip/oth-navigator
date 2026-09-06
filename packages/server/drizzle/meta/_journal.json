@@ -43,6 +43,13 @@
       "when": 1788592645766,
       "tag": "0005_silent_richard_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788671237990,
+      "tag": "0006_chemical_romulus",
+      "breakpoints": true
     }
   ]
 }

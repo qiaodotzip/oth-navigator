@@ -3,6 +3,8 @@ import { createApp } from "./app";
 import { inviteUser, resetPassword } from "./cli/invite";
 import { seedBuilding } from "./cli/seed";
 import { tracePlansIntoModel } from "./cli/trace";
+import { exportCaptureForLabelling } from "./cli/surveyExport";
+import { importProposals } from "./cli/surveyImport";
 import { loadConfig } from "./config";
 import { createPostgresDb } from "./db/client";
 import { createDevDb } from "./db/dev";
@@ -38,6 +40,27 @@ if (command === "reset-password") {
   if (!email) throw new Error("usage: reset-password <email>");
   const { user, password } = await resetPassword(db, email);
   console.log(`reset ${user.email}. New one-time password: ${password}`);
+  process.exit(0);
+}
+
+if (command === "survey:export") {
+  const captureId = process.argv[3];
+  const outDir = process.argv[4] ?? "./survey-out";
+  if (!captureId) throw new Error("usage: survey:export <captureId> [outDir]");
+  const { frames, dir } = await exportCaptureForLabelling(db, config.DATA_DIR, captureId, outDir);
+  console.log(`wrote ${frames} frame(s) to ${dir}. Point a Claude Code session at LABELLING.md there.`);
+  process.exit(0);
+}
+
+if (command === "survey:import") {
+  const file = process.argv[3];
+  if (!file) throw new Error("usage: survey:import <proposals.json>");
+  const r = await importProposals(db, file);
+  console.log(
+    `imported ${r.sightings} sighting(s): ${r.places} new place(s), ${r.linked} linked to existing`,
+  );
+  for (const bad of r.rejected) console.log(`  refused #${bad.index}: ${bad.reason}`);
+  console.log("All of it is proposed. Review it in the survey tool before it counts.");
   process.exit(0);
 }
 

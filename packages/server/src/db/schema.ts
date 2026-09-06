@@ -270,6 +270,8 @@ export const places = pgTable("places", {
   levelId: text("level_id"),
   roomId: text("room_id"),
   notes: text("notes").notNull().default(""),
+  status: text("status").notNull().default("confirmed"),
+  proposedBy: text("proposed_by").notNull().default(""),
   ...auditColumns,
 });
 
@@ -278,5 +280,7 @@ export const sightings = pgTable("sightings", {
   placeId: text("place_id").notNull(),
   keyframeId: text("keyframe_id").notNull(),
   box: jsonb("box").$type<{ x: number; y: number; w: number; h: number }>(),
+  status: text("status").notNull().default("confirmed"),
+  proposedBy: text("proposed_by").notNull().default(""),
   ...auditColumns,
 }, t => ({ placeIdx: index("sightings_place_idx").on(t.placeId) }));
