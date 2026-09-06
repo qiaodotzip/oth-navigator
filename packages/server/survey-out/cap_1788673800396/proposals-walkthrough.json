@@ -1,0 +1,1061 @@
+{
+ "captureId": "cap_1788673800396",
+ "proposals": [
+  {
+   "keyframeId": "kf_ce8790a6-5423-45de-ad48-ea5a154a0f2b",
+   "nameEn": "Yoshinoya",
+   "category": "retail",
+   "box": {
+    "x": 0.44,
+    "y": 0.28,
+    "w": 0.18,
+    "h": 0.6
+   },
+   "note": "Advertising pillar with the Yoshinoya mark and a $8.50 student meal. The unit itself is not in frame."
+  },
+  {
+   "keyframeId": "kf_ce8790a6-5423-45de-ad48-ea5a154a0f2b",
+   "nameEn": "Children's ride (Festive Walk)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.16,
+    "y": 0.35,
+    "w": 0.28,
+    "h": 0.37
+   },
+   "note": "Small carousel-style ride set up on a mat under the canopy. Possibly temporary."
+  },
+  {
+   "keyframeId": "kf_7feb3395-d626-45fe-9c96-c0da60ab8597",
+   "nameEn": "Yoshinoya",
+   "category": "retail",
+   "box": {
+    "x": 0.52,
+    "y": 0.3,
+    "w": 0.2,
+    "h": 0.58
+   },
+   "note": "Same pillar from further along."
+  },
+  {
+   "keyframeId": "kf_7feb3395-d626-45fe-9c96-c0da60ab8597",
+   "nameEn": "Children's ride (Festive Walk)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.17,
+    "y": 0.42,
+    "w": 0.31,
+    "h": 0.36
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_2224681c-9906-45a3-9a24-1dae46daaeb8",
+   "nameEn": "Yoshinoya",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.22,
+    "w": 0.16,
+    "h": 0.68
+   },
+   "note": "Third sighting, at the left edge."
+  },
+  {
+   "keyframeId": "kf_2224681c-9906-45a3-9a24-1dae46daaeb8",
+   "nameEn": "Cyberscape Adventure (event standee)",
+   "category": "community",
+   "box": {
+    "x": 0.78,
+    "y": 0.18,
+    "w": 0.22,
+    "h": 0.77
+   },
+   "note": "Temporary event signage."
+  },
+  {
+   "keyframeId": "kf_ceeab386-0bb1-4e2e-a6b5-d4848ac69164",
+   "nameEn": "Cyberscape Adventure (event standee)",
+   "category": "community",
+   "box": {
+    "x": 0.32,
+    "y": 0.1,
+    "w": 0.4,
+    "h": 0.85
+   },
+   "note": "Close up."
+  },
+  {
+   "keyframeId": "kf_ceeab386-0bb1-4e2e-a6b5-d4848ac69164",
+   "nameEn": "iTea",
+   "category": "retail",
+   "box": {
+    "x": 0.03,
+    "y": 0.42,
+    "w": 0.09,
+    "h": 0.1
+   },
+   "note": "Small shopfront sign at the left."
+  },
+  {
+   "keyframeId": "kf_ceeab386-0bb1-4e2e-a6b5-d4848ac69164",
+   "nameEn": "Kopifellas",
+   "category": "retail",
+   "box": {
+    "x": 0.17,
+    "y": 0.44,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Fascia reads KOPIFELLAS."
+  },
+  {
+   "keyframeId": "kf_ceeab386-0bb1-4e2e-a6b5-d4848ac69164",
+   "nameEn": "Crave",
+   "category": "retail",
+   "box": {
+    "x": 0.26,
+    "y": 0.42,
+    "w": 0.08,
+    "h": 0.06
+   },
+   "note": "Kiosk fascia."
+  },
+  {
+   "keyframeId": "kf_859b842c-623a-4454-8388-aa3a8a451f14",
+   "nameEn": "Old Chang Kee",
+   "category": "retail",
+   "box": {
+    "x": 0.63,
+    "y": 0.34,
+    "w": 0.2,
+    "h": 0.08
+   },
+   "note": "Clear fascia: 'Old Chang Kee since 1956'."
+  },
+  {
+   "keyframeId": "kf_859b842c-623a-4454-8388-aa3a8a451f14",
+   "nameEn": "Crave",
+   "category": "retail",
+   "box": {
+    "x": 0.32,
+    "y": 0.42,
+    "w": 0.36,
+    "h": 0.08
+   },
+   "note": "Kiosk with CRAVE on two faces. Same unit, seen square on."
+  },
+  {
+   "keyframeId": "kf_859b842c-623a-4454-8388-aa3a8a451f14",
+   "nameEn": "Kopifellas",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.44,
+    "w": 0.13,
+    "h": 0.06
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_859b842c-623a-4454-8388-aa3a8a451f14",
+   "nameEn": "Sushiro",
+   "category": "retail",
+   "box": {
+    "x": 0.84,
+    "y": 0.38,
+    "w": 0.12,
+    "h": 0.17
+   },
+   "note": "Pillar reading 'Sushi from $2.3'."
+  },
+  {
+   "keyframeId": "kf_859b842c-623a-4454-8388-aa3a8a451f14",
+   "nameEn": "Festive Mall",
+   "category": "retail",
+   "box": {
+    "x": 0.72,
+    "y": 0.48,
+    "w": 0.1,
+    "h": 0.05
+   },
+   "note": "Directional sign reading 'Festive Mall'."
+  },
+  {
+   "keyframeId": "kf_080613bb-9c2f-40e5-8fa4-cee6dc15daf4",
+   "nameEn": "Crave",
+   "category": "retail",
+   "box": {
+    "x": 0.55,
+    "y": 0.35,
+    "w": 0.3,
+    "h": 0.33
+   },
+   "note": "Third sighting, blurred by motion."
+  },
+  {
+   "keyframeId": "kf_4e317746-9182-40f9-bacc-91c4c406af4e",
+   "nameEn": "Double Storey Carousel",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.28,
+    "y": 0.05,
+    "w": 0.22,
+    "h": 0.08
+   },
+   "note": "Attraction behind hoarding, signed 'DOUBLE STOREY CAROUSEL'."
+  },
+  {
+   "keyframeId": "kf_fd2018c1-7eec-44a7-ab92-8212be35690a",
+   "nameEn": "Double Storey Carousel",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.55,
+    "y": 0.06,
+    "w": 0.23,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_523ddfd6-8e58-4c0a-ade2-8655318a15e0",
+   "nameEn": "Double Storey Carousel",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.44,
+    "y": 0.1,
+    "w": 0.19,
+    "h": 0.08
+   },
+   "note": "Third sighting, with the 'IN' entrance gate below the sign."
+  },
+  {
+   "keyframeId": "kf_5d39fa0f-9ef3-4d4e-b733-7224b96322fe",
+   "nameEn": "Fairground ride (Town Square)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.2,
+    "y": 0.28,
+    "w": 0.35,
+    "h": 0.27
+   },
+   "note": "Blue swinging ride on a mat. Its own sign is not legible at this angle; name is descriptive."
+  },
+  {
+   "keyframeId": "kf_f2848068-d36d-49a9-b04e-992d3e2c8ade",
+   "nameEn": "Fairground ride (Town Square)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.0,
+    "y": 0.3,
+    "w": 0.3,
+    "h": 0.32
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_b728fa83-b662-41de-95b5-bdd010866a3c",
+   "nameEn": "Fairground ride (Town Square)",
+   "category": "lifestyle",
+   "box": {
+    "x": 0.0,
+    "y": 0.28,
+    "w": 0.28,
+    "h": 0.34
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_c08d33d7-90b9-4135-8752-04d84d84090f",
+   "nameEn": "Gate 6",
+   "category": "facility",
+   "box": {
+    "x": 0.36,
+    "y": 0.36,
+    "w": 0.08,
+    "h": 0.08
+   },
+   "note": "Stadium gate signed 'GATE 6'."
+  },
+  {
+   "keyframeId": "kf_c08d33d7-90b9-4135-8752-04d84d84090f",
+   "nameEn": "Lobby F",
+   "category": "facility",
+   "box": {
+    "x": 0.86,
+    "y": 0.36,
+    "w": 0.12,
+    "h": 0.06
+   },
+   "note": "Door signed 'Lobby F'."
+  },
+  {
+   "keyframeId": "kf_8cbcc5f1-4750-4277-a30b-3f9b8faad3d8",
+   "nameEn": "Gate 6",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.36,
+    "w": 0.08,
+    "h": 0.08
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_8cbcc5f1-4750-4277-a30b-3f9b8faad3d8",
+   "nameEn": "Lobby F",
+   "category": "facility",
+   "box": {
+    "x": 0.8,
+    "y": 0.34,
+    "w": 0.12,
+    "h": 0.06
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_c4d9b667-9b9b-4be9-b049-9453229ecfca",
+   "nameEn": "Gate 6",
+   "category": "facility",
+   "box": {
+    "x": 0.24,
+    "y": 0.36,
+    "w": 0.08,
+    "h": 0.06
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_c4d9b667-9b9b-4be9-b049-9453229ecfca",
+   "nameEn": "Lobby F",
+   "category": "facility",
+   "box": {
+    "x": 0.53,
+    "y": 0.36,
+    "w": 0.11,
+    "h": 0.06
+   },
+   "note": "Third sighting; a second 'Lobby F' door is further right in the same frame."
+  },
+  {
+   "keyframeId": "kf_e2efffdb-ad23-4c90-b7f4-06aaf71ef5a7",
+   "nameEn": "Town Square wayfinding sign (Gate 6)",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.2,
+    "w": 0.2,
+    "h": 0.12
+   },
+   "note": "Directory reading 'Library & Bookshop / Festive Arts Theatre / Town Square Gate 1'. Useful: it confirms the library and theatre are reached from here."
+  },
+  {
+   "keyframeId": "kf_e2efffdb-ad23-4c90-b7f4-06aaf71ef5a7",
+   "nameEn": "Gate 6",
+   "category": "facility",
+   "box": {
+    "x": 0.9,
+    "y": 0.3,
+    "w": 0.08,
+    "h": 0.08
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_9b73f45a-b96b-40b8-971b-c86fc0a93cb8",
+   "nameEn": "Town Square wayfinding sign (Gate 6)",
+   "category": "facility",
+   "box": {
+    "x": 0.27,
+    "y": 0.05,
+    "w": 0.13,
+    "h": 0.09
+   },
+   "note": "Second sighting of the Library / Festive Arts Theatre / Town Square Gate 1 directory."
+  },
+  {
+   "keyframeId": "kf_9b73f45a-b96b-40b8-971b-c86fc0a93cb8",
+   "nameEn": "Escalator (Gate 6 concourse)",
+   "category": "facility",
+   "box": {
+    "x": 0.1,
+    "y": 0.08,
+    "w": 0.22,
+    "h": 0.34
+   },
+   "note": "Escalator up from the concourse."
+  },
+  {
+   "keyframeId": "kf_4bdea794-11c9-466f-a72d-89e94cc0d6f2",
+   "nameEn": "Escalator (Gate 6 concourse)",
+   "category": "facility",
+   "box": {
+    "x": 0.62,
+    "y": 0.22,
+    "w": 0.16,
+    "h": 0.26
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_8abc2c71-7626-4231-be8f-864087bec51d",
+   "nameEn": "7-Eleven",
+   "category": "retail",
+   "box": {
+    "x": 0.3,
+    "y": 0.26,
+    "w": 0.32,
+    "h": 0.29
+   },
+   "note": "Clear 7-ELEVEN fascia on a freestanding unit in the concourse."
+  },
+  {
+   "keyframeId": "kf_f3334095-1bb6-4a0b-bff5-9c38e4f9390a",
+   "nameEn": "7-Eleven",
+   "category": "retail",
+   "box": {
+    "x": 0.28,
+    "y": 0.28,
+    "w": 0.34,
+    "h": 0.3
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_5ef86e1b-ae64-4c66-ba1b-aba04646da4b",
+   "nameEn": "7-Eleven",
+   "category": "retail",
+   "box": {
+    "x": 0.35,
+    "y": 0.28,
+    "w": 0.33,
+    "h": 0.32
+   },
+   "note": "Third sighting, square on."
+  },
+  {
+   "keyframeId": "kf_97784426-b58e-4ff4-aa7f-5d9d4afcf7c0",
+   "nameEn": "7-Eleven",
+   "category": "retail",
+   "box": {
+    "x": 0.6,
+    "y": 0.3,
+    "w": 0.35,
+    "h": 0.3
+   },
+   "note": "Fourth sighting, passing the side panels."
+  },
+  {
+   "keyframeId": "kf_6590d966-9c70-41bf-a191-832e7fa878db",
+   "nameEn": "Our Tampines Hub wall sign",
+   "category": "facility",
+   "box": {
+    "x": 0.72,
+    "y": 0.14,
+    "w": 0.1,
+    "h": 0.26
+   },
+   "note": "OTH wordmark on a concourse column."
+  },
+  {
+   "keyframeId": "kf_6e2306ca-6b9f-48f8-8477-61ff231e9986",
+   "nameEn": "7-Eleven",
+   "category": "retail",
+   "box": {
+    "x": 0.85,
+    "y": 0.55,
+    "w": 0.15,
+    "h": 0.3
+   },
+   "note": "Fifth sighting, at the right edge as the walk turns."
+  },
+  {
+   "keyframeId": "kf_d15afbef-a3ab-4813-b04f-c9edead3a3d0",
+   "nameEn": "Festive Arts Theatre frontage",
+   "category": "community",
+   "box": {
+    "x": 0.62,
+    "y": 0.05,
+    "w": 0.38,
+    "h": 0.4
+   },
+   "note": "Long banner wall along the walk, branded for the Festive Arts Theatre."
+  },
+  {
+   "keyframeId": "kf_28cc67f0-0c1b-4d19-85ba-b17070833091",
+   "nameEn": "Festive Arts Theatre frontage",
+   "category": "community",
+   "box": {
+    "x": 0.66,
+    "y": 0.08,
+    "w": 0.3,
+    "h": 0.32
+   },
+   "note": "Banner reads VISUAL ARTS."
+  },
+  {
+   "keyframeId": "kf_5621b816-e02f-4761-a6de-75f598055e16",
+   "nameEn": "Festive Arts Theatre frontage",
+   "category": "community",
+   "box": {
+    "x": 0.55,
+    "y": 0.08,
+    "w": 0.4,
+    "h": 0.26
+   },
+   "note": "Banners for Dance, Film, Music, Theatre and Visual Arts."
+  },
+  {
+   "keyframeId": "kf_a930da71-7bc5-4e19-874a-e63fca756109",
+   "nameEn": "Festive Arts Theatre frontage",
+   "category": "community",
+   "box": {
+    "x": 0.6,
+    "y": 0.05,
+    "w": 0.4,
+    "h": 0.22
+   },
+   "note": "'#Home of the FESTIVE ARTS THEATRE' along the banner run."
+  },
+  {
+   "keyframeId": "kf_64a63ed6-56e2-4324-acf1-5d7905e2e997",
+   "nameEn": "Festive Arts Theatre frontage",
+   "category": "community",
+   "box": {
+    "x": 0.62,
+    "y": 0.15,
+    "w": 0.38,
+    "h": 0.4
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_fd7f0fcf-01ea-4554-a314-b3e5fa542a63",
+   "nameEn": "Festive Arts Theatre frontage",
+   "category": "community",
+   "box": {
+    "x": 0.7,
+    "y": 0.15,
+    "w": 0.3,
+    "h": 0.45
+   },
+   "note": "Sixth sighting."
+  },
+  {
+   "keyframeId": "kf_f277f3ba-a4fc-4394-a453-f2c095e97e63",
+   "nameEn": "Festive Arts Theatre display board",
+   "category": "community",
+   "box": {
+    "x": 0.55,
+    "y": 0.22,
+    "w": 0.3,
+    "h": 0.2
+   },
+   "note": "Screen listing 'Arts Performances' and 'Business Conferences' — what the theatre can be hired for."
+  },
+  {
+   "keyframeId": "kf_11b2e3a4-467d-4017-916f-4585454a45de",
+   "nameEn": "Festive Walk overhead directory",
+   "category": "facility",
+   "box": {
+    "x": 0.24,
+    "y": 0.12,
+    "w": 0.44,
+    "h": 0.1
+   },
+   "note": "Overhead sign: Town Square Gates 4/3/16, Studios 2-6, Library, Festive Arts Theatre, Arena @ OTH. The most useful wayfinding in the walk so far."
+  },
+  {
+   "keyframeId": "kf_11b2e3a4-467d-4017-916f-4585454a45de",
+   "nameEn": "Studio 1",
+   "category": "community",
+   "box": {
+    "x": 0.86,
+    "y": 0.44,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Door signed 'Studio 1'."
+  },
+  {
+   "keyframeId": "kf_65215ad3-e77b-45c8-9449-af8c384a7bb5",
+   "nameEn": "Fire hose reel (Festive Walk)",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.6,
+    "w": 0.1,
+    "h": 0.18
+   },
+   "note": "Recessed hose reel cabinet in the mural wall."
+  },
+  {
+   "keyframeId": "kf_377f4ba2-8ea3-4306-8b7f-e194b51445aa",
+   "nameEn": "Gate 5",
+   "category": "facility",
+   "box": {
+    "x": 0.55,
+    "y": 0.32,
+    "w": 0.2,
+    "h": 0.1
+   },
+   "note": "Stadium gate signed 'GATE 5 — Authorised Access only'."
+  },
+  {
+   "keyframeId": "kf_b9383593-f3f2-4cbd-8977-c00f14cf733c",
+   "nameEn": "Pick vending wall",
+   "category": "retail",
+   "box": {
+    "x": 0.22,
+    "y": 0.2,
+    "w": 0.09,
+    "h": 0.35
+   },
+   "note": "Vending installation branded 'pick', open 24/7."
+  },
+  {
+   "keyframeId": "kf_9b3d2d1b-367d-43dc-b874-5c2b8b3a689b",
+   "nameEn": "Pick vending wall",
+   "category": "retail",
+   "box": {
+    "x": 0.88,
+    "y": 0.15,
+    "w": 0.12,
+    "h": 0.45
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_55ec7aec-51fd-4d44-9a15-2542f0210d12",
+   "nameEn": "Pick vending wall",
+   "category": "retail",
+   "box": {
+    "x": 0.18,
+    "y": 0.18,
+    "w": 0.3,
+    "h": 0.62
+   },
+   "note": "Third sighting, square on: 'Open 24 HOURS', @picknetworksg. A long run of machines, not a single unit."
+  },
+  {
+   "keyframeId": "kf_43bbab25-d063-4163-857b-36ee5d96c359",
+   "nameEn": "Bus stop (Tampines Ave)",
+   "category": "facility",
+   "box": {
+    "x": 0.55,
+    "y": 0.18,
+    "w": 0.4,
+    "h": 0.22
+   },
+   "note": "Buses visible through the opening. Outside the building, but it is how most people arrive."
+  },
+  {
+   "keyframeId": "kf_0d81e5f9-4446-415b-b5e8-6a75f3f98490",
+   "nameEn": "Bus stop (Tampines Ave)",
+   "category": "facility",
+   "box": {
+    "x": 0.15,
+    "y": 0.2,
+    "w": 0.6,
+    "h": 0.18
+   },
+   "note": "Second sighting, with the ramp down to it."
+  },
+  {
+   "keyframeId": "kf_56737142-b71f-4856-8ff3-ab60905462d1",
+   "nameEn": "Bus stop (Tampines Ave)",
+   "category": "facility",
+   "box": {
+    "x": 0.4,
+    "y": 0.15,
+    "w": 0.45,
+    "h": 0.17
+   },
+   "note": "Third sighting."
+  },
+  {
+   "keyframeId": "kf_70799504-399c-45f6-820e-59fe6a1401e3",
+   "nameEn": "Festive Walk seating",
+   "category": "facility",
+   "box": {
+    "x": 0.05,
+    "y": 0.45,
+    "w": 0.25,
+    "h": 0.3
+   },
+   "note": "Fixed benches and tables along the walk. Items — details once drawn."
+  },
+  {
+   "keyframeId": "kf_740dcb3c-412c-4feb-9bac-9c1ba8adddc2",
+   "nameEn": "Female Changing Room",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.55,
+    "w": 0.13,
+    "h": 0.13
+   },
+   "note": "Signed 'Female Changing Room', with accessible pictograms above."
+  },
+  {
+   "keyframeId": "kf_0c197b9d-4085-473c-91bd-77b76e724955",
+   "nameEn": "Male Changing Room",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.42,
+    "w": 0.1,
+    "h": 0.13
+   },
+   "note": "Signed 'Male Changing Room', opposite the female one."
+  },
+  {
+   "keyframeId": "kf_abd5e878-1c85-495c-aae2-8b0aa9fa5463",
+   "nameEn": "Gate 4",
+   "category": "facility",
+   "box": {
+    "x": 0.88,
+    "y": 0.1,
+    "w": 0.1,
+    "h": 0.08
+   },
+   "note": "Stadium gate signed 'GATE 4'."
+  },
+  {
+   "keyframeId": "kf_abd5e878-1c85-495c-aae2-8b0aa9fa5463",
+   "nameEn": "Coca-Cola vending machine (Gate 4)",
+   "category": "retail",
+   "box": {
+    "x": 0.9,
+    "y": 0.15,
+    "w": 0.1,
+    "h": 0.4
+   },
+   "note": "Drinks machine beside the gate."
+  },
+  {
+   "keyframeId": "kf_fee4c7e3-46be-4f69-84f9-ec3bc4ce4461",
+   "nameEn": "Gate 4",
+   "category": "facility",
+   "box": {
+    "x": 0.02,
+    "y": 0.18,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Second sighting, square on."
+  },
+  {
+   "keyframeId": "kf_fee4c7e3-46be-4f69-84f9-ec3bc4ce4461",
+   "nameEn": "Coca-Cola vending machine (Gate 4)",
+   "category": "retail",
+   "box": {
+    "x": 0.25,
+    "y": 0.22,
+    "w": 0.25,
+    "h": 0.58
+   },
+   "note": "Second sighting: 'Grab a Coke and get back in it'."
+  },
+  {
+   "keyframeId": "kf_a895b5d0-724e-40b9-b9f9-73fc4b6cc7d4",
+   "nameEn": "Gate 4",
+   "category": "facility",
+   "box": {
+    "x": 0.88,
+    "y": 0.08,
+    "w": 0.12,
+    "h": 0.08
+   },
+   "note": "Third sighting, past the shutter."
+  },
+  {
+   "keyframeId": "kf_b82039ab-b83b-49af-b5bc-0082f743f6d7",
+   "nameEn": "Festive Walk seating",
+   "category": "facility",
+   "box": {
+    "x": 0.1,
+    "y": 0.5,
+    "w": 0.35,
+    "h": 0.25
+   },
+   "note": "Second sighting of the bench and table run."
+  },
+  {
+   "keyframeId": "kf_fe94ff34-7e4a-4aad-8cea-3a9303291eef",
+   "nameEn": "Festive Walk photo display",
+   "category": "community",
+   "box": {
+    "x": 0.05,
+    "y": 0.28,
+    "w": 0.55,
+    "h": 0.17
+   },
+   "note": "Run of printed panels along the walk's edge. Community display rather than a tenant."
+  },
+  {
+   "keyframeId": "kf_f370c42e-8e1f-4a5b-936b-47f83347e4ed",
+   "nameEn": "Festive Walk photo display",
+   "category": "community",
+   "box": {
+    "x": 0.3,
+    "y": 0.3,
+    "w": 0.35,
+    "h": 0.15
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_3de8d252-b34f-4a8b-8131-b96d354b8d40",
+   "nameEn": "Gate 3",
+   "category": "facility",
+   "box": {
+    "x": 0.72,
+    "y": 0.08,
+    "w": 0.13,
+    "h": 0.08
+   },
+   "note": "Stadium gate signed 'GATE 3'."
+  },
+  {
+   "keyframeId": "kf_3aee0189-ecc6-42e6-8e5c-4ba18dea80f8",
+   "nameEn": "Gate 3",
+   "category": "facility",
+   "box": {
+    "x": 0.14,
+    "y": 0.05,
+    "w": 0.14,
+    "h": 0.07
+   },
+   "note": "Second sighting, square on."
+  },
+  {
+   "keyframeId": "kf_e33a140f-6675-4951-8d6e-c4553bc9e125",
+   "nameEn": "Tampines Regional Library",
+   "category": "community",
+   "box": {
+    "x": 0.6,
+    "y": 0.42,
+    "w": 0.22,
+    "h": 0.13
+   },
+   "note": "NLB signage on the glazing: 'Public Library — Tampines Regional'. Matches the facilities directory, which puts it on L2-L6."
+  },
+  {
+   "keyframeId": "kf_e33a140f-6675-4951-8d6e-c4553bc9e125",
+   "nameEn": "Cyclists dismount marker",
+   "category": "facility",
+   "box": {
+    "x": 0.08,
+    "y": 0.42,
+    "w": 0.1,
+    "h": 0.2
+   },
+   "note": "Figure-and-bicycle marker reading 'Cyclists dismount your bike'. An item."
+  },
+  {
+   "keyframeId": "kf_5d91cbe2-9557-428a-9040-db2a34d1a907",
+   "nameEn": "Cyclists dismount marker",
+   "category": "facility",
+   "box": {
+    "x": 0.52,
+    "y": 0.42,
+    "w": 0.12,
+    "h": 0.18
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_7bed21cf-a2e9-4229-ab8e-3590dcf06b5b",
+   "nameEn": "Dance Studio 3",
+   "category": "community",
+   "box": {
+    "x": 0.82,
+    "y": 0.36,
+    "w": 0.1,
+    "h": 0.1
+   },
+   "note": "Wall graphic starting to read 'DANCE STUDIO'."
+  },
+  {
+   "keyframeId": "kf_f06ec681-9af1-4c63-a1b6-9863b202413a",
+   "nameEn": "Dance Studio 3",
+   "category": "community",
+   "box": {
+    "x": 0.78,
+    "y": 0.34,
+    "w": 0.1,
+    "h": 0.11
+   },
+   "note": "Second sighting."
+  },
+  {
+   "keyframeId": "kf_2637b5a6-0e8b-4bcf-9cdc-6f1f861d05d3",
+   "nameEn": "Dance Studio 3",
+   "category": "community",
+   "box": {
+    "x": 0.7,
+    "y": 0.3,
+    "w": 0.22,
+    "h": 0.22
+   },
+   "note": "Third sighting: 'DANCE STUDIO 3' in full."
+  },
+  {
+   "keyframeId": "kf_0216e739-2892-4c21-8899-fa0d4570371d",
+   "nameEn": "Dance Studio 3",
+   "category": "community",
+   "box": {
+    "x": 0.72,
+    "y": 0.28,
+    "w": 0.2,
+    "h": 0.22
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_0216e739-2892-4c21-8899-fa0d4570371d",
+   "nameEn": "Bee mascot statue",
+   "category": "community",
+   "box": {
+    "x": 0.82,
+    "y": 0.55,
+    "w": 0.16,
+    "h": 0.35
+   },
+   "note": "Yellow bee figure on a green plinth — the OTH mascot. A landmark people navigate by."
+  },
+  {
+   "keyframeId": "kf_bcc2c4dc-3bd7-4894-b05b-ba4116a39ea8",
+   "nameEn": "Dance Studio 3",
+   "category": "community",
+   "box": {
+    "x": 0.0,
+    "y": 0.02,
+    "w": 0.12,
+    "h": 0.28
+   },
+   "note": "Fifth sighting."
+  },
+  {
+   "keyframeId": "kf_bcc2c4dc-3bd7-4894-b05b-ba4116a39ea8",
+   "nameEn": "Gate 2",
+   "category": "facility",
+   "box": {
+    "x": 0.25,
+    "y": 0.05,
+    "w": 0.11,
+    "h": 0.07
+   },
+   "note": "Stadium gate signed 'GATE 2 — Authorised Access'."
+  },
+  {
+   "keyframeId": "kf_bcc2c4dc-3bd7-4894-b05b-ba4116a39ea8",
+   "nameEn": "Bee mascot statue",
+   "category": "community",
+   "box": {
+    "x": 0.32,
+    "y": 0.1,
+    "w": 0.2,
+    "h": 0.5
+   },
+   "note": "Second sighting, close up."
+  },
+  {
+   "keyframeId": "kf_5b7707b2-0c57-431d-b3e4-28f2e38341a3",
+   "nameEn": "Dance Studio 3",
+   "category": "community",
+   "box": {
+    "x": 0.62,
+    "y": 0.02,
+    "w": 0.28,
+    "h": 0.33
+   },
+   "note": "Sixth sighting."
+  },
+  {
+   "keyframeId": "kf_70ba5955-0b01-4979-b256-cd9121db6ac7",
+   "nameEn": "Dutch Colony Coffee Co",
+   "category": "retail",
+   "box": {
+    "x": 0.52,
+    "y": 0.24,
+    "w": 0.13,
+    "h": 0.06
+   },
+   "note": "Fascia beginning to read 'DUTCH COLONY'."
+  },
+  {
+   "keyframeId": "kf_70748077-8088-4237-adb7-359a55e63dc1",
+   "nameEn": "Dutch Colony Coffee Co",
+   "category": "retail",
+   "box": {
+    "x": 0.02,
+    "y": 0.35,
+    "w": 0.26,
+    "h": 0.25
+   },
+   "note": "Second sighting: the counter and queue rail."
+  },
+  {
+   "keyframeId": "kf_f2509a08-8a8a-4301-9246-353dc4a4c609",
+   "nameEn": "Dutch Colony Coffee Co",
+   "category": "retail",
+   "box": {
+    "x": 0.5,
+    "y": 0.32,
+    "w": 0.25,
+    "h": 0.23
+   },
+   "note": "Third sighting, with staff at the counter."
+  },
+  {
+   "keyframeId": "kf_2ed80b91-7ab6-44a1-b294-bdd4bfaed9c4",
+   "nameEn": "Dutch Colony Coffee Co",
+   "category": "retail",
+   "box": {
+    "x": 0.18,
+    "y": 0.34,
+    "w": 0.1,
+    "h": 0.06
+   },
+   "note": "Fourth sighting."
+  },
+  {
+   "keyframeId": "kf_c2f2a859-fb25-46bc-95f8-a43c7033cfbe",
+   "nameEn": "Dutch Colony Coffee Co",
+   "category": "retail",
+   "box": {
+    "x": 0.58,
+    "y": 0.2,
+    "w": 0.17,
+    "h": 0.12
+   },
+   "note": "Fifth sighting: 'DUTCH COLONY Coffee Co' in full."
+  },
+  {
+   "keyframeId": "kf_2fbbdfcf-3b4d-4e95-ad61-b3b4f2dcfe31",
+   "nameEn": "Dutch Colony Coffee Co",
+   "category": "retail",
+   "box": {
+    "x": 0.0,
+    "y": 0.02,
+    "w": 0.14,
+    "h": 0.14
+   },
+   "note": "Sixth sighting, on the corner return."
+  },
+  {
+   "keyframeId": "kf_5ecb7c82-99c8-48c8-95a4-39d08754d2c7",
+   "nameEn": "Fitness Corner",
+   "category": "sports",
+   "box": {
+    "x": 0.88,
+    "y": 0.35,
+    "w": 0.12,
+    "h": 0.4
+   },
+   "note": "Board headed 'FITNESS C…' with rules and equipment pictograms — an outdoor fitness area."
+  }
+ ]
+}
