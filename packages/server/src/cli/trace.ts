@@ -1,7 +1,53 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { rooms } from "../db/schema";
-import { TRACED_ZONES, zoneFootprint } from "./tracedPlans";
+import { levelImages, rooms } from "../db/schema";
+import { PLAN_SHEETS, TRACED_ZONES, zoneFootprint, zoneLevelId } from "./tracedPlans";
+
+/**
+ * Makes the underlay agree with the trace it came from.
+ *
+ * These two disagreeing is not a hypothetical: a floorplan calibrated by
+ * measuring the sheet's own printed scale bar lands at 0.07 m/px, a third of
+ * the truth, and the plan then renders at a third the size of the rooms drawn
+ * on top of it. Since the trace knows exactly what scale it used, it says so.
+ */
+async function calibrateUnderlays(db: Database): Promise<number> {
+  let fixed = 0;
+
+  for (const sheet of PLAN_SHEETS) {
+    const [image] = await db.select().from(levelImages).where(and(
+      eq(levelImages.levelId, sheet.levelId),
+      eq(levelImages.filename, sheet.file),
+      isNull(levelImages.deletedAt),
+    ));
+    if (!image) continue;
+
+    // The image's top-left corner in world metres; world y is north, so the
+    // image hangs below its offset.
+    const offsetX = (0 - sheet.originPx.x) * sheet.metresPerPixel;
+    const offsetY = (sheet.originPx.y - 0) * sheet.metresPerPixel;
+
+    const agrees =
+      image.metresPerPixel === sheet.metresPerPixel &&
+      image.offsetX === offsetX &&
+      image.offsetY === offsetY;
+    if (agrees) continue;
+
+    await db.update(levelImages)
+      .set({
+        metresPerPixel: sheet.metresPerPixel,
+        offsetX,
+        offsetY,
+        updatedBy: "cli:trace",
+        updatedAt: new Date(),
+        version: image.version + 1,
+      })
+      .where(eq(levelImages.id, image.id));
+    fixed++;
+  }
+
+  return fixed;
+}
 
 /**
  * Seeds the zones traced from the 2020 storey plans.
@@ -11,7 +57,7 @@ import { TRACED_ZONES, zoneFootprint } from "./tracedPlans";
  * for humans to correct and a re-run must not undo their work.
  */
 export async function tracePlansIntoModel(db: Database): Promise<{
-  created: number; skipped: number;
+  created: number; skipped: number; recalibrated: number;
 }> {
   let created = 0;
   let skipped = 0;
@@ -24,7 +70,7 @@ export async function tracePlansIntoModel(db: Database): Promise<{
     }
     await db.insert(rooms).values({
       id: zone.id,
-      levelId: zone.levelId,
+      levelId: zoneLevelId(zone),
       kind: zone.kind,
       footprint: zoneFootprint(zone),
       holes: [],
@@ -40,5 +86,5 @@ export async function tracePlansIntoModel(db: Database): Promise<{
     created++;
   }
 
-  return { created, skipped };
+  return { created, skipped, recalibrated: await calibrateUnderlays(db) };
 }

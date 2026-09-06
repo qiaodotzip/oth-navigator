@@ -1,27 +1,43 @@
 import { RoomSchema } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { PLAN_MPP, TRACED_ZONES, pxToModel, zoneFootprint } from "./tracedPlans";
+import { PLAN_SHEETS, TRACED_ZONES, planSheet, pxToModel, zoneFootprint, zoneLevelId } from "./tracedPlans";
+
+const l1 = planSheet("2020-1st-storey");
 
 describe("plan calibration", () => {
   it("uses the sheet's own scale, not the drawn scale bar", () => {
     // The bar reads 356 px for 25 m (0.0702) and is wrong by 3x.
-    expect(PLAN_MPP).toBeCloseTo(0.21, 5);
+    expect(l1.metresPerPixel).toBeCloseTo(0.21, 5);
   });
 
   it("puts the origin at the model origin", () => {
-    expect(pxToModel(950, 1750)).toEqual([0, 0]);
+    expect(pxToModel(l1, 950, 1750)).toEqual([0, 0]);
   });
 
   it("flips y, so north is positive", () => {
-    const [, yUp] = pxToModel(950, 1650);
+    const [, yUp] = pxToModel(l1, 950, 1650);
     expect(yUp).toBeGreaterThan(0);
   });
 
   it("measures the football pitch at full size, which is how the scale was checked", () => {
     // 505 px goal line to goal line.
-    const [, top] = pxToModel(0, 950);
-    const [, bottom] = pxToModel(0, 1455);
+    const [, top] = pxToModel(l1, 0, 950);
+    const [, bottom] = pxToModel(l1, 0, 1455);
     expect(Math.abs(top - bottom)).toBeCloseTo(106, 0);
+  });
+
+  it("calibrates each sheet on its own, since floors need not share a scale", () => {
+    // A later floor may arrive at a different scale or on a different sheet
+    // size; nothing may assume the 1st storey's figures hold for it.
+    for (const sheet of PLAN_SHEETS) {
+      expect(sheet.metresPerPixel).toBeGreaterThan(0);
+      expect(sheet.file.length).toBeGreaterThan(0);
+      expect(sheet.provenance.length).toBeGreaterThan(20);
+    }
+  });
+
+  it("names the drawing each zone came from, so a bad scale is traceable", () => {
+    for (const zone of TRACED_ZONES) expect(() => planSheet(zone.sheetId)).not.toThrow();
   });
 });
 
@@ -29,7 +45,7 @@ describe("traced zones", () => {
   it("produces footprints the model accepts as they are", () => {
     for (const zone of TRACED_ZONES) {
       expect(() => RoomSchema.parse({
-        id: zone.id, levelId: zone.levelId, kind: zone.kind,
+        id: zone.id, levelId: zoneLevelId(zone), kind: zone.kind,
         footprint: zoneFootprint(zone), heightM: zone.heightM,
         walkable: zone.kind === "area", nameEn: zone.nameEn, nameZh: zone.nameZh,
       })).not.toThrow();

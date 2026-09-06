@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
-import { inviteUser } from "./cli/invite";
+import { inviteUser, resetPassword } from "./cli/invite";
 import { seedBuilding } from "./cli/seed";
 import { tracePlansIntoModel } from "./cli/trace";
 import { loadConfig } from "./config";
@@ -33,11 +33,20 @@ if (command === "invite") {
   process.exit(0);
 }
 
+if (command === "reset-password") {
+  const email = process.argv[3];
+  if (!email) throw new Error("usage: reset-password <email>");
+  const { user, password } = await resetPassword(db, email);
+  console.log(`reset ${user.email}. New one-time password: ${password}`);
+  process.exit(0);
+}
+
 if (command === "trace") {
-  const { created, skipped } = await tracePlansIntoModel(db);
+  const { created, skipped, recalibrated } = await tracePlansIntoModel(db);
   console.log(
     `traced ${created} zone(s) from the 2020 storey plans` +
-    (skipped ? `; left ${skipped} already in the model alone` : ""),
+    (skipped ? `; left ${skipped} already in the model alone` : "") +
+    (recalibrated ? `; recalibrated ${recalibrated} underlay(s) to match` : ""),
   );
   process.exit(0);
 }
