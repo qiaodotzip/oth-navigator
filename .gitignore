@@ -8,3 +8,9 @@ dist
 
 # local scratch from the round-trip smoke check
 scripts/.context.glb
+
+# Exported frames for labelling. A single walkthrough is hundreds of megabytes
+# of 4K stills, and none of it belongs in git — the frames live in the asset
+# store and the proposals go back through survey:import.
+survey-out/frames/
+**/survey-out/*/frames/

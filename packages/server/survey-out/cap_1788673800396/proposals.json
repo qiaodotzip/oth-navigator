@@ -1,0 +1,20 @@
+{
+  "captureId": "cap_1788673800396",
+  "proposals": [
+    { "keyframeId": "kf_65221e45-e1cb-4a79-9f41-8dc5adc8ba22", "nameEn": "Town Square Gate 1", "category": "facility", "levelId": "oth-L1", "note": "Overhead wayfinding sign reads 'Town Square Gate 1'. An entrance to the Town Square, not a room." },
+    { "keyframeId": "kf_65221e45-e1cb-4a79-9f41-8dc5adc8ba22", "nameEn": "Recycling Bin (Town Square Gate 1)", "category": "facility", "levelId": "oth-L1", "note": "Illustrated 'Put waste in the right place' bin beside the stair. An item, so it belongs as a detail once it has a footprint." },
+    { "keyframeId": "kf_db060a71-011e-4a7e-9e2d-2d26e600dc7d", "nameEn": "Bicycle Bays", "category": "facility", "levelId": "oth-L1", "note": "Racks with a 'Cyclists dismount your bike' sign. The facilities directory also lists Bicycle Bays on L1, so this is likely the same thing." },
+    { "keyframeId": "kf_db060a71-011e-4a7e-9e2d-2d26e600dc7d", "nameEn": "Escalator to Festive Walk", "category": "facility", "levelId": "oth-L1", "note": "Escalator beside the bicycle bays. Destination inferred from the direction of travel, not read off a sign — check before accepting." },
+    { "keyframeId": "kf_c3d5a6df-99f3-41e4-ac37-f1e40dfded25", "nameEn": "My Happy Belly", "category": "retail", "levelId": "oth-L1", "note": "Hawker stall fascia reads 'MY HAPPY BELLY'. Clearly legible." },
+    { "keyframeId": "kf_630ea575-a61a-420c-b0fc-d795b746074e", "nameEn": "Hawker Centre seating hall", "category": "facility", "levelId": "oth-L1", "note": "The open seating hall itself, with stalls on three sides. An area rather than a tenant." },
+    { "keyframeId": "kf_8b618134-ef72-42f8-adb5-2a4740e098d3", "nameEn": "Bak kut teh stall (翠汁 · 什汤 · 肉骨茶)", "category": "retail", "levelId": "oth-L1", "note": "Red fascia in Chinese; the English line under it is too small to read at this angle. Name is a description, not the trading name — needs confirming on site." },
+    { "keyframeId": "kf_8b618134-ef72-42f8-adb5-2a4740e098d3", "nameEn": "Tray return point (Hawker Centre)", "category": "facility", "levelId": "oth-L1", "note": "Yellow 'Thank you for returning your tray and crockery' station against the far wall." },
+    { "keyframeId": "kf_715dcee1-8ce3-4dcc-86be-2c811ab25056", "nameEn": "Valu$", "category": "retail", "levelId": "oth-L1", "note": "Repeated 'Valu$' branding through the shopfront, with a 'lowest price' promotion. Confident." },
+    { "keyframeId": "kf_715dcee1-8ce3-4dcc-86be-2c811ab25056", "nameEn": "Makan Malah", "category": "retail", "levelId": "oth-L1", "note": "Large wall lettering reading 'MAKANMALAH' along the corridor. Reads as an F&B zone name rather than a single unit." },
+    { "keyframeId": "kf_7dd9e6e1-2658-4405-971c-9db0e7d8ccc2", "nameEn": "Festive Mall", "category": "retail", "note": "Gantry sign reads 'Festive Mall @ B1'. No level recorded: the model has no basement, and the facilities directory also puts Festive Mall on B1." },
+    { "keyframeId": "kf_7dd9e6e1-2658-4405-971c-9db0e7d8ccc2", "nameEn": "Ticket Counter", "category": "facility", "levelId": "oth-L1", "note": "Booth signed 'Ticket Counter 售票处', with a 'Sorry, we are closed' notice at the time of filming." },
+    { "keyframeId": "kf_7dd9e6e1-2658-4405-971c-9db0e7d8ccc2", "nameEn": "Arcade machines (Festive Plaza)", "category": "lifestyle", "levelId": "oth-L1", "note": "A row of claw and 'Hammer Men' machines on the green mat. Individual machines are items and should become details once someone draws them." },
+    { "keyframeId": "kf_7dd9e6e1-2658-4405-971c-9db0e7d8ccc2", "nameEn": "Town Square Gate 1", "category": "facility", "levelId": "oth-L1", "note": "Second sighting: directional sign reads '... / Library / Town Square Gate 1'. Should link to the same place as the earlier frame." },
+    { "keyframeId": "kf_7dd9e6e1-2658-4405-971c-9db0e7d8ccc2", "nameEn": "Festive Plaza", "category": "community", "levelId": "oth-L1", "note": "Named on the LED banner as the venue for an event, and signed 'PLAZA' on the right. The open space itself." }
+  ]
+}
