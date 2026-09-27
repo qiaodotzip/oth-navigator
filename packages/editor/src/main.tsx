@@ -1,3 +1,4 @@
+import "@fontsource-variable/inter";
 import { StrictMode, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { createApi } from "./api/client";
