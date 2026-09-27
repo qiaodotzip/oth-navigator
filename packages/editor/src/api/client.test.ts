@@ -93,4 +93,9 @@ describe("assets", () => {
   it("builds a stable file url", () => {
     expect(createApi().assetFileUrl("asset_1")).toBe("/api/assets/asset_1/file");
   });
+
+  it("asks for a frame at a width, or the original without one", () => {
+    expect(createApi().keyframeFileUrl("kf_1")).toBe("/api/keyframes/kf_1/file");
+    expect(createApi().keyframeFileUrl("kf_1", 240)).toBe("/api/keyframes/kf_1/file?w=240");
+  });
 });

@@ -95,7 +95,9 @@ function ReviewCard({
         {frameIds.slice(0, 6).map(id => (
           <img
             key={id}
-            src={api.keyframeFileUrl(id)}
+            src={api.keyframeFileUrl(id, 320)}
+            loading="lazy"
+            decoding="async"
             alt={`frame ${id}`}
             className="h-16 shrink-0 rounded"
           />

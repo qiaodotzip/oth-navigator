@@ -1,8 +1,10 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import sharp from "sharp";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app";
+import { readImageSize } from "../images/inspect";
 import { createUser } from "../auth/users";
 import type { Database } from "../db/client";
 import { createTestDb, json } from "../testing/harness";
@@ -97,6 +99,24 @@ describe("keyframe upload", () => {
     const file = await app.request(`/api/keyframes/${body.keyframe.id}/file`, { headers: { cookie } });
     expect(file.status).toBe(200);
     expect(file.headers.get("content-type")).toContain("image");
+  });
+
+  it("serves a narrower copy when a width is asked for", async () => {
+    const big = new Uint8Array(await sharp({
+      create: { width: 1920, height: 1080, channels: 3, background: "#777777" },
+    }).jpeg().toBuffer());
+    const body = await json<{ keyframe: { id: string } }>(await grab(big));
+    const file = await app.request(`/api/keyframes/${body.keyframe.id}/file?w=240`, { headers: { cookie } });
+    expect(file.status).toBe(200);
+    expect(file.headers.get("content-type")).toBe("image/jpeg");
+    expect(readImageSize(new Uint8Array(await file.arrayBuffer())).widthPx).toBe(240);
+  });
+
+  it("serves the original when it is already smaller than the width asked for", async () => {
+    const body = await json<{ keyframe: { id: string } }>(await grab(png(64, 48)));
+    const file = await app.request(`/api/keyframes/${body.keyframe.id}/file?w=240`, { headers: { cookie } });
+    expect(file.status).toBe(200);
+    expect(readImageSize(new Uint8Array(await file.arrayBuffer())).widthPx).toBe(64);
   });
 
   it("404s a frame that does not exist rather than serving nothing", async () => {

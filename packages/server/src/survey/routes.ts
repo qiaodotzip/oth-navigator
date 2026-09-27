@@ -7,6 +7,7 @@ import { requireUser } from "../auth/middleware";
 import { captures, keyframes, sightings } from "../db/schema";
 import { toModelRow } from "../db/rows";
 import { IMAGE_MAX_BYTES, InvalidImageError, readImageSize } from "../images/inspect";
+import { readThumbnail, thumbnailWidth } from "../images/thumbnail";
 
 /**
  * Keyframes have their own route rather than going through generic entity CRUD,
@@ -140,13 +141,25 @@ keyframeRoutes.delete("/:id", async c => {
   return c.body(null, 204);
 });
 
+/**
+ * The frame itself, or with `?w=` a narrower copy of it. The filmstrip and the
+ * review queue ask for small ones; only the labelling export needs the 4K.
+ */
 keyframeRoutes.get("/:id/file", async c => {
   const db = c.get("db");
   const [row] = await db.select().from(keyframes).where(eq(keyframes.id, c.req.param("id")));
   if (!row) return c.json({ error: "not found" }, 404);
+  const cache = { "cache-control": "public, max-age=31536000, immutable" };
+
+  const width = thumbnailWidth(Number(c.req.query("w") ?? 0), row.widthPx);
+  if (width !== null) {
+    const bytes = await readThumbnail(c.get("dataDir"), row, width);
+    return c.body(bytes.buffer as ArrayBuffer, 200, { "content-type": "image/jpeg", ...cache });
+  }
+
   const bytes = await readAsset(c.get("dataDir"), row.storagePath);
   return c.body(bytes.buffer as ArrayBuffer, 200, {
     "content-type": row.storagePath.endsWith(".png") ? "image/png" : "image/jpeg",
-    "cache-control": "public, max-age=31536000, immutable",
+    ...cache,
   });
 });

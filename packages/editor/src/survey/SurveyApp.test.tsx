@@ -40,6 +40,18 @@ beforeEach(() => {
 });
 
 describe("SurveyApp", () => {
+  it("fills the filmstrip with small, lazily loaded frames, not the 4K originals", async () => {
+    const api = fakeApi({
+      keyframeFileUrl: (id: string, w?: number) => `/api/keyframes/${id}/file${w ? `?w=${w}` : ""}`,
+    });
+    render(<SurveyApp api={api} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByTestId("capture-cap_1"));
+    const thumb = screen.getByTestId("filmstrip-kf_1").querySelector("img")!;
+    expect(thumb.getAttribute("src")).toBe("/api/keyframes/kf_1/file?w=240");
+    expect(thumb.getAttribute("loading")).toBe("lazy");
+  });
+
   it("lists the captures", async () => {
     render(<SurveyApp api={fakeApi()} />);
     await waitFor(() => expect(screen.getByTestId("capture-cap_1")).toBeTruthy());

@@ -24,7 +24,9 @@ const model = parseModel({
   ],
 });
 
-const api = { keyframeFileUrl: (id: string) => `/api/keyframes/${id}/file` } as unknown as Api;
+const api = {
+  keyframeFileUrl: (id: string, w?: number) => `/api/keyframes/${id}/file${w ? `?w=${w}` : ""}`,
+} as unknown as Api;
 
 function setup() {
   const saver = {
@@ -51,6 +53,14 @@ describe("ReviewPanel", () => {
     setup();
     expect(screen.getByAltText("frame kf_1")).toBeTruthy();
     expect(screen.getByAltText("frame kf_2")).toBeTruthy();
+  });
+
+  it("shows the evidence as small, lazily loaded frames", () => {
+    // 185 cards of up to six 4K frames each is not a queue anyone can load.
+    setup();
+    const img = screen.getByAltText("frame kf_1");
+    expect(img.getAttribute("src")).toBe("/api/keyframes/kf_1/file?w=320");
+    expect(img.getAttribute("loading")).toBe("lazy");
   });
 
   it("says how sure to be: who proposed it, and what they were unsure about", () => {

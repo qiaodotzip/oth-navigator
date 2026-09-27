@@ -142,7 +142,9 @@ export function createApi(options: ApiOptions = {}) {
       return body.keyframe;
     },
 
-    keyframeFileUrl: (id: string) => `${base}/api/keyframes/${id}/file`,
+    /** With a width, a smaller copy made by the server; the frames are 4K. */
+    keyframeFileUrl: (id: string, width?: number) =>
+      `${base}/api/keyframes/${id}/file${width ? `?w=${width}` : ""}`,
 
     deleteKeyframe: (id: string) =>
       request<void>(`/api/keyframes/${id}`, { method: "DELETE" }),

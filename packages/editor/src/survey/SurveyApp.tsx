@@ -249,7 +249,13 @@ export function SurveyApp({ api }: { api: Api }) {
                         }`}
                         onClick={() => setFrameId(f.id)}
                       >
-                        <img src={api.keyframeFileUrl(f.id)} alt="" className="h-full" />
+                        <img
+                          src={api.keyframeFileUrl(f.id, 240)}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full"
+                        />
                       </button>
                       {labelled.get(f.id) && (
                         <span
@@ -297,7 +303,9 @@ export function SurveyApp({ api }: { api: Api }) {
               {frame && (
                 <PlaceTagger
                   keyframe={frame}
-                  imageUrl={api.keyframeFileUrl(frame.id)}
+                  // Wide enough to read a shop sign; the box is in fractions, so
+                  // the size shown does not change what is saved.
+                  imageUrl={api.keyframeFileUrl(frame.id, 1600)}
                   places={places}
                   labels={labelsForFrame(model, frame.id)}
                   walkwayKinds={kinds}
