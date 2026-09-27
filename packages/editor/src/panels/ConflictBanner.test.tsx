@@ -34,4 +34,14 @@ describe("ConflictBanner", () => {
     fireEvent.click(screen.getByRole("button", { name: /reload/i }));
     expect(useEditorStore.getState().conflict).toBeNull();
   });
+
+  it("says who changed it, by name, and what", () => {
+    useEditorStore.getState().setTeam([{ id: "user_2", email: "wei@oth.local", displayName: "Wei Kang" }]);
+    useEditorStore.getState().setConflict({
+      entityType: "room", entityId: "L1-a",
+      current: { updatedBy: "user_2", version: 3, nameEn: "Stadium" },
+    });
+    render(<ConflictBanner onReload={vi.fn()} />);
+    expect(screen.getByRole("alert").textContent).toMatch(/^Wei Kang changed Stadium/);
+  });
 });

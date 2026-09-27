@@ -3,12 +3,14 @@ import { findLevel } from "../flow/floors";
 import { followLink, type Route } from "../route";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
+import { AccountMenu } from "./AccountMenu";
 import { FloorSwitcher } from "./FloorSwitcher";
 import { FloorTabs } from "./FloorTabs";
 import { PresenceAvatars } from "./PresenceAvatars";
+import { PublishButton } from "./PublishButton";
 
 /** One row, identical on every screen. */
-export function Header({ route }: { api: Api; saver: Saver; route: Route }) {
+export function Header({ api, route }: { api: Api; saver: Saver; route: Route }) {
   const model = useEditorStore(s => s.model);
   const level = route.name === "floor" ? findLevel(model, route.code) : null;
 
@@ -26,6 +28,8 @@ export function Header({ route }: { api: Api; saver: Saver; route: Route }) {
       {route.name === "team" && <span className="text-stone-500">Team</span>}
       <div className="ml-auto flex items-center gap-3">
         <PresenceAvatars />
+        <PublishButton api={api} />
+        <AccountMenu api={api} />
       </div>
     </header>
   );
