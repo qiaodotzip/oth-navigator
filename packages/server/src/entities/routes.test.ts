@@ -176,4 +176,13 @@ describe("restore", () => {
   it("404s something that never existed", async () => {
     expect((await send("POST", "/api/entities/pathway/p_nope/restore", { expectedVersion: 0 })).status).toBe(404);
   });
+
+  it("refuses to restore a capture, since that would half-restore its frames", async () => {
+    await send("POST", "/api/entities/capture", { data: { id: "cap_r", kind: "video", filename: "walk.mp4" } });
+    await send("DELETE", "/api/captures/cap_r");
+    const res = await send("POST", "/api/entities/capture/cap_r/restore", { expectedVersion: 1 });
+    expect(res.status).toBe(422);
+    const list = await (await send("GET", "/api/entities/capture")).json() as { items: { id: string }[] };
+    expect(list.items.find(c => c.id === "cap_r")).toBeUndefined();
+  });
 });

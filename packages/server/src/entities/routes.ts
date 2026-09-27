@@ -80,6 +80,11 @@ entityRoutes.delete("/:type/:id", async c => {
 entityRoutes.post("/:type/:id/restore", async c => {
   const type = c.req.param("type");
   if (!isEntityType(type)) return c.json({ error: "unknown entity type" }, 400);
+  // A capture's delete cascades to its keyframes and their sightings; restoring
+  // only the capture row here would leave them all still deleted and undiscoverable.
+  if (type === "capture") {
+    return c.json({ error: "a capture is restored with its frames, which is not offered; its delete is final" }, 422);
+  }
   const body = DeleteBody.safeParse(await c.req.json().catch(() => null));
   if (!body.success) return c.json({ error: "expected { expectedVersion }" }, 400);
   try {
