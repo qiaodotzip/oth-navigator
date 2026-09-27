@@ -69,10 +69,9 @@ npm install
 npm test          # vitest across all packages
 npm run typecheck # tsc -b, strict
 
-# seed the building and 8 levels, then create yourself an account
+# seed the building and 8 levels, then add yourself by name
 npm run seed
-npm run invite -- you@example.com "Your Name"
-npm run reset-password -- you@example.com   # if the one-time password is lost
+npm run invite -- "Your Name"
 
 # the server also serves the built editor, so this is all you need
 npm run dev             # API and editor on :3000

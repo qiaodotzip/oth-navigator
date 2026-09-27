@@ -5207,7 +5207,6 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 What the final review left for later plans. Nothing here ships to teammates, because deployment waits for plan 4.
 
 **Plan 2's first task**
-- *Sign out:* call `endSession("signed-out")` before awaiting logout. As it stands, a poll can briefly show "Your session ended" during a sign-out.
 - *Expired-session dialog:* "Your last change was not saved." is usually untrue now that the presence poll notices expiry first. Say it only when a save actually failed.
 - *Owner avatars while the team loads:* the "Team member" placeholder shows the initials "TM", which read as a real person. Use a glyph and an honest name ("Owner – name not loaded"), and give the switcher the failure message too.
 - *Old screens and 401s:* these show a raw "api error 401" beside the expired dialog; give them `isUnauthorized`:
@@ -5216,7 +5215,6 @@ What the final review left for later plans. Nothing here ships to teammates, bec
   - AssetLibrary
   - panels/PublishButton
   - CaptureVideo
-- *Change password:* a 400 (for example an empty current password) reads as "check your connection". Show the server's message instead.
 - *Housekeeping:*
   - The App docstring still says "Only ever rendered signed in".
   - The thumbnail cleanup test never exercises a failed rename.

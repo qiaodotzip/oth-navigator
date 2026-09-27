@@ -28,8 +28,8 @@ the result unusable by anyone else:
   drew, and the agent's boxes are sometimes wrong.
 - **Nothing is organised by floor**, although the team splits the work by
   floor: the one capture and 177 of 190 places have no level.
-- **No path to a teammate.** Accounts are created with a CLI command that prints
-  a one-time password to a terminal; there is no way to change it in the app.
+- **No path to a teammate.** Accounts are created with a CLI command; there is
+  no way to add one from the app itself.
 
 The bug pass that precedes this spec (branch `ux-overhaul`, ten commits) fixed
 the blockers — entrances and lifts can be placed, the canvas pans and fills the
@@ -68,7 +68,7 @@ Settled with the user during brainstorming, with mockups:
 - **The visitor app.** Still its own project.
 - **Mobile or on-site capture.** Survey stays a desk tool over existing footage.
 - **Roles or approval workflow.** A flat team, as the map-model spec decided;
-  anyone signed in may invite, reset, assign owners and publish.
+  anyone signed in may add a teammate, assign owners and publish.
 - **Real-time co-editing.** Presence and advisory locks stay as they are.
 - **Changing validation, the nav bake or the publish gate**, beyond grouping how
   their output is shown.
@@ -105,7 +105,7 @@ rather than a blank screen.
 ui/       Button, Kbd, Chip, Avatar, Progress, Dialog, Popover, Toast — tokens applied
 shell/    AppShell, header, FloorSwitcher, AccountMenu, PublishButton, Toaster, OfflineBanner
 home/     FloorsHome, FloorCard, OwnerPicker
-team/     TeamPage, InviteDialog, ChangePasswordDialog
+team/     TeamPage, InviteDialog
 survey/   SurveyWorkspace, FrameView, GridView, TagBar, FramePanel, Filmstrip, AddFootageDialog
 review/   ReviewWorkspace, ProposalFocus, ProposalDrawer
 build/    BuildWorkspace, Stepper, StepGuide, StepTodo, LayersDrawer, PreviewToggle
@@ -123,9 +123,7 @@ zustand store, `createSaver`, the API client and every pure function under
 |---|---|---|
 | `level.ownerIds: string[]` (default `[]`) | model schema, `levels` table, migration | Floors are owned; the home page and switcher show it. |
 | `GET /api/users` | server | Names and ids for owners, avatars and the team page. |
-| `POST /api/users/invite`, `POST /api/users/:id/reset-password` | server | Invites without a terminal; returns a one-time password once. |
-| `POST /api/auth/password` | server | Change your own password; clears the one-time flag. |
-| `users.mustChangePassword` | `users` table | Set by invite/reset, cleared on change; drives the "set your own password" banner. |
+| `GET /api/auth/people`, `POST /api/users/invite` | server | No passwords: sign-in is picking a name from a public list, and adding a teammate takes just a name. |
 | `POST /api/entities/:type/:id/restore` | server, repository | Undo for soft deletes, audited like any write. |
 | `POST /api/keyframes/:id/restore` | server | A binned frame comes back with the sightings binned with it (same `deletedAt`). |
 | `POST /api/places/:id/merge` `{ into }` | server | "Same as…" in Review: sightings move to the existing place, the proposal is retired, in one transaction. |
@@ -156,7 +154,7 @@ sighting, all confirmed.
   the tabs **Survey · Review (n) · Build**, where *n* is proposals waiting on
   this floor.
 - Right: online teammates as avatars (hover: which floor, from presence),
-  **Publish**, and the **account menu** (name, Change password, Team, Sign out).
+  **Publish**, and the **account menu** (name, Team, Sign out).
 
 **Publish** is building-wide. Disabled until the report has no errors; its
 popover lists what blocks it grouped by floor, each item a link to the step
@@ -183,12 +181,12 @@ away.
 ## 8. Team and account
 
 - **`/team`**: members with the floors they own and whether they are online
-  now. **Invite a teammate** (name, email) shows the one-time password once,
-  with *Copy invite message* (URL, email, password). **Reset password** on a
-  member does the same.
-- **Change password** from the account menu. Signing in with a one-time
-  password shows a banner asking you to set your own until you do.
-- `npm run invite` remains for the very first account on a fresh server.
+  now. **Add teammate** (name only) puts them on the sign-in list at once —
+  there is nothing to send them.
+- No passwords, for now: sign-in is picking your name from a dropdown of the
+  team, decided 2026-09-27 because the app is used only within the team.
+- `npm run invite "<name>"` remains for the very first account on a fresh
+  server.
 
 ## 9. Survey workspace
 
@@ -290,8 +288,8 @@ entrance · **L** lift · **F** fit · **Space** drag to pan · **Del** delete �
   reads them into another, so the local PGlite work reaches production intact.
   Import refuses to run into a database that already has rooms, rather than
   merging.
-- **Teammate note:** one page — the URL, how to sign in and set a password, and
-  the order of the six build steps — in the short style of the client docs.
+- **Teammate note:** one page — the URL, how to sign in, and the order of the
+  six build steps — in the short style of the client docs.
 
 ## 14. Testing
 
@@ -299,11 +297,11 @@ entrance · **L** lift · **F** fit · **Space** drag to pan · **Del** delete �
   `placeLevel`, the per-step to-do derivation, the key maps.
 - **Components** with Testing Library, as now; the kept tests move with their
   components.
-- **Server** endpoints against PGlite: owners, users / invite / reset /
-  password, restore (entity and keyframe), merge.
+- **Server** endpoints against PGlite: owners, users / invite / sign-in,
+  restore (entity and keyframe), merge.
 - **An end-to-end smoke test** (`npm run e2e`, Playwright, run by hand, not
-  part of `npm test`): sign in, change password, tag a frame, accept and undo a
-  proposal, place an entrance, publish refused with its reasons.
+  part of `npm test`): sign in, tag a frame, accept and undo a proposal, place
+  an entrance, publish refused with its reasons.
 - Test runs keep a worker cap: the full suite unthrottled is what froze the
   laptop before.
 
@@ -326,5 +324,5 @@ One spec, four plans, in order; nothing is released until all four are done.
 | A rebuild in place breaks the logic the old screens used | The pure functions and their tests are kept as-is; screens are replaced around them, and the e2e smoke covers the paths that matter. |
 | One release at the end means late feedback | Each plan ends with the app runnable against the sandbox copy of the real data, for the user to try before the next starts. |
 | The data carried to production is incomplete | Import is all-or-nothing into an empty database, and reports counts per entity type to check against the export. |
-| Anyone can reset anyone's password | Accepted for a team of six, as the map-model spec accepted a flat team. Every reset is in the audit log. |
+| Anyone who can reach the server can sign in as anyone | Accepted for a team-internal app. Plan 4 must keep the deployed URL team-only, or add a shared team code, before it goes anywhere public. |
 | The 40-hours-each budget | No new features beyond what the six steps and the two survey tabs need; the spec's non-goals are the list of things to say no to. |
