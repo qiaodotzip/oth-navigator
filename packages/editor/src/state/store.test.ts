@@ -94,3 +94,19 @@ describe("editor store", () => {
     });
   });
 });
+
+describe("an ended session", () => {
+  it("remembers that a change was lost until someone signs in again", () => {
+    useEditorStore.getState().endSession("expired", true);
+    // A presence poll's 401 a moment later must not make it forget.
+    useEditorStore.getState().endSession("expired");
+    expect(useEditorStore.getState().sessionEndUnsaved).toBe(true);
+    useEditorStore.getState().setUser({ id: "u1", email: "a@oth.local", displayName: "A" });
+    expect(useEditorStore.getState().sessionEndUnsaved).toBe(false);
+  });
+
+  it("does not claim a lost change when none was", () => {
+    useEditorStore.getState().endSession("expired");
+    expect(useEditorStore.getState().sessionEndUnsaved).toBe(false);
+  });
+});

@@ -26,6 +26,16 @@ export function isUnauthorized(err: unknown): boolean {
   return err instanceof ApiError && err.status === 401;
 }
 
+/**
+ * Whether a refused request was trying to change something, so the sign-in
+ * dialog can say that change did not land. Presence and lock pings are POSTs
+ * too, but they save nothing anyone made.
+ */
+export function wasWrite(request: { method: string; path: string }): boolean {
+  if (request.method === "GET" || request.method === "HEAD") return false;
+  return !request.path.startsWith("/api/presence") && !request.path.startsWith("/api/locks");
+}
+
 export type EntityType =
   | "level" | "room" | "pathway" | "doorway" | "entrance"
   | "portal" | "portalEndpoint" | "navHint" | "placement" | "tenant"
@@ -82,7 +92,7 @@ export type ApiOptions = {
    * is signed in. Wired in `main.tsx` to end the session as "expired" so
    * every direct write notices the same way the saver does.
    */
-  onUnauthorized?: () => void;
+  onUnauthorized?: (request: { method: string; path: string }) => void;
 };
 
 export function createApi(options: ApiOptions = {}) {
@@ -109,7 +119,9 @@ export function createApi(options: ApiOptions = {}) {
         const current = (body as { current?: Record<string, unknown> } | null)?.current ?? null;
         throw new ConflictError(current, body);
       }
-      if (res.status === 401 && !requestOptions.skipUnauthorized) options.onUnauthorized?.();
+      if (res.status === 401 && !requestOptions.skipUnauthorized) {
+        options.onUnauthorized?.({ method: (init.method ?? "GET").toUpperCase(), path });
+      }
       throw new ApiError(res.status, body);
     }
     return body as T;

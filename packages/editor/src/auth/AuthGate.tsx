@@ -15,6 +15,7 @@ export function AuthGate({ api, children }: { api: Api; children: ReactNode }) {
   const user = useEditorStore(s => s.user);
   const setUser = useEditorStore(s => s.setUser);
   const sessionEnd = useEditorStore(s => s.sessionEnd);
+  const unsaved = useEditorStore(s => s.sessionEndUnsaved);
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
@@ -36,7 +37,11 @@ export function AuthGate({ api, children }: { api: Api; children: ReactNode }) {
           open
           onOpenChange={() => {}}
           title="Your session ended"
-          description="Sign in to carry on where you were. Your last change was not saved."
+          description={
+            unsaved
+              ? "Sign in to carry on where you were. Your last change was not saved."
+              : "Sign in to carry on where you were."
+          }
           dismissible={false}
         >
           <LoginForm api={api} onSignedIn={setUser} />

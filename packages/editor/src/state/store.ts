@@ -61,6 +61,12 @@ export type EditorState = {
    * sign-in screen.
    */
   sessionEnd: "signed-out" | "expired" | null;
+  /**
+   * Whether a write was refused when the session ended. The dialog says "your
+   * last change was not saved" only then: usually a presence poll notices the
+   * expiry first, and nothing was lost.
+   */
+  sessionEndUnsaved: boolean;
 
   setUser: (u: SessionUser | null) => void;
   setModel: (m: MapModel) => void;
@@ -85,7 +91,7 @@ export type EditorState = {
   selectAsset: (id: string | null) => void;
   setTeam: (t: TeamMember[]) => void;
   setTeamLoadError: () => void;
-  endSession: (reason: "signed-out" | "expired") => void;
+  endSession: (reason: "signed-out" | "expired", unsaved?: boolean) => void;
   reset: () => void;
 };
 
@@ -114,13 +120,14 @@ const initial = {
   team: [] as TeamMember[],
   teamStatus: "loading" as EditorState["teamStatus"],
   sessionEnd: null as EditorState["sessionEnd"],
+  sessionEndUnsaved: false,
 };
 
 export const useEditorStore = create<EditorState>(set => ({
   ...initial,
 
   // Signing in, or back in, settles why the session had ended.
-  setUser: user => set(user ? { user, sessionEnd: null } : { user }),
+  setUser: user => set(user ? { user, sessionEnd: null, sessionEndUnsaved: false } : { user }),
 
   setModel: model =>
     set(state => {
@@ -163,7 +170,10 @@ export const useEditorStore = create<EditorState>(set => ({
   selectAsset: selectedAssetId => set({ selectedAssetId }),
   setTeam: team => set({ team, teamStatus: "loaded" }),
   setTeamLoadError: () => set({ teamStatus: "error" }),
-  endSession: reason => set({ user: null, sessionEnd: reason }),
+  // A lost change stays lost until someone signs in: a later 401 from a poll
+  // must not make the dialog forget it.
+  endSession: (reason, unsaved = false) =>
+    set(state => ({ user: null, sessionEnd: reason, sessionEndUnsaved: state.sessionEndUnsaved || unsaved })),
 
   reset: () => set(initial),
 }));

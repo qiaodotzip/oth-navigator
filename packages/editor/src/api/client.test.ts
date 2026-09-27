@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, ConflictError, createApi, isUnauthorized } from "./client";
+import { ApiError, ConflictError, createApi, isUnauthorized, wasWrite } from "./client";
 
 /**
  * Declares the fetch parameters explicitly so `mock.calls` is typed and the
@@ -98,6 +98,13 @@ describe("api client", () => {
     await expect(api.logout()).rejects.toBeInstanceOf(ApiError);
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
+
+  it("tells onUnauthorized which request was refused", async () => {
+    const onUnauthorized = vi.fn();
+    const api = createApi({ fetchImpl: mockFetch(401, { error: "unauthenticated" }), onUnauthorized });
+    await expect(api.deleteKeyframe("kf_1")).rejects.toBeInstanceOf(ApiError);
+    expect(onUnauthorized).toHaveBeenCalledWith({ method: "DELETE", path: "/api/keyframes/kf_1" });
+  });
 });
 
 describe("isUnauthorized", () => {
@@ -105,6 +112,21 @@ describe("isUnauthorized", () => {
     expect(isUnauthorized(new ApiError(401, null))).toBe(true);
     expect(isUnauthorized(new ApiError(422, null))).toBe(false);
     expect(isUnauthorized(new Error("boom"))).toBe(false);
+  });
+});
+
+describe("wasWrite", () => {
+  it("counts a request that changes something as a write", () => {
+    expect(wasWrite({ method: "POST", path: "/api/entities/room" })).toBe(true);
+    expect(wasWrite({ method: "PATCH", path: "/api/entities/room/r1" })).toBe(true);
+    expect(wasWrite({ method: "DELETE", path: "/api/keyframes/kf_1" })).toBe(true);
+  });
+
+  it("does not count reading, or the presence and lock pings every screen sends", () => {
+    expect(wasWrite({ method: "GET", path: "/api/model" })).toBe(false);
+    expect(wasWrite({ method: "POST", path: "/api/presence" })).toBe(false);
+    expect(wasWrite({ method: "POST", path: "/api/locks/room/r1" })).toBe(false);
+    expect(wasWrite({ method: "DELETE", path: "/api/locks/room/r1" })).toBe(false);
   });
 });
 

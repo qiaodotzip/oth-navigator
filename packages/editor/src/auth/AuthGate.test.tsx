@@ -76,4 +76,18 @@ describe("AuthGate", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(await screen.findByRole("button", { name: /sign in/i })).toBeTruthy();
   });
+
+  it("does not say a change was lost when the session simply ran out", async () => {
+    render(<AuthGate api={fakeApi()}><p>the survey</p></AuthGate>);
+    await waitFor(() => screen.getByText("the survey"));
+    act(() => useEditorStore.getState().endSession("expired"));
+    expect(screen.getByRole("dialog", { name: /session ended/i }).textContent).not.toMatch(/not saved/i);
+  });
+
+  it("says the last change was not saved when a write was refused", async () => {
+    render(<AuthGate api={fakeApi()}><p>the survey</p></AuthGate>);
+    await waitFor(() => screen.getByText("the survey"));
+    act(() => useEditorStore.getState().endSession("expired", true));
+    expect(screen.getByRole("dialog", { name: /session ended/i }).textContent).toMatch(/your last change was not saved/i);
+  });
 });

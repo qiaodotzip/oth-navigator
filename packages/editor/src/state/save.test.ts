@@ -1,6 +1,7 @@
 import { parseModel } from "@oth/model";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, ConflictError } from "../api/client";
+import { useToasts } from "../ui/toast";
 import { createSaver } from "./save";
 import { useEditorStore } from "./store";
 
@@ -23,7 +24,10 @@ function fakeApi(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-beforeEach(() => useEditorStore.getState().reset());
+beforeEach(() => {
+  useEditorStore.getState().reset();
+  useToasts.getState().clear();
+});
 
 describe("saver.apply", () => {
   it("runs any request through the same guard, and reloads once after it", async () => {
@@ -113,10 +117,46 @@ describe("saver", () => {
     expect(updateEntity).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces an unexpected failure as a status message rather than crashing", async () => {
-    const api = fakeApi({ updateEntity: vi.fn(async () => { throw new Error("network down"); }) });
-    expect(await createSaver(api).update("room", "L1-a", 0, {})).toBe(false);
-    expect(useEditorStore.getState().status).toMatch(/network down/);
+  it("reports an unexpected failure as a toast with Retry, and Retry sends the same write", async () => {
+    const updateEntity = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce({ id: "L1-a", version: 1 });
+    expect(await createSaver(fakeApi({ updateEntity })).update("room", "L1-a", 0, { nameEn: "X" })).toBe(false);
+    const failed = useToasts.getState().toasts.at(-1)!;
+    expect(failed).toMatchObject({ tone: "error", action: { label: "Retry" } });
+    await failed.action!.run();
+    expect(updateEntity).toHaveBeenCalledTimes(2);
+    expect(updateEntity.mock.calls[1]).toEqual(["room", "L1-a", 0, { nameEn: "X" }]);
+  });
+
+  it("gives a refusal in the server's words, with no Retry", async () => {
+    const updateEntity = vi.fn(async () => { throw new ApiError(422, { error: "invalid entity" }); });
+    await createSaver(fakeApi({ updateEntity })).update("room", "L1-a", 0, {});
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({
+      tone: "error",
+      message: "Couldn't save your change: invalid entity.",
+    });
+    expect(useToasts.getState().toasts.at(-1)!.action).toBeUndefined();
+  });
+
+  it("keeps the failure on screen until it is dismissed", async () => {
+    const updateEntity = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    await createSaver(fakeApi({ updateEntity })).update("room", "L1-a", 0, {});
+    expect(useToasts.getState().toasts.at(-1)!.durationMs).toBeNull();
+  });
+
+  it("counts a write that landed as saved, even when the reload after it fails", async () => {
+    const getModel = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    expect(await createSaver(fakeApi({ getModel })).create("room", { id: "x" })).toBe(true);
+    const failed = useToasts.getState().toasts.at(-1)!;
+    expect(failed.message).toBe("Couldn't reload the map after saving. Check your connection, then retry.");
+    expect(failed.action?.label).toBe("Retry");
+  });
+
+  it("goes through apply for a frame, which is not a generic entity", async () => {
+    const run = vi.fn(async () => undefined);
+    expect(await createSaver(fakeApi()).apply("keyframe", "kf_1", run)).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it("clears a previous conflict on a successful write", async () => {
@@ -139,5 +179,20 @@ describe("an expired session", () => {
     useEditorStore.getState().endSession("expired");
     useEditorStore.getState().setUser({ id: "u1", email: "a@oth.local", displayName: "A" });
     expect(useEditorStore.getState().sessionEnd).toBeNull();
+  });
+
+  it("says the change was lost when the write itself was refused", async () => {
+    useEditorStore.getState().setUser({ id: "u1", email: "a@oth.local", displayName: "A" });
+    const updateEntity = vi.fn(async () => { throw new ApiError(401, null); });
+    await createSaver(fakeApi({ updateEntity })).update("room", "r1", 0, {});
+    expect(useEditorStore.getState().sessionEndUnsaved).toBe(true);
+  });
+
+  it("does not say a change was lost when it landed and only the reload was refused", async () => {
+    useEditorStore.getState().setUser({ id: "u1", email: "a@oth.local", displayName: "A" });
+    const getModel = vi.fn(async () => { throw new ApiError(401, null); });
+    expect(await createSaver(fakeApi({ getModel })).update("room", "r1", 0, {})).toBe(true);
+    expect(useEditorStore.getState().sessionEnd).toBe("expired");
+    expect(useEditorStore.getState().sessionEndUnsaved).toBe(false);
   });
 });
