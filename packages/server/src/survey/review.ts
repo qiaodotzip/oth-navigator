@@ -28,6 +28,9 @@ const ReopenBody = z.object({
   levelId: z.string().min(1).nullable(),
   sightingIds: z.array(z.string().min(1)),
 });
+const MergeBody = z.object({ expectedVersion: Version, into: z.string().min(1) });
+const MovedSighting = z.object({ id: z.string().min(1), status: z.enum(["proposed", "confirmed"]) });
+const UnmergeBody = z.object({ expectedVersion: Version, moved: z.array(MovedSighting) });
 
 /**
  * Accept or reject what a labelling agent proposed, place and sightings as one.
@@ -157,6 +160,68 @@ placeReviewRoutes.post("/:id/reopen", async c => {
         }
       }
       return named.length;
+    });
+    return c.json({ sightings: count });
+  } catch (err) {
+    const { body: out, status } = failure(err);
+    return c.json(out, status);
+  }
+});
+
+/**
+ * "Same as…" (spec §10): the proposal was a place already on the map. Its
+ * tags move to that place, confirmed — a person has just said what they show
+ * — and the proposal is retired, all in one transaction. The response lists
+ * what moved and how each stood, which is exactly what `unmerge` takes back.
+ */
+placeReviewRoutes.post("/:id/merge", async c => {
+  const body = MergeBody.safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "expected { expectedVersion, into }" }, 400);
+  const id = c.req.param("id");
+  if (body.data.into === id) return c.json({ error: "a place cannot be merged into itself" }, 422);
+  const actor = c.get("user").id;
+  try {
+    const moved = await c.get("db").transaction(async t => {
+      const tx = t as unknown as Database;
+      const [target] = await tx.select().from(places)
+        .where(and(eq(places.id, body.data.into), isNull(places.deletedAt)));
+      if (!target) throw new NotFoundError();
+      const tags = await sightingsOf(tx, id);
+      // The proposal's version is the check that matters, so it goes first.
+      await softDeleteEntity(tx, "place", id, body.data.expectedVersion, actor);
+      for (const s of tags) {
+        await updateEntity(tx, "sighting", s.id, s.version, { placeId: body.data.into, status: "confirmed" }, actor);
+      }
+      return tags.map(s => ({ id: s.id, status: s.status }));
+    });
+    return c.json({ moved });
+  } catch (err) {
+    const { body: out, status } = failure(err);
+    return c.json(out, status);
+  }
+});
+
+/**
+ * Undoes a merge: the proposal comes back, and each tag that moved returns to
+ * it as it stood. A tag removed since stays removed.
+ */
+placeReviewRoutes.post("/:id/unmerge", async c => {
+  const body = UnmergeBody.safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "expected { expectedVersion, moved }" }, 400);
+  const id = c.req.param("id");
+  const actor = c.get("user").id;
+  try {
+    const count = await c.get("db").transaction(async t => {
+      const tx = t as unknown as Database;
+      await restoreEntity(tx, "place", id, body.data.expectedVersion, actor);
+      const was = new Map(body.data.moved.map(m => [m.id, m.status]));
+      if (was.size === 0) return 0;
+      const tags = await tx.select().from(sightings)
+        .where(and(inArray(sightings.id, [...was.keys()]), isNull(sightings.deletedAt)));
+      for (const s of tags) {
+        await updateEntity(tx, "sighting", s.id, s.version, { placeId: id, status: was.get(s.id)! }, actor);
+      }
+      return tags.length;
     });
     return c.json({ sightings: count });
   } catch (err) {

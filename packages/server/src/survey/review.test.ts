@@ -212,3 +212,60 @@ describe("undoing an accept", () => {
     expect((await post("/api/places/pl_1/reopen", { expectedVersion: 1 })).status).toBe(400);
   });
 });
+
+describe("Same as…", () => {
+  // The place already on the map that the proposal turns out to be.
+  beforeEach(async () => {
+    await createEntity(db, "place", {
+      id: "pl_c", nameEn: "Festive Mall", category: "retail", status: "confirmed", levelId: "oth-L1",
+    }, null);
+  });
+
+  type Moved = { id: string; status: string };
+  const byIdOrder = (a: Moved, b: Moved) => a.id.localeCompare(b.id);
+
+  it("moves the proposal's tags to that place, confirmed, and retires the proposal", async () => {
+    const res = await post("/api/places/pl_1/merge", { expectedVersion: 0, into: "pl_c" });
+    expect(res.status).toBe(200);
+    const body = await json<{ moved: Moved[] }>(res);
+    expect([...body.moved].sort(byIdOrder)).toEqual([
+      { id: "sg_1", status: "proposed" }, { id: "sg_2", status: "proposed" },
+    ]);
+    expect((await byId("place")).has("pl_1")).toBe(false);
+    const tags = await byId("sighting");
+    expect(tags.get("sg_1")).toMatchObject({ placeId: "pl_c", status: "confirmed" });
+    expect(tags.get("sg_2")).toMatchObject({ placeId: "pl_c", status: "confirmed" });
+    expect(tags.get("sg_3")?.placeId).toBe("pl_2");
+  });
+
+  it("refuses to merge a place into itself", async () => {
+    expect((await post("/api/places/pl_1/merge", { expectedVersion: 0, into: "pl_1" })).status).toBe(422);
+  });
+
+  it("404s a place to merge into that is gone, and changes nothing", async () => {
+    await post("/api/places/pl_2/reject", { expectedVersion: 0 });
+    expect((await post("/api/places/pl_1/merge", { expectedVersion: 0, into: "pl_2" })).status).toBe(404);
+    expect((await byId("place")).has("pl_1")).toBe(true);
+  });
+
+  it("refuses a stale version and moves nothing", async () => {
+    expect((await post("/api/places/pl_1/merge", { expectedVersion: 5, into: "pl_c" })).status).toBe(409);
+    expect((await byId("sighting")).get("sg_1")?.placeId).toBe("pl_1");
+  });
+
+  it("is undone exactly: the proposal back, each tag back to it as it stood", async () => {
+    await createEntity(db, "sighting", { id: "sg_h", placeId: "pl_1", keyframeId: "kf_3", status: "confirmed" }, null);
+    const merged = await json<{ moved: Moved[] }>(await post("/api/places/pl_1/merge", { expectedVersion: 0, into: "pl_c" }));
+    const res = await post("/api/places/pl_1/unmerge", { expectedVersion: 1, moved: merged.moved });
+    expect(res.status).toBe(200);
+    expect(await json(res)).toEqual({ sightings: 3 });
+    expect((await byId("place")).get("pl_1")?.status).toBe("proposed");
+    const tags = await byId("sighting");
+    expect(tags.get("sg_1")).toMatchObject({ placeId: "pl_1", status: "proposed" });
+    expect(tags.get("sg_h")).toMatchObject({ placeId: "pl_1", status: "confirmed" });
+  });
+
+  it("refuses to unmerge a place that was never merged away", async () => {
+    expect((await post("/api/places/pl_1/unmerge", { expectedVersion: 0, moved: [] })).status).toBe(422);
+  });
+});
