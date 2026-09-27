@@ -1,9 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { desc } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
+import { publishedVersions } from "../db/schema";
 import { PublishBlockedError, publish } from "./service";
 
 const Body = z.object({ notes: z.string().max(2000).optional() });
@@ -24,6 +26,17 @@ publishRoutes.post("/publish", requireUser, async c => {
     }
     throw err;
   }
+});
+
+/** The most recent publish, for "last published v12, 3 days ago" on the home page. */
+publishRoutes.get("/publish/latest", requireUser, async c => {
+  const [row] = await c.get("db").select().from(publishedVersions)
+    .orderBy(desc(publishedVersions.createdAt)).limit(1);
+  return c.json({
+    latest: row
+      ? { version: row.id, createdAt: row.createdAt.toISOString(), warningCount: row.warningCount }
+      : null,
+  });
 });
 
 /** Published bundles are public: this is what the visitor app reads. */

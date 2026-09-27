@@ -89,4 +89,36 @@ describe("auth routes", () => {
     };
     expect(again.user.mustChangePassword).toBe(true);
   });
+
+  describe("changing your password", () => {
+    async function signedIn() {
+      return (await login("wei@example.com", "a-good-passphrase")).headers.get("set-cookie") ?? "";
+    }
+    const change = (cookie: string, body: unknown) => app.request("/api/auth/password", {
+      method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(body),
+    });
+
+    it("sets the new password and clears the one-time flag", async () => {
+      const cookie = await signedIn();
+      await db.update(users).set({ mustChangePassword: true }).where(eq(users.email, "wei@example.com"));
+      const res = await change(cookie, { currentPassword: "a-good-passphrase", newPassword: "another-good-one" });
+      expect(res.status).toBe(204);
+      expect((await login("wei@example.com", "another-good-one")).status).toBe(200);
+      const [row] = await db.select().from(users).where(eq(users.email, "wei@example.com"));
+      expect(row!.mustChangePassword).toBe(false);
+    });
+
+    it("says the current password is wrong without signing you out", async () => {
+      // 422, not 401: a mistyped password must not read as a lost session.
+      const cookie = await signedIn();
+      const res = await change(cookie, { currentPassword: "nope", newPassword: "another-good-one" });
+      expect(res.status).toBe(422);
+      expect((await app.request("/api/auth/me", { headers: { cookie } })).status).toBe(200);
+    });
+
+    it("refuses a new password under ten characters", async () => {
+      const cookie = await signedIn();
+      expect((await change(cookie, { currentPassword: "a-good-passphrase", newPassword: "short" })).status).toBe(400);
+    });
+  });
 });

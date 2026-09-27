@@ -14,6 +14,7 @@ import { captureRoutes, keyframeRoutes } from "./survey/routes";
 import { PresenceTracker } from "./presence/service";
 import { publishRoutes } from "./publish/routes";
 import { staticRoutes } from "./static";
+import { userRoutes } from "./users/routes";
 
 export type AppDeps = {
   db: Database;
@@ -40,6 +41,7 @@ export function createApp(deps: AppDeps) {
   app.get("/api/health", c => c.json({ ok: true }));
 
   app.route("/api/auth", authRoutes);
+  app.route("/api/users", userRoutes);
   app.route("/api/entities", entityRoutes);
   app.route("/api/model", modelRoutes);
   app.route("/api/locks", lockRoutes);
