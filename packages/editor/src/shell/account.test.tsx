@@ -66,6 +66,16 @@ describe("ChangePasswordDialog", () => {
     expect(useEditorStore.getState().user).not.toBeNull();
   });
 
+  it("shows nothing of its own on a 401: the session-ended dialog is the message", async () => {
+    // I2, but the 422 case above must keep working: a wrong password is not
+    // an expired session.
+    const api = fakeApi({ changePassword: vi.fn().mockRejectedValue(new ApiError(401, null)) });
+    render(<ChangePasswordDialog api={api} open onOpenChange={() => {}} />);
+    fill("old-one", "long-enough-1");
+    await waitFor(() => expect(api.changePassword).toHaveBeenCalled());
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("clears the one-time prompt once changed", async () => {
     useEditorStore.getState().setUser({ ...me, mustChangePassword: true });
     const onOpenChange = vi.fn();

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../db/client";
 import { verifyPassword } from "../auth/password";
+import { createSession, resolveSession } from "../auth/sessions";
 import { findUserByEmail } from "../auth/users";
 import { users } from "../db/schema";
 import { createTestDb } from "../testing/harness";
@@ -63,6 +64,24 @@ describe("resetPassword", () => {
   it("is case-insensitive about the address, like the login is", async () => {
     await inviteUser(db, "wei@example.com", "Wei");
     await expect(resetPassword(db, "WEI@example.com")).resolves.toBeTruthy();
+  });
+
+  // I3: a reset is the only lever the app offers to cut off an account, so it
+  // must actually end sessions the account already has open.
+  it("ends every session the account had open", async () => {
+    const { user } = await inviteUser(db, "wei@example.com", "Wei");
+    const session = await createSession(db, user.id, 24);
+    await resetPassword(db, "wei@example.com");
+    expect(await resolveSession(db, session.id)).toBeNull();
+  });
+
+  it("keeps the one session named by keepToken, and ends the rest", async () => {
+    const { user } = await inviteUser(db, "wei@example.com", "Wei");
+    const kept = await createSession(db, user.id, 24);
+    const other = await createSession(db, user.id, 24);
+    await resetPassword(db, "wei@example.com", { keepToken: kept.id });
+    expect(await resolveSession(db, kept.id)).not.toBeNull();
+    expect(await resolveSession(db, other.id)).toBeNull();
   });
 });
 

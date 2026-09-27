@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Api } from "../api/client";
+import { isUnauthorized, type Api } from "../api/client";
 import { publishBlockers } from "../flow/publishBlockers";
 import { followLink } from "../route";
 import { useEditorStore } from "../state/store";
@@ -70,8 +70,12 @@ export function PublishButton({ api }: { api: Api }) {
             tone: "success",
             message: `Published ${result.version}${result.warningCount ? ` with ${result.warningCount} warnings` : ""}.`,
           });
-        } catch {
-          toast({ tone: "error", message: "Publishing failed. Check your connection and try again." });
+        } catch (err) {
+          // A 401 here means the session expired; the sign-in dialog over the
+          // page says so, and this would only contradict it.
+          if (!isUnauthorized(err)) {
+            toast({ tone: "error", message: "Publishing failed. Check your connection and try again." });
+          }
         } finally {
           setBusy(false);
         }

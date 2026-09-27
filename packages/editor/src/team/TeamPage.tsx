@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Api, TeamMember } from "../api/client";
+import { isUnauthorized, type Api, type TeamMember } from "../api/client";
 import { sortedLevels } from "../flow/floors";
 import { useEditorStore } from "../state/store";
 import { Avatar } from "../ui/Avatar";
@@ -30,8 +30,11 @@ export function TeamPage({ api }: { api: Api }) {
     try {
       const result = await api.resetUserPassword(member.id);
       setIssued({ ...result, kind: "reset" });
-    } catch {
-      toast({ tone: "error", message: `Couldn't reset ${member.displayName}'s password. Try again.` });
+    } catch (err) {
+      // A 401 means the session expired; the sign-in dialog says so.
+      if (!isUnauthorized(err)) {
+        toast({ tone: "error", message: `Couldn't reset ${member.displayName}'s password. Try again.` });
+      }
     }
   }
 

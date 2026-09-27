@@ -57,6 +57,26 @@ describe("TeamPage", () => {
     expect((await screen.findByRole("alert")).textContent).toMatch(/already on the team/);
   });
 
+  it("shows no error of its own when an invite 401s: the session-ended dialog is the message", async () => {
+    const api = fakeApi({ inviteUser: vi.fn().mockRejectedValue(new ApiError(401, null)) });
+    render(<TeamPage api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: "Invite a teammate" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Aisha" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "aisha@oth.local" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send invite" }));
+    await waitFor(() => expect(api.inviteUser).toHaveBeenCalled());
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows no toast when a reset 401s: the session-ended dialog is the message", async () => {
+    const api = fakeApi({ resetUserPassword: vi.fn().mockRejectedValue(new ApiError(401, null)) });
+    render(<TeamPage api={api} />);
+    fireEvent.click(within(screen.getByRole("row", { name: /Wei Kang/ })).getByRole("button", { name: "Reset password" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Reset Wei Kang's password" }));
+    await waitFor(() => expect(api.resetUserPassword).toHaveBeenCalled());
+    expect(screen.queryByText(/couldn't reset/i)).toBeNull();
+  });
+
   it("asks before resetting someone's password, then shows the new one", async () => {
     const api = fakeApi({
       resetUserPassword: vi.fn().mockResolvedValue({ user: sampleTeam[1], password: "fresh-456" }),

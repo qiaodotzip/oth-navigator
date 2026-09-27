@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
+import { getCookie } from "hono/cookie";
 import { z } from "zod";
 import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
+import { SESSION_COOKIE } from "../auth/sessions";
 import { findUserByEmail } from "../auth/users";
 import { inviteUser, resetPassword } from "../cli/invite";
 import type { Database } from "../db/client";
@@ -57,7 +59,10 @@ userRoutes.post("/:id/reset-password", async c => {
   const db = c.get("db");
   const [row] = await db.select().from(users).where(eq(users.id, c.req.param("id")));
   if (!row || row.disabledAt) return c.json({ error: "not found" }, 404);
-  const { user, password } = await resetPassword(db, row.email);
-  await record(db, c.get("user").id, user.id, "reset-password");
+  const actor = c.get("user");
+  // Resetting your own password must not sign out the request doing the resetting.
+  const keepToken = row.id === actor.id ? getCookie(c, SESSION_COOKIE) : undefined;
+  const { user, password } = await resetPassword(db, row.email, { keepToken });
+  await record(db, actor.id, user.id, "reset-password");
   return c.json({ user: { id: user.id, email: user.email, displayName: user.displayName }, password });
 });

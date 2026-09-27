@@ -95,6 +95,33 @@ describe("resetting a password", () => {
   it("404s someone who is not on the team", async () => {
     expect((await post("/api/users/user_nope/reset-password", {})).status).toBe(404);
   });
+
+  it("404s a disabled account", async () => {
+    const ghost = await createUser(db, { email: "ghost@example.com", password: "x".repeat(12), displayName: "Ghost" });
+    await db.update(users).set({ disabledAt: new Date() }).where(eq(users.id, ghost.id));
+    expect((await post(`/api/users/${ghost.id}/reset-password`, {})).status).toBe(404);
+  });
+
+  // I3: the only lever the app has to cut an account off must actually do so.
+  it("signs the target out of every session they had open", async () => {
+    const invited = await json<{ user: { id: string }; password: string }>(
+      await post("/api/users/invite", { email: "aisha@example.com", displayName: "Aisha" }),
+    );
+    const aishaCookie = (await login("aisha@example.com", invited.password)).headers.get("set-cookie") ?? "";
+    expect((await app.request("/api/auth/me", { headers: { cookie: aishaCookie } })).status).toBe(200);
+
+    await post(`/api/users/${invited.user.id}/reset-password`, {});
+
+    expect((await app.request("/api/auth/me", { headers: { cookie: aishaCookie } })).status).toBe(401);
+    // Wei's own session, which did the resetting, is untouched.
+    expect((await app.request("/api/auth/me", { headers: { cookie } })).status).toBe(200);
+  });
+
+  it("keeps the caller signed in when resetting their own password", async () => {
+    const me = await json<{ user: { id: string } }>(await app.request("/api/auth/me", { headers: { cookie } }));
+    await post(`/api/users/${me.user.id}/reset-password`, {});
+    expect((await app.request("/api/auth/me", { headers: { cookie } })).status).toBe(200);
+  });
 });
 
 describe("the last publish", () => {

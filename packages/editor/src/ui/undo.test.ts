@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ConflictError } from "../api/client";
+import { ApiError, ConflictError } from "../api/client";
 import { useToasts } from "./toast";
 import { deleteWithUndo } from "./undo";
 
@@ -41,6 +41,16 @@ describe("deleteWithUndo", () => {
     const last = useToasts.getState().toasts.at(-1)!;
     expect(last.tone).toBe("error");
     expect(last.message).toMatch(/changed since/i);
+  });
+
+  it("says nothing on a 401: the session-ended dialog is the message", async () => {
+    // I2: a direct write's 401 must not read as "check your connection" —
+    // the client's onUnauthorized hook already opened the sign-in dialog.
+    const { api, saver } = fakes();
+    api.restoreEntity.mockRejectedValueOnce(new ApiError(401, null));
+    await deleteWithUndo({ api, saver, removals: [removals[0]!], label: "Lift A" });
+    await useToasts.getState().toasts[0]!.action!.run();
+    expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(false);
   });
 
   it("offers nothing when the delete itself failed", async () => {

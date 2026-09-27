@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, ConflictError, createApi } from "./client";
+import { ApiError, ConflictError, createApi, isUnauthorized } from "./client";
 
 /**
  * Declares the fetch parameters explicitly so `mock.calls` is typed and the
@@ -71,6 +71,31 @@ describe("api client", () => {
     const fetchImpl = vi.fn(async (_u: RequestInfo | URL, _i?: RequestInit) => new Response(null, { status: 204 }));
     const api = createApi({ fetchImpl });
     await expect(api.logout()).resolves.toBeUndefined();
+  });
+
+  it("calls onUnauthorized for a 401 on an ordinary request", async () => {
+    const onUnauthorized = vi.fn();
+    const api = createApi({ fetchImpl: mockFetch(401, { error: "unauthenticated" }), onUnauthorized });
+    await expect(api.getModel()).rejects.toBeInstanceOf(ApiError);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call onUnauthorized for a 401 on login, me or logout", async () => {
+    const onUnauthorized = vi.fn();
+    const fetchImpl = mockFetch(401, { error: "unauthenticated" });
+    const api = createApi({ fetchImpl, onUnauthorized });
+    await expect(api.me()).rejects.toBeInstanceOf(ApiError);
+    await expect(api.login("a@b.c", "pw")).rejects.toBeInstanceOf(ApiError);
+    await expect(api.logout()).rejects.toBeInstanceOf(ApiError);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+});
+
+describe("isUnauthorized", () => {
+  it("is true only for a 401 ApiError", () => {
+    expect(isUnauthorized(new ApiError(401, null))).toBe(true);
+    expect(isUnauthorized(new ApiError(422, null))).toBe(false);
+    expect(isUnauthorized(new Error("boom"))).toBe(false);
   });
 });
 

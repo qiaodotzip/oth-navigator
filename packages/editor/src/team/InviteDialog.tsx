@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ApiError, type Api, type TeamMember } from "../api/client";
+import { ApiError, isUnauthorized, type Api, type TeamMember } from "../api/client";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 
@@ -32,13 +32,17 @@ export function InviteDialog({
       setEmail("");
       onInvited(result);
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 409
-          ? "Someone with that email is already on the team."
-          : err instanceof ApiError && err.status === 400
-            ? "Check the name and the email address."
-            : "Couldn't send the invite. Check your connection and try again.",
-      );
+      // A 401 means the session expired; the sign-in dialog over the page
+      // says so, and this would only contradict it.
+      if (!isUnauthorized(err)) {
+        setError(
+          err instanceof ApiError && err.status === 409
+            ? "Someone with that email is already on the team."
+            : err instanceof ApiError && err.status === 400
+              ? "Check the name and the email address."
+              : "Couldn't send the invite. Check your connection and try again.",
+        );
+      }
     } finally {
       setBusy(false);
     }

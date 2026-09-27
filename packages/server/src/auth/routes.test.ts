@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import type { Database } from "../db/client";
-import { users } from "../db/schema";
+import { auditLog, users } from "../db/schema";
 import { createTestDb } from "../testing/harness";
 import { createUser } from "./users";
 
@@ -119,6 +119,37 @@ describe("auth routes", () => {
     it("refuses a new password under ten characters", async () => {
       const cookie = await signedIn();
       expect((await change(cookie, { currentPassword: "a-good-passphrase", newPassword: "short" })).status).toBe(400);
+    });
+
+    // M15: one message for every malformed body meant a missing field read
+    // the same as a too-short new one.
+    it("says so when the current password is missing, rather than blaming the new one", async () => {
+      const cookie = await signedIn();
+      const res = await change(cookie, { newPassword: "another-good-one" });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toMatch(/current password/i);
+    });
+
+    // I3: changing your password is the only way to end other sessions, so it must.
+    it("signs out other sessions of the same user, but not the one that changed it", async () => {
+      const first = await signedIn();
+      const second = (await login("wei@example.com", "a-good-passphrase")).headers.get("set-cookie") ?? "";
+      expect((await app.request("/api/auth/me", { headers: { cookie: second } })).status).toBe(200);
+
+      const res = await change(first, { currentPassword: "a-good-passphrase", newPassword: "another-good-one" });
+      expect(res.status).toBe(204);
+
+      expect((await app.request("/api/auth/me", { headers: { cookie: second } })).status).toBe(401);
+      expect((await app.request("/api/auth/me", { headers: { cookie: first } })).status).toBe(200);
+    });
+
+    it("is written to the audit log, without the password or its hash", async () => {
+      const cookie = await signedIn();
+      await change(cookie, { currentPassword: "a-good-passphrase", newPassword: "another-good-one" });
+      const rows = await db.select().from(auditLog).where(eq(auditLog.action, "change-password"));
+      expect(rows).toHaveLength(1);
+      expect(JSON.stringify(rows[0])).not.toContain("another-good-one");
     });
   });
 });

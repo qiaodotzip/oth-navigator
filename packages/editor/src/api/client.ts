@@ -16,6 +16,16 @@ export class ConflictError extends ApiError {
   }
 }
 
+/**
+ * A direct write's own 401. The client's `onUnauthorized` hook already opens
+ * the "session ended" dialog for this, so a caller that reaches this far
+ * should show nothing of its own — no "check your connection" toast, no
+ * inline error — rather than duplicate or contradict that message.
+ */
+export function isUnauthorized(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 401;
+}
+
 export type EntityType =
   | "level" | "room" | "pathway" | "doorway" | "entrance"
   | "portal" | "portalEndpoint" | "navHint" | "placement" | "tenant"
@@ -63,13 +73,25 @@ export type LevelImagePatch = {
   opacity?: number;
 };
 
-export type ApiOptions = { fetchImpl?: typeof fetch; baseUrl?: string };
+export type ApiOptions = {
+  fetchImpl?: typeof fetch;
+  baseUrl?: string;
+  /**
+   * Called for a 401 on any request except login, `me` and logout — a
+   * signed-out start-up `me` also answers 401, and that must lead to the
+   * sign-in screen, not this. Wired in `main.tsx` to end the session as
+   * "expired" so every direct write notices the same way the saver does.
+   */
+  onUnauthorized?: () => void;
+};
 
 export function createApi(options: ApiOptions = {}) {
   const doFetch = options.fetchImpl ?? fetch;
   const base = options.baseUrl ?? "";
 
-  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  async function request<T>(
+    path: string, init: RequestInit = {}, requestOptions: { skipUnauthorized?: boolean } = {},
+  ): Promise<T> {
     const res = await doFetch(`${base}${path}`, {
       ...init,
       // The session lives in an httpOnly cookie, so every call must carry it.
@@ -87,6 +109,7 @@ export function createApi(options: ApiOptions = {}) {
         const current = (body as { current?: Record<string, unknown> } | null)?.current ?? null;
         throw new ConflictError(current, body);
       }
+      if (res.status === 401 && !requestOptions.skipUnauthorized) options.onUnauthorized?.();
       throw new ApiError(res.status, body);
     }
     return body as T;
@@ -99,14 +122,14 @@ export function createApi(options: ApiOptions = {}) {
       const body = await request<{ user: SessionUser }>("/api/auth/login", {
         method: "POST",
         body: json({ email, password }),
-      });
+      }, { skipUnauthorized: true });
       return body.user;
     },
 
-    logout: () => request<void>("/api/auth/logout", { method: "POST" }),
+    logout: () => request<void>("/api/auth/logout", { method: "POST" }, { skipUnauthorized: true }),
 
     async me(): Promise<SessionUser> {
-      return (await request<{ user: SessionUser }>("/api/auth/me")).user;
+      return (await request<{ user: SessionUser }>("/api/auth/me", {}, { skipUnauthorized: true })).user;
     },
 
     listUsers: async (): Promise<TeamMember[]> =>

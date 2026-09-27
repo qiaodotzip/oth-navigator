@@ -17,13 +17,18 @@ import { StatusToasts } from "./StatusToasts";
  */
 export function AppShell({ api, saver, route, children }: { api: Api; saver: Saver; route: Route; children: ReactNode }) {
   const setTeam = useEditorStore(s => s.setTeam);
+  const setTeamLoadError = useEditorStore(s => s.setTeamLoadError);
+  const user = useEditorStore(s => s.user);
 
   useEffect(() => {
-    // The team is needed for owners and avatars; failing to load it only costs names.
-    api.listUsers().then(setTeam).catch(() => {});
-  }, [api, setTeam]);
+    // The team is needed for owners and avatars; a failure still needs
+    // marking, so owners are not shown as if everyone had left.
+    api.listUsers().then(setTeam).catch(() => setTeamLoadError());
+  }, [api, setTeam, setTeamLoadError]);
 
-  useCollaboration(api, true);
+  // Only while someone is signed in: otherwise this polls presence and locks
+  // with 401s for as long as the session stays expired.
+  useCollaboration(api, Boolean(user));
 
   return (
     <div className="flex h-full flex-col">

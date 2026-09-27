@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ApiError, type Api } from "../api/client";
+import { ApiError, isUnauthorized, type Api } from "../api/client";
 import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
@@ -40,11 +40,14 @@ export function ChangePasswordDialog({
       toast({ tone: "success", message: "Password changed." });
       onOpenChange(false);
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 422
-          ? "Your current password is not right."
-          : "Couldn't change it. Check your connection and try again.",
-      );
+      // The 422 for a wrong current password must always show: it is not the
+      // session expiring. A 401 needs nothing of its own — the sign-in dialog
+      // over the page already says so.
+      if (err instanceof ApiError && err.status === 422) {
+        setError("Your current password is not right.");
+      } else if (!isUnauthorized(err)) {
+        setError("Couldn't change it. Check your connection and try again.");
+      }
     } finally {
       setBusy(false);
     }

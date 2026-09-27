@@ -1,4 +1,4 @@
-import { ConflictError, type Api } from "../api/client";
+import { ConflictError, isUnauthorized, type Api } from "../api/client";
 import type { Removal } from "../flow/removeLayer";
 import type { Saver } from "../state/save";
 import { toast } from "./toast";
@@ -39,6 +39,9 @@ export async function deleteWithUndo({
           await saver.refresh();
           toast({ message: `Restored ${label}`, tone: "success" });
         } catch (err) {
+          // A 401 means the session expired; the sign-in dialog over the
+          // page says so, and this would only contradict it.
+          if (isUnauthorized(err)) return;
           toast({
             tone: "error",
             message:

@@ -1,14 +1,27 @@
-import { eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, eq, ne } from "drizzle-orm";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import type { AppEnv } from "../app";
 import { loadConfig } from "../config";
-import { users } from "../db/schema";
+import type { Database } from "../db/client";
+import { auditLog, sessions, users } from "../db/schema";
 import { requireUser } from "./middleware";
 import { hashPassword, verifyPassword } from "./password";
 import { SESSION_COOKIE, createSession, revokeSession } from "./sessions";
 import { findUserByEmail } from "./users";
+
+/** Never the password or its hash — just that a change happened, and who did it. */
+async function recordPasswordChange(db: Database, userId: string) {
+  await db.insert(auditLog).values({
+    id: `audit_${randomUUID()}`,
+    entityType: "user",
+    entityId: userId,
+    action: "change-password",
+    actorId: userId,
+  });
+}
 
 const LoginSchema = z.object({ email: z.string().min(1), password: z.string().min(1) });
 
@@ -60,10 +73,22 @@ const PasswordBody = z.object({
 /**
  * Changing your own password, which also ends the one-time-password prompt.
  * A wrong current password is 422, not 401: it must not read as a lost session.
+ *
+ * Also ends every other session the account has open — the point of changing
+ * a password is that the old one stops working, which must be true for a
+ * teammate who left a session open on another machine too. The cookie this
+ * request came in on is kept, so changing your password does not sign you
+ * out of the tab you changed it from.
  */
 authRoutes.post("/password", requireUser, async c => {
   const body = PasswordBody.safeParse(await c.req.json().catch(() => null));
-  if (!body.success) return c.json({ error: "A new password needs at least 10 characters." }, 400);
+  if (!body.success) {
+    const missingCurrent = body.error.issues.some(i => i.path[0] === "currentPassword");
+    return c.json(
+      { error: missingCurrent ? "Enter your current password." : "A new password needs at least 10 characters." },
+      400,
+    );
+  }
   const db = c.get("db");
   const me = c.get("user");
   const row = await findUserByEmail(db, me.email);
@@ -73,5 +98,12 @@ authRoutes.post("/password", requireUser, async c => {
   await db.update(users)
     .set({ passwordHash: await hashPassword(body.data.newPassword), mustChangePassword: false })
     .where(eq(users.id, me.id));
+
+  const token = getCookie(c, SESSION_COOKIE);
+  await db.delete(sessions).where(
+    token ? and(eq(sessions.userId, me.id), ne(sessions.id, token)) : eq(sessions.userId, me.id),
+  );
+  await recordPasswordChange(db, me.id);
+
   return c.body(null, 204);
 });

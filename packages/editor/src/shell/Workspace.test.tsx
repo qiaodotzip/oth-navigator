@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
+import { AuthGate } from "../auth/AuthGate";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
@@ -50,5 +51,25 @@ describe("Workspace", () => {
   it("shows the team page", async () => {
     at("/team");
     expect(await screen.findByRole("heading", { name: "Team" })).toBeTruthy();
+  });
+
+  // I1: an expired session must not blank a floor's embedded tab behind the
+  // sign-in dialog. Survey is a real tab that is cheap to render in jsdom;
+  // App.test.tsx pins the same rule for Build, which needs WebGL to render
+  // for real.
+  it("keeps a floor's tab on screen through an expired session", async () => {
+    const api = fakeApi();
+    window.history.pushState({}, "", "/floors/L1/survey");
+    render(
+      <AuthGate api={api}>
+        <Workspace api={api} />
+      </AuthGate>,
+    );
+    expect(await screen.findByText("L1 walk.mp4")).toBeTruthy();
+
+    act(() => useEditorStore.getState().endSession("expired"));
+
+    expect(screen.getByText("L1 walk.mp4")).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: /session ended/i })).toBeTruthy();
   });
 });

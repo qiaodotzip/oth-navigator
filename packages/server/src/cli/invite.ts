@@ -1,9 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { hashPassword } from "../auth/password";
 import { createUser, findUserByEmail, type User } from "../auth/users";
 import type { Database } from "../db/client";
-import { users } from "../db/schema";
+import { sessions, users } from "../db/schema";
 
 /** One-time passwords are shown once and never stored in the clear. */
 function oneTimePassword(): string {
@@ -32,9 +32,16 @@ export async function inviteUser(
  * Without this, a forgotten password is a permanent lockout: there is no signup
  * route, no reset email, and `invite` refuses an address it already knows. For
  * a team of four sharing one server that is a real way to lose a person.
+ *
+ * Also ends every session the account had open: a reset is the only lever the
+ * app offers to cut off an account (a lost laptop, a teammate who has left),
+ * and "their current password stops working at once" reads as "they are
+ * signed out now" — this makes that true. `keepToken` is for the one case
+ * where the caller is resetting their own password and should not be signed
+ * out by the request they just made.
  */
 export async function resetPassword(
-  db: Database, email: string,
+  db: Database, email: string, options: { keepToken?: string } = {},
 ): Promise<{ user: User; password: string }> {
   const existing = await findUserByEmail(db, email);
   if (!existing) throw new Error(`no user with email ${email}`);
@@ -43,6 +50,12 @@ export async function resetPassword(
   await db.update(users)
     .set({ passwordHash: await hashPassword(password), mustChangePassword: true })
     .where(eq(users.id, existing.id));
+
+  await db.delete(sessions).where(
+    options.keepToken
+      ? and(eq(sessions.userId, existing.id), ne(sessions.id, options.keepToken))
+      : eq(sessions.userId, existing.id),
+  );
 
   return {
     user: {

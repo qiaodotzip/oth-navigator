@@ -49,7 +49,8 @@ export function App({ api, embedded = false }: { api: Api; embedded?: boolean })
   // Embedded in the shell, which already runs presence and locks for every screen.
   useCollaboration(api, Boolean(user) && !embedded);
 
-  if (!user) return null;
+  // AuthGate keeps this mounted through an expired session so the canvas
+  // survives behind the sign-in dialog: no early return on `user` here.
 
   const renameLayer = (item: LayerItem, nameEn: string) =>
     void saver.update(layerEntityType(item.type), item.id, item.version, { nameEn });
@@ -77,7 +78,7 @@ export function App({ api, embedded = false }: { api: Api; embedded?: boolean })
           </button>
           <div className="ml-auto flex items-center gap-3 text-sm">
             <PresenceBar />
-            <span className="text-stone-500">{user.displayName}</span>
+            <span className="text-stone-500">{user?.displayName}</span>
             <PublishButton api={api} />
           </div>
         </header>
