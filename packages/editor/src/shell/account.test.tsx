@@ -38,6 +38,13 @@ describe("PublishButton", () => {
 });
 
 describe("AccountMenu", () => {
+  it("shows the name only, not the hidden @team.oth.local email", async () => {
+    render(<AccountMenu api={fakeApi()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(await screen.findByText("Stef Chan")).toBeTruthy();
+    expect(screen.queryByText(me.email)).toBeNull();
+  });
+
   it("signs out as a choice, not as an expiry", async () => {
     const api = fakeApi();
     render(<AccountMenu api={api} />);

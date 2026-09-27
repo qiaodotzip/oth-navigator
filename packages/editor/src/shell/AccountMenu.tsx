@@ -22,8 +22,8 @@ export function AccountMenu({ api }: { api: Api }) {
       }
     >
       <div className="px-2 py-1">
+        {/* Name only: email is a hidden slug (e.g. wei@team.oth.local) since sign-in dropped passwords. */}
         <div className="font-medium">{user.displayName}</div>
-        <div className="text-xs text-stone-500">{user.email}</div>
       </div>
       <hr className="my-1 border-stone-200" />
       <PopoverClose asChild>

@@ -46,12 +46,12 @@ There is no signup route, by design. Create each teammate's account from a
 Railway shell:
 
 ```bash
-npm run invite --workspace @oth/server -- wei@example.com "Wei"
+npm run invite --workspace @oth/server -- "Wei"
 ```
 
-It prints a one-time password **once**. Send it to them over something private;
-it is not recoverable afterwards, and re-running `invite` for an existing email
-is refused rather than resetting their account.
+There are no passwords: they sign in by picking their name from the list on
+the sign-in screen. A name already on the team, case-insensitively, is
+refused rather than creating a second account.
 
 To disable someone's access, set `disabled_at` on their `users` row. Their
 existing sessions stop resolving immediately.

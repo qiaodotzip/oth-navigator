@@ -1,26 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, type Api, type SessionUser, type TeamMember } from "../api/client";
 import { Button } from "../ui/Button";
-
-/** Where this browser remembers who last signed in, so the dropdown can pre-select them. */
-const LAST_SIGNED_IN_KEY = "oth-map.last-signed-in-user-id";
-
-function readLastSignedInId(): string | null {
-  try {
-    return localStorage.getItem(LAST_SIGNED_IN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function rememberSignedInId(id: string): void {
-  try {
-    localStorage.setItem(LAST_SIGNED_IN_KEY, id);
-  } catch {
-    // A browser that refuses storage (private mode, quota) just skips the
-    // convenience: sign-in itself must not depend on it.
-  }
-}
+import { recall, remember } from "../ui/remember";
 
 /**
  * Why a sign-in failed, in the words of someone who has to fix it.
@@ -56,7 +37,7 @@ export function LoginForm({ api, onSignedIn }: { api: Api; onSignedIn: (u: Sessi
       .then(people => {
         if (!alive) return;
         setState({ status: "loaded", people });
-        const last = readLastSignedInId();
+        const last = recall("lastSignedInUserId");
         setSelected(last && people.some(p => p.id === last) ? last : "");
       })
       .catch(() => {
@@ -74,7 +55,7 @@ export function LoginForm({ api, onSignedIn }: { api: Api; onSignedIn: (u: Sessi
     setError(null);
     try {
       const user = await api.login(selected);
-      rememberSignedInId(user.id);
+      remember("lastSignedInUserId", user.id);
       onSignedIn(user);
     } catch (err) {
       setError(signInError(err));

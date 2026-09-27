@@ -337,10 +337,11 @@ Budgets: 5 MB and 150k triangles per asset, 25 MB of dressing per level. Roughly
 **Stack:** Hono on Node (already in the repo), Postgres via Drizzle ORM, deployed
 on Railway (hobby plan) with a volume for assets. No new vendors.
 
-**Auth:** invite-only, email + password, argon2 hashing, httpOnly session
-cookies. No third-party OAuth dependency and no configuration burden. Every edit
-is attributed to a named person — which matters the first time four people are
-editing one model and something moves unexpectedly.
+**Auth:** invite-only, sign in by picking your name from a public list — no
+passwords, decided 2026-09-27 — over httpOnly session cookies. No third-party
+OAuth dependency and no configuration burden. Every edit is attributed to a
+named person — which matters the first time four people are editing one model
+and something moves unexpectedly.
 
 **Concurrency — locking, not CRDTs:**
 

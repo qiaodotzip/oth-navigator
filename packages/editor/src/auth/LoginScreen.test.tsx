@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type Api } from "../api/client";
+import { recall, remember } from "../ui/remember";
 import { LoginScreen, signInError } from "./LoginScreen";
 
 const ada = { id: "u_ada", displayName: "Ada" };
@@ -8,6 +9,10 @@ const wei = { id: "u_wei", displayName: "Wei" };
 
 beforeEach(() => {
   localStorage.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("signInError", () => {
@@ -78,7 +83,7 @@ describe("LoginScreen", () => {
   });
 
   it("pre-selects whoever last signed in on this browser", async () => {
-    localStorage.setItem("oth-map.last-signed-in-user-id", "u_wei");
+    remember("lastSignedInUserId", "u_wei");
     render(<LoginScreen api={fakeApi()} onSignedIn={vi.fn()} />);
     const select = await screen.findByLabelText(/who are you/i);
     expect(select).toHaveValue("u_wei");
@@ -87,7 +92,7 @@ describe("LoginScreen", () => {
   });
 
   it("falls back to the placeholder when the remembered id is no longer on the team", async () => {
-    localStorage.setItem("oth-map.last-signed-in-user-id", "u_gone");
+    remember("lastSignedInUserId", "u_gone");
     render(<LoginScreen api={fakeApi()} onSignedIn={vi.fn()} />);
     const select = await screen.findByLabelText(/who are you/i);
     expect(select).toHaveValue("");
@@ -103,7 +108,27 @@ describe("LoginScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
     await waitFor(() => expect(onSignedIn).toHaveBeenCalledWith(wei));
     expect(login).toHaveBeenCalledWith("u_wei");
-    expect(localStorage.getItem("oth-map.last-signed-in-user-id")).toBe("u_wei");
+    expect(recall("lastSignedInUserId")).toBe("u_wei");
+  });
+
+  it("still lets you sign in when this browser refuses storage entirely", async () => {
+    // Private windows and blocked storage throw on both reads and writes;
+    // the sign-in itself must not depend on either succeeding.
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+    const onSignedIn = vi.fn();
+    const login = vi.fn().mockResolvedValue(wei);
+    render(<LoginScreen api={fakeApi({ login })} onSignedIn={onSignedIn} />);
+
+    const select = await screen.findByLabelText(/who are you/i);
+    expect(screen.getByRole("option", { name: "Pick your name" })).toBeTruthy();
+    expect(select).toHaveValue("");
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeDisabled();
+
+    fireEvent.change(select, { target: { value: "u_wei" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalledWith(wei));
+    expect(login).toHaveBeenCalledWith("u_wei");
   });
 
   it("shows the server's own message when a sign-in is refused", async () => {
