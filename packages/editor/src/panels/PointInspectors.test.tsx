@@ -62,7 +62,9 @@ describe("EntranceInspector", () => {
 describe("PortalInspector", () => {
   it("explains how to place one when none is selected", () => {
     render(<PortalInspector saver={fakeSaver()} />);
-    expect(screen.getByText(/same spot/i)).toBeTruthy();
+    // Each level frames itself, so "the same spot" means nothing on screen;
+    // the dashed outline is what there is to click.
+    expect(screen.getByText(/dashed outline/i)).toBeTruthy();
   });
 
   it("lists the levels the lift stops on", () => {

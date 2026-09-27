@@ -36,7 +36,7 @@ export async function commitPoint({
     if (placed.portal && !(await saver.create("portal", placed.portal))) return;
     if (await saver.create("portalEndpoint", placed.endpoint)) {
       say(placed.portal
-        ? "New lift placed. Switch level and click the same spot to add its next stop."
+        ? "New lift placed. Switch level and click its dashed outline to add its next stop."
         : "Joined the lift or stair already at this spot on another level.");
     }
   }
