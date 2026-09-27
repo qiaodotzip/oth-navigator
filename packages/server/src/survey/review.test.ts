@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { createUser } from "../auth/users";
 import type { Database } from "../db/client";
-import { places as placeRows, sightings as sightingRows } from "../db/schema";
+import { buildings, levels, places as placeRows, sightings as sightingRows } from "../db/schema";
 import { createEntity, listEntities } from "../entities/repository";
 import { createTestDb, json } from "../testing/harness";
 
@@ -37,6 +37,13 @@ beforeEach(async () => {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ userId: wei.id }),
   })).headers.get("set-cookie") ?? "";
+
+  // Floors accept and reopen can file a place under, and validate against.
+  await db.insert(buildings).values({ id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94, rotationDeg: 0 });
+  await db.insert(levels).values([
+    { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 },
+    { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 6 },
+  ]);
 
   // What a labelling agent leaves behind: a proposed place, seen in two frames.
   await createEntity(db, "place", {
@@ -89,6 +96,20 @@ describe("accepting a proposal", () => {
   it("files a place with no floor under the floor it was accepted on", async () => {
     await post("/api/places/pl_1/accept", { expectedVersion: 0, nameEn: "Festive Mall", category: "retail", levelId: "oth-L1" });
     expect((await byId("place")).get("pl_1")?.levelId).toBe("oth-L1");
+  });
+
+  it("never moves a place off the floor it already has, even though the client always sends one", async () => {
+    await db.update(placeRows).set({ levelId: "oth-L2" }).where(eq(placeRows.id, "pl_1"));
+    await post("/api/places/pl_1/accept", { expectedVersion: 0, nameEn: "Festive Mall", category: "retail", levelId: "oth-L1" });
+    expect((await byId("place")).get("pl_1")?.levelId).toBe("oth-L2");
+  });
+
+  it("422s an unknown floor and writes nothing", async () => {
+    const res = await post("/api/places/pl_1/accept", { expectedVersion: 0, nameEn: "Festive Mall", category: "retail", levelId: "oth-nope" });
+    expect(res.status).toBe(422);
+    expect(await json(res)).toMatchObject({ error: "There is no floor oth-nope." });
+    expect((await byId("place")).get("pl_1")).toMatchObject({ status: "proposed", version: 0 });
+    expect((await byId("sighting")).get("sg_1")).toMatchObject({ status: "proposed", version: 0 });
   });
 
   it("confirms only the tags that were still claims, and says which, for Undo", async () => {

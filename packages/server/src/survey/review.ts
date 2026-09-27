@@ -5,9 +5,9 @@ import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
 import type { Database } from "../db/client";
 import type { Row } from "../db/rows";
-import { places, sightings } from "../db/schema";
+import { levels, places, sightings } from "../db/schema";
 import {
-  NotDeletedError, NotFoundError, VersionConflictError,
+  NotFoundError, VersionConflictError,
   restoreEntity, softDeleteEntity, updateEntity,
 } from "../entities/repository";
 
@@ -49,12 +49,25 @@ async function sightingsOf(db: Database, placeId: string) {
     .where(and(eq(sightings.placeId, placeId), isNull(sightings.deletedAt)));
 }
 
+/** A floor a reviewer names has to be a real one, or nothing here is written. */
+class UnknownLevelError extends Error {
+  constructor(id: string) {
+    super(`There is no floor ${id}.`);
+    this.name = "UnknownLevelError";
+  }
+}
+
+async function requireLevel(db: Database, id: string): Promise<void> {
+  const [level] = await db.select().from(levels).where(eq(levels.id, id));
+  if (!level) throw new UnknownLevelError(id);
+}
+
 function failure(err: unknown) {
   if (err instanceof VersionConflictError) {
     return { body: { error: "version conflict", current: err.current }, status: 409 as const };
   }
   if (err instanceof NotFoundError) return { body: { error: "not found" }, status: 404 as const };
-  if (err instanceof NotDeletedError) return { body: { error: "not deleted" }, status: 422 as const };
+  if (err instanceof UnknownLevelError) return { body: { error: err.message }, status: 422 as const };
   return { body: { error: "invalid", detail: String(err) }, status: 422 as const };
 }
 
@@ -67,9 +80,15 @@ placeReviewRoutes.post("/:id/accept", async c => {
   try {
     const confirmed = await c.get("db").transaction(async t => {
       const tx = t as unknown as Database;
-      await updateEntity(tx, "place", id, expectedVersion, {
-        status: "confirmed", nameEn, category, ...(levelId ? { levelId } : {}),
-      }, actor);
+      if (levelId) await requireLevel(tx, levelId);
+      // Fills in a floor only when the place has none of its own — never
+      // overwrites one it already had, even though a reviewer's client always
+      // sends the floor they're reviewing on. Only `reopen` moves a place off
+      // a floor accept gave it.
+      const [place] = await tx.select().from(places).where(eq(places.id, id));
+      const patch: Row = { status: "confirmed", nameEn, category };
+      if (levelId && place?.levelId == null) patch.levelId = levelId;
+      await updateEntity(tx, "place", id, expectedVersion, patch, actor);
       // Only what was still a claim. A tag someone typed is theirs already,
       // and Undo has to know exactly which tags this accept changed.
       const claims = (await sightingsOf(tx, id)).filter(s => s.status === "proposed");
@@ -125,6 +144,7 @@ placeReviewRoutes.post("/:id/reopen", async c => {
   try {
     const count = await c.get("db").transaction(async t => {
       const tx = t as unknown as Database;
+      if (levelId) await requireLevel(tx, levelId);
       // A null levelId clears it, which is how a place that had no floor gets none back.
       await updateEntity(tx, "place", id, expectedVersion, { status: "proposed", nameEn, category, levelId }, actor);
       if (sightingIds.length === 0) return 0;
