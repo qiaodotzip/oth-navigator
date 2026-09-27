@@ -1,4 +1,4 @@
-import type { Capture, Keyframe, Place } from "@oth/model";
+import type { Box, Capture, Keyframe, Place } from "@oth/model";
 import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api/client";
 import { createSaver } from "../state/save";
@@ -120,6 +120,16 @@ export function SurveyApp({ api }: { api: Api }) {
    */
   async function removeLabel(label: FrameLabel) {
     await saver.remove("sighting", label.sighting.id, label.sighting.version);
+  }
+
+  /**
+   * Corrects where a box sits, after dragging or resizing it.
+   *
+   * Most boxes that need this came from a proposal, which read the frame well
+   * enough to name the place but put the rectangle a little off.
+   */
+  async function moveLabel(label: FrameLabel, box: Box) {
+    await saver.update("sighting", label.sighting.id, label.sighting.version, { box });
   }
 
   async function tag(t: Tag) {
@@ -294,6 +304,7 @@ export function SurveyApp({ api }: { api: Api }) {
                   walkwayKinds={kinds}
                   onTag={t => void tag(t)}
                   onRemoveLabel={l => void removeLabel(l)}
+                  onMoveLabel={(l, b) => void moveLabel(l, b)}
                   onAddWalkwayKind={n => void addWalkwayKind(n)}
                 />
               )}

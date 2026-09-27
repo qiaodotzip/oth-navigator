@@ -21,14 +21,15 @@ function setup(existing = places, labels: FrameLabel[] = []) {
   const onTag = vi.fn();
   const onRemoveLabel = vi.fn();
   const onAddWalkwayKind = vi.fn();
+  const onMoveLabel = vi.fn();
   render(
     <PlaceTagger
       keyframe={keyframe} imageUrl="/f.jpg" places={existing} labels={labels}
       walkwayKinds={walkwayKinds} onTag={onTag} onRemoveLabel={onRemoveLabel}
-      onAddWalkwayKind={onAddWalkwayKind}
+      onMoveLabel={onMoveLabel} onAddWalkwayKind={onAddWalkwayKind}
     />,
   );
-  return { onTag, onRemoveLabel, onAddWalkwayKind };
+  return { onTag, onRemoveLabel, onAddWalkwayKind, onMoveLabel };
 }
 
 const label = (id: string, place: Place, box?: Box): FrameLabel => ({
@@ -181,6 +182,64 @@ describe("what has already been identified", () => {
     expect(box.style.left).toBe("25%");
     expect(box.style.top).toBe("50%");
     expect(box.style.width).toBe("20%");
+  });
+
+  it("keeps the label and its remove control on the image when the box hugs the top", () => {
+    // Drawn above the box normally. A box at y=0 would put the label, and the
+    // x that deletes the tag, off the picture and behind the panel above it.
+    setup(places, [label("s1", places[0]!, { x: 0.1, y: 0, w: 0.3, h: 0.2 })]);
+    const tag = screen.getByTestId("label-box-s1").querySelector("span")!;
+    expect(tag.className).toContain("top-0");
+    expect(tag.className).not.toContain("-top-5");
+  });
+
+  it("drags a misplaced box to where the thing actually is", () => {
+    const { onMoveLabel } = setup(places, [label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.2, h: 0.2 })]);
+    const grip = screen.getByTitle(/Drag to move, corners to resize/);
+    fireEvent.mouseDown(grip, { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(screen.getByTestId("tag-frame"), { clientX: 140, clientY: 130 });
+    fireEvent.mouseUp(screen.getByTestId("tag-frame"));
+    const moved = onMoveLabel.mock.calls[0]![1];
+    expect(moved.x).toBeCloseTo(0.2, 2);
+    expect(moved.y).toBeCloseTo(0.3, 2);
+    expect(moved.w).toBeCloseTo(0.2, 2);
+  });
+
+  it("resizes a box that is the wrong size, holding the opposite corner", () => {
+    const { onMoveLabel } = setup(places, [label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.2, h: 0.2 })]);
+    fireEvent.mouseDown(screen.getByLabelText("Resize NTUC FairPrice se"), { clientX: 120, clientY: 120 });
+    fireEvent.mouseMove(screen.getByTestId("tag-frame"), { clientX: 200, clientY: 180 });
+    fireEvent.mouseUp(screen.getByTestId("tag-frame"));
+    const sized = onMoveLabel.mock.calls[0]![1];
+    expect(sized.x).toBeCloseTo(0.1, 2);
+    expect(sized.y).toBeCloseTo(0.2, 2);
+    expect(sized.w).toBeCloseTo(0.4, 2);
+    expect(sized.h).toBeCloseTo(0.4, 2);
+  });
+
+  it("does not start drawing a new box when an existing one is grabbed", () => {
+    const { onMoveLabel, onTag } = setup(places, [label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.2, h: 0.2 })]);
+    fireEvent.mouseDown(screen.getByTitle(/Drag to move/), { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(screen.getByTestId("tag-frame"), { clientX: 140, clientY: 100 });
+    fireEvent.mouseUp(screen.getByTestId("tag-frame"));
+    expect(onMoveLabel).toHaveBeenCalled();
+    expect(onTag).not.toHaveBeenCalled();
+  });
+
+  it("leaves the box body transparent, so a shopfront inside a walkway can still be drawn", () => {
+    setup(places, [label("s1", places[0]!, { x: 0, y: 0.2, w: 1, h: 0.8 })]);
+    expect(screen.getByTestId("label-box-s1").className).toContain("pointer-events-none");
+  });
+
+  it("removes a tag without dragging the box on the way out", () => {
+    const { onRemoveLabel, onMoveLabel } = setup(places, [
+      label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.2, h: 0.2 }),
+    ]);
+    const x = screen.getByLabelText("Remove tag NTUC FairPrice from this frame");
+    fireEvent.mouseDown(x, { clientX: 100, clientY: 100 });
+    fireEvent.click(x);
+    expect(onRemoveLabel).toHaveBeenCalled();
+    expect(onMoveLabel).not.toHaveBeenCalled();
   });
 
   it("still shows a label that applies to the whole frame", () => {
