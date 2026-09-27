@@ -19,7 +19,7 @@ export class ConflictError extends ApiError {
 export type EntityType =
   | "level" | "room" | "pathway" | "doorway" | "entrance"
   | "portal" | "portalEndpoint" | "navHint" | "placement" | "tenant"
-  | "capture" | "place" | "sighting";
+  | "capture" | "place" | "sighting" | "pathwayKind";
 
 export type SessionUser = { id: string; email: string; displayName: string };
 
@@ -146,6 +146,10 @@ export function createApi(options: ApiOptions = {}) {
 
     deleteKeyframe: (id: string) =>
       request<void>(`/api/keyframes/${id}`, { method: "DELETE" }),
+
+    /** Retires a capture, its frames, and everything labelled on them. */
+    deleteCapture: (id: string) =>
+      request<{ frames: number }>(`/api/captures/${id}`, { method: "DELETE" }),
 
     listLocks: async (): Promise<LockEntry[]> =>
       (await request<{ locks: LockEntry[] }>("/api/locks")).locks,

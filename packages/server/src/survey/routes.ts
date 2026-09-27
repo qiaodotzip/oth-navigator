@@ -16,6 +16,45 @@ import { IMAGE_MAX_BYTES, InvalidImageError, readImageSize } from "../images/ins
  */
 export const keyframeRoutes = new Hono<AppEnv>();
 
+/**
+ * Retires a capture and everything under it.
+ *
+ * Deleting only the capture would leave its frames and their labels adrift:
+ * still counted toward places, still in the model, reachable from nothing. So
+ * the cascade is the behaviour, and it is soft the whole way down.
+ */
+export const captureRoutes = new Hono<AppEnv>();
+captureRoutes.use("*", requireUser);
+
+captureRoutes.delete("/:id", async c => {
+  const db = c.get("db");
+  const id = c.req.param("id");
+  const now = new Date();
+  const by = c.get("user").id;
+
+  const [capture] = await db.select().from(captures).where(eq(captures.id, id));
+  if (!capture) return c.json({ error: "not found" }, 404);
+
+  const frames = await db.select().from(keyframes)
+    .where(and(eq(keyframes.captureId, id), isNull(keyframes.deletedAt)));
+
+  for (const frame of frames) {
+    await db.update(sightings)
+      .set({ deletedAt: now, updatedBy: by, updatedAt: now })
+      .where(and(eq(sightings.keyframeId, frame.id), isNull(sightings.deletedAt)));
+  }
+
+  await db.update(keyframes)
+    .set({ deletedAt: now, updatedBy: by, updatedAt: now })
+    .where(and(eq(keyframes.captureId, id), isNull(keyframes.deletedAt)));
+
+  await db.update(captures)
+    .set({ deletedAt: now, updatedBy: by, updatedAt: now })
+    .where(eq(captures.id, id));
+
+  return c.json({ frames: frames.length }, 200);
+});
+
 keyframeRoutes.use("*", requireUser);
 
 keyframeRoutes.get("/", async c =>

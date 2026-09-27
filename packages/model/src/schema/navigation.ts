@@ -79,9 +79,29 @@ export const DEFAULT_PATHWAY_WIDTH_M = 2.4;
  * right no matter how wrong the traced footprints around it are. That is the
  * whole point on an approximate floorplan.
  */
+/**
+ * A kind of walkway, defined by the team rather than by this file.
+ *
+ * OTH has concourse, covered link, ramp, service corridor and more, and which
+ * distinctions matter is a judgement the people drawing the map make — so the
+ * types are rows, not an enum. Each carries a note saying how it should be
+ * built in 3D, which is the whole reason for naming them separately.
+ */
+export const PathwayKindSchema = AuditFieldsSchema.extend({
+  id: SlugSchema,
+  nameEn: z.string().min(1),
+  nameZh: z.string().default(""),
+  /** So a floor of walkways reads at a glance rather than as one blue tangle. */
+  colorHex: z.string().regex(/^#[0-9a-fA-F]{6}$/, "expected a hex colour like #38bdf8"),
+  /** What a modeller should do with it: covered or open, ramp or steps, surface. */
+  modellingNote: z.string().default(""),
+});
+
 export const PathwaySchema = AuditFieldsSchema.extend({
   id: SlugSchema,
   levelId: SlugSchema,
+  /** Which kind of walkway. Optional: the ones drawn before kinds existed have none. */
+  kindId: SlugSchema.optional(),
   polyline: z.array(Vec2Schema).min(2),
   widthM: z.number().positive().default(DEFAULT_PATHWAY_WIDTH_M),
   stepFree: z.boolean().default(true),
@@ -95,6 +115,7 @@ export const PathwaySchema = AuditFieldsSchema.extend({
 });
 
 export type Doorway = z.infer<typeof DoorwaySchema>;
+export type PathwayKind = z.infer<typeof PathwayKindSchema>;
 export type Pathway = z.infer<typeof PathwaySchema>;
 export type Entrance = z.infer<typeof EntranceSchema>;
 export type PortalKind = z.infer<typeof PortalKindSchema>;

@@ -24,6 +24,8 @@ function fakeApi(overrides: Record<string, unknown> = {}) {
     listLevelImages: vi.fn().mockResolvedValue([]),
     keyframeFileUrl: (id: string) => `/api/keyframes/${id}/file`,
     deleteKeyframe: vi.fn().mockResolvedValue(undefined),
+    deleteCapture: vi.fn().mockResolvedValue({ frames: 2 }),
+    updateEntity: vi.fn().mockResolvedValue({}),
     uploadKeyframe: vi.fn().mockResolvedValue({}),
     createEntity: vi.fn().mockResolvedValue({}),
     ...overrides,
@@ -60,6 +62,53 @@ describe("SurveyApp", () => {
     render(<SurveyApp api={api} />);
     await waitFor(() => expect(screen.getByText(/add the walkthrough you filmed/i)).toBeTruthy());
     expect(screen.queryByTestId("captures-unloaded")).toBeNull();
+  });
+
+  it("renames a capture in place", async () => {
+    const api = fakeApi();
+    render(<SurveyApp api={api} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByLabelText("Rename L1 walk.mp4"));
+    const input = screen.getByLabelText("Rename L1 walk.mp4");
+    fireEvent.change(input, { target: { value: "Level 1 east" } });
+    fireEvent.blur(input);
+    await waitFor(() =>
+      expect((api as unknown as { updateEntity: ReturnType<typeof vi.fn> }).updateEntity)
+        .toHaveBeenCalledWith("capture", "cap_1", 0, { filename: "Level 1 east" }));
+  });
+
+  it("does not save a rename that changed nothing", async () => {
+    const api = fakeApi();
+    render(<SurveyApp api={api} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByLabelText("Rename L1 walk.mp4"));
+    fireEvent.blur(screen.getByLabelText("Rename L1 walk.mp4"));
+    expect((api as unknown as { updateEntity: ReturnType<typeof vi.fn> }).updateEntity)
+      .not.toHaveBeenCalled();
+  });
+
+  it("asks before deleting a capture, since it is hours of labelling", async () => {
+    const api = fakeApi();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<SurveyApp api={api} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByLabelText("Delete L1 walk.mp4"));
+    expect(confirm).toHaveBeenCalled();
+    expect((api as unknown as { deleteCapture: ReturnType<typeof vi.fn> }).deleteCapture)
+      .not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it("deletes the capture once confirmed", async () => {
+    const api = fakeApi();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<SurveyApp api={api} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByLabelText("Delete L1 walk.mp4"));
+    await waitFor(() =>
+      expect((api as unknown as { deleteCapture: ReturnType<typeof vi.fn> }).deleteCapture)
+        .toHaveBeenCalledWith("cap_1"));
+    confirm.mockRestore();
   });
 
   it("asks you to pick one before showing a video", async () => {

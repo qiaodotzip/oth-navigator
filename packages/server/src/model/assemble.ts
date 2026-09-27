@@ -33,6 +33,7 @@ export async function assembleModel(db: Database): Promise<MapModel> {
     portalEndpoints: await liveRows(db, schema.portalEndpoints as EntityTable),
     navHints: await liveRows(db, schema.navHints as EntityTable),
     pathways: await liveRows(db, schema.pathways as EntityTable),
+    pathwayKinds: await liveRows(db, schema.pathwayKinds as EntityTable),
     assets: await liveRows(db, schema.assets as EntityTable),
     placements: await liveRows(db, schema.placements as EntityTable),
     tenants: await liveRows(db, schema.tenants as EntityTable),

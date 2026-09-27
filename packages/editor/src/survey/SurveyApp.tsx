@@ -25,6 +25,7 @@ export function SurveyApp({ api }: { api: Api }) {
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [frameId, setFrameId] = useState<string | null>(null);
   const [tab, setTab] = useState<"places" | "review">("places");
+  const [renaming, setRenaming] = useState<string | null>(null);
 
   useEffect(() => {
     void saver.refresh();
@@ -59,6 +60,31 @@ export function SurveyApp({ api }: { api: Api }) {
     if (!capture) return;
     try {
       await api.uploadKeyframe(blob, capture.id, timeMs, frameFilename(capture, timeMs));
+      await saver.refresh();
+    } catch (err) {
+      useEditorStore.getState().setStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function renameCapture(capture: Capture, filename: string) {
+    setRenaming(null);
+    if (filename.trim() === "" || filename === capture.filename) return;
+    await saver.update("capture", capture.id, capture.version, { filename: filename.trim() });
+  }
+
+  async function removeCapture(capture: Capture) {
+    const frames = (model?.keyframes ?? []).filter(k => k.captureId === capture.id).length;
+    // Deleting a capture deletes a labelling session, which is hours of work.
+    const ok = window.confirm(
+      `Delete "${capture.filename}" and its ${frames} frame(s), with everything labelled on them?`,
+    );
+    if (!ok) return;
+    try {
+      await api.deleteCapture(capture.id);
+      if (captureId === capture.id) {
+        setCaptureId(null);
+        setFrameId(null);
+      }
       await saver.refresh();
     } catch (err) {
       useEditorStore.getState().setStatus(err instanceof Error ? err.message : String(err));
@@ -134,19 +160,49 @@ export function SurveyApp({ api }: { api: Api }) {
           )}
           <ul>
             {captures.map(c => (
-              <li key={c.id}>
-                <button
-                  data-testid={`capture-${c.id}`}
-                  className={`w-full truncate rounded px-1 py-0.5 text-left ${
-                    c.id === captureId ? "bg-stone-800 text-white" : "hover:bg-stone-100"
-                  }`}
-                  onClick={() => {
-                    setCaptureId(c.id);
-                    setFrameId(null);
-                  }}
-                >
-                  {c.filename}
-                </button>
+              <li key={c.id} className="group flex items-center gap-1">
+                {renaming === c.id ? (
+                  <input
+                    aria-label={`Rename ${c.filename}`}
+                    autoFocus
+                    defaultValue={c.filename}
+                    className="min-w-0 flex-1 rounded border px-1 text-xs text-stone-900"
+                    onBlur={e => void renameCapture(c, e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                      if (e.key === "Escape") setRenaming(null);
+                    }}
+                  />
+                ) : (
+                  <>
+                    <button
+                      data-testid={`capture-${c.id}`}
+                      className={`min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left ${
+                        c.id === captureId ? "bg-stone-800 text-white" : "hover:bg-stone-100"
+                      }`}
+                      onClick={() => {
+                        setCaptureId(c.id);
+                        setFrameId(null);
+                      }}
+                    >
+                      {c.filename}
+                    </button>
+                    <button
+                      aria-label={`Rename ${c.filename}`}
+                      className="shrink-0 opacity-0 group-hover:opacity-100"
+                      onClick={() => setRenaming(c.id)}
+                    >
+                      &#9998;
+                    </button>
+                    <button
+                      aria-label={`Delete ${c.filename}`}
+                      className="shrink-0 opacity-0 group-hover:opacity-100"
+                      onClick={() => void removeCapture(c)}
+                    >
+                      &#128465;
+                    </button>
+                  </>
+                )}
               </li>
             ))}
           </ul>

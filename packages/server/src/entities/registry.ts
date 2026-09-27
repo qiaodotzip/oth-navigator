@@ -1,6 +1,6 @@
 import {
   CaptureSchema, DoorwaySchema, EntranceSchema, LevelSchema, NavHintSchema,
-  PathwaySchema, PlaceSchema, PlacementSchema, PortalEndpointSchema, PortalSchema,
+  PathwayKindSchema, PathwaySchema, PlaceSchema, PlacementSchema, PortalEndpointSchema, PortalSchema,
   RoomSchema, SightingSchema, TenantSchema,
 } from "@oth/model";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
@@ -12,7 +12,7 @@ export const ENTITY_TYPES = [
   "portal", "portalEndpoint", "navHint", "pathway", "placement", "tenant",
   // A keyframe is deliberately absent: it arrives as multipart bytes, and
   // generic CRUD would be a way to create one with no image behind it.
-  "capture", "place", "sighting",
+  "capture", "place", "sighting", "pathwayKind",
 ] as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[number];
@@ -45,6 +45,7 @@ export const entityRegistry: Record<EntityType, { table: EntityTable; schema: Zo
   capture: { table: schema.captures as EntityTable, schema: CaptureSchema },
   place: { table: schema.places as EntityTable, schema: PlaceSchema },
   sighting: { table: schema.sightings as EntityTable, schema: SightingSchema },
+  pathwayKind: { table: schema.pathwayKinds as EntityTable, schema: PathwayKindSchema },
 };
 
 export function isEntityType(v: string): v is EntityType {

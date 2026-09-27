@@ -227,6 +227,7 @@ export const pathways = pgTable("pathways", {
   polyline: jsonb("polyline").$type<[number, number][]>().notNull(),
   widthM: doublePrecision("width_m").notNull().default(2.4),
   stepFree: boolean("step_free").notNull().default(true),
+  kindId: text("kind_id"),
   nameEn: text("name_en").notNull().default(""),
   nameZh: text("name_zh").notNull().default(""),
   ...auditColumns,
@@ -239,6 +240,16 @@ export const pathways = pgTable("pathways", {
  * uploads only those, so what is kept here is enough to recognise the source
  * file when a teammate is asked for it again.
  */
+/** Walkway types the team defines for itself. See PathwayKindSchema. */
+export const pathwayKinds = pgTable("pathway_kinds", {
+  id: text("id").primaryKey(),
+  nameEn: text("name_en").notNull(),
+  nameZh: text("name_zh").notNull().default(""),
+  colorHex: text("color_hex").notNull(),
+  modellingNote: text("modelling_note").notNull().default(""),
+  ...auditColumns,
+});
+
 export const captures = pgTable("captures", {
   id: text("id").primaryKey(),
   kind: text("kind").notNull(),

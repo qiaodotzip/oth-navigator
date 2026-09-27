@@ -11,6 +11,7 @@ export function PathwayShape({
   widthM,
   viewport,
   selected = false,
+  color,
   onClick,
 }: {
   id: string;
@@ -18,6 +19,8 @@ export function PathwayShape({
   widthM: number;
   viewport: Viewport;
   selected?: boolean;
+  /** The walkway type's colour. Undefined for one with no type yet. */
+  color?: string;
   onClick?: (event: React.MouseEvent) => void;
 }) {
   const points = polyline.map(p => worldToScreen(viewport, p).join(",")).join(" ");
@@ -26,7 +29,7 @@ export function PathwayShape({
       data-testid={`pathway-${id}`}
       points={points}
       fill="none"
-      stroke={selected ? "#f2a33c" : "#38bdf8"}
+      stroke={selected ? "#f2a33c" : color ?? "#38bdf8"}
       strokeOpacity={0.45}
       strokeWidth={widthM * viewport.scale}
       strokeLinecap="round"

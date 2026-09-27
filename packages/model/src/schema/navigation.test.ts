@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PATHWAY_WIDTH_M,
   DoorwaySchema,
+  PathwayKindSchema,
   EntranceSchema,
   NavHintSchema,
   PortalEndpointSchema,
@@ -160,5 +161,34 @@ describe("PathwaySchema", () => {
 
   it("rejects a non-positive width", () => {
     expect(() => PathwaySchema.parse({ ...pathway, widthM: 0 })).toThrow();
+  });
+});
+
+describe("pathway kinds", () => {
+  const kind = { id: "covered-link", nameEn: "Covered link", colorHex: "#38bdf8" };
+
+  it("needs a name and a colour, since both are what make it useful", () => {
+    expect(() => PathwayKindSchema.parse(kind)).not.toThrow();
+    expect(() => PathwayKindSchema.parse({ ...kind, nameEn: "" })).toThrow();
+    expect(() => PathwayKindSchema.parse({ ...kind, colorHex: "blue" })).toThrow();
+  });
+
+  it("carries a modelling note, which is why kinds exist at all", () => {
+    const withNote = PathwayKindSchema.parse({ ...kind, modellingNote: "Roofed, open sides." });
+    expect(withNote.modellingNote).toBe("Roofed, open sides.");
+  });
+
+  it("leaves a pathway unkinded rather than guessing", () => {
+    // Every pathway drawn before kinds existed has none, and inventing one
+    // would put a claim in the model nobody made.
+    const p = PathwaySchema.parse({ id: "p1", levelId: "oth-L1", polyline: [[0, 0], [10, 0]] });
+    expect(p.kindId).toBeUndefined();
+  });
+
+  it("takes a kind when one is chosen", () => {
+    const p = PathwaySchema.parse({
+      id: "p1", levelId: "oth-L1", polyline: [[0, 0], [10, 0]], kindId: "covered-link",
+    });
+    expect(p.kindId).toBe("covered-link");
   });
 });

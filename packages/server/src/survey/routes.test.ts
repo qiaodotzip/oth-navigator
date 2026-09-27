@@ -22,6 +22,13 @@ function png(width: number, height: number): Uint8Array {
   return bytes;
 }
 
+const patch = (path: string, body: unknown) =>
+  app.request(path, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify(body),
+  });
+
 const post = (path: string, body: unknown) =>
   app.request(path, {
     method: "POST",
@@ -163,5 +170,52 @@ describe("removing a frame", () => {
     const kf = await json<{ keyframe: { id: string } }>(await grab(png(10, 10)));
     const res = await app.request(`/api/keyframes/${kf.keyframe.id}`, { method: "DELETE" });
     expect(res.status).toBe(401);
+  });
+});
+
+describe("removing a capture", () => {
+  it("takes its frames and their labels with it", async () => {
+    // A frame with no capture is reachable from nothing but still counts
+    // toward a place, so the cascade is the behaviour rather than a courtesy.
+    const kf = await json<{ keyframe: { id: string } }>(await grab(png(10, 10)));
+    await post("/api/entities/place", { data: { id: "pl_1", nameEn: "X", category: "retail" } });
+    await post("/api/entities/sighting", {
+      data: { id: "sg_1", placeId: "pl_1", keyframeId: kf.keyframe.id },
+    });
+
+    const res = await app.request("/api/captures/cap_1", { method: "DELETE", headers: { cookie } });
+    expect(res.status).toBe(200);
+    expect((await json<{ frames: number }>(res)).frames).toBe(1);
+
+    const frames = await app.request("/api/keyframes", { headers: { cookie } });
+    expect((await json<{ items: unknown[] }>(frames)).items).toHaveLength(0);
+    const left = await app.request("/api/entities/sighting", { headers: { cookie } });
+    expect((await json<{ items: unknown[] }>(left)).items).toHaveLength(0);
+  });
+
+  it("leaves the places themselves alone, since they may be seen elsewhere", async () => {
+    await post("/api/entities/place", { data: { id: "pl_1", nameEn: "X", category: "retail" } });
+    await app.request("/api/captures/cap_1", { method: "DELETE", headers: { cookie } });
+    const places = await app.request("/api/entities/place", { headers: { cookie } });
+    expect((await json<{ items: unknown[] }>(places)).items).toHaveLength(1);
+  });
+
+  it("404s a capture that is not there", async () => {
+    const res = await app.request("/api/captures/cap_nope", { method: "DELETE", headers: { cookie } });
+    expect(res.status).toBe(404);
+  });
+
+  it("requires authentication", async () => {
+    expect((await app.request("/api/captures/cap_1", { method: "DELETE" })).status).toBe(401);
+  });
+
+  it("renames through the generic entity route", async () => {
+    const res = await patch("/api/entities/capture/cap_1", {
+      expectedVersion: 0,
+      data: { filename: "Level 1 — east wing" },
+    });
+    expect(res.status).toBe(200);
+    expect((await json<{ entity: { filename: string } }>(res)).entity.filename)
+      .toBe("Level 1 — east wing");
   });
 });

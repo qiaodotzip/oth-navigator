@@ -281,6 +281,9 @@ export function PlanCanvas({
               polyline={p.polyline}
               widthM={p.widthM}
               viewport={state.viewport}
+              // A floor of walkways in one colour is a tangle; the type's
+              // colour is what makes it readable.
+              color={state.model?.pathwayKinds.find(k => k.id === p.kindId)?.colorHex}
               selected={state.selection?.id === p.id}
               onClick={event => {
                 if (state.tool !== "select") return;

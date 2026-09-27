@@ -9,7 +9,7 @@ import { levelImageRoutes } from "./images/routes";
 import { lockRoutes } from "./locks/routes";
 import { modelRoutes } from "./model/routes";
 import { presenceRoutes } from "./presence/routes";
-import { keyframeRoutes } from "./survey/routes";
+import { captureRoutes, keyframeRoutes } from "./survey/routes";
 import { PresenceTracker } from "./presence/service";
 import { publishRoutes } from "./publish/routes";
 import { staticRoutes } from "./static";
@@ -43,6 +43,7 @@ export function createApp(deps: AppDeps) {
   app.route("/api/model", modelRoutes);
   app.route("/api/locks", lockRoutes);
   app.route("/api/keyframes", keyframeRoutes);
+  app.route("/api/captures", captureRoutes);
   app.route("/api/assets", assetRoutes);
   app.route("/api/level-images", levelImageRoutes);
   app.route("/api", publishRoutes);

@@ -566,3 +566,31 @@ describe("details on the canvas", () => {
     expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-vend" });
   });
 });
+
+describe("walkway types on the canvas", () => {
+  it("draws a walkway in its type's colour", () => {
+    // A floor of walkways in one colour is a tangle.
+    useEditorStore.getState().setModel(
+      parseModel({
+        building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+        levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+        pathwayKinds: [{ id: "pk-1", nameEn: "Ramp", colorHex: "#f2a33c" }],
+        pathways: [{ id: "L1-p", levelId: "oth-L1", polyline: [[0, 0], [20, 0]], kindId: "pk-1" }],
+      }),
+    );
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("pathway-L1-p").getAttribute("stroke")).toBe("#f2a33c");
+  });
+
+  it("falls back to the default colour for a walkway with no type", () => {
+    useEditorStore.getState().setModel(
+      parseModel({
+        building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+        levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+        pathways: [{ id: "L1-p", levelId: "oth-L1", polyline: [[0, 0], [20, 0]] }],
+      }),
+    );
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("pathway-L1-p").getAttribute("stroke")).toBe("#38bdf8");
+  });
+});

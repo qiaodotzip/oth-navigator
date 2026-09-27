@@ -15,6 +15,8 @@ import { ContextExportButton } from "./panels/ContextExportButton";
 import { DxfImportButton } from "./panels/DxfImportButton";
 import { FloorplanPanel } from "./panels/FloorplanPanel";
 import { Inspector } from "./panels/Inspector";
+import { PathwayInspector } from "./panels/PathwayInspector";
+import { PathwayKindsPanel } from "./panels/PathwayKindsPanel";
 import { LayersPanel } from "./panels/LayersPanel";
 import { LevelTabs } from "./panels/LevelTabs";
 import { PlacementInspector } from "./panels/PlacementInspector";
@@ -119,6 +121,17 @@ export function App() {
           <StepsPanel
             sections={{
               floorplan: <FloorplanPanel api={api} saver={saver} />,
+              connect: (
+                <div className="space-y-3">
+                  <PathwayInspector saver={saver} />
+                  <details className="border-t pt-2">
+                    <summary className="cursor-pointer px-3 text-xs font-medium text-stone-600">
+                      Walkway types
+                    </summary>
+                    <PathwayKindsPanel saver={saver} />
+                  </details>
+                </div>
+              ),
               rooms: (
                 <div className="space-y-3">
                 <Inspector
