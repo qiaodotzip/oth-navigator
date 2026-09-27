@@ -1,1 +1,3 @@
-data
+# The local PGlite database. Anchored, so it does not also swallow the data
+# files the CLI ships with, such as src/cli/data.
+/data

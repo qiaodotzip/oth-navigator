@@ -22,7 +22,8 @@
     "trace": "npm run start --workspace @oth/server -- trace",
     "survey:export": "npm run start --workspace @oth/server -- survey:export",
     "survey:import": "npm run start --workspace @oth/server -- survey:import",
-    "survey:tidy": "npm run start --workspace @oth/server -- survey:tidy"
+    "survey:tidy": "npm run start --workspace @oth/server -- survey:tidy",
+    "plan:l1": "npm run start --workspace @oth/server -- plan:l1"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

@@ -5,6 +5,7 @@ import { seedBuilding } from "./cli/seed";
 import { tracePlansIntoModel } from "./cli/trace";
 import { exportCaptureForLabelling } from "./cli/surveyExport";
 import { importProposals } from "./cli/surveyImport";
+import { importL1Plan } from "./cli/planL1";
 import { tidySurvey } from "./cli/surveyTidy";
 import { loadConfig } from "./config";
 import { createPostgresDb } from "./db/client";
@@ -79,6 +80,16 @@ if (command === "survey:tidy") {
   for (const s of r.suspects) {
     console.log(`  ! "${s}" is still a walkway but sounds vertical — decide it by hand`);
   }
+  process.exit(0);
+}
+
+if (command === "plan:l1") {
+  const r = await importL1Plan(db, config.DATA_DIR);
+  console.log(
+    `seeded ${r.spaces} space(s) from the 2015 working drawing` +
+    (r.skipped ? `; left ${r.skipped} already in the model alone` : ""),
+  );
+  console.log(`underlay: ${r.underlay}`);
   process.exit(0);
 }
 
