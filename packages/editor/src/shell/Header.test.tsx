@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as progress from "../flow/floorProgress";
 import { createSaver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { fakeApi, sampleModel, sampleTeam } from "../testing/fakeApi";
@@ -46,5 +47,14 @@ describe("Header", () => {
   it("has no floor controls on the floors home", () => {
     renderHeader("/floors");
     expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
+  });
+
+  it("works out floor progress only once the switcher is opened", () => {
+    const spy = vi.spyOn(progress, "floorProgress");
+    renderHeader();
+    expect(spy).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Floor L1/ }));
+    expect(spy).toHaveBeenCalledTimes(2); // once per floor: L1, L2
+    spy.mockRestore();
   });
 });
