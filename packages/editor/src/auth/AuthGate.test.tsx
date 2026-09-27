@@ -56,6 +56,7 @@ describe("AuthGate", () => {
     act(() => useEditorStore.getState().endSession("expired"));
     expect(screen.getByText("the survey")).toBeTruthy();
     expect(screen.getByRole("dialog", { name: /session ended/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "ada@oth.local" } });
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: "pw" } });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));

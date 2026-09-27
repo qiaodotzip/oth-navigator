@@ -37,6 +37,7 @@ export function AuthGate({ api, children }: { api: Api; children: ReactNode }) {
           onOpenChange={() => {}}
           title="Your session ended"
           description="Sign in to carry on where you were. Your last change was not saved."
+          dismissible={false}
         >
           <LoginForm api={api} onSignedIn={setUser} />
         </Dialog>

@@ -51,6 +51,14 @@ describe("Dialog", () => {
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
+
+  it("offers no close control when it cannot be dismissed", () => {
+    const onOpenChange = vi.fn();
+    render(<Dialog open dismissible={false} onOpenChange={onOpenChange} title="Your session ended"><p>body</p></Dialog>);
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
 });
 
 describe("Popover", () => {
