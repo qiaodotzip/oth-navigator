@@ -52,7 +52,14 @@ export type FloorRoute = Extract<Route, { name: "floor" }>;
  * L1; a missing or unknown tab is null, for the workspace to choose.
  */
 export function parseRoute(pathname: string, search = ""): Route {
-  const parts = pathname.split("/").filter(Boolean).map(p => decodeURIComponent(p));
+  let parts: string[];
+  try {
+    parts = pathname.split("/").filter(Boolean).map(p => decodeURIComponent(p));
+  } catch {
+    // A malformed %-escape throws URIError. Floor codes never need escaping,
+    // so this is always a stray link rather than something worth guessing at.
+    return { name: "not-found", path: pathname };
+  }
   if (parts.length === 0) return { name: "home" };
   if (parts.length === 1 && parts[0] === "survey") return { name: "legacy-survey" };
   if (parts.length === 1 && parts[0] === "team") return { name: "team" };

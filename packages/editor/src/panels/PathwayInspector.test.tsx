@@ -1,5 +1,5 @@
 import { parseModel } from "@oth/model";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
@@ -12,7 +12,10 @@ const model = parseModel({
     { id: "pk-1", nameEn: "Covered link", colorHex: "#38bdf8" },
     { id: "pk-2", nameEn: "Ramp", colorHex: "#f2a33c" },
   ],
-  pathways: [{ id: "p1", levelId: "oth-L1", polyline: [[0, 0], [10, 0]], widthM: 2.4 }],
+  pathways: [
+    { id: "p1", levelId: "oth-L1", polyline: [[0, 0], [10, 0]], widthM: 2.4, nameEn: "Main hall" },
+    { id: "p2", levelId: "oth-L1", polyline: [[0, 5], [10, 5]], widthM: 1.5, nameEn: "Side corridor" },
+  ],
 });
 
 function setup(select = true) {
@@ -67,5 +70,16 @@ describe("PathwayInspector", () => {
     const saver = setup();
     fireEvent.click(screen.getByLabelText("Step free"));
     expect(saver.update).toHaveBeenCalledWith("pathway", "p1", 0, { stepFree: false });
+  });
+
+  // M9: an unblurred edit on one walkway must not land on the next one
+  // selected — both fields are uncontrolled, so they need a key by entity id.
+  it("resets the name and width fields when a different walkway is selected", () => {
+    setup();
+    fireEvent.change(screen.getByLabelText("Walkway name"), { target: { value: "typed but not saved" } });
+    fireEvent.change(screen.getByLabelText("Walkway width"), { target: { value: "9.9" } });
+    act(() => useEditorStore.getState().select({ type: "pathway", id: "p2" }));
+    expect(screen.getByLabelText("Walkway name")).toHaveValue("Side corridor");
+    expect(screen.getByLabelText("Walkway width")).toHaveValue(1.5);
   });
 });

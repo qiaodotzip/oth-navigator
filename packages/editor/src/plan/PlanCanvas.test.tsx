@@ -696,6 +696,20 @@ describe("panning", () => {
     expect(useEditorStore.getState().draft).toHaveLength(1);
   });
 
+  // M10: Alt-Tabbing away while Space is held never fires keyup, and every
+  // later click would be swallowed as a pan until Space is pressed again.
+  it("stops treating clicks as a pan once the window loses focus while Space is held", () => {
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.keyDown(window, { key: " ", code: "Space" });
+    fireEvent(window, new Event("blur"));
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.mouseDown(surface, { clientX: 300, clientY: 300, button: 0 });
+    fireEvent.mouseUp(window, { clientX: 300, clientY: 300, button: 0 });
+    fireEvent.click(surface, { clientX: 300, clientY: 300 });
+    expect(useEditorStore.getState().draft).toHaveLength(1);
+  });
+
   it("frames the level again from the Fit button", () => {
     render(<PlanCanvas width={800} height={600} />);
     act(() => useEditorStore.getState().setViewport({ originX: -9999, originY: -9999, scale: 1 }));

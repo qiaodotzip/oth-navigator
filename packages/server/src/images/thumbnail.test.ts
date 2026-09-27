@@ -1,11 +1,16 @@
-import { mkdtemp, readdir } from "node:fs/promises";
+import { mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { storeAsset } from "../assets/storage";
 import { readImageSize } from "./inspect";
 import { readThumbnail, thumbnailWidth } from "./thumbnail";
+
+vi.mock("node:fs/promises", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...actual, writeFile: vi.fn(actual.writeFile) };
+});
 
 async function jpeg(width: number, height: number): Promise<Uint8Array> {
   const buf = await sharp({ create: { width, height, channels: 3, background: "#7a7a7a" } })
@@ -56,5 +61,26 @@ describe("readThumbnail", () => {
     const second = await readThumbnail(dataDir, stored, 240);
     expect(second).toEqual(first);
     expect(await readdir(join(dataDir, "thumbs"))).toHaveLength(1);
+  });
+
+  // M2: a reader must never see a truncated file, and a process killed
+  // mid-write must not leave a permanently broken thumbnail behind.
+  it("writes through a temp file, leaving no .tmp behind on success", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "oth-thumb-"));
+    const stored = await storeAsset(dataDir, await jpeg(1920, 1080), "jpg");
+    await readThumbnail(dataDir, stored, 240);
+    const names = await readdir(join(dataDir, "thumbs"));
+    expect(names).toHaveLength(1);
+    expect(names[0]).not.toMatch(/\.tmp$/);
+    expect(vi.mocked(writeFile).mock.calls.some(([p]) => String(p).endsWith(".tmp"))).toBe(true);
+  });
+
+  it("cleans up its temp file when the write fails", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "oth-thumb-"));
+    const stored = await storeAsset(dataDir, await jpeg(1920, 1080), "jpg");
+    vi.mocked(writeFile).mockRejectedValueOnce(new Error("disk full"));
+    await expect(readThumbnail(dataDir, stored, 240)).rejects.toThrow("disk full");
+    const names = await readdir(join(dataDir, "thumbs")).catch(() => []);
+    expect(names).toHaveLength(0);
   });
 });

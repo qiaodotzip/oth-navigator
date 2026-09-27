@@ -72,4 +72,25 @@ describe("editor store", () => {
     useEditorStore.getState().setTool("select");
     expect(useEditorStore.getState().draft).toBeNull();
   });
+
+  // M4: an id missing from `team` must not read as "left the team" before the
+  // first fetch has even come back, and a failed fetch must not read as
+  // "loaded, and empty" either.
+  describe("teamStatus", () => {
+    it("starts loading, with nobody on the team yet", () => {
+      expect(useEditorStore.getState().teamStatus).toBe("loading");
+      expect(useEditorStore.getState().team).toEqual([]);
+    });
+
+    it("is loaded once the team arrives", () => {
+      useEditorStore.getState().setTeam([{ id: "u1", email: "a@b.c", displayName: "A" }]);
+      expect(useEditorStore.getState().teamStatus).toBe("loaded");
+    });
+
+    it("is error when the fetch fails, without touching team", () => {
+      useEditorStore.getState().setTeamLoadError();
+      expect(useEditorStore.getState().teamStatus).toBe("error");
+      expect(useEditorStore.getState().team).toEqual([]);
+    });
+  });
 });

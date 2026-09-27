@@ -45,6 +45,16 @@ describe("FloorsHome", () => {
     expect(await screen.findByText(/last published v12, 3 days ago/)).toBeTruthy();
   });
 
+  it("leaves the published clause out on a failed fetch, rather than saying 'not published yet'", async () => {
+    // M5: `latest: null` (genuinely never published) and a failed fetch must
+    // not render the same way.
+    const api = fakeApi({ latestPublished: vi.fn().mockRejectedValue(new Error("offline")) });
+    render(<FloorsHome api={api} saver={fakeSaver()} />);
+    await waitFor(() => expect(api.latestPublished).toHaveBeenCalled());
+    expect(screen.queryByText(/not published yet/)).toBeNull();
+    expect(screen.queryByText(/last published/)).toBeNull();
+  });
+
   it("assigns an owner from the card", async () => {
     const saver = fakeSaver() as { update: ReturnType<typeof vi.fn> };
     render(<FloorsHome api={fakeApi()} saver={saver as never} />);
@@ -57,6 +67,30 @@ describe("FloorsHome", () => {
     useEditorStore.getState().setTeam([sampleTeam[1]!]);
     render(<FloorsHome api={fakeApi()} saver={fakeSaver()} />);
     expect(screen.getAllByRole("img", { name: "Former teammate" }).length).toBeGreaterThan(0);
+  });
+
+  // M4: an owner must not flash "Former teammate" before the team has even
+  // loaded, and a failed load must not call everyone a former teammate either.
+  it("shows a neutral avatar for an owner while the team is still loading", () => {
+    useEditorStore.setState({ team: [], teamStatus: "loading" });
+    render(<FloorsHome api={fakeApi()} saver={fakeSaver()} />);
+    expect(screen.queryByRole("img", { name: "Former teammate" })).toBeNull();
+    expect(screen.getAllByRole("img", { name: "Team member" }).length).toBeGreaterThan(0);
+  });
+
+  it("shows a neutral avatar, not 'Former teammate', when the team failed to load", () => {
+    useEditorStore.setState({ team: [], teamStatus: "error" });
+    render(<FloorsHome api={fakeApi()} saver={fakeSaver()} />);
+    expect(screen.queryByRole("img", { name: "Former teammate" })).toBeNull();
+    expect(screen.getAllByRole("img", { name: "Team member" }).length).toBeGreaterThan(0);
+  });
+
+  it("says the team could not load, instead of 'Loading the team…' forever", async () => {
+    useEditorStore.setState({ team: [], teamStatus: "error" });
+    render(<FloorsHome api={fakeApi()} saver={fakeSaver()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Owners of L1" }));
+    expect(await screen.findByText(/couldn't load the team/i)).toBeTruthy();
+    expect(screen.queryByText(/loading the team/i)).toBeNull();
   });
 
   it("locks the picker while an owner change is saving, so a quick second tick is not lost", async () => {

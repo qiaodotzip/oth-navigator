@@ -23,6 +23,9 @@ export function OneTimePasswordDialog({ issued, onClose }: { issued: Issued | nu
       }}
       title={issued.kind === "invite" ? `${issued.user.displayName} is invited` : `${issued.user.displayName}'s new password`}
       description="This password is shown once. Copy it now — if it's lost, reset it again."
+      // A stray click outside must not be what throws away a password shown
+      // once — Done, × and Escape still close it, and forget it, on purpose.
+      closeOnOutsideClick={false}
     >
       <div className="space-y-3">
         <div className="rounded border border-stone-200 bg-stone-50 p-3">

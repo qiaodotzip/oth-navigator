@@ -170,11 +170,18 @@ export function PlanCanvas({
     const up = (event: KeyboardEvent) => {
       if (event.code === "Space") spaceHeld.current = false;
     };
+    // Alt-Tabbing away mid-hold never fires keyup, so every later click on
+    // the canvas would be swallowed as a pan until Space is pressed again.
+    const blur = () => {
+      spaceHeld.current = false;
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
     };
   }, []);
 

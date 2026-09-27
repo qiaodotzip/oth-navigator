@@ -49,6 +49,13 @@ export type EditorState = {
   /** Everyone on the team, for owners, avatars and the team page. */
   team: TeamMember[];
   /**
+   * Whether `team` reflects a real answer yet. "loading" is only the first
+   * fetch in flight — an id not found in `team` means nothing until then. On
+   * "error" it stays whatever it last was (usually still empty), so it must
+   * not be read as "nobody is on the team" either.
+   */
+  teamStatus: "loading" | "loaded" | "error";
+  /**
    * Why there is no user. "expired" keeps the page and asks you to sign in
    * again over it; "signed-out" (or null, before anyone signs in) shows the
    * sign-in screen.
@@ -77,6 +84,7 @@ export type EditorState = {
   clearCalibration: () => void;
   selectAsset: (id: string | null) => void;
   setTeam: (t: TeamMember[]) => void;
+  setTeamLoadError: () => void;
   endSession: (reason: "signed-out" | "expired") => void;
   reset: () => void;
 };
@@ -104,6 +112,7 @@ const initial = {
   levelImages: [],
   calibrationDraft: null,
   team: [] as TeamMember[],
+  teamStatus: "loading" as EditorState["teamStatus"],
   sessionEnd: null as EditorState["sessionEnd"],
 };
 
@@ -152,7 +161,8 @@ export const useEditorStore = create<EditorState>(set => ({
     set(state => ({ calibrationDraft: [...(state.calibrationDraft ?? []), p] })),
   clearCalibration: () => set({ calibrationDraft: null }),
   selectAsset: selectedAssetId => set({ selectedAssetId }),
-  setTeam: team => set({ team }),
+  setTeam: team => set({ team, teamStatus: "loaded" }),
+  setTeamLoadError: () => set({ teamStatus: "error" }),
   endSession: reason => set({ user: null, sessionEnd: reason }),
 
   reset: () => set(initial),

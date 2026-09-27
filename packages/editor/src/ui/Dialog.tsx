@@ -8,6 +8,7 @@ export function Dialog({
   title,
   description,
   dismissible = true,
+  closeOnOutsideClick = true,
   children,
 }: {
   open: boolean;
@@ -15,6 +16,12 @@ export function Dialog({
   title: string;
   description?: string;
   dismissible?: boolean;
+  /**
+   * Independent of `dismissible`, so a dialog can still show its × and close
+   * on Escape while a stray click outside does nothing — for a shown-once
+   * secret, that click must not be what throws it away.
+   */
+  closeOnOutsideClick?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -24,7 +31,7 @@ export function Dialog({
         <D.Content
           className="fixed left-1/2 top-1/2 z-50 w-[28rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white p-5 shadow-xl"
           onEscapeKeyDown={dismissible ? undefined : e => e.preventDefault()}
-          onPointerDownOutside={dismissible ? undefined : e => e.preventDefault()}
+          onPointerDownOutside={dismissible && closeOnOutsideClick ? undefined : e => e.preventDefault()}
         >
           <D.Title className="text-base font-semibold">{title}</D.Title>
           {description ? (

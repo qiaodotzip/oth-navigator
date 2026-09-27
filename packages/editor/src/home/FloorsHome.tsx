@@ -21,7 +21,9 @@ export function FloorsHome({ api, saver }: { api: Api; saver: Pick<Saver, "updat
   const [latest, setLatest] = useState<PublishedVersion | null | undefined>(undefined);
 
   useEffect(() => {
-    api.latestPublished().then(setLatest).catch(() => setLatest(null));
+    // A failed fetch must stay unknown, not read as "checked, and there is
+    // none" — undefined already leaves the "published …" clause out below.
+    api.latestPublished().then(setLatest).catch(() => {});
   }, [api]);
 
   if (!model) return <p className="p-8 text-sm text-stone-500">Loading the floors…</p>;

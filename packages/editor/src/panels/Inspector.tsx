@@ -25,6 +25,7 @@ export function Inspector({
       <label className="block">
         Name
         <input
+          key={room.id}
           className="mt-1 w-full rounded border px-2 py-1"
           defaultValue={room.nameEn}
           onBlur={e => onRename(room.id, room.version, e.target.value)}
@@ -33,6 +34,7 @@ export function Inspector({
       <label className="block">
         Height (m)
         <input
+          key={room.id}
           aria-label="Height (m)"
           type="number"
           min={0.1}

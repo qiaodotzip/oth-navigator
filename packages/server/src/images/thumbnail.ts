@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import sharp from "sharp";
 import { readAsset } from "../assets/storage";
@@ -45,6 +46,17 @@ export async function readThumbnail(
     await sharp(original).resize({ width, withoutEnlargement: true }).jpeg({ quality: 78 }).toBuffer(),
   );
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, bytes);
+  // Written beside the final name, then renamed into place: a reader never
+  // sees a truncated file, and a process killed mid-write (a redeploy) leaves
+  // only an orphan .tmp rather than a permanently broken thumbnail served
+  // forever behind `immutable, max-age=31536000`.
+  const tmpPath = `${path}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(tmpPath, bytes);
+    await rename(tmpPath, path);
+  } catch (err) {
+    await unlink(tmpPath).catch(() => {});
+    throw err;
+  }
   return bytes;
 }

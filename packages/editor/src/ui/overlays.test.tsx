@@ -59,6 +59,37 @@ describe("Dialog", () => {
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(onOpenChange).not.toHaveBeenCalled();
   });
+
+  // Radix arms its outside-click listener on a timer, so a test needs a tick
+  // to pass before firing one, or it lands before the listener is attached.
+  const nextTick = () => act(() => new Promise(r => setTimeout(r, 0)));
+
+  it("closes on an outside click by default", async () => {
+    const onOpenChange = vi.fn();
+    render(<Dialog open onOpenChange={onOpenChange} title="Change password"><p>body</p></Dialog>);
+    await nextTick();
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  // M11: a one-time password must survive a stray outside click, but Escape
+  // and its × still forget it on purpose.
+  it("ignores an outside click when closeOnOutsideClick is false, but keeps Escape and its close control", async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <Dialog open onOpenChange={onOpenChange} title="A new password" closeOnOutsideClick={false}>
+        <p>otp-123</p>
+      </Dialog>,
+    );
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+
+    await nextTick();
+    fireEvent.pointerDown(document.body);
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
 });
 
 describe("Popover", () => {

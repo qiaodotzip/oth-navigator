@@ -69,6 +69,12 @@ describe("parseRoute", () => {
   it("calls anything else not found, rather than guessing", () => {
     expect(parseRoute("/nope/x")).toEqual({ name: "not-found", path: "/nope/x" });
   });
+
+  it("calls a malformed %-escape not found instead of throwing a blank page", () => {
+    // M1: decodeURIComponent throws URIError on a broken escape; floor codes
+    // never need escaping, so this is always a stray link.
+    expect(parseRoute("/floors/%E0%A4%A")).toEqual({ name: "not-found", path: "/floors/%E0%A4%A" });
+  });
 });
 
 describe("href", () => {

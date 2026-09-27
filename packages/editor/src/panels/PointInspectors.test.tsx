@@ -1,5 +1,5 @@
 import { parseModel } from "@oth/model";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
@@ -15,11 +15,18 @@ const model = parseModel({
     id: "L1-a", levelId: "oth-L1", kind: "area",
     footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 5, walkable: true,
   }],
-  entrances: [{ id: "en-1", levelId: "oth-L1", roomId: "L1-a", point: [1, 1], nameEn: "Gate 1" }],
-  portals: [{ id: "lift-a", kind: "lift", nameEn: "" }],
+  entrances: [
+    { id: "en-1", levelId: "oth-L1", roomId: "L1-a", point: [1, 1], nameEn: "Gate 1" },
+    { id: "en-2", levelId: "oth-L1", roomId: "L1-a", point: [2, 2], nameEn: "Gate 2" },
+  ],
+  portals: [
+    { id: "lift-a", kind: "lift", nameEn: "" },
+    { id: "lift-b", kind: "lift", nameEn: "Lift B" },
+  ],
   portalEndpoints: [
     { id: "ep-1", portalId: "lift-a", levelId: "oth-L1", roomId: "L1-a", point: [5, 5] },
     { id: "ep-2", portalId: "lift-a", levelId: "oth-L2", roomId: "L1-a", point: [5, 5] },
+    { id: "ep-3", portalId: "lift-b", levelId: "oth-L1", roomId: "L1-a", point: [6, 6] },
   ],
 });
 
@@ -57,6 +64,16 @@ describe("EntranceInspector", () => {
     fireEvent.click(screen.getByLabelText("Main entrance"));
     expect(saver.update).toHaveBeenCalledWith("entrance", "en-1", 0, { isPrimary: true });
   });
+
+  // M9: an unblurred edit on one entrance must not land on the next one
+  // selected — the field is uncontrolled, so it needs a key by entity id.
+  it("resets the name field when a different entrance is selected", () => {
+    useEditorStore.getState().select({ type: "entrance", id: "en-1" });
+    render(<EntranceInspector saver={fakeSaver()} />);
+    fireEvent.change(screen.getByLabelText("Entrance name"), { target: { value: "typed but not saved" } });
+    act(() => useEditorStore.getState().select({ type: "entrance", id: "en-2" }));
+    expect(screen.getByLabelText("Entrance name")).toHaveValue("Gate 2");
+  });
 });
 
 describe("PortalInspector", () => {
@@ -89,5 +106,14 @@ describe("PortalInspector", () => {
     fireEvent.change(name, { target: { value: "Lift A" } });
     fireEvent.blur(name);
     expect(saver.update).toHaveBeenCalledWith("portal", "lift-a", 0, { nameEn: "Lift A" });
+  });
+
+  // M9: an unblurred edit on one lift must not land on the next one selected.
+  it("resets the name field when a different portal is selected", () => {
+    useEditorStore.getState().select({ type: "portalEndpoint", id: "ep-1" });
+    render(<PortalInspector saver={fakeSaver()} />);
+    fireEvent.change(screen.getByLabelText("Lift or stair name"), { target: { value: "typed but not saved" } });
+    act(() => useEditorStore.getState().select({ type: "portalEndpoint", id: "ep-3" }));
+    expect(screen.getByLabelText("Lift or stair name")).toHaveValue("Lift B");
   });
 });

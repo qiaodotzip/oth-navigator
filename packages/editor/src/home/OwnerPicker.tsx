@@ -9,6 +9,7 @@ import { Popover } from "../ui/Popover";
 /** Who owns a floor, set from the floor's own card. */
 export function OwnerPicker({ level, saver }: { level: Level; saver: Pick<Saver, "update"> }) {
   const team = useEditorStore(s => s.team);
+  const teamStatus = useEditorStore(s => s.teamStatus);
   // Serialises toggles: `level` is a stale closure until the round trip that
   // follows refreshes the store, so a second tick fired before that lands
   // would compute `next` from the same stale ownerIds and send the same
@@ -42,7 +43,10 @@ export function OwnerPicker({ level, saver }: { level: Level; saver: Pick<Saver,
       }
     >
       <p className="px-2 pb-1 text-xs text-stone-500">Who owns {level.code}?</p>
-      {team.length === 0 && <p className="px-2 text-xs text-stone-500">Loading the team…</p>}
+      {teamStatus === "loading" && <p className="px-2 text-xs text-stone-500">Loading the team…</p>}
+      {teamStatus === "error" && (
+        <p className="px-2 text-xs text-danger">Couldn't load the team. Reload the page to try again.</p>
+      )}
       <ul>
         {team.map(member => (
           <li key={member.id}>

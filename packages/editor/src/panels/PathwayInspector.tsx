@@ -47,6 +47,7 @@ export function PathwayInspector({ saver }: { saver: Saver }) {
       <label className="block text-xs">
         Name (optional)
         <input
+          key={pathway.id}
           aria-label="Walkway name"
           className="mt-1 w-full rounded border px-2 py-1 text-sm"
           defaultValue={pathway.nameEn}
@@ -59,6 +60,7 @@ export function PathwayInspector({ saver }: { saver: Saver }) {
       <label className="block text-xs">
         Width (m)
         <input
+          key={pathway.id}
           aria-label="Walkway width"
           type="number"
           min={0.5}

@@ -1,5 +1,5 @@
 import { parseModel } from "@oth/model";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEditorStore } from "../state/store";
 import { Inspector } from "./Inspector";
@@ -7,7 +7,10 @@ import { Inspector } from "./Inspector";
 const model = parseModel({
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
   levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
-  rooms: [{ id: "L1-vend", levelId: "oth-L1", kind: "detail", footprint: [[0, 0], [4, 0], [4, 2], [0, 2]], heightM: 1.2, walkable: false }],
+  rooms: [
+    { id: "L1-vend", levelId: "oth-L1", kind: "detail", footprint: [[0, 0], [4, 0], [4, 2], [0, 2]], heightM: 1.2, walkable: false, nameEn: "Vending" },
+    { id: "L1-bench", levelId: "oth-L1", kind: "detail", footprint: [[5, 0], [9, 0], [9, 2], [5, 2]], heightM: 0.5, walkable: false, nameEn: "Bench" },
+  ],
 });
 
 function setup() {
@@ -52,5 +55,16 @@ describe("Inspector", () => {
     useEditorStore.getState().select(null);
     setup();
     expect(screen.getByText(/nothing selected/i)).toBeTruthy();
+  });
+
+  // M9: an unblurred edit on one room must not land on the next one selected
+  // — both fields are uncontrolled, so they need a key by entity id.
+  it("resets the name and height fields when a different room is selected", () => {
+    setup();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "typed but not saved" } });
+    fireEvent.change(screen.getByLabelText("Height (m)"), { target: { value: "9.9" } });
+    act(() => useEditorStore.getState().select({ type: "room", id: "L1-bench" }));
+    expect(screen.getByLabelText("Name")).toHaveValue("Bench");
+    expect(screen.getByLabelText("Height (m)")).toHaveValue(0.5);
   });
 });

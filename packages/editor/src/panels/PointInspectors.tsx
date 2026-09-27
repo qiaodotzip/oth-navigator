@@ -37,6 +37,7 @@ export function EntranceInspector({ saver }: { saver: Saver }) {
       <label className="block text-xs">
         Name
         <input
+          key={entrance.id}
           aria-label="Entrance name"
           className="mt-1 w-full rounded border px-2 py-1 text-sm"
           placeholder="e.g. Gate 6…"
@@ -118,6 +119,7 @@ export function PortalInspector({ saver }: { saver: Saver }) {
       <label className="block text-xs">
         Name
         <input
+          key={portal.id}
           aria-label="Lift or stair name"
           className="mt-1 w-full rounded border px-2 py-1 text-sm"
           placeholder="e.g. Lift A…"
