@@ -83,7 +83,7 @@ describe("editor store", () => {
     });
 
     it("is loaded once the team arrives", () => {
-      useEditorStore.getState().setTeam([{ id: "u1", email: "a@b.c", displayName: "A" }]);
+      useEditorStore.getState().setTeam([{ id: "u1", displayName: "A" }]);
       expect(useEditorStore.getState().teamStatus).toBe("loaded");
     });
 

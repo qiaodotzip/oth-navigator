@@ -19,19 +19,27 @@ afterEach(() => {
 });
 
 describe("api client", () => {
-  it("posts credentials to the login route", async () => {
+  it("posts the chosen id to the login route", async () => {
     const fetchImpl = mockFetch(200, { user: { id: "user_1", displayName: "Wei" } });
-    const user = await createApi({ fetchImpl }).login("wei@example.com", "pw");
+    const user = await createApi({ fetchImpl }).login("user_1");
     expect(user.displayName).toBe("Wei");
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toBe("/api/auth/login");
     expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ userId: "user_1" });
   });
 
   it("sends cookies, since the session lives in one", async () => {
     const fetchImpl = mockFetch(200, { user: { id: "u", displayName: "W" } });
-    await createApi({ fetchImpl }).login("a@b.c", "pw");
+    await createApi({ fetchImpl }).login("u");
     expect(fetchImpl.mock.calls[0]![1]?.credentials).toBe("same-origin");
+  });
+
+  it("lists who can sign in, without needing a session", async () => {
+    const fetchImpl = mockFetch(200, { people: [{ id: "u1", displayName: "Ada" }] });
+    const people = await createApi({ fetchImpl }).people();
+    expect(people).toEqual([{ id: "u1", displayName: "Ada" }]);
+    expect(fetchImpl.mock.calls[0]![0]).toBe("/api/auth/people");
   });
 
   it("throws ApiError carrying the status", async () => {
@@ -80,12 +88,13 @@ describe("api client", () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
-  it("does not call onUnauthorized for a 401 on login, me or logout", async () => {
+  it("does not call onUnauthorized for a 401 on login, me, people or logout", async () => {
     const onUnauthorized = vi.fn();
     const fetchImpl = mockFetch(401, { error: "unauthenticated" });
     const api = createApi({ fetchImpl, onUnauthorized });
     await expect(api.me()).rejects.toBeInstanceOf(ApiError);
-    await expect(api.login("a@b.c", "pw")).rejects.toBeInstanceOf(ApiError);
+    await expect(api.login("u1")).rejects.toBeInstanceOf(ApiError);
+    await expect(api.people()).rejects.toBeInstanceOf(ApiError);
     await expect(api.logout()).rejects.toBeInstanceOf(ApiError);
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
@@ -124,21 +133,13 @@ describe("assets", () => {
     expect(createApi().keyframeFileUrl("kf_1", 240)).toBe("/api/keyframes/kf_1/file?w=240");
   });
 
-  it("invites a teammate", async () => {
-    const fetchImpl = mockFetch(201, { user: { id: "u2", email: "a@x.com", displayName: "A" }, password: "otp" });
-    const result = await createApi({ fetchImpl }).inviteUser("a@x.com", "A");
-    expect(result.password).toBe("otp");
+  it("adds a teammate by name alone", async () => {
+    const fetchImpl = mockFetch(201, { user: { id: "u2", displayName: "A" } });
+    const result = await createApi({ fetchImpl }).inviteUser("A");
+    expect(result.user.displayName).toBe("A");
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toBe("/api/users/invite");
-    expect(JSON.parse(String(init?.body))).toEqual({ email: "a@x.com", displayName: "A" });
-  });
-
-  it("changes your password", async () => {
-    const fetchImpl = mockFetch(204, undefined);
-    await createApi({ fetchImpl }).changePassword("old-one", "new-password");
-    const [url, init] = fetchImpl.mock.calls[0]!;
-    expect(url).toBe("/api/auth/password");
-    expect(JSON.parse(String(init?.body))).toEqual({ currentPassword: "old-one", newPassword: "new-password" });
+    expect(JSON.parse(String(init?.body))).toEqual({ displayName: "A" });
   });
 
   it("restores an entity at the version the delete left", async () => {

@@ -22,8 +22,8 @@ export const sampleModel = parseModel({
 });
 
 export const sampleTeam = [
-  { id: "u_sc", email: "sc@oth.local", displayName: "Stef Chan" },
-  { id: "u_wei", email: "wei@oth.local", displayName: "Wei Kang" },
+  { id: "u_sc", displayName: "Stef Chan" },
+  { id: "u_wei", displayName: "Wei Kang" },
 ];
 
 /** Every Api method as a vi.fn with a harmless default; pass overrides for the ones a test cares about. */
@@ -32,10 +32,9 @@ export function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}): Ap
     login: vi.fn().mockResolvedValue({ id: "u_sc", email: "sc@oth.local", displayName: "Stef Chan" }),
     logout: vi.fn().mockResolvedValue(undefined),
     me: vi.fn().mockResolvedValue({ id: "u_sc", email: "sc@oth.local", displayName: "Stef Chan" }),
+    people: vi.fn().mockResolvedValue(sampleTeam),
     listUsers: vi.fn().mockResolvedValue(sampleTeam),
     inviteUser: vi.fn(),
-    resetUserPassword: vi.fn(),
-    changePassword: vi.fn().mockResolvedValue(undefined),
     getModel: vi.fn().mockResolvedValue(sampleModel),
     validate: vi.fn().mockResolvedValue({ issues: [], errorCount: 0, warningCount: 0, ok: true }),
     listLevelImages: vi.fn().mockResolvedValue([]),

@@ -9,9 +9,17 @@ const ada = { id: "u1", email: "ada@oth.local", displayName: "Ada" };
 function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
   return {
     me: vi.fn().mockResolvedValue(ada),
+    people: vi.fn().mockResolvedValue([{ id: "u1", displayName: "Ada" }]),
     login: vi.fn().mockResolvedValue(ada),
     ...overrides,
   } as unknown as Api;
+}
+
+/** Picks Ada from the sign-in dropdown and submits. */
+async function signInAsAda() {
+  const select = await screen.findByLabelText(/who are you/i);
+  fireEvent.change(select, { target: { value: "u1" } });
+  fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 }
 
 beforeEach(() => {
@@ -37,9 +45,7 @@ describe("AuthGate", () => {
     const api = fakeApi({ me: vi.fn().mockRejectedValue(new ApiError(401, null)) });
     render(<AuthGate api={api}><p>the survey</p></AuthGate>);
     await waitFor(() => screen.getByRole("button", { name: /sign in/i }));
-    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "ada@oth.local" } });
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: "pw" } });
-    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await signInAsAda();
     await waitFor(() => expect(screen.getByText("the survey")).toBeTruthy());
   });
 
@@ -57,9 +63,7 @@ describe("AuthGate", () => {
     expect(screen.getByText("the survey")).toBeTruthy();
     expect(screen.getByRole("dialog", { name: /session ended/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
-    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "ada@oth.local" } });
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: "pw" } });
-    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await signInAsAda();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(screen.getByText("the survey")).toBeTruthy();
   });
@@ -70,6 +74,6 @@ describe("AuthGate", () => {
     act(() => useEditorStore.getState().endSession("signed-out"));
     expect(screen.queryByText("the survey")).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /sign in/i })).toBeTruthy();
   });
 });

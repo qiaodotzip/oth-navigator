@@ -7,7 +7,6 @@ import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { Header } from "./Header";
 import { OfflineBanner } from "./OfflineBanner";
-import { PasswordBanner } from "./PasswordBanner";
 import { StatusToasts } from "./StatusToasts";
 
 /**
@@ -33,7 +32,6 @@ export function AppShell({ api, saver, route, children }: { api: Api; saver: Sav
   return (
     <div className="flex h-full flex-col">
       <Header api={api} saver={saver} route={route} />
-      <PasswordBanner api={api} />
       <OfflineBanner api={api} />
       <ConflictBanner onReload={() => void saver.refresh()} />
       <main className="min-h-0 flex-1 overflow-auto">{children}</main>

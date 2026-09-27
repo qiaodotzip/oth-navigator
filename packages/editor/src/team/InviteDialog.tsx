@@ -5,7 +5,7 @@ import { Dialog } from "../ui/Dialog";
 
 const FIELD = "mt-1 w-full rounded border border-stone-300 px-2.5 py-1.5";
 
-/** Name and email; the server makes the account and a one-time password. */
+/** Just a name: there's no password to set, so adding someone is all it takes. */
 export function InviteDialog({
   api,
   open,
@@ -15,10 +15,9 @@ export function InviteDialog({
   api: Api;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onInvited: (result: { user: TeamMember; password: string }) => void;
+  onInvited: (member: TeamMember) => void;
 }) {
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -27,20 +26,19 @@ export function InviteDialog({
     setError(null);
     setBusy(true);
     try {
-      const result = await api.inviteUser(email.trim(), name.trim());
+      const { user } = await api.inviteUser(name.trim());
       setName("");
-      setEmail("");
-      onInvited(result);
+      onInvited(user);
     } catch (err) {
       // A 401 means the session expired; the sign-in dialog over the page
       // says so, and this would only contradict it.
       if (!isUnauthorized(err)) {
         setError(
           err instanceof ApiError && err.status === 409
-            ? "Someone with that email is already on the team."
+            ? ((err.body as { error?: string } | null)?.error ?? "Someone with that name is already on the team.")
             : err instanceof ApiError && err.status === 400
-              ? "Check the name and the email address."
-              : "Couldn't send the invite. Check your connection and try again.",
+              ? "Check the name."
+              : "Couldn't add them. Check your connection and try again.",
         );
       }
     } finally {
@@ -49,20 +47,16 @@ export function InviteDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title="Invite a teammate" description="They'll get a one-time password to sign in with.">
+    <Dialog open={open} onOpenChange={onOpenChange} title="Add a teammate" description="They'll sign in by picking their name from the list.">
       <form onSubmit={submit} className="space-y-3">
         <label className="block text-sm">
           Name
           <input className={FIELD} autoComplete="off" value={name} required onChange={e => setName(e.target.value)} />
         </label>
-        <label className="block text-sm">
-          Email
-          <input className={FIELD} type="email" autoComplete="off" spellCheck={false} value={email} required onChange={e => setEmail(e.target.value)} />
-        </label>
         {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           <Button onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={busy}>{busy ? "Sending…" : "Send invite"}</Button>
+          <Button type="submit" variant="primary" disabled={busy}>{busy ? "Adding…" : "Add teammate"}</Button>
         </div>
       </form>
     </Dialog>

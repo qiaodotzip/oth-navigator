@@ -35,11 +35,9 @@ export type SessionUser = {
   id: string;
   email: string;
   displayName: string;
-  /** True while the account is on a one-time password. */
-  mustChangePassword?: boolean;
 };
 
-export type TeamMember = { id: string; email: string; displayName: string };
+export type TeamMember = { id: string; displayName: string };
 
 export type PublishedVersion = { version: string; createdAt: string; warningCount: number };
 
@@ -77,10 +75,12 @@ export type ApiOptions = {
   fetchImpl?: typeof fetch;
   baseUrl?: string;
   /**
-   * Called for a 401 on any request except login, `me` and logout — a
-   * signed-out start-up `me` also answers 401, and that must lead to the
-   * sign-in screen, not this. Wired in `main.tsx` to end the session as
-   * "expired" so every direct write notices the same way the saver does.
+   * Called for a 401 on any request except login, `me`, `people` and logout —
+   * a signed-out start-up `me` also answers 401, and that must lead to the
+   * sign-in screen, not this. `people` is public, so it never 401s, but it
+   * skips the hook for the same reason the others do: it runs before anyone
+   * is signed in. Wired in `main.tsx` to end the session as "expired" so
+   * every direct write notices the same way the saver does.
    */
   onUnauthorized?: () => void;
 };
@@ -118,10 +118,10 @@ export function createApi(options: ApiOptions = {}) {
   const json = (data: unknown) => JSON.stringify(data);
 
   return {
-    async login(email: string, password: string): Promise<SessionUser> {
+    async login(userId: string): Promise<SessionUser> {
       const body = await request<{ user: SessionUser }>("/api/auth/login", {
         method: "POST",
-        body: json({ email, password }),
+        body: json({ userId }),
       }, { skipUnauthorized: true });
       return body.user;
     },
@@ -132,24 +132,18 @@ export function createApi(options: ApiOptions = {}) {
       return (await request<{ user: SessionUser }>("/api/auth/me", {}, { skipUnauthorized: true })).user;
     },
 
+    /** Everyone the sign-in dropdown can offer. Public: asked before anyone is signed in. */
+    async people(): Promise<TeamMember[]> {
+      return (await request<{ people: TeamMember[] }>("/api/auth/people", {}, { skipUnauthorized: true })).people;
+    },
+
     listUsers: async (): Promise<TeamMember[]> =>
       (await request<{ users: TeamMember[] }>("/api/users")).users,
 
-    inviteUser: (email: string, displayName: string) =>
-      request<{ user: TeamMember; password: string }>("/api/users/invite", {
+    inviteUser: (displayName: string) =>
+      request<{ user: TeamMember }>("/api/users/invite", {
         method: "POST",
-        body: json({ email, displayName }),
-      }),
-
-    resetUserPassword: (id: string) =>
-      request<{ user: TeamMember; password: string }>(`/api/users/${id}/reset-password`, {
-        method: "POST",
-      }),
-
-    changePassword: (currentPassword: string, newPassword: string) =>
-      request<void>("/api/auth/password", {
-        method: "POST",
-        body: json({ currentPassword, newPassword }),
+        body: json({ displayName }),
       }),
 
     /** The other half of Undo: brings back what a delete retired, at the version it left. */

@@ -1,13 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError } from "../api/client";
 import { useEditorStore } from "../state/store";
 import { fakeApi, sampleModel } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
 import { AccountMenu } from "./AccountMenu";
-import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { OfflineBanner } from "./OfflineBanner";
-import { PasswordBanner } from "./PasswordBanner";
 import { PublishButton } from "./PublishButton";
 
 const me = { id: "u_sc", email: "sc@oth.local", displayName: "Stef Chan" };
@@ -40,65 +37,6 @@ describe("PublishButton", () => {
   });
 });
 
-describe("ChangePasswordDialog", () => {
-  function fill(current: string, next: string, again = next) {
-    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: current } });
-    fireEvent.change(screen.getByLabelText("New password"), { target: { value: next } });
-    fireEvent.change(screen.getByLabelText("New password, again"), { target: { value: again } });
-    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
-  }
-
-  it("checks length and the repeat before asking the server", () => {
-    const api = fakeApi();
-    render(<ChangePasswordDialog api={api} open onOpenChange={() => {}} />);
-    fill("old", "short");
-    expect(screen.getByRole("alert").textContent).toMatch(/10 characters/);
-    fill("old", "long-enough-1", "long-enough-2");
-    expect(screen.getByRole("alert").textContent).toMatch(/don't match/);
-    expect(api.changePassword).not.toHaveBeenCalled();
-  });
-
-  it("says a wrong current password without signing you out", async () => {
-    const api = fakeApi({ changePassword: vi.fn().mockRejectedValue(new ApiError(422, null)) });
-    render(<ChangePasswordDialog api={api} open onOpenChange={() => {}} />);
-    fill("wrong", "long-enough-1");
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/current password is not right/));
-    expect(useEditorStore.getState().user).not.toBeNull();
-  });
-
-  it("shows nothing of its own on a 401: the session-ended dialog is the message", async () => {
-    // I2, but the 422 case above must keep working: a wrong password is not
-    // an expired session.
-    const api = fakeApi({ changePassword: vi.fn().mockRejectedValue(new ApiError(401, null)) });
-    render(<ChangePasswordDialog api={api} open onOpenChange={() => {}} />);
-    fill("old-one", "long-enough-1");
-    await waitFor(() => expect(api.changePassword).toHaveBeenCalled());
-    expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("clears the one-time prompt once changed", async () => {
-    useEditorStore.getState().setUser({ ...me, mustChangePassword: true });
-    const onOpenChange = vi.fn();
-    render(<ChangePasswordDialog api={fakeApi()} open onOpenChange={onOpenChange} />);
-    fill("old-one", "long-enough-1");
-    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-    expect(useEditorStore.getState().user?.mustChangePassword).toBe(false);
-  });
-});
-
-describe("PasswordBanner", () => {
-  it("asks someone on a one-time password to set their own", () => {
-    useEditorStore.getState().setUser({ ...me, mustChangePassword: true });
-    render(<PasswordBanner api={fakeApi()} />);
-    expect(screen.getByRole("status").textContent).toMatch(/one-time password/);
-  });
-
-  it("stays quiet otherwise", () => {
-    render(<PasswordBanner api={fakeApi()} />);
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-});
-
 describe("AccountMenu", () => {
   it("signs out as a choice, not as an expiry", async () => {
     const api = fakeApi();
@@ -107,6 +45,23 @@ describe("AccountMenu", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(useEditorStore.getState().sessionEnd).toBe("signed-out"));
     expect(api.logout).toHaveBeenCalled();
+  });
+
+  it("ends the session before the sign-out request settles, so a poll mid-flight can't show it as expired", async () => {
+    // Carried forward from Plan 1: signing out the other way round left a gap
+    // where the store still had a user, and a 401 landing in that gap read as
+    // an expired session rather than the sign-out that was already underway.
+    let resolveLogout!: () => void;
+    const logout = vi.fn(() => new Promise<void>(res => { resolveLogout = res; }));
+    render(<AccountMenu api={fakeApi({ logout })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+
+    expect(useEditorStore.getState().sessionEnd).toBe("signed-out");
+    expect(useEditorStore.getState().user).toBeNull();
+
+    resolveLogout();
+    await waitFor(() => expect(logout).toHaveBeenCalled());
   });
 });
 

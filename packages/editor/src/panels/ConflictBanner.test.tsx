@@ -36,7 +36,7 @@ describe("ConflictBanner", () => {
   });
 
   it("says who changed it, by name, and what", () => {
-    useEditorStore.getState().setTeam([{ id: "user_2", email: "wei@oth.local", displayName: "Wei Kang" }]);
+    useEditorStore.getState().setTeam([{ id: "user_2", displayName: "Wei Kang" }]);
     useEditorStore.getState().setConflict({
       entityType: "room", entityId: "L1-a",
       current: { updatedBy: "user_2", version: 3, nameEn: "Stadium" },
