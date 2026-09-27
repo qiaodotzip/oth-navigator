@@ -5,5 +5,7 @@ export * from "./RoomMesh";
 export * from "./LevelGroup";
 export * from "./MapScene";
 export * from "./walls";
+export * from "./massing";
+export * from "./shell";
 export * from "./contextExport";
 export * from "./PlacementMesh";

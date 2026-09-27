@@ -16,8 +16,30 @@ const BASE: Record<RoomKind, string> = {
   void: "#9aa0a6",
 };
 
+/**
+ * Walls sit a shade darker than the floor they stand on.
+ *
+ * Same hue rather than a contrasting one: the wall is the same material seen
+ * edge-on, and the shading does the separating. A second colour here turns
+ * every room into a diagram.
+ */
+const WALLS: Record<RoomKind, string> = {
+  room: "#cdc0a3",
+  area: "#cdc0a3",
+  detail: "#b4a98f",
+  service: "#bcbcb2",
+  void: "#8b9197",
+};
+
 const SELECTED = "#f2a33c";
 const GHOSTED = "#d8d8d4";
+
+export function wallColor(
+  kind: RoomKind,
+  opts: { ghosted?: boolean } = {},
+): string {
+  return opts.ghosted ? GHOSTED : WALLS[kind];
+}
 
 export function roomColor(
   kind: RoomKind,
