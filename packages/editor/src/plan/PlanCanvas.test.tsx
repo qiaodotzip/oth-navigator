@@ -105,6 +105,22 @@ describe("PlanCanvas", () => {
   });
 });
 
+describe("placing a point", () => {
+  it("puts an entrance where it was clicked, not snapped onto the nearest wall", () => {
+    // Snapped onto a room's edge, the point is on the boundary — which counts
+    // as outside every space, so the click was refused.
+    const onCommitPoint = vi.fn();
+    useEditorStore.getState().setTool("place-entrance");
+    render(<PlanCanvas width={800} height={600} onCommitPoint={onCommitPoint} />);
+    act(() => useEditorStore.getState().setViewport({ originX: 0, originY: 600, scale: 10 }));
+    // Room L1-a spans x 0..10 m, so screen x 0..100; 97 is 3 px inside its edge.
+    fireEvent.click(screen.getByTestId("plan-surface"), { clientX: 97, clientY: 550 });
+    const [x, y] = onCommitPoint.mock.calls[0]![0] as [number, number];
+    expect(x).toBeCloseTo(9.7);
+    expect(y).toBeCloseTo(5);
+  });
+});
+
 describe("framing", () => {
   it("puts the level's rooms inside the visible canvas", () => {
     render(<PlanCanvas width={800} height={600} />);

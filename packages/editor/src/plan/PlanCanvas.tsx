@@ -309,7 +309,9 @@ export function PlanCanvas({
     }
 
     if (state.tool === "place-entrance" || state.tool === "place-portal") {
-      onCommitPoint?.(p);
+      // Unsnapped. Snapping is for corners; it would pull a point onto the
+      // nearest wall, which is the boundary of the space it belongs inside.
+      onCommitPoint?.(rawWorld(event));
     }
   }
 
@@ -374,7 +376,11 @@ export function PlanCanvas({
           onDoubleClick={commitDraft}
           onMouseMove={event => {
             if (state.tool === "select" || pan) return;
-            setCursor(state.tool === "calibrate" ? rawWorld(event) : pointerWorld(event));
+            // The indicator shows where a click will land, so it snaps only
+            // for the tools that snap.
+            const unsnapped =
+              state.tool === "calibrate" || state.tool === "place-entrance" || state.tool === "place-portal";
+            setCursor(unsnapped ? rawWorld(event) : pointerWorld(event));
           }}
           onMouseLeave={() => setCursor(null)}
         />
