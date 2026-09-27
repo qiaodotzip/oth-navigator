@@ -5199,3 +5199,40 @@ them.
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
+
+---
+
+## Carried forward to plans 2–4
+
+What the final review left for later plans. Nothing here ships to teammates, because deployment waits for plan 4.
+
+**Plan 2's first task**
+- *Sign out:* call `endSession("signed-out")` before awaiting logout. As it stands, a poll can briefly show "Your session ended" during a sign-out.
+- *Expired-session dialog:* "Your last change was not saved." is usually untrue now that the presence poll notices expiry first. Say it only when a save actually failed.
+- *Owner avatars while the team loads:* the "Team member" placeholder shows the initials "TM", which read as a real person. Use a glyph and an honest name ("Owner – name not loaded"), and give the switcher the failure message too.
+- *Old screens and 401s:* these show a raw "api error 401" beside the expired dialog; give them `isUnauthorized`:
+  - SurveyApp
+  - FloorplanPanel
+  - AssetLibrary
+  - panels/PublishButton
+  - CaptureVideo
+- *Change password:* a 400 (for example an empty current password) reads as "check your connection". Show the server's message instead.
+- *Housekeeping:*
+  - The App docstring still says "Only ever rendered signed in".
+  - The thumbnail cleanup test never exercises a failed rename.
+
+**Plan 2 (Survey & Review)**
+- *Undoing a reject:* it must bring back the place's sightings (those with the same `deletedAt`). The generic restore brings back only the place.
+- *Keyframe delete and restore:* make both audited and transactional, and bump the version, before frame Undo uses them.
+
+**Plan 3 (Build)**
+- *`deleteWithUndo`:* refresh in `finally`, and say what was restored when only part of an undo succeeds.
+- *Placing a lift:* it saves the portal and its stop separately, so a failed second save leaves an orphan portal.
+- *Screens and sessions:* new workspaces must not return early when there is no `user`. An expired session keeps the page.
+- *Name fields:* key each uncontrolled name field by entity id.
+- *Double load:* it goes once the old screens are replaced, and with it the doubled error toasts.
+- *Error toasts:* each rebuilt screen's error toasts offer Retry (spec §6).
+
+**Later, if it comes up**
+- A former owner can't be unticked; people only leave the team by a direct database edit.
+- Two invites for the same email at the same moment return a 500.
