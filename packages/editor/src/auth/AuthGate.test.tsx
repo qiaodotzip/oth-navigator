@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type Api } from "../api/client";
 import { useEditorStore } from "../state/store";
@@ -48,5 +48,27 @@ describe("AuthGate", () => {
     await waitFor(() => screen.getByText("the survey"));
     useEditorStore.getState().setUser(null);
     await waitFor(() => expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy());
+  });
+
+  it("keeps the page when a session expires, and asks for a sign-in over it", async () => {
+    render(<AuthGate api={fakeApi()}><p>the survey</p></AuthGate>);
+    await waitFor(() => screen.getByText("the survey"));
+    act(() => useEditorStore.getState().endSession("expired"));
+    expect(screen.getByText("the survey")).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: /session ended/i })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "ada@oth.local" } });
+    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByText("the survey")).toBeTruthy();
+  });
+
+  it("shows the sign-in screen, not the dialog, after signing out on purpose", async () => {
+    render(<AuthGate api={fakeApi()}><p>the survey</p></AuthGate>);
+    await waitFor(() => screen.getByText("the survey"));
+    act(() => useEditorStore.getState().endSession("signed-out"));
+    expect(screen.queryByText("the survey")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy();
   });
 });
