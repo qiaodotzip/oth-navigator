@@ -41,13 +41,22 @@ function setup({ captureId = null, upload = vi.fn().mockResolvedValue({}) }: {
   };
   const onOpenChange = vi.fn();
   const onCapture = vi.fn();
-  render(
+  const { unmount } = render(
     <AddFootageDialog
       api={api} saver={saver as unknown as Saver} level={L1} captureId={captureId}
       open onOpenChange={onOpenChange} onCapture={onCapture} reader={reader()}
     />,
   );
-  return { upload, saver, onOpenChange, onCapture };
+  return { upload, saver, onOpenChange, onCapture, unmount };
+}
+
+/** An upload that hangs until the test releases it, so a run can be paused mid-loop. */
+function pausableUpload() {
+  let release: (() => void) | null = null;
+  const upload = vi.fn().mockImplementation(
+    () => new Promise(resolve => { release = () => resolve({}); }),
+  );
+  return { upload, release: () => release?.() };
 }
 
 /** Opens a six-second video and lets its length load. */
@@ -187,5 +196,64 @@ describe("AddFootageDialog", () => {
     openVideo();
     fireEvent.click(screen.getByRole("button", { name: /grab this frame/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't add that frame/i);
+  });
+
+  it("leaves a hand-grabbed frame's expired session to the sign-in dialog", async () => {
+    const upload = vi.fn().mockRejectedValue(new ApiError(401, null));
+    setup({ upload });
+    openVideo();
+    fireEvent.click(screen.getByRole("button", { name: /grab this frame/i }));
+    await waitFor(() => expect(upload).toHaveBeenCalled());
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("stops uploading once Cancel is pressed, and reports what it kept so far", async () => {
+    const { upload, release } = pausableUpload();
+    setup({ upload });
+    openVideo();
+    fireEvent.click(screen.getByRole("button", { name: /find frames automatically/i }));
+    // The first frame (0ms) is always kept; its upload is the one left hanging.
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    release();
+    await waitFor(() => expect(useToasts.getState().toasts[0]?.message)
+      .toBe("Stopped. Kept 1 frames — run it again to carry on."));
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops finding frames once the dialog unmounts, uploading nothing more", async () => {
+    const { upload, release } = pausableUpload();
+    const { unmount } = setup({ upload });
+    openVideo();
+    fireEvent.click(screen.getByRole("button", { name: /find frames automatically/i }));
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
+    unmount();
+    release();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes one capture, not two, when the button is clicked twice before it can disable itself", async () => {
+    const { saver, upload, onOpenChange } = setup();
+    openVideo();
+    const button = screen.getByRole("button", { name: /find frames automatically/i });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(saver.create).toHaveBeenCalledTimes(1);
+    expect(upload).toHaveBeenCalledTimes(3);
+  });
+
+  it("grabs one frame, not two, when Grab this frame is clicked twice quickly", async () => {
+    const { upload } = setup();
+    openVideo();
+    const button = screen.getByRole("button", { name: /grab this frame/i });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
+    // Give a wrongly-unguarded second call a chance to have landed too.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(upload).toHaveBeenCalledTimes(1);
   });
 });

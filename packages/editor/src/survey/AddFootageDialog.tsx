@@ -69,6 +69,15 @@ export function AddFootageDialog({ api, saver, level, captureId, open, onOpenCha
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cancelled = useRef(false);
+  // Whether the dialog is still on screen. `run`/`grabOne` keep running after
+  // an `await` — an unmount mid-upload must not then set state, toast, or
+  // tell the workspace the dialog closed.
+  const mounted = useRef(true);
+  // Set synchronously, before the first `await` in `run`/`grabOne` — so a
+  // second click landing before either has had a chance to disable the
+  // buttons still finds this true and does nothing, rather than creating a
+  // second capture or uploading the same moment twice.
+  const busyRef = useRef(false);
   const [url, setUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [name, setName] = useState(capture?.filename ?? "");
@@ -76,12 +85,20 @@ export function AddFootageDialog({ api, saver, level, captureId, open, onOpenCha
   const [made, setMade] = useState<Target | null>(null);
   const [progress, setProgress] = useState<FindProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const running = progress !== null;
 
   // The video is a whole file held in memory; let it go when the dialog does.
   useEffect(() => () => {
     if (url) URL.revokeObjectURL(url);
   }, [url]);
+
+  // Cancelling on unmount stops findFrames' loop the same way the Cancel
+  // button does, between one frame and the next.
+  useEffect(() => () => {
+    mounted.current = false;
+    cancelled.current = true;
+  }, []);
 
   function choose(file: File) {
     setUrl(URL.createObjectURL(file));
@@ -107,7 +124,7 @@ export function AddFootageDialog({ api, saver, level, captureId, open, onOpenCha
       id, kind: "video", filename, levelId: level.id,
       ...(durationMs ? { durationMs: Math.round(durationMs) } : {}),
     });
-    if (!ok) return null;
+    if (!ok || !mounted.current) return null;
     const next = { id, filename };
     setMade(next);
     onCapture(id);
@@ -115,81 +132,105 @@ export function AddFootageDialog({ api, saver, level, captureId, open, onOpenCha
   }
 
   async function run() {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-    if (!durationMs) {
-      setError("The video's length isn't known yet. Give it a moment, then try again.");
-      return;
-    }
-    setError(null);
-    const into = await target();
-    if (!into) return;
-
-    const existing = live(useEditorStore.getState().model?.keyframes ?? [])
-      .filter(k => k.captureId === into.id)
-      .flatMap(k => (k.timeMs === undefined ? [] : [k.timeMs]));
-    const moments = freshSamples(samplePlan(durationMs), existing);
-    if (moments.length === 0) {
-      setError("Every stretch of this video already has a frame. To add one by hand, pause the video where you want it and choose Grab this frame.");
-      return;
-    }
-
-    cancelled.current = false;
-    setProgress({ checked: 0, total: moments.length, kept: 0 });
-    let uploaded = 0;
+    // Guards the whole function, not just the find-frames loop: a second
+    // click landing while the first is still awaiting `target()` — before
+    // Cancel replaces these buttons — must not start a second run.
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
     try {
-      const result = await findFrames({
-        moments,
-        source: reader(video, canvas),
-        cancelled: () => cancelled.current,
-        onProgress: setProgress,
-        keep: async (blob, timeMs) => {
-          await api.uploadKeyframe(blob, into.id, timeMs, frameFilename(into, timeMs));
-          uploaded++;
-          // Frames appear as they upload, a batch at a time.
-          if (uploaded % REFRESH_EVERY === 0) await saver.refresh().catch(() => {});
-        },
-      });
-      await saver.refresh().catch(() => {});
-      toast({
-        tone: "success",
-        message: result.stopped
-          ? `Stopped. Kept ${result.kept} frames — run it again to carry on.`
-          : `Kept ${result.kept} frames from ${into.filename}.`,
-      });
-      onOpenChange(false);
-    } catch (err) {
-      await saver.refresh().catch(() => {});
-      setProgress(null);
-      const reason = err instanceof FindFramesError ? err.reason : err;
-      // The sign-in dialog over the page is the message.
-      if (isUnauthorized(reason)) return;
-      const at = err instanceof FindFramesError ? ` at ${frameTime(err.atMs)}` : "";
-      const { said, retryable } = explain(reason);
-      const next = retryable
-        ? "run it again and it carries on from there"
-        : "check the footage, then try again";
-      setError(`Stopped${at}: ${said} Frames kept so far stay — ${next}.`);
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas) return;
+      if (!durationMs) {
+        setError("The video's length isn't known yet. Give it a moment, then try again.");
+        return;
+      }
+      setError(null);
+      const into = await target();
+      if (!mounted.current || !into) return;
+
+      const existing = live(useEditorStore.getState().model?.keyframes ?? [])
+        .filter(k => k.captureId === into.id)
+        .flatMap(k => (k.timeMs === undefined ? [] : [k.timeMs]));
+      const moments = freshSamples(samplePlan(durationMs), existing);
+      if (moments.length === 0) {
+        setError("Every stretch of this video already has a frame. To add one by hand, pause the video where you want it and choose Grab this frame.");
+        return;
+      }
+
+      cancelled.current = false;
+      setProgress({ checked: 0, total: moments.length, kept: 0 });
+      let uploaded = 0;
+      try {
+        const result = await findFrames({
+          moments,
+          source: reader(video, canvas),
+          cancelled: () => cancelled.current,
+          onProgress: p => { if (mounted.current) setProgress(p); },
+          keep: async (blob, timeMs) => {
+            await api.uploadKeyframe(blob, into.id, timeMs, frameFilename(into, timeMs));
+            uploaded++;
+            // Frames appear as they upload, a batch at a time.
+            if (uploaded % REFRESH_EVERY === 0) await saver.refresh().catch(() => {});
+          },
+        });
+        if (!mounted.current) return;
+        await saver.refresh().catch(() => {});
+        if (!mounted.current) return;
+        toast({
+          tone: "success",
+          message: result.stopped
+            ? `Stopped. Kept ${result.kept} frames — run it again to carry on.`
+            : `Kept ${result.kept} frames from ${into.filename}.`,
+        });
+        onOpenChange(false);
+      } catch (err) {
+        await saver.refresh().catch(() => {});
+        if (!mounted.current) return;
+        setProgress(null);
+        const reason = err instanceof FindFramesError ? err.reason : err;
+        // The sign-in dialog over the page is the message.
+        if (isUnauthorized(reason)) return;
+        const at = err instanceof FindFramesError ? ` at ${frameTime(err.atMs)}` : "";
+        const { said, retryable } = explain(reason);
+        const next = retryable
+          ? "run it again and it carries on from there"
+          : "check the footage, then try again";
+        setError(`Stopped${at}: ${said} Frames kept so far stay — ${next}.`);
+      }
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
   }
 
   async function grabOne() {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-    setError(null);
-    const into = await target();
-    if (!into) return;
-    const timeMs = video.currentTime * 1000;
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
     try {
-      const blob = await reader(video, canvas).grab();
-      await api.uploadKeyframe(blob, into.id, timeMs, frameFilename(into, timeMs));
-      await saver.refresh().catch(() => {});
-      toast({ tone: "success", message: `Added the frame at ${frameTime(timeMs)}.` });
-    } catch (err) {
-      if (isUnauthorized(err)) return;
-      setError(`Couldn't add that frame: ${explain(err).said}`);
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas) return;
+      setError(null);
+      const into = await target();
+      if (!mounted.current || !into) return;
+      const timeMs = video.currentTime * 1000;
+      try {
+        const blob = await reader(video, canvas).grab();
+        await api.uploadKeyframe(blob, into.id, timeMs, frameFilename(into, timeMs));
+        if (!mounted.current) return;
+        await saver.refresh().catch(() => {});
+        if (!mounted.current) return;
+        toast({ tone: "success", message: `Added the frame at ${frameTime(timeMs)}.` });
+      } catch (err) {
+        if (!mounted.current || isUnauthorized(err)) return;
+        setError(`Couldn't add that frame: ${explain(err).said}`);
+      }
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
   }
 
@@ -261,8 +302,8 @@ export function AddFootageDialog({ api, saver, level, captureId, open, onOpenCha
             <Button onClick={() => { cancelled.current = true; }}>Cancel</Button>
           ) : (
             <>
-              <Button disabled={!url} onClick={() => void grabOne()}>Grab this frame</Button>
-              <Button variant="primary" disabled={!url} onClick={() => void run()}>Find frames automatically</Button>
+              <Button disabled={!url || busy} onClick={() => void grabOne()}>Grab this frame</Button>
+              <Button variant="primary" disabled={!url || busy} onClick={() => void run()}>Find frames automatically</Button>
             </>
           )}
         </div>
