@@ -1,10 +1,12 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { createUser } from "../auth/users";
 import type { Database } from "../db/client";
+import { places as placeRows, sightings as sightingRows } from "../db/schema";
 import { createEntity, listEntities } from "../entities/repository";
 import { createTestDb, json } from "../testing/harness";
 
@@ -16,6 +18,13 @@ const post = (path: string, body: unknown, headers: Record<string, string> = { c
   app.request(path, {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+
+const del = (path: string, body: unknown) =>
+  app.request(path, {
+    method: "DELETE",
+    headers: { "content-type": "application/json", cookie },
     body: JSON.stringify(body),
   });
 
@@ -76,6 +85,21 @@ describe("accepting a proposal", () => {
     const res = await post("/api/places/pl_1/accept", { expectedVersion: 0, nameEn: "X", category: "retail" }, {});
     expect(res.status).toBe(401);
   });
+
+  it("files a place with no floor under the floor it was accepted on", async () => {
+    await post("/api/places/pl_1/accept", { expectedVersion: 0, nameEn: "Festive Mall", category: "retail", levelId: "oth-L1" });
+    expect((await byId("place")).get("pl_1")?.levelId).toBe("oth-L1");
+  });
+
+  it("confirms only the tags that were still claims, and says which, for Undo", async () => {
+    await createEntity(db, "sighting", { id: "sg_h", placeId: "pl_1", keyframeId: "kf_3", status: "confirmed" }, null);
+    const res = await post("/api/places/pl_1/accept", { expectedVersion: 0, nameEn: "Festive Mall", category: "retail" });
+    const body = await json<{ sightings: number; confirmed: string[] }>(res);
+    expect(body.sightings).toBe(2);
+    expect([...body.confirmed].sort()).toEqual(["sg_1", "sg_2"]);
+    // Typed by a person, so already theirs: untouched.
+    expect((await byId("sighting")).get("sg_h")?.version).toBe(0);
+  });
 });
 
 describe("rejecting a proposal", () => {
@@ -92,5 +116,78 @@ describe("rejecting a proposal", () => {
   it("refuses a stale version", async () => {
     expect((await post("/api/places/pl_1/reject", { expectedVersion: 3 })).status).toBe(409);
     expect((await byId("place")).has("pl_1")).toBe(true);
+  });
+});
+
+describe("undoing a reject", () => {
+  it("stamps the place and its tags with one moment", async () => {
+    await post("/api/places/pl_1/reject", { expectedVersion: 0 });
+    const [place] = await db.select().from(placeRows).where(eq(placeRows.id, "pl_1"));
+    const tags = await db.select().from(sightingRows).where(eq(sightingRows.placeId, "pl_1"));
+    expect(tags).toHaveLength(2);
+    for (const tag of tags) expect(tag.deletedAt?.getTime()).toBe(place!.deletedAt?.getTime());
+  });
+
+  it("brings the tags back with the place", async () => {
+    await post("/api/places/pl_1/reject", { expectedVersion: 0 });
+    const res = await post("/api/entities/place/pl_1/restore", { expectedVersion: 1 });
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({ sightings: 2 });
+    expect((await byId("place")).get("pl_1")?.status).toBe("proposed");
+    expect([...(await byId("sighting")).keys()].sort()).toEqual(["sg_1", "sg_2", "sg_3"]);
+  });
+
+  it("leaves a tag removed by hand before the reject removed", async () => {
+    await del("/api/entities/sighting/sg_2", { expectedVersion: 0 });
+    // Stamps are to the millisecond; make sure the reject's is a later one.
+    await new Promise(resolve => setTimeout(resolve, 5));
+    await post("/api/places/pl_1/reject", { expectedVersion: 0 });
+    await post("/api/entities/place/pl_1/restore", { expectedVersion: 1 });
+    expect([...(await byId("sighting")).keys()].sort()).toEqual(["sg_1", "sg_3"]);
+  });
+
+  it("refuses when someone has touched the place since, and brings nothing back", async () => {
+    await post("/api/places/pl_1/reject", { expectedVersion: 0 });
+    expect((await post("/api/entities/place/pl_1/restore", { expectedVersion: 0 })).status).toBe(409);
+    expect((await byId("sighting")).has("sg_1")).toBe(false);
+  });
+});
+
+describe("undoing an accept", () => {
+  async function accepted(): Promise<string[]> {
+    await createEntity(db, "sighting", { id: "sg_h", placeId: "pl_1", keyframeId: "kf_3", status: "confirmed" }, null);
+    const res = await post("/api/places/pl_1/accept", {
+      expectedVersion: 0, nameEn: "Festive Mall", category: "lifestyle", levelId: "oth-L1",
+    });
+    return (await json<{ confirmed: string[] }>(res)).confirmed;
+  }
+
+  it("puts the proposal back as it was, and the tags it confirmed back to claims", async () => {
+    const confirmed = await accepted();
+    const res = await post("/api/places/pl_1/reopen", {
+      expectedVersion: 1, nameEn: "Festve Mall", category: "retail", levelId: null, sightingIds: confirmed,
+    });
+    expect(res.status).toBe(200);
+    expect((await byId("place")).get("pl_1")).toMatchObject({
+      status: "proposed", nameEn: "Festve Mall", category: "retail", levelId: null,
+    });
+    const tags = await byId("sighting");
+    expect(tags.get("sg_1")?.status).toBe("proposed");
+    expect(tags.get("sg_2")?.status).toBe("proposed");
+    expect(tags.get("sg_h")?.status).toBe("confirmed");
+  });
+
+  it("refuses when someone has changed the place since, and changes nothing", async () => {
+    const confirmed = await accepted();
+    const res = await post("/api/places/pl_1/reopen", {
+      expectedVersion: 0, nameEn: "Festve Mall", category: "retail", levelId: null, sightingIds: confirmed,
+    });
+    expect(res.status).toBe(409);
+    expect((await byId("place")).get("pl_1")?.status).toBe("confirmed");
+    expect((await byId("sighting")).get("sg_1")?.status).toBe("confirmed");
+  });
+
+  it("400s a body without what it puts back", async () => {
+    expect((await post("/api/places/pl_1/reopen", { expectedVersion: 1 })).status).toBe(400);
   });
 });

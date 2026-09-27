@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
+import { restorePlace } from "../survey/review";
 import { isEntityType } from "./registry";
 import {
   NotDeletedError, NotFoundError, VersionConflictError,
@@ -88,6 +89,10 @@ entityRoutes.post("/:type/:id/restore", async c => {
   const body = DeleteBody.safeParse(await c.req.json().catch(() => null));
   if (!body.success) return c.json({ error: "expected { expectedVersion }" }, 400);
   try {
+    // A rejected place comes back with the tags rejected with it.
+    if (type === "place") {
+      return c.json(await restorePlace(c.get("db"), c.req.param("id"), body.data.expectedVersion, c.get("user").id));
+    }
     const entity = await restoreEntity(
       c.get("db"), type, c.req.param("id"), body.data.expectedVersion, c.get("user").id,
     );
