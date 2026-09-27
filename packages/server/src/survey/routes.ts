@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AppEnv } from "../app";
 import { readAsset, storeAsset } from "../assets/storage";
 import { requireUser } from "../auth/middleware";
+import type { Database } from "../db/client";
+import type { Row } from "../db/rows";
 import { captures, keyframes, sightings } from "../db/schema";
 import { toModelRow } from "../db/rows";
+import { recordAudit, restoreEntity, softDeleteEntity } from "../entities/repository";
 import { IMAGE_MAX_BYTES, InvalidImageError, readImageSize } from "../images/inspect";
 import { readThumbnail, thumbnailWidth } from "../images/thumbnail";
 
@@ -120,52 +123,70 @@ keyframeRoutes.post("/", async c => {
  * A soft delete, like every other removal here, so a frame binned by mistake is
  * recoverable. The sightings go with it: a label pointing at a frame nobody can
  * see is worse than no label, because it still counts toward a place.
+ *
+ * One transaction and one moment for the lot, each row one version on and in
+ * the audit log. The shared moment is how Undo finds exactly these sightings
+ * again, so a frame already binned is left alone: a second stamp would strand
+ * the tags binned with the first.
  */
 keyframeRoutes.delete("/:id", async c => {
-  const db = c.get("db");
   const id = c.req.param("id");
-  const now = new Date();
   const by = c.get("user").id;
+  const found = await c.get("db").transaction(async t => {
+    const tx = t as unknown as Database;
+    const [before] = await tx.select().from(keyframes).where(eq(keyframes.id, id));
+    if (!before) return false;
+    if (before.deletedAt) return true;
 
-  const [row] = await db.select().from(keyframes).where(eq(keyframes.id, id));
-  if (!row) return c.json({ error: "not found" }, 404);
+    const at = new Date();
+    const tagged = await tx.select().from(sightings)
+      .where(and(eq(sightings.keyframeId, id), isNull(sightings.deletedAt)));
+    for (const s of tagged) await softDeleteEntity(tx, "sighting", s.id, s.version, by, at);
 
-  await db.update(sightings)
-    .set({ deletedAt: now, updatedBy: by, updatedAt: now })
-    .where(and(eq(sightings.keyframeId, id), isNull(sightings.deletedAt)));
+    const [after] = await tx.update(keyframes)
+      .set({ deletedAt: at, version: sql`${keyframes.version} + 1`, updatedBy: by, updatedAt: at })
+      .where(eq(keyframes.id, id))
+      .returning();
+    await recordAudit(tx, "keyframe", id, "delete", by, before as Row, (after ?? null) as Row | null);
+    return true;
+  });
 
-  await db.update(keyframes)
-    .set({ deletedAt: now, updatedBy: by, updatedAt: now })
-    .where(eq(keyframes.id, id));
-
+  if (!found) return c.json({ error: "not found" }, 404);
   return c.body(null, 204);
 });
 
 /**
  * Undoes binning a frame.
  *
- * The frame and its sightings were retired with one timestamp, so that
- * timestamp is how the right sightings come back: a tag removed by hand
- * earlier has an older one, and stays removed.
+ * The frame and its sightings were retired at one moment, so that moment is
+ * how the right sightings come back: a tag removed by hand earlier has an
+ * older one, and stays removed. On the record and in one transaction, like
+ * the bin.
  */
 keyframeRoutes.post("/:id/restore", async c => {
-  const db = c.get("db");
   const id = c.req.param("id");
-  const [row] = await db.select().from(keyframes).where(eq(keyframes.id, id));
-  if (!row) return c.json({ error: "not found" }, 404);
-  if (!row.deletedAt) return c.json({ error: "not deleted" }, 422);
-
-  const now = new Date();
   const by = c.get("user").id;
-  const restored = await db.update(sightings)
-    .set({ deletedAt: null, updatedBy: by, updatedAt: now })
-    .where(and(eq(sightings.keyframeId, id), eq(sightings.deletedAt, row.deletedAt)))
-    .returning();
-  await db.update(keyframes)
-    .set({ deletedAt: null, updatedBy: by, updatedAt: now })
-    .where(eq(keyframes.id, id));
+  const result = await c.get("db").transaction(async t => {
+    const tx = t as unknown as Database;
+    const [before] = await tx.select().from(keyframes).where(eq(keyframes.id, id));
+    if (!before) return { status: 404 as const };
+    if (!before.deletedAt) return { status: 422 as const };
 
-  return c.json({ sightings: restored.length });
+    const binned = await tx.select().from(sightings)
+      .where(and(eq(sightings.keyframeId, id), eq(sightings.deletedAt, before.deletedAt)));
+    for (const s of binned) await restoreEntity(tx, "sighting", s.id, s.version, by);
+
+    const [after] = await tx.update(keyframes)
+      .set({ deletedAt: null, version: sql`${keyframes.version} + 1`, updatedBy: by, updatedAt: new Date() })
+      .where(eq(keyframes.id, id))
+      .returning();
+    await recordAudit(tx, "keyframe", id, "restore", by, before as Row, (after ?? null) as Row | null);
+    return { status: 200 as const, sightings: binned.length };
+  });
+
+  if (result.status === 404) return c.json({ error: "not found" }, 404);
+  if (result.status === 422) return c.json({ error: "not deleted" }, 422);
+  return c.json({ sightings: result.sightings });
 });
 
 /**

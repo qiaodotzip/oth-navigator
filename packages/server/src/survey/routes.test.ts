@@ -1,12 +1,14 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { and, eq } from "drizzle-orm";
 import sharp from "sharp";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { readImageSize } from "../images/inspect";
 import { createUser } from "../auth/users";
 import type { Database } from "../db/client";
+import { auditLog, keyframes as keyframeRows, sightings as sightingRows } from "../db/schema";
 import { createTestDb, json } from "../testing/harness";
 
 let db: Database;
@@ -264,5 +266,54 @@ describe("removing a capture", () => {
     expect(res.status).toBe(200);
     expect((await json<{ entity: { filename: string } }>(res)).entity.filename)
       .toBe("Level 1 — east wing");
+  });
+});
+
+describe("binning and restoring a frame, on the record", () => {
+  async function taggedFrame(): Promise<string> {
+    const body = await json<{ keyframe: { id: string } }>(await grab(png(10, 10)));
+    await post("/api/entities/place", { data: { id: "pl_a", nameEn: "Somewhere", category: "retail" } });
+    await post("/api/entities/sighting", { data: { id: "sg_a", placeId: "pl_a", keyframeId: body.keyframe.id } });
+    return body.keyframe.id;
+  }
+  const bin = (kf: string) => app.request(`/api/keyframes/${kf}`, { method: "DELETE", headers: { cookie } });
+  const restore = (kf: string) => app.request(`/api/keyframes/${kf}/restore`, { method: "POST", headers: { cookie } });
+  const frameRow = async (kf: string) => (await db.select().from(keyframeRows).where(eq(keyframeRows.id, kf)))[0]!;
+  const tagRow = async (id: string) => (await db.select().from(sightingRows).where(eq(sightingRows.id, id)))[0]!;
+  const actions = async (type: string, id: string) =>
+    (await db.select().from(auditLog)
+      .where(and(eq(auditLog.entityType, type), eq(auditLog.entityId, id)))
+      .orderBy(auditLog.at))
+      .map(r => r.action);
+
+  it("bins the frame and its tags with one stamp, one version on, each in the audit log", async () => {
+    const kf = await taggedFrame();
+    expect((await bin(kf)).status).toBe(204);
+    const frame = await frameRow(kf);
+    const tag = await tagRow("sg_a");
+    expect(frame.version).toBe(1);
+    expect(tag.version).toBe(1);
+    expect(tag.deletedAt?.getTime()).toBe(frame.deletedAt?.getTime());
+    expect(await actions("keyframe", kf)).toEqual(["delete"]);
+    expect(await actions("sighting", "sg_a")).toEqual(["create", "delete"]);
+  });
+
+  it("restores them one version on again, also in the audit log", async () => {
+    const kf = await taggedFrame();
+    await bin(kf);
+    expect(await json(await restore(kf))).toEqual({ sightings: 1 });
+    expect((await frameRow(kf)).version).toBe(2);
+    expect((await tagRow("sg_a")).deletedAt).toBeNull();
+    expect(await actions("keyframe", kf)).toEqual(["delete", "restore"]);
+    expect((await actions("sighting", "sg_a")).at(-1)).toBe("restore");
+  });
+
+  it("leaves a binned frame as it was when it is binned again, so its tags still come back", async () => {
+    // Del pressed twice is the likely way this happens.
+    const kf = await taggedFrame();
+    await bin(kf);
+    expect((await bin(kf)).status).toBe(204);
+    expect((await frameRow(kf)).version).toBe(1);
+    expect(await json(await restore(kf))).toEqual({ sightings: 1 });
   });
 });

@@ -20,7 +20,12 @@ export class NotFoundError extends Error {
   }
 }
 
-async function audit(
+/**
+ * One row of the audit log. Exported for the writes that are not generic
+ * entities — a keyframe arrives as bytes and has its own routes — so they are
+ * on the record like everything else.
+ */
+export async function recordAudit(
   db: Database, entityType: string, entityId: string, action: string,
   actorId: string | null, before: Row | null, after: Row | null,
 ): Promise<void> {
@@ -62,7 +67,7 @@ export async function createEntity(
   } as never);
 
   const row = await findRow(db, type, id);
-  await audit(db, type, id, "create", actorId, null, row);
+  await recordAudit(db, type, id, "create", actorId, null, row);
   return row as Row;
 }
 
@@ -104,12 +109,18 @@ export async function updateEntity(
   const after = updated[0];
   if (!after) throw new VersionConflictError(toModelRow(before));
 
-  await audit(db, type, id, "update", actorId, before, after);
+  await recordAudit(db, type, id, "update", actorId, before, after);
   return after;
 }
 
+/**
+ * `at` lets several rows share one deletion moment, which is how an Undo later
+ * finds exactly the rows retired together: a frame and its tags, a rejected
+ * place and its tags.
+ */
 export async function softDeleteEntity(
   db: Database, type: EntityType, id: string, expectedVersion: number, actorId: string | null,
+  at: Date = new Date(),
 ): Promise<Row> {
   const { table } = entityRegistry[type];
 
@@ -119,10 +130,10 @@ export async function softDeleteEntity(
   const updated = (await db
     .update(table)
     .set({
-      deletedAt: new Date(),
+      deletedAt: at,
       version: sql`${table.version} + 1`,
       updatedBy: actorId,
-      updatedAt: new Date(),
+      updatedAt: at,
     } as never)
     .where(and(eq(table.id, id), eq(table.version, expectedVersion)))
     .returning()) as Row[];
@@ -130,7 +141,7 @@ export async function softDeleteEntity(
   const after = updated[0];
   if (!after) throw new VersionConflictError(toModelRow(before));
 
-  await audit(db, type, id, "delete", actorId, before, after);
+  await recordAudit(db, type, id, "delete", actorId, before, after);
   return after;
 }
 
@@ -170,6 +181,6 @@ export async function restoreEntity(
   const after = updated[0];
   if (!after) throw new VersionConflictError(toModelRow(before));
 
-  await audit(db, type, id, "restore", actorId, before, after);
+  await recordAudit(db, type, id, "restore", actorId, before, after);
   return after;
 }
