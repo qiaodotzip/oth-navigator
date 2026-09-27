@@ -595,6 +595,39 @@ describe("walkway types on the canvas", () => {
   });
 });
 
+describe("clicking through shapes while drawing", () => {
+  // A browser delivers a click to the topmost shape, and the drawing surface
+  // sits under every room. Without this an entrance — which always goes inside
+  // an area — could never be placed, and nothing could be drawn over a room.
+  it("lets a drawing tool's clicks pass through rooms to the canvas", () => {
+    useEditorStore.getState().setTool("place-entrance");
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("room-L1-a").getAttribute("pointer-events")).toBe("none");
+  });
+
+  it("keeps rooms clickable for Select", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("room-L1-a").getAttribute("pointer-events")).not.toBe("none");
+  });
+
+  it("lets clicks pass through pathways and dressing too", () => {
+    useEditorStore.getState().setModel(parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+      pathways: [{ id: "L1-p", levelId: "oth-L1", polyline: [[0, 0], [20, 0]] }],
+      assets: [{
+        id: "asset_1", filename: "arch.glb", storagePath: "a", checksum: "c", sizeBytes: 10, triangleCount: 5,
+        bbox: { minX: 0, minY: 0, minZ: 0, maxX: 1, maxY: 1, maxZ: 1 },
+      }],
+      placements: [{ id: "pl_1", levelId: "oth-L1", assetId: "asset_1", position: [5, 5, 0] }],
+    }));
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("pathway-L1-p").getAttribute("pointer-events")).toBe("none");
+    expect(screen.getByTestId("placement-pl_1").getAttribute("pointer-events")).toBe("none");
+  });
+});
+
 describe("panning", () => {
   // Relative to wherever the canvas framed itself on mount.
   const originX = () => useEditorStore.getState().viewport.originX;

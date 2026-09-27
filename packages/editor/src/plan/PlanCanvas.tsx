@@ -22,7 +22,7 @@ const PORTAL_LETTER = { lift: "L", escalator: "Es", stair: "S", ramp: "R" } as c
  * stair. Drawn at a fixed screen size, since a point has no extent to scale.
  */
 function PointMarker({
-  testId, at, letter, fill, square = false, selected, title, onClick,
+  testId, at, letter, fill, square = false, selected, title, onClick, pointerEvents,
 }: {
   testId: string;
   at: [number, number];
@@ -32,11 +32,12 @@ function PointMarker({
   selected: boolean;
   title: string;
   onClick: (event: React.MouseEvent) => void;
+  pointerEvents?: "none";
 }) {
   const [x, y] = at;
   const stroke = selected ? "#f2a33c" : "#ffffff";
   return (
-    <g data-testid={testId} onClick={onClick} style={{ cursor: "pointer" }}>
+    <g data-testid={testId} onClick={onClick} pointerEvents={pointerEvents} style={{ cursor: "pointer" }}>
       <title>{title}</title>
       {square ? (
         <rect x={x - 9} y={y - 9} width={18} height={18} rx={3} fill={fill} stroke={stroke} strokeWidth={2} />
@@ -94,6 +95,11 @@ export function PlanCanvas({
   const image = imageForLevel(state.levelImages, state.activeLevelId);
   const calibration = imageCalibration(image);
   const underlay = underlayBBox(image);
+
+  // Shapes take clicks only for Select. Otherwise a click lands on whatever
+  // room is under the pointer instead of the drawing surface beneath it, and an
+  // entrance — always inside an area — could never be placed.
+  const shapeEvents = state.tool === "select" ? undefined : "none";
 
   const selectedRoom =
     state.selection?.type === "room" ? rooms.find(r => r.id === state.selection?.id) ?? null : null;
@@ -322,6 +328,7 @@ export function PlanCanvas({
       data-testid={`room-${room.id}`}
       points={ringPoints(room.footprint)}
       fill={roomColor(room.kind, { selected: state.selection?.id === room.id })}
+      pointerEvents={shapeEvents}
       stroke="#57534e"
       strokeWidth={1}
       onClick={event => {
@@ -392,6 +399,7 @@ export function PlanCanvas({
               // colour is what makes it readable.
               color={state.model?.pathwayKinds.find(k => k.id === p.kindId)?.colorHex}
               selected={state.selection?.id === p.id}
+              pointerEvents={shapeEvents}
               onClick={event => {
                 if (state.tool !== "select") return;
                 event.stopPropagation();
@@ -430,6 +438,7 @@ export function PlanCanvas({
                 fill={state.selection?.id === p.id ? "#f2a33c" : "#8b5cf6"}
                 stroke="#4c1d95"
                 strokeWidth={1}
+                pointerEvents={shapeEvents}
                 style={{ cursor: state.tool === "select" ? "move" : "default" }}
                 onMouseDown={event => {
                   if (state.tool !== "select") return;
@@ -447,6 +456,7 @@ export function PlanCanvas({
             <PointMarker
               key={e.id}
               testId={`entrance-${e.id}`}
+              pointerEvents={shapeEvents}
               at={worldToScreen(state.viewport, e.point)}
               letter="E"
               fill="#047857"
@@ -468,6 +478,7 @@ export function PlanCanvas({
               <PointMarker
                 key={ep.id}
                 testId={`portal-endpoint-${ep.id}`}
+                pointerEvents={shapeEvents}
                 at={worldToScreen(state.viewport, ep.point)}
                 letter={PORTAL_LETTER[portal?.kind ?? "lift"]}
                 fill="#1d4ed8"
