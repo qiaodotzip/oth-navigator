@@ -89,6 +89,12 @@ if (command === "plan:l1") {
     `seeded ${r.spaces} space(s) from the 2015 working drawing` +
     (r.skipped ? `; left ${r.skipped} already in the model alone` : ""),
   );
+  console.log(
+    `named ${r.features} feature(s) from the walkthrough, with ${r.sightings} sighting(s)`,
+  );
+  if (r.featuresWithoutFrames.length) {
+    console.log(`  no frames in this database for: ${r.featuresWithoutFrames.join(", ")}`);
+  }
   console.log(`underlay: ${r.underlay}`);
   process.exit(0);
 }

@@ -175,7 +175,11 @@ def rdp(pts, eps):
     best, bi = -1.0, 0
     for i in range(1, len(pts) - 1):
         p = pts[i]
-        d = (abs(dx * (a[1] - p[1]) - dy * (a[0] - p[0])) / den) if den else 0.0
+        # A closed ring starts and ends on the same point, so the chord has no
+        # length and the perpendicular distance is undefined. Fall back to the
+        # distance from that point, or the whole ring collapses to two.
+        d = (abs(dx * (a[1] - p[1]) - dy * (a[0] - p[0])) / den) if den else (
+            ((p[0] - a[0]) ** 2 + (p[1] - a[1]) ** 2) ** 0.5)
         if d > best:
             best, bi = d, i
     if best <= eps:
@@ -345,10 +349,17 @@ def main():
     ap.add_argument("--underlay-mpp", type=float, default=0.07)
     args = ap.parse_args()
 
+    # Two views of the same page. Text coordinates are only sane with the
+    # rotation removed; the raster clip below is expressed in the rotated,
+    # north-up space the sheet is drawn in. Setting the rotation on the page
+    # used for rendering silently moves the clip to another part of the site,
+    # so the two never share a page object.
     doc = pymupdf.open(args.pdf)
+    text_doc = pymupdf.open(args.pdf)
     page = doc[0]
-    page.set_rotation(0)
-    S = calibrate(page)
+    text_page = text_doc[0]
+    text_page.set_rotation(0)
+    S = calibrate(text_page)
     ox, oy = args.origin
     mx0, my0, wm, hm = args.window
     print(f"scale: {S * 1000:.3f} mm per point ({S:.6f} m/pt)")
@@ -374,13 +385,18 @@ def main():
     def to_px(mx, my):
         return int(round((mx - mx0) / mpp)), int(round((my0 - my) / mpp))
 
-    groups, lines = labels(page, S, ox, oy)
+    groups, lines = labels(text_page, S, ox, oy)
     pad = 0.35
     for l in lines:
         x0, y0, x1, y1 = l["bbox"]
         a, b = to_px((ox - y1) * S - pad, (oy - x0) * S + pad)
         c, d = to_px((ox - y0) * S + pad, (oy - x1) * S - pad)
-        ink[max(b, 0):min(d, H), max(a, 0):min(c, W)] = False
+        # Clamp both ends into the array. A label west of the window gives a
+        # negative column, and a negative slice bound counts from the right —
+        # which quietly erases most of the drawing instead of nothing.
+        a, c = min(max(a, 0), W), min(max(c, 0), W)
+        b, d = min(max(b, 0), H), min(max(d, 0), H)
+        ink[b:d, a:c] = False
     print(f"labels: {len(groups)} names, {len(lines)} lines of text erased")
 
     free = ~ink
