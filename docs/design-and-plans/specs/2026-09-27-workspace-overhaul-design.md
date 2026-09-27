@@ -288,6 +288,11 @@ entrance · **L** lift · **F** fit · **Space** drag to pan · **Del** delete �
   reads them into another, so the local PGlite work reaches production intact.
   Import refuses to run into a database that already has rooms, rather than
   merging.
+- **A shared team code** in front of the deployed app (decided 2026-09-27):
+  one code for the whole team, set as a Railway variable by the user and never
+  committed, typed once per browser, then the name dropdown as in §8. Without
+  the variable, production refuses to serve rather than serving open. Local
+  development needs no code.
 - **Teammate note:** one page — the URL, how to sign in, and the order of the
   six build steps — in the short style of the client docs.
 
@@ -324,5 +329,5 @@ One spec, four plans, in order; nothing is released until all four are done.
 | A rebuild in place breaks the logic the old screens used | The pure functions and their tests are kept as-is; screens are replaced around them, and the e2e smoke covers the paths that matter. |
 | One release at the end means late feedback | Each plan ends with the app runnable against the sandbox copy of the real data, for the user to try before the next starts. |
 | The data carried to production is incomplete | Import is all-or-nothing into an empty database, and reports counts per entity type to check against the export. |
-| Anyone who can reach the server can sign in as anyone | Accepted for a team-internal app. Plan 4 must keep the deployed URL team-only, or add a shared team code, before it goes anywhere public. |
+| Anyone who can reach the server can sign in as anyone | Accepted inside the team. The deployed app sits behind a shared team code (§13), so the public URL alone lets no one in. |
 | The 40-hours-each budget | No new features beyond what the six steps and the two survey tabs need; the spec's non-goals are the list of things to say no to. |
