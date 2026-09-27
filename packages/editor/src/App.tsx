@@ -124,9 +124,15 @@ export function App() {
               connect: (
                 <div className="space-y-3">
                   <PathwayInspector saver={saver} />
-                  <details className="border-t pt-2">
+                  <details
+                    className="border-t pt-2"
+                    // Open until there are types to show. Folded away on an
+                    // empty list, the one control that creates them is behind
+                    // two collapses and may as well not exist.
+                    open={(model?.pathwayKinds.length ?? 0) === 0}
+                  >
                     <summary className="cursor-pointer px-3 text-xs font-medium text-stone-600">
-                      Walkway types
+                      Walkway types ({model?.pathwayKinds.length ?? 0})
                     </summary>
                     <PathwayKindsPanel saver={saver} />
                   </details>
