@@ -79,13 +79,21 @@ export async function updateEntity(
   const before = await findRow(db, type, id);
   if (!before || before.deletedAt != null) throw new NotFoundError();
 
-  // Re-validate the merged result: a patch cannot produce a shape the model rejects.
-  const merged = schema.parse({ ...toModelRow(before), ...patch, id }) as Row;
+  // An explicit null in a patch means "clear this field". The model spells
+  // absence as undefined and would reject the null, and Drizzle ignores an
+  // undefined in `set()`, so neither alone can empty a column — hence the two
+  // halves: the merge drops the key so the schema can object if it was
+  // required, and the write puts the null in.
+  const cleared = Object.keys(patch).filter(k => patch[k] === null && k !== "deletedAt");
+  const input: Row = { ...toModelRow(before), ...patch, id };
+  for (const key of cleared) delete input[key];
+  const merged = schema.parse(input) as Row;
 
   const updated = (await db
     .update(table)
     .set({
       ...stripAuditFields(merged),
+      ...Object.fromEntries(cleared.map(key => [key, null])),
       version: sql`${table.version} + 1`,
       updatedBy: actorId,
       updatedAt: new Date(),

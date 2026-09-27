@@ -5,6 +5,7 @@ import { seedBuilding } from "./cli/seed";
 import { tracePlansIntoModel } from "./cli/trace";
 import { exportCaptureForLabelling } from "./cli/surveyExport";
 import { importProposals } from "./cli/surveyImport";
+import { tidySurvey } from "./cli/surveyTidy";
 import { loadConfig } from "./config";
 import { createPostgresDb } from "./db/client";
 import { createDevDb } from "./db/dev";
@@ -61,6 +62,23 @@ if (command === "survey:import") {
   );
   for (const bad of r.rejected) console.log(`  refused #${bad.index}: ${bad.reason}`);
   console.log("All of it is proposed. Review it in the survey tool before it counts.");
+  process.exit(0);
+}
+
+if (command === "survey:tidy") {
+  const dryRun = process.argv.includes("--dry-run");
+  const r = await tidySurvey(db, { dryRun });
+  if (dryRun) console.log("--dry-run: nothing was written.");
+  console.log(`removed ${r.removed.length} temporary place(s):`);
+  for (const p of r.removed) console.log(`  - ${p.name} (${p.sightings} sighting(s) kept as evidence)`);
+  console.log(`made ${r.portals.length} place(s) vertical connections rather than walkways:`);
+  for (const p of r.portals) console.log(`  - ${p.name}${p.wasWalkway ? " (was tagged a walkway)" : ""}`);
+  if (r.alreadyDone.length) console.log(`already done on an earlier run: ${r.alreadyDone.length}`);
+  if (r.missing.length) console.log(`not in the model at all: ${r.missing.join(", ")}`);
+  if (dryRun) console.log("Run it again without --dry-run to apply.");
+  for (const s of r.suspects) {
+    console.log(`  ! "${s}" is still a walkway but sounds vertical — decide it by hand`);
+  }
   process.exit(0);
 }
 

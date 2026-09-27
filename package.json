@@ -21,7 +21,8 @@
     "seed": "npm run start --workspace @oth/server -- seed",
     "trace": "npm run start --workspace @oth/server -- trace",
     "survey:export": "npm run start --workspace @oth/server -- survey:export",
-    "survey:import": "npm run start --workspace @oth/server -- survey:import"
+    "survey:import": "npm run start --workspace @oth/server -- survey:import",
+    "survey:tidy": "npm run start --workspace @oth/server -- survey:tidy"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

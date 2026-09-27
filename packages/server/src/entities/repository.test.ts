@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../db/client";
-import { auditLog, buildings, levels, rooms } from "../db/schema";
+import { auditLog, buildings, levels, places, rooms } from "../db/schema";
 import { createTestDb } from "../testing/harness";
 import {
   VersionConflictError, createEntity, listEntities, softDeleteEntity, updateEntity,
@@ -89,6 +89,21 @@ describe("updateEntity", () => {
 });
 
 describe("softDeleteEntity", () => {
+  it("clears an optional field when the patch says null", async () => {
+    // Unbinding is a real edit: a place wrongly bound to a room has to be able
+    // to stop being bound to it.
+    await db.insert(places).values({ id: "pl_1", nameEn: "NTUC", category: "retail", roomId: "r1" });
+    const after = await updateEntity(db, "place", "pl_1", 0, { roomId: null } as never, null);
+    expect(after.roomId).toBeNull();
+  });
+
+  it("refuses to clear a field the model requires", async () => {
+    await db.insert(places).values({ id: "pl_1", nameEn: "NTUC", category: "retail" });
+    await expect(
+      updateEntity(db, "place", "pl_1", 0, { nameEn: null } as never, null),
+    ).rejects.toThrow();
+  });
+
   it("sets deletedAt rather than removing the row", async () => {
     await createEntity(db, "room", roomData, "user_1");
     await softDeleteEntity(db, "room", "L1-lobby", 0, "user_1");
