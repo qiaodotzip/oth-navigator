@@ -33,7 +33,8 @@ Plan 1 ([`2026-09-27-workspace-foundation.md`](2026-09-27-workspace-foundation.m
 - Destructive actions are undone, not confirmed (spec §3): no `window.confirm` or `window.prompt` in a new screen. Every bin, removed tag and review decision offers Undo in its toast.
 - New workspaces never return early when `user` is null. An expired session keeps the page mounted behind the sign-in dialog.
 - New workspaces never load the model. `shell/Workspace.tsx` loads it once. Survey and Review write through one saver made in `FloorWorkspace` with `{ validate: false }`. That is safe because every survey validation rule is a warning, so these writes never change what blocks publishing.
-- Keys (spec §9, §10) are inactive while a text field, select or dialog (Radix popovers included) has focus, and never fire with Ctrl, Cmd or Alt held. `ui/keys.ts` is the one place that decides this.
+- Keys (spec §9, §10) are inactive while a text field, select or dialog (Radix popovers included) has focus, and never fire with Ctrl, Cmd or Alt held. `ui/keys.ts` (`ignoreKey`, `useKeys`) is the one place that decides this. It is built on `ui/typing.ts` (`isTyping`), which is Plan 3's module, copied exactly as Plan 3 specifies it so that both plans share it.
+- Failures are said through `ui/failure.ts` (`reportFailure`), which is also Plan 3's module, copied exactly. Plan 2 does not change `ui/undo.ts`: Plan 3's Task 1 replaces that file. Plan 2's Undo toast is `ui/offerUndo.ts`.
 - Frame images: the 240 px variant in the filmstrip and grid, the 1600 px variant for the frame being tagged and for review evidence, never the 4K original. Long frame lists are windowed.
 - Never touch the live server on :3000 or the main checkout's `packages/server/data`. Anything run against real data runs against a copy in the scratchpad, served on :3055.
 - Comments explain *why*, in the repo's existing voice. Commit messages are `type(scope): summary` with an explanatory body, ending with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
@@ -64,7 +65,7 @@ packages/server/src/
 packages/editor/src/
   api/client.ts                 MODIFY  onUnauthorized(request), wasWrite, acceptPlace levelId, reopenPlace, mergePlace, unmergePlace
   state/store.ts                MODIFY  sessionEndUnsaved; endSession(reason, unsaved)
-  state/save.ts                 MODIFY  saveFailure; failures as toasts with Retry; apply("keyframe")
+  state/save.ts                 MODIFY  failures through reportFailure, with Retry; apply("keyframe")
   main.tsx                      MODIFY  the 401 hook says whether a write was lost
   auth/AuthGate.tsx             MODIFY  "not saved" only when it was not
   shell/OwnerAvatars.tsx        MODIFY  a glyph while names load
@@ -73,9 +74,11 @@ packages/editor/src/
   App.tsx                       MODIFY  docstring
   flow/floorProgress.ts         MODIFY  reviewCounts
   testing/fakeApi.ts            MODIFY  the new endpoints
-  ui/keys.ts                    CREATE  isTypingTarget, ignoreKey, useKeys
+  ui/failure.ts                 CREATE  worthRetrying, serverWords, reportFailure (as Plan 3 specifies them)
+  ui/typing.ts                  CREATE  isTyping (as Plan 3 specifies it)
+  ui/keys.ts                    CREATE  ignoreKey, useKeys
   ui/windowing.ts               CREATE  visibleRange, centerOffset
-  ui/undo.ts                    MODIFY  offerUndo; deleteWithUndo uses it
+  ui/offerUndo.ts               CREATE  the Undo toast for bins and review decisions
   survey/frameStatus.ts         CREATE  frameStatuses, filterCounts
   survey/surveyView.ts          CREATE  readSurveyParams, surveyView, stepFrame, nextUntagged, frameTime
   survey/keys.ts                CREATE  surveyCommand
@@ -109,25 +112,97 @@ packages/editor/src/
 
 This is the first half of what Plan 1 left for Plan 2's first task. The session-ended dialog said "Your last change was not saved." every time. Usually that was untrue, because the presence poll notices an expiry before any save does. Separately, a failed save went through the status bar as raw text (`api error 500`) with nothing to press. Spec §6 wants errors to stay until dismissed and to offer Retry where retrying makes sense.
 
+The failure wording comes from `ui/failure.ts`. That module is copied exactly as the Build plan ([`2026-09-27-build.md`](2026-09-27-build.md), Task 1) specifies it, with the same tests. That way both plans say a failure the same way, and when Plan 3's Task 1 reaches it, the module is already there. Plan 3's Task 1 keeps the rest of its own work: `deleteWithUndo`, and making `load()` use `reportFailure`. This task does not touch `ui/undo.ts`.
+
 **Files:**
+- Create: `packages/editor/src/ui/failure.ts`
 - Modify: `packages/editor/src/api/client.ts` (the `ApiOptions.onUnauthorized` type and its call in `request`; add `wasWrite`)
 - Modify: `packages/editor/src/state/store.ts` (`sessionEndUnsaved`, `endSession`, `setUser`, `initial`)
 - Modify: `packages/editor/src/state/save.ts`
 - Modify: `packages/editor/src/main.tsx:16-20`
 - Modify: `packages/editor/src/auth/AuthGate.tsx:35-40`
-- Test: `packages/editor/src/api/client.test.ts`, `packages/editor/src/state/store.test.ts`, `packages/editor/src/state/save.test.ts`, `packages/editor/src/auth/AuthGate.test.tsx`
+- Test: `packages/editor/src/ui/failure.test.ts` (create), `packages/editor/src/api/client.test.ts`, `packages/editor/src/state/store.test.ts`, `packages/editor/src/state/save.test.ts`, `packages/editor/src/auth/AuthGate.test.tsx`
 
 **Interfaces:**
 - Consumes: `toast` from `ui/toast.ts`; `isUnauthorized`, `ApiError`, `ConflictError` from `api/client.ts`.
 - Produces:
+  - `worthRetrying(err: unknown): boolean`, `serverWords(err: unknown): string | null` and `reportFailure(err: unknown, opts: { doing: string; retry?: () => void | Promise<void> }): void`, all in `ui/failure.ts`, as in Plan 3.
   - `wasWrite(request: { method: string; path: string }): boolean`.
   - `ApiOptions.onUnauthorized?: (request: { method: string; path: string }) => void`.
   - Store: `sessionEndUnsaved: boolean` and `endSession(reason: "signed-out" | "expired", unsaved?: boolean)`. The flag sticks until `setUser(user)`.
-  - `saveFailure(err: unknown): { message: string; retry: boolean }`.
   - `Saver.apply(type: EntityType | "keyframe", id, run)`.
   - A saver write whose request succeeded now returns `true` even when the reload after it fails.
 
 - [ ] **Step 1: Write the failing tests**
+
+Create `packages/editor/src/ui/failure.test.ts`. This is Plan 3's Task 1 test, word for word:
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError, ConflictError } from "../api/client";
+import { reportFailure, serverWords, worthRetrying } from "./failure";
+import { useToasts } from "./toast";
+
+beforeEach(() => useToasts.getState().clear());
+
+const last = () => useToasts.getState().toasts.at(-1);
+
+describe("worthRetrying", () => {
+  it("retries what never arrived, and a server that fell over", () => {
+    expect(worthRetrying(new TypeError("Failed to fetch"))).toBe(true);
+    expect(worthRetrying(new ApiError(503, null))).toBe(true);
+  });
+
+  it("does not retry a refusal, which would only be refused again", () => {
+    expect(worthRetrying(new ApiError(422, { error: "invalid entity" }))).toBe(false);
+    expect(worthRetrying(new ConflictError(null, null))).toBe(false);
+  });
+});
+
+describe("serverWords", () => {
+  it("is what the server said, when it said something", () => {
+    expect(serverWords(new ApiError(422, { error: "not a PNG or JPEG file" }))).toBe("not a PNG or JPEG file");
+    expect(serverWords(new ApiError(500, null))).toBeNull();
+    expect(serverWords(new Error("boom"))).toBeNull();
+  });
+});
+
+describe("reportFailure", () => {
+  it("offers Retry when the connection failed, and Retry tries again", async () => {
+    const retry = vi.fn();
+    reportFailure(new TypeError("Failed to fetch"), { doing: "save your change", retry });
+    expect(last()).toMatchObject({
+      tone: "error",
+      message: "Couldn't save your change. Check your connection, then retry.",
+      action: { label: "Retry" },
+    });
+    await last()!.action!.run();
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("blames the server, not the connection, for a 5xx", () => {
+    reportFailure(new ApiError(500, null), { doing: "save your change", retry: vi.fn() });
+    expect(last()!.message).toMatch(/server had a problem/i);
+    expect(last()!.action?.label).toBe("Retry");
+  });
+
+  it("gives a refusal in the server's own words, with nothing to retry", () => {
+    reportFailure(new ApiError(422, { error: "not a PNG or JPEG file." }), { doing: "add notes.txt", retry: vi.fn() });
+    expect(last()).toMatchObject({ tone: "error", message: "Couldn't add notes.txt: not a PNG or JPEG file." });
+    expect(last()!.action).toBeUndefined();
+  });
+
+  it("says a teammate got there first on a conflict", () => {
+    reportFailure(new ConflictError({ version: 4 }, null), { doing: "move the plan" });
+    expect(last()!.message).toMatch(/someone changed it since/i);
+  });
+
+  it("says nothing on a 401: the session-ended dialog is the message", () => {
+    reportFailure(new ApiError(401, null), { doing: "save your change", retry: vi.fn() });
+    expect(useToasts.getState().toasts).toHaveLength(0);
+  });
+});
+```
 
 In `packages/editor/src/api/client.test.ts`, change the import to `import { ApiError, ConflictError, createApi, isUnauthorized, wasWrite } from "./client";`. Inside `describe("api client", …)`, after the test "does not call onUnauthorized for a 401 on login, me, people or logout", add:
 
@@ -188,42 +263,43 @@ beforeEach(() => {
 });
 ```
 
-Delete the test `it("surfaces an unexpected failure as a status message rather than crashing", …)`. The block below replaces it. Add at the end of the file:
+In `describe("saver", …)`, replace the test `it("surfaces an unexpected failure as a status message rather than crashing", …)` with Plan 3's two tests, word for word, followed by this plan's three:
 
 ```ts
-describe("a write that fails", () => {
-  it("says so in a toast that stays, with Retry, when trying again could help", async () => {
-    const updateEntity = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
-    expect(await createSaver(fakeApi({ updateEntity })).update("room", "L1-a", 0, {})).toBe(false);
-    const shown = useToasts.getState().toasts[0]!;
-    expect(shown.tone).toBe("error");
-    expect(shown.message).toBe("Couldn't save. Check your connection and try again.");
-    expect(shown.durationMs).toBeNull();
-    expect(shown.action?.label).toBe("Retry");
-  });
-
-  it("Retry sends the same write again", async () => {
+  it("reports an unexpected failure as a toast with Retry, and Retry sends the same write", async () => {
     const updateEntity = vi.fn()
-      .mockRejectedValueOnce(new ApiError(503, null))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
       .mockResolvedValueOnce({ id: "L1-a", version: 1 });
-    await createSaver(fakeApi({ updateEntity })).update("room", "L1-a", 0, { nameEn: "X" });
-    await useToasts.getState().toasts[0]!.action!.run();
+    expect(await createSaver(fakeApi({ updateEntity })).update("room", "L1-a", 0, { nameEn: "X" })).toBe(false);
+    const failed = useToasts.getState().toasts.at(-1)!;
+    expect(failed).toMatchObject({ tone: "error", action: { label: "Retry" } });
+    await failed.action!.run();
     expect(updateEntity).toHaveBeenCalledTimes(2);
     expect(updateEntity.mock.calls[1]).toEqual(["room", "L1-a", 0, { nameEn: "X" }]);
   });
 
-  it("offers no Retry for a change the server refused, since it would refuse it again", async () => {
+  it("gives a refusal in the server's words, with no Retry", async () => {
     const updateEntity = vi.fn(async () => { throw new ApiError(422, { error: "invalid entity" }); });
     await createSaver(fakeApi({ updateEntity })).update("room", "L1-a", 0, {});
-    const shown = useToasts.getState().toasts[0]!;
-    expect(shown.message).toBe("The server refused that change: invalid entity.");
-    expect(shown.action).toBeUndefined();
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({
+      tone: "error",
+      message: "Couldn't save your change: invalid entity.",
+    });
+    expect(useToasts.getState().toasts.at(-1)!.action).toBeUndefined();
+  });
+
+  it("keeps the failure on screen until it is dismissed", async () => {
+    const updateEntity = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    await createSaver(fakeApi({ updateEntity })).update("room", "L1-a", 0, {});
+    expect(useToasts.getState().toasts.at(-1)!.durationMs).toBeNull();
   });
 
   it("counts a write that landed as saved, even when the reload after it fails", async () => {
     const getModel = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
     expect(await createSaver(fakeApi({ getModel })).create("room", { id: "x" })).toBe(true);
-    expect(useToasts.getState().toasts[0]!.message).toMatch(/^Saved, but the map didn't reload/);
+    const failed = useToasts.getState().toasts.at(-1)!;
+    expect(failed.message).toBe("Couldn't reload the map after saving. Check your connection, then retry.");
+    expect(failed.action?.label).toBe("Retry");
   });
 
   it("goes through apply for a frame, which is not a generic entity", async () => {
@@ -231,7 +307,6 @@ describe("a write that fails", () => {
     expect(await createSaver(fakeApi()).apply("keyframe", "kf_1", run)).toBe(true);
     expect(run).toHaveBeenCalledTimes(1);
   });
-});
 ```
 
 In the same file, inside `describe("an expired session", …)`, add:
@@ -273,10 +348,65 @@ In `packages/editor/src/auth/AuthGate.test.tsx`, inside `describe("AuthGate", �
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `npx vitest run packages/editor/src/api/client.test.ts packages/editor/src/state packages/editor/src/auth/AuthGate.test.tsx --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
-Expected: FAIL. `wasWrite` is not exported; `sessionEndUnsaved` is undefined; the saver sets `status` instead of toasting; the dialog always says "not saved".
+Run: `npx vitest run packages/editor/src/ui/failure.test.ts packages/editor/src/api/client.test.ts packages/editor/src/state packages/editor/src/auth/AuthGate.test.tsx --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
+Expected: FAIL. `./failure` does not resolve; `wasWrite` is not exported; `sessionEndUnsaved` is undefined; the saver sets `status` instead of toasting; the dialog always says "not saved".
 
-- [ ] **Step 3: The client tells the hook which request was refused**
+- [ ] **Step 3: How a failure is said — Plan 3's module, as it specifies it**
+
+Create `packages/editor/src/ui/failure.ts`, word for word as Plan 3's Task 1 has it:
+
+```ts
+import { ApiError, ConflictError, isUnauthorized } from "../api/client";
+import { toast } from "./toast";
+
+/**
+ * Whether sending the same request again could work. A refusal (a 4xx) will
+ * be refused again; a request that never arrived, or a server that fell over
+ * (a 5xx), may well go through the second time.
+ */
+export function worthRetrying(err: unknown): boolean {
+  return !(err instanceof ApiError) || err.status >= 500;
+}
+
+/** What the server said, when it said something in words. */
+export function serverWords(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const said = (err.body as { error?: unknown } | null)?.error;
+  return typeof said === "string" && said.trim() !== "" ? said.trim().replace(/\.$/, "") : null;
+}
+
+/**
+ * Says a request failed, in words a teammate can act on (spec §6). Errors
+ * stay until dismissed, and offer Retry only where trying again could work.
+ *
+ * `doing` finishes the sentence "Couldn't …": "save your change", "add L1.png".
+ */
+export function reportFailure(
+  err: unknown,
+  { doing, retry }: { doing: string; retry?: () => void | Promise<void> },
+): void {
+  // A 401 already opened the session-ended dialog; a toast would only contradict it.
+  if (isUnauthorized(err)) return;
+  if (err instanceof ConflictError) {
+    toast({ tone: "error", message: `Couldn't ${doing}: someone changed it since. Reload to see the latest.` });
+    return;
+  }
+  if (!worthRetrying(err)) {
+    const said = serverWords(err) ?? `the server refused it (HTTP ${(err as ApiError).status})`;
+    toast({ tone: "error", message: `Couldn't ${doing}: ${said}.` });
+    return;
+  }
+  toast({
+    tone: "error",
+    message: err instanceof ApiError
+      ? `Couldn't ${doing}: the server had a problem. Try again in a moment.`
+      : `Couldn't ${doing}. Check your connection, then retry.`,
+    action: retry ? { label: "Retry", run: retry } : undefined,
+  });
+}
+```
+
+- [ ] **Step 4: The client tells the hook which request was refused**
 
 In `packages/editor/src/api/client.ts`, directly above `export type EntityType =`, add:
 
@@ -312,7 +442,7 @@ with
       }
 ```
 
-- [ ] **Step 4: The store remembers whether a change was lost**
+- [ ] **Step 5: The store remembers whether a change was lost**
 
 In `packages/editor/src/state/store.ts`:
 
@@ -355,34 +485,15 @@ Replace the `endSession` implementation with:
     set(state => ({ user: null, sessionEnd: reason, sessionEndUnsaved: state.sessionEndUnsaved || unsaved })),
 ```
 
-- [ ] **Step 5: The saver toasts its failures, with Retry where it helps**
+- [ ] **Step 6: The saver toasts its failures, with Retry where it helps**
 
 Replace `packages/editor/src/state/save.ts` with:
 
 ```ts
 import type { Api, EntityType } from "../api/client";
 import { ApiError, ConflictError, isUnauthorized } from "../api/client";
-import { toast } from "../ui/toast";
+import { reportFailure } from "../ui/failure";
 import { useEditorStore } from "./store";
-
-/**
- * What to say when a write fails for a reason other than a conflict or an
- * expired session, and whether trying again could help. A refusal (a 4xx)
- * would be refused again; a server fault or a dropped connection may not be.
- */
-export function saveFailure(err: unknown): { message: string; retry: boolean } {
-  if (err instanceof ApiError) {
-    if (err.status >= 500) return { message: "The server couldn't save that. Try again in a moment.", retry: true };
-    const said = (err.body as { error?: unknown } | null)?.error;
-    return {
-      message: typeof said === "string"
-        ? `The server refused that change: ${said}.`
-        : `The server refused that change (HTTP ${err.status}).`,
-      retry: false,
-    };
-  }
-  return { message: "Couldn't save. Check your connection and try again.", retry: true };
-}
 
 /**
  * Every mutation goes through here so four rules hold everywhere:
@@ -433,13 +544,13 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
         store.getState().endSession("expired", true);
         return false;
       }
-      const { message, retry } = saveFailure(err);
-      toast({
-        tone: "error",
-        message,
-        ...(retry
-          ? { action: { label: "Retry", run: async () => { await guard(entityType, entityId, run); } } }
-          : {}),
+      // Anything else: say so, and offer to send the same write again where
+      // that could work (spec §6).
+      reportFailure(err, {
+        doing: "save your change",
+        retry: async () => {
+          await guard(entityType, entityId, run);
+        },
       });
       return false;
     }
@@ -449,14 +560,15 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
       await refresh();
     } catch (err) {
       // The change landed; only the reload after it did not. Retrying the
-      // write here would make it twice, so the offer is to reload.
+      // write would make it twice, so the Retry here is the reload.
       if (isUnauthorized(err)) {
         store.getState().endSession("expired");
       } else {
-        toast({
-          tone: "error",
-          message: "Saved, but the map didn't reload. Try again to see the latest.",
-          action: { label: "Try again", run: async () => { await refresh().catch(() => {}); } },
+        reportFailure(err, {
+          doing: "reload the map after saving",
+          retry: async () => {
+            await refresh().catch(() => {});
+          },
         });
       }
     }
@@ -509,7 +621,7 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
 export type Saver = ReturnType<typeof createSaver>;
 ```
 
-- [ ] **Step 6: The hook in `main.tsx`, and the dialog's wording**
+- [ ] **Step 7: The hook in `main.tsx`, and the dialog's wording**
 
 In `packages/editor/src/main.tsx`, change the import `import { createApi } from "./api/client";` to `import { createApi, wasWrite } from "./api/client";`, and replace the `onUnauthorized` option with:
 
@@ -533,17 +645,17 @@ In `packages/editor/src/auth/AuthGate.tsx`, add `const unsaved = useEditorStore(
           }
 ```
 
-- [ ] **Step 7: Run the tests and the typecheck**
+- [ ] **Step 8: Run the tests and the typecheck**
 
-Run: `npx vitest run packages/editor/src/api/client.test.ts packages/editor/src/state packages/editor/src/auth packages/editor/src/shell --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
+Run: `npx vitest run packages/editor/src/ui/failure.test.ts packages/editor/src/api/client.test.ts packages/editor/src/state packages/editor/src/auth packages/editor/src/shell --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
 Expected: PASS.
 Run: `npx tsc -b`
 Expected: exit 0.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add packages/editor/src/api/client.ts packages/editor/src/api/client.test.ts packages/editor/src/state/store.ts packages/editor/src/state/store.test.ts packages/editor/src/state/save.ts packages/editor/src/state/save.test.ts packages/editor/src/main.tsx packages/editor/src/auth/AuthGate.tsx packages/editor/src/auth/AuthGate.test.tsx
+git add packages/editor/src/ui/failure.ts packages/editor/src/ui/failure.test.ts packages/editor/src/api/client.ts packages/editor/src/api/client.test.ts packages/editor/src/state/store.ts packages/editor/src/state/store.test.ts packages/editor/src/state/save.ts packages/editor/src/state/save.test.ts packages/editor/src/main.tsx packages/editor/src/auth/AuthGate.tsx packages/editor/src/auth/AuthGate.test.tsx
 git commit -m "fix(editor): an expired session says only what is true; a failed save offers Retry
 
 The sign-in dialog said the last change was not saved every time, though
@@ -554,7 +666,9 @@ says so only when a write was.
 A save that fails for any other reason is now a toast that stays, with
 Retry when trying again could help: a dropped connection or a server
 fault, never a refusal. A write that landed counts as saved even if the
-reload after it failed, and offers a reload rather than a second write.
+reload after it failed, and its Retry reloads rather than writing twice.
+The wording is ui/failure.ts, exactly as plan 3's first task specifies it,
+so both plans say a failure the same way.
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
@@ -2146,14 +2260,16 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 
 Spec §9 and §10 define the keys, and §14 wants every key map tested exhaustively. Keys are inactive while typing. The name field's suggestions list this floor's places first, with their sighting counts. This task also moves the pieces of the old `SurveyApp.tag` that decide what gets written into a tested function.
 
+Whether a key press is typing is decided by `ui/typing.ts`. That module is copied exactly as the Build plan ([`2026-09-27-build.md`](2026-09-27-build.md), Task 3) specifies it, with the same test. Build's keys and these keys therefore agree on what typing is, and Plan 3's Task 3 finds the file already made.
+
 **Files:**
-- Create: `packages/editor/src/ui/keys.ts`, `packages/editor/src/survey/keys.ts`, `packages/editor/src/review/keys.ts`, `packages/editor/src/survey/suggest.ts`, `packages/editor/src/survey/tagging.ts`
-- Test: `packages/editor/src/ui/keys.test.tsx`, `packages/editor/src/survey/keys.test.ts`, `packages/editor/src/review/keys.test.ts`, `packages/editor/src/survey/suggest.test.ts`, `packages/editor/src/survey/tagging.test.ts`
+- Create: `packages/editor/src/ui/typing.ts`, `packages/editor/src/ui/keys.ts`, `packages/editor/src/survey/keys.ts`, `packages/editor/src/review/keys.ts`, `packages/editor/src/survey/suggest.ts`, `packages/editor/src/survey/tagging.ts`
+- Test: `packages/editor/src/ui/typing.test.ts`, `packages/editor/src/ui/keys.test.tsx`, `packages/editor/src/survey/keys.test.ts`, `packages/editor/src/review/keys.test.ts`, `packages/editor/src/survey/suggest.test.ts`, `packages/editor/src/survey/tagging.test.ts`
 
 **Interfaces:**
 - Consumes: `matchPlaces` from `survey/places.ts`.
 - Produces:
-  - `isTypingTarget(target: EventTarget | null): boolean`.
+  - `isTyping(target: EventTarget | null | undefined): boolean` (`ui/typing.ts`, as in Plan 3).
   - `ignoreKey(event: Pick<KeyboardEvent, "key" | "target" | "ctrlKey" | "metaKey" | "altKey" | "defaultPrevented">): boolean`.
   - `useKeys(onKey: (event: KeyboardEvent) => void): void`.
   - `type SurveyCommand = "prev" | "next" | "nextUntagged" | "focusName" | "tag" | "dropBox" | "bin" | "toggleGrid"` and `surveyCommand(key: string): SurveyCommand | null`.
@@ -2171,12 +2287,43 @@ Spec §9 and §10 define the keys, and §14 wants every key map tested exhaustiv
 
 - [ ] **Step 1: Write the failing tests**
 
+Create `packages/editor/src/ui/typing.test.ts`, Plan 3's test word for word:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { isTyping } from "./typing";
+
+describe("isTyping", () => {
+  it("is typing in a text field, a text area or a select", () => {
+    expect(isTyping(document.createElement("input"))).toBe(true);
+    expect(isTyping(document.createElement("textarea"))).toBe(true);
+    expect(isTyping(document.createElement("select"))).toBe(true);
+  });
+
+  it("is not typing on a checkbox, a slider or a button, which take no text", () => {
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    const slider = document.createElement("input");
+    slider.type = "range";
+    expect(isTyping(box)).toBe(false);
+    expect(isTyping(slider)).toBe(false);
+    expect(isTyping(document.createElement("button"))).toBe(false);
+  });
+
+  it("is not typing on the page itself", () => {
+    expect(isTyping(document.body)).toBe(false);
+    expect(isTyping(window)).toBe(false);
+    expect(isTyping(null)).toBe(false);
+  });
+});
+```
+
 Create `packages/editor/src/ui/keys.test.tsx`:
 
 ```tsx
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ignoreKey, isTypingTarget, useKeys } from "./keys";
+import { ignoreKey, useKeys } from "./keys";
 
 function element(html: string): Element {
   const host = document.createElement("div");
@@ -2189,24 +2336,12 @@ const press = (target: EventTarget | null, key = "a", extra: Partial<KeyboardEve
   key, target, ctrlKey: false, metaKey: false, altKey: false, defaultPrevented: false, ...extra,
 });
 
-describe("isTypingTarget", () => {
-  it("is true where a letter becomes text", () => {
-    expect(isTypingTarget(element(`<input type="text">`))).toBe(true);
-    expect(isTypingTarget(element(`<input type="search">`))).toBe(true);
-    expect(isTypingTarget(element(`<textarea></textarea>`))).toBe(true);
-    expect(isTypingTarget(element(`<select><option>a</option></select>`))).toBe(true);
-    expect(isTypingTarget(element(`<div contenteditable="true"><span>x</span></div>`).firstElementChild)).toBe(true);
-  });
-
-  it("is false for controls a letter does not type into", () => {
-    expect(isTypingTarget(element(`<input type="checkbox">`))).toBe(false);
-    expect(isTypingTarget(element(`<button>Go</button>`))).toBe(false);
-    expect(isTypingTarget(document.body)).toBe(false);
-    expect(isTypingTarget(null)).toBe(false);
-  });
-});
-
 describe("ignoreKey", () => {
+  it("leaves a key typed into a search field or a select to it", () => {
+    expect(ignoreKey(press(element(`<input type="search">`), "n"))).toBe(true);
+    expect(ignoreKey(press(element(`<select><option>a</option></select>`), "a"))).toBe(true);
+  });
+
   it("leaves a plain key on the page to the workspace", () => {
     expect(ignoreKey(press(document.body))).toBe(false);
   });
@@ -2455,42 +2590,45 @@ describe("walkwayColour", () => {
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `npx vitest run packages/editor/src/ui/keys.test.tsx packages/editor/src/survey/keys.test.ts packages/editor/src/review/keys.test.ts packages/editor/src/survey/suggest.test.ts packages/editor/src/survey/tagging.test.ts --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
-Expected: FAIL — none of the five modules resolve.
+Run: `npx vitest run packages/editor/src/ui/typing.test.ts packages/editor/src/ui/keys.test.tsx packages/editor/src/survey/keys.test.ts packages/editor/src/review/keys.test.ts packages/editor/src/survey/suggest.test.ts packages/editor/src/survey/tagging.test.ts --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
+Expected: FAIL — none of the six modules resolve.
 
 - [ ] **Step 3: Write the key handling**
+
+Create `packages/editor/src/ui/typing.ts`, word for word as Plan 3's Task 3 has it:
+
+```ts
+/** Input types that take no typed text, so a letter pressed on one is a shortcut. */
+const NOT_TEXT = new Set(["checkbox", "radio", "range", "button", "submit", "reset", "file", "color"]);
+
+/**
+ * Whether a key press belongs to a field someone is typing in. A single-letter
+ * shortcut or Delete must never fire while a name is being typed.
+ */
+export function isTyping(target: EventTarget | null | undefined): boolean {
+  if (target instanceof HTMLInputElement) return !NOT_TEXT.has(target.type);
+  return target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
+}
+```
 
 Create `packages/editor/src/ui/keys.ts`:
 
 ```ts
 import { useEffect, useRef } from "react";
-
-/** Input types a letter does not type into. */
-const NOT_TEXT = new Set(["checkbox", "radio", "button", "submit", "reset", "range", "color", "file", "image"]);
-
-/**
- * Whether a key pressed here is text rather than a command. Spec §9 and §10:
- * the keys are inactive while typing, so the N of "NTUC" is never "next".
- * A select counts: letters pick its options.
- */
-export function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  if (target.closest('[contenteditable=""], [contenteditable="true"]')) return true;
-  if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true;
-  if (target instanceof HTMLInputElement) return !NOT_TEXT.has(target.type);
-  return false;
-}
+import { isTyping } from "./typing";
 
 /**
  * Whether a key press belongs to something other than the workspace's
- * shortcuts: a field, a dialog or popover (Radix gives both role="dialog"),
- * the browser (Ctrl, Cmd, Alt), or a button that Enter and Space press.
+ * shortcuts (spec §9, §10: the keys are inactive while typing, so the N of
+ * "NTUC" is never "next"): a field, a dialog or popover (Radix gives both
+ * role="dialog"), the browser (Ctrl, Cmd, Alt), or a button that Enter and
+ * Space press.
  */
 export function ignoreKey(
   event: Pick<KeyboardEvent, "key" | "target" | "ctrlKey" | "metaKey" | "altKey" | "defaultPrevented">,
 ): boolean {
   if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return true;
-  if (isTypingTarget(event.target)) return true;
+  if (isTyping(event.target)) return true;
   const el = event.target instanceof Element ? event.target : null;
   if (el?.closest('[role="dialog"], [role="alertdialog"]')) return true;
   if ((event.key === "Enter" || event.key === " ") && el?.closest("button, a, summary, [role='button']")) return true;
@@ -2679,7 +2817,7 @@ export function walkwayColour(existing: number): string {
 
 - [ ] **Step 5: Run the tests and the typecheck**
 
-Run: `npx vitest run packages/editor/src/ui/keys.test.tsx packages/editor/src/survey/keys.test.ts packages/editor/src/review/keys.test.ts packages/editor/src/survey/suggest.test.ts packages/editor/src/survey/tagging.test.ts --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
+Run: `npx vitest run packages/editor/src/ui/typing.test.ts packages/editor/src/ui/keys.test.tsx packages/editor/src/survey/keys.test.ts packages/editor/src/review/keys.test.ts packages/editor/src/survey/suggest.test.ts packages/editor/src/survey/tagging.test.ts --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
 Expected: PASS.
 Run: `npx tsc -b`
 Expected: exit 0.
@@ -2687,7 +2825,7 @@ Expected: exit 0.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/editor/src/ui/keys.ts packages/editor/src/ui/keys.test.tsx packages/editor/src/survey/keys.ts packages/editor/src/survey/keys.test.ts packages/editor/src/review/keys.ts packages/editor/src/review/keys.test.ts packages/editor/src/survey/suggest.ts packages/editor/src/survey/suggest.test.ts packages/editor/src/survey/tagging.ts packages/editor/src/survey/tagging.test.ts
+git add packages/editor/src/ui/typing.ts packages/editor/src/ui/typing.test.ts packages/editor/src/ui/keys.ts packages/editor/src/ui/keys.test.tsx packages/editor/src/survey/keys.ts packages/editor/src/survey/keys.test.ts packages/editor/src/review/keys.ts packages/editor/src/review/keys.test.ts packages/editor/src/survey/suggest.ts packages/editor/src/survey/suggest.test.ts packages/editor/src/survey/tagging.ts packages/editor/src/survey/tagging.test.ts
 git commit -m "feat(editor): the survey's and review's keys, name suggestions, and what a tag writes
 
 One place decides when a key is a command: never while typing, behind a
@@ -4652,15 +4790,14 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ---
 ### Task 11: The Survey workspace
 
-This task puts spec §9 together. The top row holds the capture picker, `Frame 212 of 445 · 7m04s`, the filter chips, the Frame | Grid toggle and **+ Add footage**. Below it come the frame, the tag bar and the filmstrip; the right panel shows *On this frame* and *Places on L1*; and the keys work throughout. The real walkthrough is filed under no floor, so the workspace offers to file it (Review Focus 1). Binning a frame and removing a tag each offer Undo. The shared Undo toast is written here, because this is its first user.
+This task puts spec §9 together. The top row holds the capture picker, `Frame 212 of 445 · 7m04s`, the filter chips, the Frame | Grid toggle and **+ Add footage**. Below it come the frame, the tag bar and the filmstrip; the right panel shows *On this frame* and *Places on L1*; and the keys work throughout. The real walkthrough is filed under no floor, so the workspace offers to file it (Review Focus 1). Binning a frame and removing a tag each offer Undo. Removing a tag uses `deleteWithUndo` as it stands. Binning a frame and the review decisions (Task 12) use `offerUndo`, a new Undo toast in its own file. `ui/undo.ts` is left alone, because Plan 3's Task 1 replaces it. `offerUndo` reloads whatever happens, and offers Retry where trying again could work, in the same words as Plan 3's `deleteWithUndo`.
 
 **Files:**
-- Modify: `packages/editor/src/ui/undo.ts` (add `offerUndo`; `deleteWithUndo` uses it)
-- Create: `packages/editor/src/survey/FramePanel.tsx`, `packages/editor/src/survey/FrameView.tsx`, `packages/editor/src/survey/SurveyWorkspace.tsx`
-- Test: `packages/editor/src/ui/undo.test.ts`, `packages/editor/src/survey/SurveyWorkspace.test.tsx`
+- Create: `packages/editor/src/ui/offerUndo.ts`, `packages/editor/src/survey/FramePanel.tsx`, `packages/editor/src/survey/FrameView.tsx`, `packages/editor/src/survey/SurveyWorkspace.tsx`
+- Test: `packages/editor/src/ui/offerUndo.test.ts`, `packages/editor/src/survey/SurveyWorkspace.test.tsx`
 
 **Interfaces:**
-- Consumes: Tasks 6–10 (`surveyView`, `readSurveyParams`, `stepFrame`, `nextUntagged`, `frameTime`, `SURVEY_FILTERS`, `useKeys`, `surveyCommand`, `linkablePlaces`, `tagWrites`, `newId`, `walkwayColour`, `FrameCanvas`, `TagBar`, `Filmstrip`, `GridView`, `AddFootageDialog`); `setParams` from `route.ts`; `labelsForFrame`; `sightingCounts`, `matchPlaces`; `deleteWithUndo`; Task 1's `Saver.apply("keyframe", …)`.
+- Consumes: Tasks 6–10 (`surveyView`, `readSurveyParams`, `stepFrame`, `nextUntagged`, `frameTime`, `SURVEY_FILTERS`, `useKeys`, `surveyCommand`, `linkablePlaces`, `tagWrites`, `newId`, `walkwayColour`, `FrameCanvas`, `TagBar`, `Filmstrip`, `GridView`, `AddFootageDialog`); `setParams` from `route.ts`; `labelsForFrame`; `sightingCounts`, `matchPlaces`; `deleteWithUndo` (unchanged); Task 1's `worthRetrying`, `serverWords` and `Saver.apply("keyframe", …)`.
 - Produces:
   - `offerUndo({ message, undone, what, run, refresh }: { message: string; undone: string; what: string; run: () => Promise<unknown>; refresh: () => Promise<void> }): void`.
   - `SurveyWorkspace({ api, saver, level, params }: { api: Api; saver: Saver; level: Level; params: Record<string, string> })`.
@@ -4669,30 +4806,67 @@ This task puts spec §9 together. The top row holds the capture picker, `Frame 2
 
 - [ ] **Step 1: Write the failing tests**
 
-In `packages/editor/src/ui/undo.test.ts`, change the import to `import { deleteWithUndo, offerUndo } from "./undo";`, and add at the end:
+Create `packages/editor/src/ui/offerUndo.test.ts`:
 
 ```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError, ConflictError } from "../api/client";
+import { offerUndo } from "./offerUndo";
+import { useToasts } from "./toast";
+
+beforeEach(() => useToasts.getState().clear());
+
+const undoIt = async () => { await useToasts.getState().toasts[0]!.action!.run(); };
+const last = () => useToasts.getState().toasts.at(-1)!;
+
 describe("offerUndo", () => {
+  it("shows what happened, with Undo", () => {
+    offerUndo({ message: "Binned frame 3", undone: "Frame 3 is back", what: "frame 3", run: vi.fn(), refresh: vi.fn(async () => {}) });
+    expect(last()).toMatchObject({ message: "Binned frame 3", action: { label: "Undo" } });
+  });
+
   it("says what came back when Undo works, and reloads", async () => {
     const run = vi.fn(async () => ({}));
     const refresh = vi.fn(async () => {});
     offerUndo({ message: "Binned frame 3", undone: "Frame 3 is back", what: "frame 3", run, refresh });
-    await useToasts.getState().toasts[0]!.action!.run();
+    await undoIt();
     expect(run).toHaveBeenCalledTimes(1);
-    expect(useToasts.getState().toasts.at(-1)).toMatchObject({ tone: "success", message: "Frame 3 is back" });
+    expect(last()).toMatchObject({ tone: "success", message: "Frame 3 is back" });
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("reloads even when the undo is refused, and says why", async () => {
+  it("reloads even when the undo is refused, and says a teammate changed it", async () => {
     const refresh = vi.fn(async () => {});
     offerUndo({
       message: "Accepted Gate 1", undone: "Gate 1 is back in the queue", what: "Gate 1",
       run: async () => { throw new ConflictError({ version: 5 }, null); },
       refresh,
     });
-    await useToasts.getState().toasts[0]!.action!.run();
-    expect(useToasts.getState().toasts.at(-1)!.message).toMatch(/changed since/i);
+    await undoIt();
+    expect(last().message).toBe("Couldn't undo: Gate 1 was changed since. Reload to see the latest.");
+    expect(last().action).toBeUndefined();
     expect(refresh).toHaveBeenCalled();
+  });
+
+  it("offers Retry when the undo never arrived, and Retry tries it again", async () => {
+    const run = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce({});
+    offerUndo({ message: "Rejected Gate 1", undone: "Gate 1 is back in the queue", what: "Gate 1", run, refresh: vi.fn(async () => {}) });
+    await undoIt();
+    expect(last()).toMatchObject({ message: "Couldn't undo Gate 1. Check your connection, then retry.", action: { label: "Retry" } });
+    await last().action!.run();
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(last()).toMatchObject({ tone: "success", message: "Gate 1 is back in the queue" });
+  });
+
+  it("says nothing on a 401: the session-ended dialog is the message", async () => {
+    offerUndo({
+      message: "Binned frame 3", undone: "Frame 3 is back", what: "frame 3",
+      run: async () => { throw new ApiError(401, null); }, refresh: vi.fn(async () => {}),
+    });
+    await undoIt();
+    expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(false);
   });
 });
 ```
@@ -4914,68 +5088,63 @@ describe("SurveyWorkspace", () => {
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `npx vitest run packages/editor/src/ui/undo.test.ts packages/editor/src/survey/SurveyWorkspace.test.tsx --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
-Expected: FAIL — `offerUndo` is not exported; `./SurveyWorkspace` does not resolve.
+Run: `npx vitest run packages/editor/src/ui/offerUndo.test.ts packages/editor/src/survey/SurveyWorkspace.test.tsx --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
+Expected: FAIL — `./offerUndo` and `./SurveyWorkspace` do not resolve.
 
-- [ ] **Step 3: One Undo toast for everything**
+- [ ] **Step 3: The Undo toast**
 
-In `packages/editor/src/ui/undo.ts`, above `deleteWithUndo`, add:
+Create `packages/editor/src/ui/offerUndo.ts`:
 
 ```ts
+import { ConflictError, isUnauthorized } from "../api/client";
+import { serverWords, worthRetrying } from "./failure";
+import { toast } from "./toast";
+
 /**
  * An Undo on the toast that says what just happened (spec §10: "Accepted
- * Festive Mall · Undo"). Undoing runs `run`, then reloads whatever the outcome
- * so the screen shows what the server now has. A teammate's change since is
- * refused rather than overwritten, and the toast says so; a 401 says nothing,
- * because the sign-in dialog over the page is the message.
+ * Festive Mall · Undo").
+ *
+ * Undoing runs `run`, then reloads whatever the outcome, so the screen shows
+ * what the server now has. A teammate's change since is refused rather than
+ * overwritten, and the toast says so. An undo that never arrived offers
+ * Retry, which runs the same `run` again — so a `run` of several steps must
+ * carry on from where it stopped. A 401 says nothing: the sign-in dialog over
+ * the page is the message. Worded like `deleteWithUndo`, so every Undo in the
+ * app sounds the same.
  */
 export function offerUndo({ message, undone, what, run, refresh }: {
   message: string;
   /** Said when the undo worked: "Frame 3 is back". */
   undone: string;
-  /** What was undone, for the failure messages. */
+  /** What was undone, for the failure messages: "frame 3", "Gate 1". */
   what: string;
   run: () => Promise<unknown>;
   refresh: () => Promise<void>;
 }): void {
-  toast({
-    message,
-    action: {
-      label: "Undo",
-      run: async () => {
-        try {
-          await run();
-          toast({ message: undone, tone: "success" });
-        } catch (err) {
-          if (isUnauthorized(err)) return;
-          toast({
-            tone: "error",
-            message:
-              err instanceof ConflictError
-                ? `Couldn't undo: ${what} was changed since. Reload to see the latest.`
-                : `Couldn't undo ${what}. Check your connection and try again.`,
-          });
-        } finally {
-          await refresh().catch(() => {});
-        }
-      },
-    },
-  });
+  async function undo(): Promise<void> {
+    try {
+      await run();
+      toast({ tone: "success", message: undone });
+    } catch (err) {
+      if (isUnauthorized(err)) return;
+      const conflict = err instanceof ConflictError;
+      const retry = !conflict && worthRetrying(err) ? { label: "Retry", run: undo } : undefined;
+      toast({
+        tone: "error",
+        action: retry,
+        message: conflict
+          ? `Couldn't undo: ${what} was changed since. Reload to see the latest.`
+          : retry
+            ? `Couldn't undo ${what}. Check your connection, then retry.`
+            : `Couldn't undo ${what}: ${serverWords(err) ?? "the server refused it"}.`,
+      });
+    } finally {
+      await refresh().catch(() => {});
+    }
+  }
+
+  toast({ message, action: { label: "Undo", run: undo } });
 }
-```
-
-Then replace the `toast({ … })` call inside `deleteWithUndo` (everything from `toast({` through its closing `});`, before `return done.length === removals.length;`) with:
-
-```ts
-  offerUndo({
-    message: `Deleted ${label}`,
-    undone: `Restored ${label}`,
-    what: label,
-    run: async () => {
-      for (const r of [...done].reverse()) await api.restoreEntity(r.type, r.id, r.version + 1);
-    },
-    refresh: saver.refresh,
-  });
 ```
 
 - [ ] **Step 4: The side panel and the frame's column**
@@ -5180,7 +5349,8 @@ import { Chip } from "../ui/Chip";
 import { Kbd } from "../ui/Kbd";
 import { useKeys } from "../ui/keys";
 import { toast } from "../ui/toast";
-import { deleteWithUndo, offerUndo } from "../ui/undo";
+import { offerUndo } from "../ui/offerUndo";
+import { deleteWithUndo } from "../ui/undo";
 import { AddFootageDialog } from "./AddFootageDialog";
 import { FramePanel } from "./FramePanel";
 import { SURVEY_FILTERS, type SurveyFilter } from "./frameStatus";
@@ -5509,7 +5679,7 @@ export function SurveyWorkspace({ api, saver, level, params }: {
 
 - [ ] **Step 6: Run the tests and the typecheck**
 
-Run: `npx vitest run packages/editor/src/ui/undo.test.ts packages/editor/src/survey --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
+Run: `npx vitest run packages/editor/src/ui packages/editor/src/survey --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1`
 Expected: PASS. The old `SurveyApp` and `PlaceTagger` tests still pass too; they go in Task 15.
 Run: `npx tsc -b`
 Expected: exit 0.
@@ -5517,7 +5687,7 @@ Expected: exit 0.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/editor/src/ui/undo.ts packages/editor/src/ui/undo.test.ts packages/editor/src/survey/FramePanel.tsx packages/editor/src/survey/FrameView.tsx packages/editor/src/survey/SurveyWorkspace.tsx packages/editor/src/survey/SurveyWorkspace.test.tsx
+git add packages/editor/src/ui/offerUndo.ts packages/editor/src/ui/offerUndo.test.ts packages/editor/src/survey/FramePanel.tsx packages/editor/src/survey/FrameView.tsx packages/editor/src/survey/SurveyWorkspace.tsx packages/editor/src/survey/SurveyWorkspace.test.tsx
 git commit -m "feat(editor): the Survey workspace — frame first, keyboard driven, one link per frame
 
 The frame is the largest thing on screen with the tag bar directly under
@@ -5529,7 +5699,9 @@ is in the address.
 
 Footage filed under no floor — the real walkthrough is — is offered for
 filing under this floor. Binning a frame and removing a tag each offer
-Undo, through one shared Undo toast that reloads whatever the outcome.
+Undo. The bin's comes from a new offerUndo toast, kept apart from
+ui/undo.ts, which plan 3 replaces. It reloads whatever the outcome and
+offers Retry when the undo never arrived.
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
@@ -5547,7 +5719,7 @@ Spec §10 and §5.3. This task covers one floor's queue of proposals, the "Same 
 - Test: `packages/editor/src/api/client.test.ts`, `packages/editor/src/flow/floorProgress.test.ts`, `packages/editor/src/review/queue.test.ts`, `packages/editor/src/review/decide.test.ts`
 
 **Interfaces:**
-- Consumes: Tasks 4–5's endpoints; Task 11's `offerUndo`; `proposedPlaces` and `ProposedPlace` from `survey/review.ts`; Task 7's `normalName`.
+- Consumes: Tasks 4–5's endpoints; Task 11's `offerUndo` (`ui/offerUndo.ts`); Task 1's `reportFailure`; `proposedPlaces` and `ProposedPlace` from `survey/review.ts`; Task 7's `normalName`.
 - Produces:
   - `type MovedSighting = { id: string; status: "proposed" | "confirmed" }`.
   - `api.acceptPlace(id, v, { nameEn, category, levelId? }) → { sightings: number; confirmed: string[] }`.
@@ -6035,8 +6207,8 @@ import { ConflictError, isUnauthorized, type Api, type MovedSighting } from "../
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import type { ProposedPlace } from "../survey/review";
-import { toast } from "../ui/toast";
-import { offerUndo } from "../ui/undo";
+import { reportFailure } from "../ui/failure";
+import { offerUndo } from "../ui/offerUndo";
 
 export type ReviewDeps = {
   api: Pick<Api, "acceptPlace" | "reopenPlace" | "rejectPlace" | "restoreEntity" | "mergePlace" | "unmergePlace">;
@@ -6137,18 +6309,26 @@ export async function acceptProposals(
     if (failed.err instanceof ConflictError) {
       useEditorStore.getState().setConflict({ entityType: "place", entityId: failed.place.id, current: failed.err.current });
     } else {
-      toast({ tone: "error", message: `Couldn't accept ${failed.place.nameEn}. Check your connection and try again.` });
+      // The ones before it went through; the list shows what is still waiting.
+      reportFailure(failed.err, { doing: `accept ${failed.place.nameEn}` });
     }
   }
 
   if (done.length > 0) {
     const label = done.length === 1 ? done[0]!.place.nameEn : `${done.length} places`;
+    // Kept across attempts, so a Retry of the undo carries on from where it
+    // stopped instead of reopening the first ones twice.
+    const pending = [...done].reverse();
     offerUndo({
       message: `Accepted ${label}`,
       undone: `${label} ${done.length === 1 ? "is" : "are"} back in the queue`,
       what: label,
       run: async () => {
-        for (const d of [...done].reverse()) await reopen(api, d.place, d.confirmed);
+        while (pending.length > 0) {
+          const next = pending[0]!;
+          await reopen(api, next.place, next.confirmed);
+          pending.shift();
+        }
       },
       refresh: saver.refresh,
     });
@@ -7503,12 +7683,12 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 | Keyframe delete and restore audited, transactional, versioned | Task 3 |
 | (Plan 3's list) Screens and sessions: no early return on `user` | Global Constraints; tests in Tasks 11 and 13 |
 | (Plan 3's list) Double load | Gone for Survey and Review, Task 15; Build's stays until Plan 3 |
-| (Plan 3's list) Error toasts offer Retry | The saver, Task 1: every screen's writes, Build's included |
-| (Plan 3's list) `deleteWithUndo` refreshes in `finally` | Task 11, through `offerUndo`. What it says when only part of an undo succeeds is still Plan 3's. |
+| (Plan 3's list) Error toasts offer Retry | The saver, Task 1, through Plan 3's own `ui/failure.ts`: every screen's writes, Build's included. Making `load()` use it is left to Plan 3's Task 1. |
+| (Plan 3's list) `deleteWithUndo` refreshes in `finally` | Still Plan 3's (its Task 1 replaces `ui/undo.ts`). Plan 2's own Undo, `ui/offerUndo.ts`, already reloads in `finally` and retries. |
 | (Plan 3's list) Key each name field by entity id | Review's, Task 13. Build's are still Plan 3's. |
 
 ## Left for later plans
 
-- **Build (Plan 3):** the rest of its list — lift placement that can orphan a portal, Build's name fields keyed by id, Build's own double load, and what a partial `deleteWithUndo` says.
+- **Build (Plan 3):** the rest of its list — `deleteWithUndo`, lift placement that can orphan a portal, Build's name fields keyed by id, Build's own double load, and `load()`'s failure toast. Plan 3's Task 1 finds `ui/failure.ts`, and its Task 3 finds `ui/typing.ts`, already made exactly as it specifies them. Its Task 1 replaces `ui/undo.ts`, which Plan 2 leaves alone; `ui/offerUndo.ts` is Plan 2's and must stay.
 - **Deploy (Plan 4):** the live data's walkthrough is still on no floor. After import, one click on *File under L1* in L1's Survey files it; the teammate note should say so, or `data:import` can file it.
 - **Not offered, on purpose:** deleting a whole capture. Spec §9 does not list it, and it cannot be undone (its restore is refused). The server endpoint stays. A wrong frame is binned, with Undo, and footage is renamed from *Find more frames*.
