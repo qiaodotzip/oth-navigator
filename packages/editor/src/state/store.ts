@@ -1,6 +1,6 @@
 import type { Level, MapModel, Ring, Room, ValidationReport, Vec2 } from "@oth/model";
 import { create } from "zustand";
-import type { AssetRecord, LevelImage, SessionUser } from "../api/client";
+import type { AssetRecord, LevelImage, SessionUser, TeamMember } from "../api/client";
 import type { LockEntry, PresenceEntry } from "../collab/types";
 import { DEFAULT_VIEWPORT, type Viewport } from "../plan/viewport";
 
@@ -46,6 +46,14 @@ export type EditorState = {
   levelImages: LevelImage[];
   /** The two points of an in-progress scale measurement, in world units. */
   calibrationDraft: Vec2[] | null;
+  /** Everyone on the team, for owners, avatars and the team page. */
+  team: TeamMember[];
+  /**
+   * Why there is no user. "expired" keeps the page and asks you to sign in
+   * again over it; "signed-out" (or null, before anyone signs in) shows the
+   * sign-in screen.
+   */
+  sessionEnd: "signed-out" | "expired" | null;
 
   setUser: (u: SessionUser | null) => void;
   setModel: (m: MapModel) => void;
@@ -68,6 +76,8 @@ export type EditorState = {
   pushCalibrationPoint: (p: Vec2) => void;
   clearCalibration: () => void;
   selectAsset: (id: string | null) => void;
+  setTeam: (t: TeamMember[]) => void;
+  endSession: (reason: "signed-out" | "expired") => void;
   reset: () => void;
 };
 
@@ -93,12 +103,15 @@ const initial = {
   selectedAssetId: null,
   levelImages: [],
   calibrationDraft: null,
+  team: [] as TeamMember[],
+  sessionEnd: null as EditorState["sessionEnd"],
 };
 
 export const useEditorStore = create<EditorState>(set => ({
   ...initial,
 
-  setUser: user => set({ user }),
+  // Signing in, or back in, settles why the session had ended.
+  setUser: user => set(user ? { user, sessionEnd: null } : { user }),
 
   setModel: model =>
     set(state => {
@@ -139,6 +152,8 @@ export const useEditorStore = create<EditorState>(set => ({
     set(state => ({ calibrationDraft: [...(state.calibrationDraft ?? []), p] })),
   clearCalibration: () => set({ calibrationDraft: null }),
   selectAsset: selectedAssetId => set({ selectedAssetId }),
+  setTeam: team => set({ team }),
+  endSession: reason => set({ user: null, sessionEnd: reason }),
 
   reset: () => set(initial),
 }));

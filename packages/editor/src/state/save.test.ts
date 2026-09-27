@@ -125,3 +125,19 @@ describe("saver", () => {
     expect(useEditorStore.getState().conflict).toBeNull();
   });
 });
+
+describe("an expired session", () => {
+  it("ends the session as expired when a write is refused as signed out", async () => {
+    useEditorStore.getState().setUser({ id: "u1", email: "a@oth.local", displayName: "A" });
+    const updateEntity = vi.fn(async () => { throw new ApiError(401, null); });
+    expect(await createSaver(fakeApi({ updateEntity })).update("room", "r1", 0, { nameEn: "x" })).toBe(false);
+    expect(useEditorStore.getState().user).toBeNull();
+    expect(useEditorStore.getState().sessionEnd).toBe("expired");
+  });
+
+  it("clears the reason once someone signs in again", () => {
+    useEditorStore.getState().endSession("expired");
+    useEditorStore.getState().setUser({ id: "u1", email: "a@oth.local", displayName: "A" });
+    expect(useEditorStore.getState().sessionEnd).toBeNull();
+  });
+});

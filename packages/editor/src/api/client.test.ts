@@ -98,4 +98,34 @@ describe("assets", () => {
     expect(createApi().keyframeFileUrl("kf_1")).toBe("/api/keyframes/kf_1/file");
     expect(createApi().keyframeFileUrl("kf_1", 240)).toBe("/api/keyframes/kf_1/file?w=240");
   });
+
+  it("invites a teammate", async () => {
+    const fetchImpl = mockFetch(201, { user: { id: "u2", email: "a@x.com", displayName: "A" }, password: "otp" });
+    const result = await createApi({ fetchImpl }).inviteUser("a@x.com", "A");
+    expect(result.password).toBe("otp");
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("/api/users/invite");
+    expect(JSON.parse(String(init?.body))).toEqual({ email: "a@x.com", displayName: "A" });
+  });
+
+  it("changes your password", async () => {
+    const fetchImpl = mockFetch(204, undefined);
+    await createApi({ fetchImpl }).changePassword("old-one", "new-password");
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("/api/auth/password");
+    expect(JSON.parse(String(init?.body))).toEqual({ currentPassword: "old-one", newPassword: "new-password" });
+  });
+
+  it("restores an entity at the version the delete left", async () => {
+    const fetchImpl = mockFetch(200, { entity: { id: "p1", version: 2 } });
+    await createApi({ fetchImpl }).restoreEntity("pathway", "p1", 1);
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("/api/entities/pathway/p1/restore");
+    expect(JSON.parse(String(init?.body))).toEqual({ expectedVersion: 1 });
+  });
+
+  it("reports the server unreachable rather than throwing", async () => {
+    const fetchImpl = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    expect(await createApi({ fetchImpl }).health()).toBe(false);
+  });
 });

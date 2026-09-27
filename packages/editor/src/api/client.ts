@@ -21,7 +21,17 @@ export type EntityType =
   | "portal" | "portalEndpoint" | "navHint" | "placement" | "tenant"
   | "capture" | "place" | "sighting" | "pathwayKind";
 
-export type SessionUser = { id: string; email: string; displayName: string };
+export type SessionUser = {
+  id: string;
+  email: string;
+  displayName: string;
+  /** True while the account is on a one-time password. */
+  mustChangePassword?: boolean;
+};
+
+export type TeamMember = { id: string; email: string; displayName: string };
+
+export type PublishedVersion = { version: string; createdAt: string; warningCount: number };
 
 export type AssetRecord = {
   id: string;
@@ -97,6 +107,49 @@ export function createApi(options: ApiOptions = {}) {
 
     async me(): Promise<SessionUser> {
       return (await request<{ user: SessionUser }>("/api/auth/me")).user;
+    },
+
+    listUsers: async (): Promise<TeamMember[]> =>
+      (await request<{ users: TeamMember[] }>("/api/users")).users,
+
+    inviteUser: (email: string, displayName: string) =>
+      request<{ user: TeamMember; password: string }>("/api/users/invite", {
+        method: "POST",
+        body: json({ email, displayName }),
+      }),
+
+    resetUserPassword: (id: string) =>
+      request<{ user: TeamMember; password: string }>(`/api/users/${id}/reset-password`, {
+        method: "POST",
+      }),
+
+    changePassword: (currentPassword: string, newPassword: string) =>
+      request<void>("/api/auth/password", {
+        method: "POST",
+        body: json({ currentPassword, newPassword }),
+      }),
+
+    /** The other half of Undo: brings back what a delete retired, at the version it left. */
+    restoreEntity: async (type: EntityType, id: string, expectedVersion: number) =>
+      (await request<{ entity: Record<string, unknown> }>(`/api/entities/${type}/${id}/restore`, {
+        method: "POST",
+        body: json({ expectedVersion }),
+      })).entity,
+
+    restoreKeyframe: (id: string) =>
+      request<{ sightings: number }>(`/api/keyframes/${id}/restore`, { method: "POST" }),
+
+    latestPublished: async (): Promise<PublishedVersion | null> =>
+      (await request<{ latest: PublishedVersion | null }>("/api/publish/latest")).latest,
+
+    /** Whether the server answers at all. Never throws: it is asked on a timer. */
+    async health(): Promise<boolean> {
+      try {
+        await request<{ ok: boolean }>("/api/health");
+        return true;
+      } catch {
+        return false;
+      }
     },
 
     getModel: () => request<MapModel>("/api/model"),

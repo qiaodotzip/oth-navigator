@@ -44,6 +44,11 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
         store.getState().setConflict({ entityType, entityId, current: err.current });
         return false;
       }
+      // A write refused as signed out: keep the page, ask for a sign-in over it.
+      if (err instanceof ApiError && err.status === 401) {
+        store.getState().endSession("expired");
+        return false;
+      }
       store.getState().setStatus(err instanceof Error ? err.message : String(err));
       return false;
     }
@@ -62,7 +67,7 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
       return true;
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        store.getState().setUser(null);
+        store.getState().endSession("expired");
         return false;
       }
       store.getState().setStatus(
