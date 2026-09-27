@@ -34,7 +34,7 @@ import { createSaver } from "./state/save";
 import { useEditorStore } from "./state/store";
 
 /** The map editor. Only ever rendered signed in: AuthGate sees to that. */
-export function App({ api }: { api: Api }) {
+export function App({ api, embedded = false }: { api: Api; embedded?: boolean }) {
   const saver = useMemo(() => createSaver(api), [api]);
   const user = useEditorStore(s => s.user);
   const model = useEditorStore(s => s.model);
@@ -46,7 +46,8 @@ export function App({ api }: { api: Api }) {
     void saver.load();
   }, [saver]);
 
-  useCollaboration(api, Boolean(user));
+  // Embedded in the shell, which already runs presence and locks for every screen.
+  useCollaboration(api, Boolean(user) && !embedded);
 
   if (!user) return null;
 
@@ -64,25 +65,27 @@ export function App({ api }: { api: Api }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-4 border-b bg-white px-4 py-2">
-        <h1 className="text-sm font-semibold">OTH Map Editor</h1>
-        <LevelTabs />
-        <button
-          className="text-sm text-stone-500 hover:underline"
-          onClick={() => navigate("/survey")}
-        >
-          Survey &rarr;
-        </button>
-        <div className="ml-auto flex items-center gap-3 text-sm">
-          <PresenceBar />
-          <span className="text-stone-500">{user.displayName}</span>
-          <PublishButton api={api} />
-        </div>
-      </header>
+      {!embedded && (
+        <header className="flex items-center gap-4 border-b bg-white px-4 py-2">
+          <h1 className="text-sm font-semibold">OTH Map Editor</h1>
+          <LevelTabs />
+          <button
+            className="text-sm text-stone-500 hover:underline"
+            onClick={() => navigate("/survey")}
+          >
+            Survey &rarr;
+          </button>
+          <div className="ml-auto flex items-center gap-3 text-sm">
+            <PresenceBar />
+            <span className="text-stone-500">{user.displayName}</span>
+            <PublishButton api={api} />
+          </div>
+        </header>
+      )}
 
       {/* The advisory warning sits above the one that means a save failed. */}
       <LockBanner />
-      <ConflictBanner onReload={() => void saver.refresh()} />
+      {!embedded && <ConflictBanner onReload={() => void saver.refresh()} />}
       <Toolbar />
 
       <div className="flex min-h-0 flex-1">
@@ -233,7 +236,7 @@ export function App({ api }: { api: Api }) {
         </aside>
       </div>
 
-      {status && <footer className="border-t bg-stone-100 px-4 py-1 text-xs">{status}</footer>}
+      {!embedded && status && <footer className="border-t bg-stone-100 px-4 py-1 text-xs">{status}</footer>}
     </div>
   );
 }

@@ -18,7 +18,7 @@ import { reviewProgress } from "./review";
  * A second route in the editor rather than a second application — same login,
  * same server, same audit log, different job.
  */
-export function SurveyApp({ api }: { api: Api }) {
+export function SurveyApp({ api, embedded = false }: { api: Api; embedded?: boolean }) {
   // No validation: nothing here shows the report, and it is the slow half of a reload.
   const saver = useMemo(() => createSaver(api, { validate: false }), [api]);
   const model = useEditorStore(s => s.model);
@@ -157,12 +157,14 @@ export function SurveyApp({ api }: { api: Api }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-4 border-b bg-white px-4 py-2">
-        <h1 className="text-sm font-semibold">OTH Survey</h1>
-        <button className="text-sm text-stone-500 hover:underline" onClick={() => navigate("/")}>
-          ← Map editor
-        </button>
-      </header>
+      {!embedded && (
+        <header className="flex items-center gap-4 border-b bg-white px-4 py-2">
+          <h1 className="text-sm font-semibold">OTH Survey</h1>
+          <button className="text-sm text-stone-500 hover:underline" onClick={() => navigate("/")}>
+            ← Map editor
+          </button>
+        </header>
+      )}
 
       <div className="flex min-h-0 flex-1">
         <aside className="w-56 overflow-auto border-r bg-white p-2 text-sm">
@@ -354,7 +356,7 @@ export function SurveyApp({ api }: { api: Api }) {
         </aside>
       </div>
 
-      {status && <footer className="border-t bg-stone-100 px-4 py-1 text-xs">{status}</footer>}
+      {!embedded && status && <footer className="border-t bg-stone-100 px-4 py-1 text-xs">{status}</footer>}
     </div>
   );
 }
