@@ -71,18 +71,18 @@ describe("FloorsHome", () => {
 
   // M4: an owner must not flash "Former teammate" before the team has even
   // loaded, and a failed load must not call everyone a former teammate either.
-  it("shows a neutral avatar for an owner while the team is still loading", () => {
+  it("shows a glyph for an owner while the team is still loading", () => {
     useEditorStore.setState({ team: [], teamStatus: "loading" });
     render(<FloorsHome api={fakeApi()} saver={fakeSaver()} />);
     expect(screen.queryByRole("img", { name: "Former teammate" })).toBeNull();
-    expect(screen.getAllByRole("img", { name: "Team member" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("img", { name: "Owner – name not loaded" }).length).toBeGreaterThan(0);
   });
 
-  it("shows a neutral avatar, not 'Former teammate', when the team failed to load", () => {
+  it("shows a glyph, not 'Former teammate', when the team failed to load", () => {
     useEditorStore.setState({ team: [], teamStatus: "error" });
     render(<FloorsHome api={fakeApi()} saver={fakeSaver()} />);
     expect(screen.queryByRole("img", { name: "Former teammate" })).toBeNull();
-    expect(screen.getAllByRole("img", { name: "Team member" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("img", { name: "Owner – name not loaded" }).length).toBeGreaterThan(0);
   });
 
   it("says the team could not load, instead of 'Loading the team…' forever", async () => {
