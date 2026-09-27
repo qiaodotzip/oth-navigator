@@ -1,4 +1,5 @@
 import type { Level } from "@oth/model";
+import { useState } from "react";
 import { OwnerAvatars } from "../shell/OwnerAvatars";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
@@ -8,10 +9,22 @@ import { Popover } from "../ui/Popover";
 /** Who owns a floor, set from the floor's own card. */
 export function OwnerPicker({ level, saver }: { level: Level; saver: Pick<Saver, "update"> }) {
   const team = useEditorStore(s => s.team);
+  // Serialises toggles: `level` is a stale closure until the round trip that
+  // follows refreshes the store, so a second tick fired before that lands
+  // would compute `next` from the same stale ownerIds and send the same
+  // stale version — the first save wins, the second 409s, and the checkbox
+  // silently reverts as if someone else had clicked it.
+  const [busy, setBusy] = useState(false);
 
-  const toggle = (id: string) => {
+  const toggle = async (id: string) => {
+    if (busy) return;
     const next = level.ownerIds.includes(id) ? level.ownerIds.filter(x => x !== id) : [...level.ownerIds, id];
-    void saver.update("level", level.id, level.version, { ownerIds: next });
+    setBusy(true);
+    try {
+      await saver.update("level", level.id, level.version, { ownerIds: next });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -38,7 +51,8 @@ export function OwnerPicker({ level, saver }: { level: Level; saver: Pick<Saver,
                 type="checkbox"
                 aria-label={member.displayName}
                 checked={level.ownerIds.includes(member.id)}
-                onChange={() => toggle(member.id)}
+                disabled={busy}
+                onChange={() => void toggle(member.id)}
               />
               <Avatar userId={member.id} name={member.displayName} size={20} />
               {member.displayName}

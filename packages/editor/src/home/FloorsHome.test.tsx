@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEditorStore } from "../state/store";
 import { fakeApi, sampleModel, sampleTeam } from "../testing/fakeApi";
@@ -57,5 +57,26 @@ describe("FloorsHome", () => {
     useEditorStore.getState().setTeam([sampleTeam[1]!]);
     render(<FloorsHome api={fakeApi()} saver={fakeSaver()} />);
     expect(screen.getAllByRole("img", { name: "Former teammate" }).length).toBeGreaterThan(0);
+  });
+
+  it("locks the picker while an owner change is saving, so a quick second tick is not lost", async () => {
+    let release!: () => void;
+    const update = vi.fn(() => new Promise<boolean>(r => { release = () => r(true); }));
+    const saver = { update };
+    render(<FloorsHome api={fakeApi()} saver={saver as never} />);
+    fireEvent.click(screen.getByRole("button", { name: "Owners of L1" }));
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Wei Kang" }));
+    expect(update).toHaveBeenCalledTimes(1);
+
+    // While that save is in flight, every checkbox in the picker is locked...
+    for (const box of screen.getAllByRole("checkbox")) expect(box).toBeDisabled();
+    // ...so a quick second tick does not fire off a second save from stale data.
+    fireEvent.click(screen.getByRole("checkbox", { name: "Stef Chan" }));
+    expect(update).toHaveBeenCalledTimes(1);
+
+    await act(async () => release());
+
+    for (const box of screen.getAllByRole("checkbox")) expect(box).not.toBeDisabled();
   });
 });
