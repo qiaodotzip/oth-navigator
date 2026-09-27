@@ -29,7 +29,6 @@ export async function resolveSession(db: Database, token: string): Promise<User 
     id: row.user.id,
     email: row.user.email,
     displayName: row.user.displayName,
-    mustChangePassword: row.user.mustChangePassword,
   };
 }
 

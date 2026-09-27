@@ -1,20 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { eq, isNull } from "drizzle-orm";
+import { isNull } from "drizzle-orm";
 import { Hono } from "hono";
-import { getCookie } from "hono/cookie";
 import { z } from "zod";
 import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
-import { SESSION_COOKIE } from "../auth/sessions";
-import { findUserByEmail } from "../auth/users";
-import { inviteUser, resetPassword } from "../cli/invite";
+import { DuplicateNameError, inviteUser } from "../cli/invite";
 import type { Database } from "../db/client";
 import { auditLog, users } from "../db/schema";
 
-const InviteBody = z.object({
-  email: z.string().trim().email(),
-  displayName: z.string().trim().min(1).max(80),
-});
+const InviteBody = z.object({ displayName: z.string().trim().min(1).max(80) });
 
 async function record(db: Database, actorId: string, userId: string, action: string) {
   await db.insert(auditLog).values({
@@ -29,40 +23,30 @@ async function record(db: Database, actorId: string, userId: string, action: str
 /**
  * The team, managed from the app rather than from a terminal.
  *
- * A flat team, as the map-model spec decided: anyone signed in may invite a
- * teammate or issue a fresh password. A one-time password is in the response
- * and nowhere else — it is never stored in the clear — and every invite and
- * reset is in the audit log.
+ * A flat team, as the map-model spec decided: anyone signed in may add a
+ * teammate by name. There is nothing to hand them afterwards — the name they
+ * were added under is the name they'll pick from the sign-in list — and
+ * every addition is in the audit log.
  */
 export const userRoutes = new Hono<AppEnv>();
 userRoutes.use("*", requireUser);
 
 userRoutes.get("/", async c => {
   const rows = await c.get("db").select().from(users).where(isNull(users.disabledAt));
-  return c.json({ users: rows.map(u => ({ id: u.id, email: u.email, displayName: u.displayName })) });
+  return c.json({ users: rows.map(u => ({ id: u.id, displayName: u.displayName })) });
 });
 
 userRoutes.post("/invite", async c => {
   const body = InviteBody.safeParse(await c.req.json().catch(() => null));
-  if (!body.success) return c.json({ error: "expected { email, displayName }" }, 400);
+  if (!body.success) return c.json({ error: "expected { displayName }" }, 400);
   const db = c.get("db");
-  if (await findUserByEmail(db, body.data.email)) {
-    return c.json({ error: "someone with that email is already on the team" }, 409);
-  }
   const actor = c.get("user").id;
-  const { user, password } = await inviteUser(db, body.data.email, body.data.displayName, actor);
-  await record(db, actor, user.id, "invite");
-  return c.json({ user: { id: user.id, email: user.email, displayName: user.displayName }, password }, 201);
-});
-
-userRoutes.post("/:id/reset-password", async c => {
-  const db = c.get("db");
-  const [row] = await db.select().from(users).where(eq(users.id, c.req.param("id")));
-  if (!row || row.disabledAt) return c.json({ error: "not found" }, 404);
-  const actor = c.get("user");
-  // Resetting your own password must not sign out the request doing the resetting.
-  const keepToken = row.id === actor.id ? getCookie(c, SESSION_COOKIE) : undefined;
-  const { user, password } = await resetPassword(db, row.email, { keepToken });
-  await record(db, actor.id, user.id, "reset-password");
-  return c.json({ user: { id: user.id, email: user.email, displayName: user.displayName }, password });
+  try {
+    const { user } = await inviteUser(db, body.data.displayName, actor);
+    await record(db, actor, user.id, "invite");
+    return c.json({ user: { id: user.id, displayName: user.displayName } }, 201);
+  } catch (err) {
+    if (err instanceof DuplicateNameError) return c.json({ error: err.message }, 409);
+    throw err;
+  }
 });

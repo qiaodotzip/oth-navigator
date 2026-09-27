@@ -1,104 +1,85 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "../db/client";
 import { verifyPassword } from "../auth/password";
-import { createSession, resolveSession } from "../auth/sessions";
 import { findUserByEmail } from "../auth/users";
+import type { Database } from "../db/client";
 import { users } from "../db/schema";
 import { createTestDb } from "../testing/harness";
-import { inviteUser, resetPassword } from "./invite";
+import { DuplicateNameError, inviteUser } from "./invite";
+
+let db: Database;
+beforeEach(async () => { db = await createTestDb(); });
 
 describe("inviteUser", () => {
-  it("creates a user with a generated passphrase it returns exactly once", async () => {
-    const db = await createTestDb();
-    const { user, password } = await inviteUser(db, "wei@example.com", "Wei");
-    expect(user.email).toBe("wei@example.com");
-    expect(password.length).toBeGreaterThanOrEqual(16);
-    const row = await findUserByEmail(db, "wei@example.com");
-    expect(await verifyPassword(password, row!.passwordHash)).toBe(true);
+  it("adds a person by name, with a password hash nobody will ever check", async () => {
+    const { user } = await inviteUser(db, "Wei");
+    expect(user.displayName).toBe("Wei");
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    // Not empty, and not guessable, but never verified by any route: the
+    // column is NOT NULL and nothing else about it matters any more.
+    expect(row!.passwordHash).toMatch(/^scrypt\$/);
+    expect(await verifyPassword("", row!.passwordHash)).toBe(false);
   });
 
-  it("refuses to invite an email that already exists", async () => {
-    const db = await createTestDb();
-    await inviteUser(db, "wei@example.com", "Wei");
-    await expect(inviteUser(db, "wei@example.com", "Wei Again")).rejects.toThrow(/already/i);
+  it("hides a generated email behind the name, so the email column stays satisfied", async () => {
+    const { user } = await inviteUser(db, "Wei");
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row!.email).toBe("wei@team.oth.local");
   });
 
-  it("generates a different password each time", async () => {
-    const db = await createTestDb();
-    const a = await inviteUser(db, "a@example.com", "A");
-    const b = await inviteUser(db, "b@example.com", "B");
-    expect(a.password).not.toBe(b.password);
+  it("numbers a colliding name's hidden email rather than failing", async () => {
+    const a = await inviteUser(db, "Wei");
+    await db.update(users).set({ disabledAt: new Date() }).where(eq(users.id, a.user.id));
+    // A disabled account keeps its row (and its email), so a second "Wei"
+    // — allowed because the first is no longer active — still needs a free one.
+    const { user } = await inviteUser(db, "Wei");
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row!.email).toBe("wei-2@team.oth.local");
+  });
+
+  it("refuses a name that collides, case-insensitively, with an active teammate", async () => {
+    await inviteUser(db, "Wei");
+    await expect(inviteUser(db, "wei")).rejects.toBeInstanceOf(DuplicateNameError);
+    await expect(inviteUser(db, "WEI")).rejects.toThrow(/already on the team/);
+  });
+
+  it("does not collide with a disabled account's name", async () => {
+    const { user } = await inviteUser(db, "Ghost");
+    await db.update(users).set({ disabledAt: new Date() }).where(eq(users.id, user.id));
+    await expect(inviteUser(db, "Ghost")).resolves.toBeTruthy();
+  });
+
+  it("trims the name before storing and checking it", async () => {
+    const { user } = await inviteUser(db, "  Aisha  ");
+    expect(user.displayName).toBe("Aisha");
+    await expect(inviteUser(db, "aisha")).rejects.toBeInstanceOf(DuplicateNameError);
+  });
+
+  it("records who added whom", async () => {
+    const inviter = await inviteUser(db, "Wei");
+    const { user } = await inviteUser(db, "Aisha", inviter.user.id);
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row!.invitedBy).toBe(inviter.user.id);
+  });
+
+  it("leaves mustChangePassword at its default: nothing ever sets it", async () => {
+    const { user } = await inviteUser(db, "Wei");
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row!.mustChangePassword).toBe(false);
   });
 });
 
-describe("resetPassword", () => {
-  let db: Database;
-  beforeEach(async () => { db = await createTestDb(); });
-
-  it("issues a password that works, when the old one is lost", async () => {
-    await inviteUser(db, "wei@example.com", "Wei");
-    const { password } = await resetPassword(db, "wei@example.com");
-    const user = await findUserByEmail(db, "wei@example.com");
-    expect(await verifyPassword(password, user!.passwordHash)).toBe(true);
-  });
-
-  it("retires the old password, so a leaked one stops working", async () => {
-    const first = await inviteUser(db, "wei@example.com", "Wei");
-    await resetPassword(db, "wei@example.com");
-    const user = await findUserByEmail(db, "wei@example.com");
-    expect(await verifyPassword(first.password, user!.passwordHash)).toBe(false);
-  });
-
-  it("keeps the same account, rather than making a second one", async () => {
-    const first = await inviteUser(db, "wei@example.com", "Wei");
-    const again = await resetPassword(db, "wei@example.com");
-    expect(again.user.id).toBe(first.user.id);
-    expect(again.user.displayName).toBe("Wei");
-  });
-
-  it("refuses an address nobody has been invited to", async () => {
-    await expect(resetPassword(db, "nobody@example.com")).rejects.toThrow(/no user/);
-  });
-
-  it("is case-insensitive about the address, like the login is", async () => {
-    await inviteUser(db, "wei@example.com", "Wei");
-    await expect(resetPassword(db, "WEI@example.com")).resolves.toBeTruthy();
-  });
-
-  // I3: a reset is the only lever the app offers to cut off an account, so it
-  // must actually end sessions the account already has open.
-  it("ends every session the account had open", async () => {
-    const { user } = await inviteUser(db, "wei@example.com", "Wei");
-    const session = await createSession(db, user.id, 24);
-    await resetPassword(db, "wei@example.com");
-    expect(await resolveSession(db, session.id)).toBeNull();
-  });
-
-  it("keeps the one session named by keepToken, and ends the rest", async () => {
-    const { user } = await inviteUser(db, "wei@example.com", "Wei");
-    const kept = await createSession(db, user.id, 24);
-    const other = await createSession(db, user.id, 24);
-    await resetPassword(db, "wei@example.com", { keepToken: kept.id });
-    expect(await resolveSession(db, kept.id)).not.toBeNull();
-    expect(await resolveSession(db, other.id)).toBeNull();
+describe("DuplicateNameError", () => {
+  it("names the person in its message", () => {
+    expect(new DuplicateNameError("Wei").message).toBe("Someone called Wei is already on the team.");
   });
 });
 
-describe("one-time passwords", () => {
-  it("asks an invited person to set their own password", async () => {
-    const db = await createTestDb();
-    const { user } = await inviteUser(db, "new@example.com", "New Person");
-    const [row] = await db.select().from(users).where(eq(users.id, user.id));
-    expect(row!.mustChangePassword).toBe(true);
-  });
-
-  it("asks again after a reset", async () => {
-    const db = await createTestDb();
-    const { user } = await inviteUser(db, "again@example.com", "Again");
-    await db.update(users).set({ mustChangePassword: false }).where(eq(users.id, user.id));
-    await resetPassword(db, "again@example.com");
-    const [row] = await db.select().from(users).where(eq(users.id, user.id));
-    expect(row!.mustChangePassword).toBe(true);
+// A quick sanity check that findUserByEmail (shared with the route layer for
+// generating a free hidden email) still finds what inviteUser created.
+describe("findUserByEmail", () => {
+  it("finds the hidden email inviteUser generated", async () => {
+    await inviteUser(db, "Wei");
+    expect(await findUserByEmail(db, "wei@team.oth.local")).not.toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
-import { inviteUser, resetPassword } from "./cli/invite";
+import { inviteUser } from "./cli/invite";
 import { seedBuilding } from "./cli/seed";
 import { tracePlansIntoModel } from "./cli/trace";
 import { exportCaptureForLabelling } from "./cli/surveyExport";
@@ -29,19 +29,10 @@ if (config.DATABASE_URL) await runMigrations(db);
 const command = process.argv[2];
 
 if (command === "invite") {
-  const email = process.argv[3];
-  const displayName = process.argv[4];
-  if (!email || !displayName) throw new Error('usage: invite <email> "<display name>"');
-  const { password } = await inviteUser(db, email, displayName);
-  console.log(`invited ${email}. One-time password: ${password}`);
-  process.exit(0);
-}
-
-if (command === "reset-password") {
-  const email = process.argv[3];
-  if (!email) throw new Error("usage: reset-password <email>");
-  const { user, password } = await resetPassword(db, email);
-  console.log(`reset ${user.email}. New one-time password: ${password}`);
+  const displayName = process.argv[3];
+  if (!displayName) throw new Error('usage: invite "<name>"');
+  const { user } = await inviteUser(db, displayName);
+  console.log(`added ${user.displayName}`);
   process.exit(0);
 }
 

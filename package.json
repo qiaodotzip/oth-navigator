@@ -17,7 +17,6 @@
     "typecheck": "tsc -b",
     "build": "npm run build --workspace @oth/editor",
     "invite": "npm run start --workspace @oth/server -- invite",
-    "reset-password": "npm run start --workspace @oth/server -- reset-password",
     "seed": "npm run start --workspace @oth/server -- seed",
     "trace": "npm run start --workspace @oth/server -- trace",
     "survey:export": "npm run start --workspace @oth/server -- survey:export",

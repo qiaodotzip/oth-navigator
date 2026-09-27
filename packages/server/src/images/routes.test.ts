@@ -34,11 +34,11 @@ function upload(bytes: Uint8Array, levelId = "oth-L1", filename = "L1.png") {
 beforeEach(async () => {
   db = await createTestDb();
   app = createApp({ db, dataDir: await mkdtemp(join(tmpdir(), "oth-img-")) });
-  await createUser(db, { email: "wei@example.com", password: "passphrase", displayName: "Wei" });
+  const wei = await createUser(db, { email: "wei@example.com", password: "passphrase", displayName: "Wei" });
   cookie = (await app.request("/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email: "wei@example.com", password: "passphrase" }),
+    body: JSON.stringify({ userId: wei.id }),
   })).headers.get("set-cookie") ?? "";
   await db.insert(buildings).values({ id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94, rotationDeg: 0 });
   await db.insert(levels).values({

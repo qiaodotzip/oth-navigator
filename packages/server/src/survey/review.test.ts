@@ -22,11 +22,11 @@ const post = (path: string, body: unknown, headers: Record<string, string> = { c
 beforeEach(async () => {
   db = await createTestDb();
   app = createApp({ db, dataDir: await mkdtemp(join(tmpdir(), "oth-review-")) });
-  await createUser(db, { email: "wei@example.com", password: "passphrase", displayName: "Wei" });
+  const wei = await createUser(db, { email: "wei@example.com", password: "passphrase", displayName: "Wei" });
   cookie = (await app.request("/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email: "wei@example.com", password: "passphrase" }),
+    body: JSON.stringify({ userId: wei.id }),
   })).headers.get("set-cookie") ?? "";
 
   // What a labelling agent leaves behind: a proposed place, seen in two frames.

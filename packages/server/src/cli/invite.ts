@@ -1,69 +1,55 @@
 import { randomBytes } from "node:crypto";
-import { and, eq, ne } from "drizzle-orm";
-import { hashPassword } from "../auth/password";
+import { isNull } from "drizzle-orm";
 import { createUser, findUserByEmail, type User } from "../auth/users";
 import type { Database } from "../db/client";
-import { sessions, users } from "../db/schema";
+import { users } from "../db/schema";
 
-/** One-time passwords are shown once and never stored in the clear. */
-function oneTimePassword(): string {
-  return randomBytes(16).toString("base64url");
+/** A name that collides, case-insensitively, with someone already on the team. */
+export class DuplicateNameError extends Error {
+  constructor(displayName: string) {
+    super(`Someone called ${displayName} is already on the team.`);
+    this.name = "DuplicateNameError";
+  }
+}
+
+function slugify(name: string): string {
+  const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug || "person";
+}
+
+/** The first `<slug>@team.oth.local` nobody has yet, trying `-2`, `-3`, … until one is free. */
+async function freeHiddenEmail(db: Database, displayName: string): Promise<string> {
+  const base = slugify(displayName);
+  for (let n = 1; ; n += 1) {
+    const email = n === 1 ? `${base}@team.oth.local` : `${base}-${n}@team.oth.local`;
+    if (!(await findUserByEmail(db, email))) return email;
+  }
+}
+
+async function activeUserNamed(db: Database, displayName: string): Promise<boolean> {
+  const rows = await db.select({ displayName: users.displayName }).from(users).where(isNull(users.disabledAt));
+  const target = displayName.toLowerCase();
+  return rows.some(r => r.displayName.toLowerCase() === target);
 }
 
 /**
- * There is no signup route. Accounts exist because someone ran this, which is
- * the whole of "invite-only" for a team of four.
+ * Adds a person by name. There is no password to set or send: signing in is
+ * picking a name from a list, so the name is the whole of the account, and
+ * two people can't share one.
+ *
+ * The email and password columns are both `NOT NULL` and nothing checks
+ * either any more: the email is a hidden slug nobody sees, and the password
+ * is the hash of a random value nobody will ever need, because no route
+ * verifies it.
  */
 export async function inviteUser(
-  db: Database, email: string, displayName: string, invitedBy?: string,
-): Promise<{ user: User; password: string }> {
-  if (await findUserByEmail(db, email)) {
-    throw new Error(`a user with email ${email} already exists`);
-  }
-  const password = oneTimePassword();
-  // A one-time password is meant to be replaced; the app asks until it is.
-  const user = await createUser(db, { email, password, displayName, invitedBy, mustChangePassword: true });
-  return { user, password };
-}
+  db: Database, displayName: string, invitedBy?: string,
+): Promise<{ user: User }> {
+  const name = displayName.trim();
+  if (await activeUserNamed(db, name)) throw new DuplicateNameError(name);
 
-/**
- * Issues a fresh password for an account that already exists.
- *
- * Without this, a forgotten password is a permanent lockout: there is no signup
- * route, no reset email, and `invite` refuses an address it already knows. For
- * a team of four sharing one server that is a real way to lose a person.
- *
- * Also ends every session the account had open: a reset is the only lever the
- * app offers to cut off an account (a lost laptop, a teammate who has left),
- * and "their current password stops working at once" reads as "they are
- * signed out now" — this makes that true. `keepToken` is for the one case
- * where the caller is resetting their own password and should not be signed
- * out by the request they just made.
- */
-export async function resetPassword(
-  db: Database, email: string, options: { keepToken?: string } = {},
-): Promise<{ user: User; password: string }> {
-  const existing = await findUserByEmail(db, email);
-  if (!existing) throw new Error(`no user with email ${email}`);
-
-  const password = oneTimePassword();
-  await db.update(users)
-    .set({ passwordHash: await hashPassword(password), mustChangePassword: true })
-    .where(eq(users.id, existing.id));
-
-  await db.delete(sessions).where(
-    options.keepToken
-      ? and(eq(sessions.userId, existing.id), ne(sessions.id, options.keepToken))
-      : eq(sessions.userId, existing.id),
-  );
-
-  return {
-    user: {
-      id: existing.id,
-      email: existing.email,
-      displayName: existing.displayName,
-      mustChangePassword: true,
-    },
-    password,
-  };
+  const email = await freeHiddenEmail(db, name);
+  const password = randomBytes(32).toString("base64url");
+  const user = await createUser(db, { email, password, displayName: name, invitedBy });
+  return { user };
 }

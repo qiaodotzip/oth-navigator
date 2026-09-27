@@ -2,53 +2,87 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import type { Database } from "../db/client";
-import { auditLog, users } from "../db/schema";
-import { createTestDb } from "../testing/harness";
+import { users } from "../db/schema";
+import { createTestDb, json } from "../testing/harness";
 import { createUser } from "./users";
 
 let db: Database;
 let app: ReturnType<typeof createApp>;
+let wei: { id: string; email: string; displayName: string };
 
 beforeEach(async () => {
   db = await createTestDb();
   app = createApp({ db });
-  await createUser(db, {
+  wei = await createUser(db, {
     email: "wei@example.com",
     password: "a-good-passphrase",
     displayName: "Wei",
   });
 });
 
-function login(email: string, password: string) {
+function login(userId: string) {
   return app.request("/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ userId }),
   });
 }
 
+describe("who you can sign in as", () => {
+  it("is public, and needs no session", async () => {
+    const res = await app.request("/api/auth/people");
+    expect(res.status).toBe(200);
+    const body = await json<{ people: { id: string; displayName: string }[] }>(res);
+    expect(body.people).toEqual([{ id: wei.id, displayName: "Wei" }]);
+  });
+
+  it("sorts by name, case-insensitively", async () => {
+    await createUser(db, { email: "b@example.com", password: "x".repeat(12), displayName: "bea" });
+    await createUser(db, { email: "a@example.com", password: "x".repeat(12), displayName: "Aisha" });
+    const body = await json<{ people: { displayName: string }[] }>(await app.request("/api/auth/people"));
+    expect(body.people.map(p => p.displayName)).toEqual(["Aisha", "bea", "Wei"]);
+  });
+
+  it("never includes email or anything else", async () => {
+    const text = JSON.stringify(await json(await app.request("/api/auth/people")));
+    expect(text).not.toContain("example.com");
+  });
+
+  it("leaves out a disabled account", async () => {
+    await db.update(users).set({ disabledAt: new Date() }).where(eq(users.id, wei.id));
+    const body = await json<{ people: unknown[] }>(await app.request("/api/auth/people"));
+    expect(body.people).toEqual([]);
+  });
+});
+
 describe("auth routes", () => {
-  it("logs in with correct credentials and sets an httpOnly cookie", async () => {
-    const res = await login("wei@example.com", "a-good-passphrase");
+  it("signs in by id and sets an httpOnly cookie", async () => {
+    const res = await login(wei.id);
     expect(res.status).toBe(200);
     const cookie = res.headers.get("set-cookie") ?? "";
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("SameSite=Lax");
+    const body = await json<{ user: { displayName: string } }>(res);
+    expect(body.user.displayName).toBe("Wei");
   });
 
-  it("rejects a wrong password with 401", async () => {
-    expect((await login("wei@example.com", "wrong")).status).toBe(401);
+  it("rejects an id nobody has, so picking a name from the list is the only way in", async () => {
+    const res = await login("user_nope");
+    expect(res.status).toBe(401);
+    expect(await json<{ error: string }>(res)).toEqual({ error: "Pick your name from the list." });
   });
 
-  it("gives the same 401 for an unknown email, so accounts cannot be enumerated", async () => {
-    const unknown = await login("nobody@example.com", "a-good-passphrase");
-    const wrong = await login("wei@example.com", "wrong");
-    expect(unknown.status).toBe(401);
-    expect(await unknown.json()).toEqual(await wrong.json());
+  it("rejects a malformed body the same way", async () => {
+    const res = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(401);
   });
 
   it("returns the current user for a valid session", async () => {
-    const cookie = (await login("wei@example.com", "a-good-passphrase")).headers.get("set-cookie") ?? "";
+    const cookie = (await login(wei.id)).headers.get("set-cookie") ?? "";
     const me = await app.request("/api/auth/me", { headers: { cookie } });
     expect(me.status).toBe(200);
     const body = (await me.json()) as { user: { displayName: string } };
@@ -56,8 +90,13 @@ describe("auth routes", () => {
   });
 
   it("never returns the password hash", async () => {
-    const res = await login("wei@example.com", "a-good-passphrase");
+    const res = await login(wei.id);
     expect(JSON.stringify(await res.json())).not.toContain("scrypt$");
+  });
+
+  it("never returns mustChangePassword: there is no password to change", async () => {
+    const res = await login(wei.id);
+    expect(JSON.stringify(await res.json())).not.toContain("mustChangePassword");
   });
 
   it("401s /api/auth/me without a session", async () => {
@@ -65,91 +104,19 @@ describe("auth routes", () => {
   });
 
   it("invalidates the session on logout", async () => {
-    const cookie = (await login("wei@example.com", "a-good-passphrase")).headers.get("set-cookie") ?? "";
+    const cookie = (await login(wei.id)).headers.get("set-cookie") ?? "";
     await app.request("/api/auth/logout", { method: "POST", headers: { cookie } });
     expect((await app.request("/api/auth/me", { headers: { cookie } })).status).toBe(401);
   });
 
   it("rejects a session whose user has since been disabled", async () => {
-    const cookie = (await login("wei@example.com", "a-good-passphrase")).headers.get("set-cookie") ?? "";
-    await db.update(users).set({ disabledAt: new Date() }).where(eq(users.email, "wei@example.com"));
+    const cookie = (await login(wei.id)).headers.get("set-cookie") ?? "";
+    await db.update(users).set({ disabledAt: new Date() }).where(eq(users.id, wei.id));
     expect((await app.request("/api/auth/me", { headers: { cookie } })).status).toBe(401);
   });
 
-  it("says in the session when the password is a one-time one", async () => {
-    const cookie = (await login("wei@example.com", "a-good-passphrase")).headers.get("set-cookie") ?? "";
-    const me = await (await app.request("/api/auth/me", { headers: { cookie } })).json() as {
-      user: { mustChangePassword: boolean };
-    };
-    expect(me.user.mustChangePassword).toBe(false);
-
-    await db.update(users).set({ mustChangePassword: true }).where(eq(users.email, "wei@example.com"));
-    const again = await (await app.request("/api/auth/me", { headers: { cookie } })).json() as {
-      user: { mustChangePassword: boolean };
-    };
-    expect(again.user.mustChangePassword).toBe(true);
-  });
-
-  describe("changing your password", () => {
-    async function signedIn() {
-      return (await login("wei@example.com", "a-good-passphrase")).headers.get("set-cookie") ?? "";
-    }
-    const change = (cookie: string, body: unknown) => app.request("/api/auth/password", {
-      method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(body),
-    });
-
-    it("sets the new password and clears the one-time flag", async () => {
-      const cookie = await signedIn();
-      await db.update(users).set({ mustChangePassword: true }).where(eq(users.email, "wei@example.com"));
-      const res = await change(cookie, { currentPassword: "a-good-passphrase", newPassword: "another-good-one" });
-      expect(res.status).toBe(204);
-      expect((await login("wei@example.com", "another-good-one")).status).toBe(200);
-      const [row] = await db.select().from(users).where(eq(users.email, "wei@example.com"));
-      expect(row!.mustChangePassword).toBe(false);
-    });
-
-    it("says the current password is wrong without signing you out", async () => {
-      // 422, not 401: a mistyped password must not read as a lost session.
-      const cookie = await signedIn();
-      const res = await change(cookie, { currentPassword: "nope", newPassword: "another-good-one" });
-      expect(res.status).toBe(422);
-      expect((await app.request("/api/auth/me", { headers: { cookie } })).status).toBe(200);
-    });
-
-    it("refuses a new password under ten characters", async () => {
-      const cookie = await signedIn();
-      expect((await change(cookie, { currentPassword: "a-good-passphrase", newPassword: "short" })).status).toBe(400);
-    });
-
-    // M15: one message for every malformed body meant a missing field read
-    // the same as a too-short new one.
-    it("says so when the current password is missing, rather than blaming the new one", async () => {
-      const cookie = await signedIn();
-      const res = await change(cookie, { newPassword: "another-good-one" });
-      expect(res.status).toBe(400);
-      const body = (await res.json()) as { error: string };
-      expect(body.error).toMatch(/current password/i);
-    });
-
-    // I3: changing your password is the only way to end other sessions, so it must.
-    it("signs out other sessions of the same user, but not the one that changed it", async () => {
-      const first = await signedIn();
-      const second = (await login("wei@example.com", "a-good-passphrase")).headers.get("set-cookie") ?? "";
-      expect((await app.request("/api/auth/me", { headers: { cookie: second } })).status).toBe(200);
-
-      const res = await change(first, { currentPassword: "a-good-passphrase", newPassword: "another-good-one" });
-      expect(res.status).toBe(204);
-
-      expect((await app.request("/api/auth/me", { headers: { cookie: second } })).status).toBe(401);
-      expect((await app.request("/api/auth/me", { headers: { cookie: first } })).status).toBe(200);
-    });
-
-    it("is written to the audit log, without the password or its hash", async () => {
-      const cookie = await signedIn();
-      await change(cookie, { currentPassword: "a-good-passphrase", newPassword: "another-good-one" });
-      const rows = await db.select().from(auditLog).where(eq(auditLog.action, "change-password"));
-      expect(rows).toHaveLength(1);
-      expect(JSON.stringify(rows[0])).not.toContain("another-good-one");
-    });
+  it("refuses to sign in as a disabled account too", async () => {
+    await db.update(users).set({ disabledAt: new Date() }).where(eq(users.id, wei.id));
+    expect((await login(wei.id)).status).toBe(401);
   });
 });

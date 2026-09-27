@@ -43,11 +43,11 @@ function upload(bytes: Uint8Array, filename = "arch.glb") {
 beforeEach(async () => {
   db = await createTestDb();
   app = createApp({ db, dataDir: await mkdtemp(join(tmpdir(), "oth-assets-routes-")) });
-  await createUser(db, { email: "wei@example.com", password: "passphrase", displayName: "Wei" });
+  const wei = await createUser(db, { email: "wei@example.com", password: "passphrase", displayName: "Wei" });
   cookie = (await app.request("/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email: "wei@example.com", password: "passphrase" }),
+    body: JSON.stringify({ userId: wei.id }),
   })).headers.get("set-cookie") ?? "";
 });
 

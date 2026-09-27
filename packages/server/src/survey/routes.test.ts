@@ -49,11 +49,11 @@ function grab(bytes: Uint8Array, captureId = "cap_1", timeMs?: string, headers =
 beforeEach(async () => {
   db = await createTestDb();
   app = createApp({ db, dataDir: await mkdtemp(join(tmpdir(), "oth-survey-")) });
-  await createUser(db, { email: "wei@example.com", password: "passphrase", displayName: "Wei" });
+  const wei = await createUser(db, { email: "wei@example.com", password: "passphrase", displayName: "Wei" });
   cookie = (await app.request("/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email: "wei@example.com", password: "passphrase" }),
+    body: JSON.stringify({ userId: wei.id }),
   })).headers.get("set-cookie") ?? "";
   await post("/api/entities/capture", {
     data: { id: "cap_1", kind: "video", filename: "L1 walk.mp4", durationMs: 90000 },

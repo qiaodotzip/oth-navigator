@@ -9,36 +9,37 @@ import { createTestDb, json } from "../testing/harness";
 let db: Database;
 let app: ReturnType<typeof createApp>;
 let cookie: string;
+let wei: { id: string };
 
 const post = (path: string, body: unknown, headers: Record<string, string> = { cookie }) =>
   app.request(path, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
-async function login(email: string, password: string) {
+async function login(userId: string) {
   return app.request("/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ userId }),
   });
 }
 
 beforeEach(async () => {
   db = await createTestDb();
   app = createApp({ db });
-  await createUser(db, { email: "wei@example.com", password: "passphrase-1", displayName: "Wei" });
-  cookie = (await login("wei@example.com", "passphrase-1")).headers.get("set-cookie") ?? "";
+  wei = await createUser(db, { email: "wei@example.com", password: "passphrase-1", displayName: "Wei" });
+  cookie = (await login(wei.id)).headers.get("set-cookie") ?? "";
 });
 
 describe("the team", () => {
-  it("lists everyone on it, without anyone's password hash", async () => {
+  it("lists everyone on it by name, without email or a password hash", async () => {
     const body = await json<{ users: Record<string, unknown>[] }>(await app.request("/api/users", { headers: { cookie } }));
-    expect(body.users).toEqual([{ id: expect.any(String), email: "wei@example.com", displayName: "Wei" }]);
+    expect(body.users).toEqual([{ id: wei.id, displayName: "Wei" }]);
   });
 
   it("leaves out a disabled account", async () => {
     const ghost = await createUser(db, { email: "ghost@example.com", password: "x".repeat(12), displayName: "Ghost" });
     await db.update(users).set({ disabledAt: new Date() }).where(eq(users.id, ghost.id));
-    const body = await json<{ users: { email: string }[] }>(await app.request("/api/users", { headers: { cookie } }));
-    expect(body.users.map(u => u.email)).toEqual(["wei@example.com"]);
+    const body = await json<{ users: { displayName: string }[] }>(await app.request("/api/users", { headers: { cookie } }));
+    expect(body.users.map(u => u.displayName)).toEqual(["Wei"]);
   });
 
   it("requires a signed-in teammate", async () => {
@@ -46,81 +47,52 @@ describe("the team", () => {
   });
 });
 
-describe("inviting", () => {
-  it("creates the account and hands back its one-time password, once", async () => {
-    const res = await post("/api/users/invite", { email: "Aisha@Example.com", displayName: "Aisha" });
+describe("adding a teammate", () => {
+  it("creates the account by name alone, ready to sign in by picking it", async () => {
+    const res = await post("/api/users/invite", { displayName: "Aisha" });
     expect(res.status).toBe(201);
-    const body = await json<{ user: { email: string }; password: string }>(res);
-    expect(body.user.email).toBe("aisha@example.com");
-    const signIn = await login("aisha@example.com", body.password);
+    const body = await json<{ user: { id: string; displayName: string } }>(res);
+    expect(body.user.displayName).toBe("Aisha");
+    expect(Object.keys(body.user).sort()).toEqual(["displayName", "id"]);
+
+    const signIn = await login(body.user.id);
     expect(signIn.status).toBe(200);
-    expect((await json<{ user: { mustChangePassword: boolean } }>(signIn)).user.mustChangePassword).toBe(true);
   });
 
-  it("refuses an email already on the team", async () => {
-    expect((await post("/api/users/invite", { email: "wei@example.com", displayName: "Wei again" })).status).toBe(409);
+  it("refuses a name already on the team, case-insensitively", async () => {
+    const res = await post("/api/users/invite", { displayName: "wei" });
+    expect(res.status).toBe(409);
+    expect(await json<{ error: string }>(res)).toEqual({ error: "Someone called wei is already on the team." });
   });
 
   it("refuses a body that is not an invite", async () => {
-    expect((await post("/api/users/invite", { email: "not-an-email", displayName: "" })).status).toBe(400);
+    expect((await post("/api/users/invite", { displayName: "" })).status).toBe(400);
   });
 
-  it("records who invited whom", async () => {
-    await post("/api/users/invite", { email: "aisha@example.com", displayName: "Aisha" });
+  it("refuses a name over 80 characters", async () => {
+    expect((await post("/api/users/invite", { displayName: "x".repeat(81) })).status).toBe(400);
+  });
+
+  it("records who added whom", async () => {
+    await post("/api/users/invite", { displayName: "Aisha" });
     const rows = await db.select().from(auditLog).where(eq(auditLog.action, "invite"));
     expect(rows).toHaveLength(1);
   });
-});
 
-describe("resetting a password", () => {
-  it("issues a new one-time password and retires the old one", async () => {
-    const invited = await json<{ user: { id: string }; password: string }>(
-      await post("/api/users/invite", { email: "aisha@example.com", displayName: "Aisha" }),
-    );
-    const res = await post(`/api/users/${invited.user.id}/reset-password`, {});
-    expect(res.status).toBe(200);
-    const fresh = await json<{ password: string }>(res);
-    expect(fresh.password).not.toBe(invited.password);
-    expect((await login("aisha@example.com", invited.password)).status).toBe(401);
-    expect((await login("aisha@example.com", fresh.password)).status).toBe(200);
-  });
-
-  it("is written to the audit log", async () => {
-    const me = await json<{ user: { id: string } }>(await app.request("/api/auth/me", { headers: { cookie } }));
-    await post(`/api/users/${me.user.id}/reset-password`, {});
-    const rows = await db.select().from(auditLog).where(eq(auditLog.action, "reset-password"));
-    expect(rows).toHaveLength(1);
-  });
-
-  it("404s someone who is not on the team", async () => {
-    expect((await post("/api/users/user_nope/reset-password", {})).status).toBe(404);
-  });
-
-  it("404s a disabled account", async () => {
+  it("a disabled name can be reused: it no longer collides", async () => {
     const ghost = await createUser(db, { email: "ghost@example.com", password: "x".repeat(12), displayName: "Ghost" });
     await db.update(users).set({ disabledAt: new Date() }).where(eq(users.id, ghost.id));
-    expect((await post(`/api/users/${ghost.id}/reset-password`, {})).status).toBe(404);
+    expect((await post("/api/users/invite", { displayName: "Ghost" })).status).toBe(201);
+  });
+});
+
+describe("no password routes remain", () => {
+  it("404s the removed change-password route", async () => {
+    expect((await post("/api/auth/password", { currentPassword: "a", newPassword: "b" })).status).toBe(404);
   });
 
-  // I3: the only lever the app has to cut an account off must actually do so.
-  it("signs the target out of every session they had open", async () => {
-    const invited = await json<{ user: { id: string }; password: string }>(
-      await post("/api/users/invite", { email: "aisha@example.com", displayName: "Aisha" }),
-    );
-    const aishaCookie = (await login("aisha@example.com", invited.password)).headers.get("set-cookie") ?? "";
-    expect((await app.request("/api/auth/me", { headers: { cookie: aishaCookie } })).status).toBe(200);
-
-    await post(`/api/users/${invited.user.id}/reset-password`, {});
-
-    expect((await app.request("/api/auth/me", { headers: { cookie: aishaCookie } })).status).toBe(401);
-    // Wei's own session, which did the resetting, is untouched.
-    expect((await app.request("/api/auth/me", { headers: { cookie } })).status).toBe(200);
-  });
-
-  it("keeps the caller signed in when resetting their own password", async () => {
-    const me = await json<{ user: { id: string } }>(await app.request("/api/auth/me", { headers: { cookie } }));
-    await post(`/api/users/${me.user.id}/reset-password`, {});
-    expect((await app.request("/api/auth/me", { headers: { cookie } })).status).toBe(200);
+  it("404s the removed reset-password route", async () => {
+    expect((await post(`/api/users/${wei.id}/reset-password`, {})).status).toBe(404);
   });
 });
 
