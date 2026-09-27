@@ -42,6 +42,15 @@ export const KeyframeSchema = AuditFieldsSchema.extend({
   imageId: SlugSchema,
   widthPx: z.number().int().positive(),
   heightPx: z.number().int().positive(),
+  /**
+   * The kind of walkway the camera was in when this frame was taken.
+   *
+   * A walkthrough is already a recording of a real route; this is what says
+   * what kind of route it was. Frame by frame along a capture it turns the
+   * sequence into a typed path — concourse, then covered link, then ramp —
+   * which is the thing no floorplan carries and no single photograph shows.
+   */
+  pathwayKindId: SlugSchema.optional(),
 });
 
 /** Fractions of the frame, so a box survives any resize or re-encode. */

@@ -6,7 +6,14 @@ import { readAsset, storeAsset } from "../assets/storage";
 import { requireUser } from "../auth/middleware";
 import { captures, keyframes, sightings } from "../db/schema";
 import { toModelRow } from "../db/rows";
+import { z } from "zod";
 import { IMAGE_MAX_BYTES, InvalidImageError, readImageSize } from "../images/inspect";
+
+const PatchKeyframe = z.object({
+  pathwayKindId: z.string().nullable(),
+  /** Carry it forward to later untyped frames in the same capture. */
+  from: z.boolean().default(false),
+});
 
 /**
  * Keyframes have their own route rather than going through generic entity CRUD,
@@ -120,6 +127,46 @@ keyframeRoutes.post("/", async c => {
  * recoverable. The sightings go with it: a label pointing at a frame nobody can
  * see is worse than no label, because it still counts toward a place.
  */
+/**
+ * Sets which kind of walkway a frame was taken in.
+ *
+ * `from` applies it to this frame and every later one in the capture that has
+ * no type yet, which is how a walk is actually described: you enter a covered
+ * link and stay in it for forty frames, and saying so forty times is how a
+ * labelling job gets abandoned.
+ */
+keyframeRoutes.patch("/:id", async c => {
+  const db = c.get("db");
+  const id = c.req.param("id");
+  const body = PatchKeyframe.safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "expected { pathwayKindId, from? }" }, 400);
+
+  const [frame] = await db.select().from(keyframes).where(eq(keyframes.id, id));
+  if (!frame) return c.json({ error: "not found" }, 404);
+
+  const { pathwayKindId, from } = body.data;
+  const now = new Date();
+  const by = c.get("user").id;
+  const set = { pathwayKindId: pathwayKindId ?? null, updatedBy: by, updatedAt: now };
+
+  if (!from) {
+    await db.update(keyframes).set(set).where(eq(keyframes.id, id));
+    return c.json({ updated: 1 });
+  }
+
+  const rest = (await db.select().from(keyframes)
+    .where(and(eq(keyframes.captureId, frame.captureId), isNull(keyframes.deletedAt))))
+    .filter(k => (k.timeMs ?? 0) >= (frame.timeMs ?? 0))
+    // Only the untyped ones: a type already set further along is someone's
+    // decision, and running over it would undo their work silently.
+    .filter(k => k.id === id || k.pathwayKindId === null);
+
+  for (const k of rest) {
+    await db.update(keyframes).set(set).where(eq(keyframes.id, k.id));
+  }
+  return c.json({ updated: rest.length });
+});
+
 keyframeRoutes.delete("/:id", async c => {
   const db = c.get("db");
   const id = c.req.param("id");

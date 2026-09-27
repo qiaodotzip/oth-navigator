@@ -1,0 +1,1 @@
+ALTER TABLE "keyframes" ADD COLUMN "pathway_kind_id" text;

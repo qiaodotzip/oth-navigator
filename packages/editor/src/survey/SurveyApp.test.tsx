@@ -9,6 +9,7 @@ const model = parseModel({
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
   levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
   captures: [{ id: "cap_1", kind: "video", filename: "L1 walk.mp4" }],
+  pathwayKinds: [{ id: "pk-1", nameEn: "Covered link", colorHex: "#38bdf8" }],
   keyframes: [
     { id: "kf_2", captureId: "cap_1", timeMs: 2000, imageId: "kf_2", widthPx: 640, heightPx: 480 },
     { id: "kf_1", captureId: "cap_1", timeMs: 1000, imageId: "kf_1", widthPx: 640, heightPx: 480 },
@@ -25,6 +26,7 @@ function fakeApi(overrides: Record<string, unknown> = {}) {
     keyframeFileUrl: (id: string) => `/api/keyframes/${id}/file`,
     deleteKeyframe: vi.fn().mockResolvedValue(undefined),
     deleteCapture: vi.fn().mockResolvedValue({ frames: 2 }),
+    setKeyframeWalkway: vi.fn().mockResolvedValue({ updated: 1 }),
     updateEntity: vi.fn().mockResolvedValue({}),
     uploadKeyframe: vi.fn().mockResolvedValue({}),
     createEntity: vi.fn().mockResolvedValue({}),
@@ -143,6 +145,57 @@ describe("SurveyApp", () => {
     fireEvent.click(screen.getByTestId("capture-cap_1"));
     fireEvent.click(await screen.findByTestId("filmstrip-kf_1"));
     expect(screen.getByTestId("label-box-sg_1")).toBeTruthy();
+  });
+
+  it("says which walkway a frame was taken in", async () => {
+    const api = fakeApi();
+    render(<SurveyApp api={api} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByTestId("capture-cap_1"));
+    fireEvent.click(await screen.findByTestId("filmstrip-kf_1"));
+    fireEvent.change(screen.getByLabelText("Walkway type for this frame"), {
+      target: { value: "pk-1" },
+    });
+    await waitFor(() =>
+      expect((api as unknown as { setKeyframeWalkway: ReturnType<typeof vi.fn> })
+        .setKeyframeWalkway).toHaveBeenCalledWith("kf_1", "pk-1", false));
+  });
+
+  it("carries the walkway onward, since a walk stays in one for many frames", async () => {
+    const withKind = parseModel({
+      ...JSON.parse(JSON.stringify(model)),
+      keyframes: [
+        { id: "kf_1", captureId: "cap_1", timeMs: 1000, imageId: "kf_1", widthPx: 64, heightPx: 48, pathwayKindId: "pk-1" },
+      ],
+    });
+    const api = fakeApi({ getModel: vi.fn().mockResolvedValue(withKind) });
+    render(<SurveyApp api={api} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByTestId("capture-cap_1"));
+    fireEvent.click(await screen.findByTestId("filmstrip-kf_1"));
+    fireEvent.click(screen.getByRole("button", { name: /apply onward/i }));
+    await waitFor(() =>
+      expect((api as unknown as { setKeyframeWalkway: ReturnType<typeof vi.fn> })
+        .setKeyframeWalkway).toHaveBeenCalledWith("kf_1", "pk-1", true));
+  });
+
+  it("shows the route as a colour band along the filmstrip", async () => {
+    const withKind = parseModel({
+      ...JSON.parse(JSON.stringify(model)),
+      keyframes: [
+        { id: "kf_1", captureId: "cap_1", timeMs: 1000, imageId: "kf_1", widthPx: 64, heightPx: 48, pathwayKindId: "pk-1" },
+        { id: "kf_2", captureId: "cap_1", timeMs: 2000, imageId: "kf_2", widthPx: 64, heightPx: 48 },
+      ],
+    });
+    render(<SurveyApp api={fakeApi({ getModel: vi.fn().mockResolvedValue(withKind) })} />);
+    await waitFor(() => screen.getByTestId("capture-cap_1"));
+    fireEvent.click(screen.getByTestId("capture-cap_1"));
+    await screen.findByTestId("filmstrip");
+    expect((screen.getByTestId("walkway-kf_1") as HTMLElement).style.background)
+      .toContain("rgb(56, 189, 248)");
+    // A frame with no type shows no band rather than a wrong one.
+    expect((screen.getByTestId("walkway-kf_2") as HTMLElement).style.background)
+      .toBe("transparent");
   });
 
   it("lists places with how often each was seen", async () => {

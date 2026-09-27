@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
 import { readAsset } from "../assets/storage";
 import type { Database } from "../db/client";
-import { captures, keyframes, places } from "../db/schema";
+import { captures, keyframes, pathwayKinds, places } from "../db/schema";
 
 /**
  * Writes one capture's frames to a folder, with everything an agent needs to
@@ -25,6 +25,7 @@ export async function exportCaptureForLabelling(
   frames.sort((a, b) => (a.timeMs ?? 0) - (b.timeMs ?? 0));
 
   const known = await db.select().from(places).where(isNull(places.deletedAt));
+  const kinds = await db.select().from(pathwayKinds).where(isNull(pathwayKinds.deletedAt));
 
   const dir = join(outDir, captureId);
   await mkdir(join(dir, "frames"), { recursive: true });
@@ -42,6 +43,9 @@ export async function exportCaptureForLabelling(
     levelId: capture.levelId,
     frames: frames.map(f => ({
       keyframeId: f.id,
+      // What kind of walkway the camera was in. Along the sequence this is the
+      // route, which is the context a single frame cannot give you.
+      pathwayKindId: f.pathwayKindId,
       file: `frames/${f.id}.${f.storagePath.endsWith(".png") ? "png" : "jpg"}`,
       timeMs: f.timeMs,
       widthPx: f.widthPx,
@@ -50,6 +54,7 @@ export async function exportCaptureForLabelling(
     // So a second pass links to what the first pass named instead of
     // duplicating it.
     knownPlaces: known.map(p => ({ id: p.id, nameEn: p.nameEn, category: p.category })),
+    walkwayKinds: kinds.map(k => ({ id: k.id, nameEn: k.nameEn, modellingNote: k.modellingNote })),
   }, null, 2), "utf8");
 
   await writeFile(join(dir, "LABELLING.md"), INSTRUCTIONS, "utf8");
@@ -98,6 +103,10 @@ propose what you can actually see and say when you are unsure.
   so the seventh sighting of a shop links rather than making a seventh shop.
 - \`levelId\` — optional, like "oth-L3". Set it when the frame tells you the
   floor, such as a directory board. Otherwise the capture's floor is used.
+
+Each frame also carries \`pathwayKindId\` — what kind of walkway the camera was
+in. Read it for context: a shopfront seen from a covered link is on that link,
+and along the sequence these say the route the walk took.
 - \`note\` — optional. Say what you were unsure about; the reviewer reads it.
 
 ## The point

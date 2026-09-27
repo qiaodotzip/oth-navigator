@@ -147,6 +147,13 @@ export function createApi(options: ApiOptions = {}) {
     deleteKeyframe: (id: string) =>
       request<void>(`/api/keyframes/${id}`, { method: "DELETE" }),
 
+    /** Sets a frame's walkway type; `from` carries it to later untyped frames. */
+    setKeyframeWalkway: (id: string, pathwayKindId: string | null, from = false) =>
+      request<{ updated: number }>(`/api/keyframes/${id}`, {
+        method: "PATCH",
+        body: json({ pathwayKindId, from }),
+      }),
+
     /** Retires a capture, its frames, and everything labelled on them. */
     deleteCapture: (id: string) =>
       request<{ frames: number }>(`/api/captures/${id}`, { method: "DELETE" }),

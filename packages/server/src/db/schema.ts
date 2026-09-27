@@ -270,6 +270,7 @@ export const keyframes = pgTable("keyframes", {
   widthPx: integer("width_px").notNull(),
   heightPx: integer("height_px").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
+  pathwayKindId: text("pathway_kind_id"),
   ...auditColumns,
 }, t => ({ captureIdx: index("keyframes_capture_idx").on(t.captureId) }));
 

@@ -46,6 +46,8 @@ export function SurveyApp({ api }: { api: Api }) {
   const frame = frames.find(f => f.id === frameId) ?? frames[frames.length - 1] ?? null;
   const counts = sightingCounts(model?.sightings ?? []);
   const labelled = labelCounts(model);
+  const kinds = model?.pathwayKinds ?? [];
+  const kindOf = (id: string | undefined) => kinds.find(k => k.id === id);
   const unbound = places.filter(p => !p.roomId).length;
   const waiting = reviewProgress(model).proposed;
 
@@ -85,6 +87,16 @@ export function SurveyApp({ api }: { api: Api }) {
         setCaptureId(null);
         setFrameId(null);
       }
+      await saver.refresh();
+    } catch (err) {
+      useEditorStore.getState().setStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function setWalkway(pathwayKindId: string | null, from: boolean) {
+    if (!frame) return;
+    try {
+      await api.setKeyframeWalkway(frame.id, pathwayKindId, from);
       await saver.refresh();
     } catch (err) {
       useEditorStore.getState().setStatus(err instanceof Error ? err.message : String(err));
@@ -231,6 +243,17 @@ export function SurveyApp({ api }: { api: Api }) {
                       >
                         <img src={api.keyframeFileUrl(f.id)} alt="" className="h-full" />
                       </button>
+                      {/*
+                        The walk as a route: a band of colour per frame, so a
+                        capture reads as concourse, then covered link, then
+                        ramp, rather than as 446 unrelated pictures.
+                      */}
+                      <span
+                        data-testid={`walkway-${f.id}`}
+                        title={kindOf(f.pathwayKindId)?.nameEn ?? "No walkway type"}
+                        className="pointer-events-none absolute inset-x-0 bottom-0 h-1"
+                        style={{ background: kindOf(f.pathwayKindId)?.colorHex ?? "transparent" }}
+                      />
                       {labelled.get(f.id) && (
                         <span
                           data-testid={`labelled-${f.id}`}
@@ -265,6 +288,26 @@ export function SurveyApp({ api }: { api: Api }) {
                       ? ` — ${Math.floor(frame.timeMs / 60000)}m${String(Math.floor((frame.timeMs % 60000) / 1000)).padStart(2, "0")}s`
                       : ""}
                   </span>
+                  <label className="flex items-center gap-1">
+                    Walking through
+                    <select
+                      aria-label="Walkway type for this frame"
+                      className="rounded border px-1 py-1"
+                      value={frame.pathwayKindId ?? ""}
+                      onChange={e => void setWalkway(e.target.value || null, false)}
+                    >
+                      <option value="">not set</option>
+                      {kinds.map(k => <option key={k.id} value={k.id}>{k.nameEn}</option>)}
+                    </select>
+                  </label>
+                  <button
+                    className="rounded border px-2 py-1 disabled:opacity-40"
+                    disabled={!frame.pathwayKindId}
+                    title="Apply to this frame and every later one that has no type yet"
+                    onClick={() => void setWalkway(frame.pathwayKindId ?? null, true)}
+                  >
+                    Apply onward
+                  </button>
                   <button
                     className="rounded border px-2 py-1"
                     onClick={() => void removeFrame(frame.id)}
