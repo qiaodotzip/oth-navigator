@@ -141,3 +141,39 @@ describe("level owners", () => {
     expect(list.items.find(l => l.id === "oth-L9")?.ownerIds).toEqual(["user_a"]);
   });
 });
+
+describe("restore", () => {
+  const send = (method: string, path: string, body?: unknown) => app.request(path, {
+    method,
+    headers: { "content-type": "application/json", cookie },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  async function binnedPathway() {
+    await send("POST", "/api/entities/pathway", { data: { id: "p_undo", levelId: "oth-L1", polyline: [[0, 0], [5, 0]] } });
+    await send("DELETE", "/api/entities/pathway/p_undo", { expectedVersion: 0 });
+  }
+
+  it("brings a deleted entity back, one version on", async () => {
+    await binnedPathway();
+    const res = await send("POST", "/api/entities/pathway/p_undo/restore", { expectedVersion: 1 });
+    expect(res.status).toBe(200);
+    const list = await (await send("GET", "/api/entities/pathway")).json() as { items: { id: string; version: number }[] };
+    expect(list.items.find(p => p.id === "p_undo")?.version).toBe(2);
+  });
+
+  it("refuses when someone has touched it since, and says so", async () => {
+    await binnedPathway();
+    const res = await send("POST", "/api/entities/pathway/p_undo/restore", { expectedVersion: 0 });
+    expect(res.status).toBe(409);
+  });
+
+  it("refuses to restore something that was never deleted", async () => {
+    await send("POST", "/api/entities/pathway", { data: { id: "p_live", levelId: "oth-L1", polyline: [[0, 0], [5, 0]] } });
+    expect((await send("POST", "/api/entities/pathway/p_live/restore", { expectedVersion: 0 })).status).toBe(422);
+  });
+
+  it("404s something that never existed", async () => {
+    expect((await send("POST", "/api/entities/pathway/p_nope/restore", { expectedVersion: 0 })).status).toBe(404);
+  });
+});

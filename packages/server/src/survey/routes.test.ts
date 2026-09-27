@@ -130,6 +130,33 @@ describe("keyframe upload", () => {
     const res = await app.request("/api/keyframes", { headers: { cookie } });
     expect((await json<{ items: unknown[] }>(res)).items).toHaveLength(2);
   });
+
+  it("restores a binned frame with the tags binned with it, and not ones removed by hand before", async () => {
+    const body = await json<{ keyframe: { id: string } }>(await grab(png(10, 10)));
+    const kf = body.keyframe.id;
+    await post("/api/entities/place", { data: { id: "pl_r", nameEn: "Somewhere", category: "retail" } });
+    await post("/api/entities/sighting", { data: { id: "sg_keep", placeId: "pl_r", keyframeId: kf } });
+    await post("/api/entities/sighting", { data: { id: "sg_gone", placeId: "pl_r", keyframeId: kf } });
+    // Removed by hand first, so it must stay removed.
+    await app.request("/api/entities/sighting/sg_gone", {
+      method: "DELETE", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ expectedVersion: 0 }),
+    });
+    await app.request(`/api/keyframes/${kf}`, { method: "DELETE", headers: { cookie } });
+
+    const res = await app.request(`/api/keyframes/${kf}/restore`, { method: "POST", headers: { cookie } });
+    expect(res.status).toBe(200);
+    expect(await json(res)).toEqual({ sightings: 1 });
+
+    const frames = await json<{ items: { id: string }[] }>(await app.request("/api/keyframes", { headers: { cookie } }));
+    expect(frames.items.map(f => f.id)).toContain(kf);
+    const sightings = await json<{ items: { id: string }[] }>(await app.request("/api/entities/sighting", { headers: { cookie } }));
+    expect(sightings.items.map(s => s.id)).toEqual(["sg_keep"]);
+  });
+
+  it("refuses to restore a frame that is not binned", async () => {
+    const body = await json<{ keyframe: { id: string } }>(await grab(png(10, 10)));
+    expect((await app.request(`/api/keyframes/${body.keyframe.id}/restore`, { method: "POST", headers: { cookie } })).status).toBe(422);
+  });
 });
 
 describe("the rest of the survey layer goes through generic CRUD", () => {

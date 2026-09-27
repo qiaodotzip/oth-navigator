@@ -133,3 +133,43 @@ export async function softDeleteEntity(
   await audit(db, type, id, "delete", actorId, before, after);
   return after;
 }
+
+export class NotDeletedError extends Error {
+  constructor() {
+    super("not deleted");
+    this.name = "NotDeletedError";
+  }
+}
+
+/**
+ * Brings back a soft-deleted entity — the other half of every Undo.
+ *
+ * Version-checked like any write: if someone has touched it since the delete,
+ * the restore is refused with their state, rather than overwriting what they did.
+ */
+export async function restoreEntity(
+  db: Database, type: EntityType, id: string, expectedVersion: number, actorId: string | null,
+): Promise<Row> {
+  const { table } = entityRegistry[type];
+
+  const before = await findRow(db, type, id);
+  if (!before) throw new NotFoundError();
+  if (before.deletedAt == null) throw new NotDeletedError();
+
+  const updated = (await db
+    .update(table)
+    .set({
+      deletedAt: null,
+      version: sql`${table.version} + 1`,
+      updatedBy: actorId,
+      updatedAt: new Date(),
+    } as never)
+    .where(and(eq(table.id, id), eq(table.version, expectedVersion)))
+    .returning()) as Row[];
+
+  const after = updated[0];
+  if (!after) throw new VersionConflictError(toModelRow(before));
+
+  await audit(db, type, id, "restore", actorId, before, after);
+  return after;
+}

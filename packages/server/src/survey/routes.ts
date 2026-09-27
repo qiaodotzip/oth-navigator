@@ -142,6 +142,33 @@ keyframeRoutes.delete("/:id", async c => {
 });
 
 /**
+ * Undoes binning a frame.
+ *
+ * The frame and its sightings were retired with one timestamp, so that
+ * timestamp is how the right sightings come back: a tag removed by hand
+ * earlier has an older one, and stays removed.
+ */
+keyframeRoutes.post("/:id/restore", async c => {
+  const db = c.get("db");
+  const id = c.req.param("id");
+  const [row] = await db.select().from(keyframes).where(eq(keyframes.id, id));
+  if (!row) return c.json({ error: "not found" }, 404);
+  if (!row.deletedAt) return c.json({ error: "not deleted" }, 422);
+
+  const now = new Date();
+  const by = c.get("user").id;
+  const restored = await db.update(sightings)
+    .set({ deletedAt: null, updatedBy: by, updatedAt: now })
+    .where(and(eq(sightings.keyframeId, id), eq(sightings.deletedAt, row.deletedAt)))
+    .returning();
+  await db.update(keyframes)
+    .set({ deletedAt: null, updatedBy: by, updatedAt: now })
+    .where(eq(keyframes.id, id));
+
+  return c.json({ sightings: restored.length });
+});
+
+/**
  * The frame itself, or with `?w=` a narrower copy of it. The filmstrip and the
  * review queue ask for small ones; only the labelling export needs the 4K.
  */

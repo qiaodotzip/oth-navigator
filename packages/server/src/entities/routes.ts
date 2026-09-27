@@ -4,8 +4,8 @@ import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
 import { isEntityType } from "./registry";
 import {
-  NotFoundError, VersionConflictError,
-  createEntity, listEntities, softDeleteEntity, updateEntity,
+  NotDeletedError, NotFoundError, VersionConflictError,
+  createEntity, listEntities, restoreEntity, softDeleteEntity, updateEntity,
 } from "./repository";
 
 const CreateBody = z.object({ data: z.unknown() });
@@ -73,6 +73,25 @@ entityRoutes.delete("/:type/:id", async c => {
     if (err instanceof VersionConflictError) {
       return c.json({ error: "version conflict", current: err.current }, 409);
     }
+    return c.json({ error: "not found" }, 404);
+  }
+});
+
+entityRoutes.post("/:type/:id/restore", async c => {
+  const type = c.req.param("type");
+  if (!isEntityType(type)) return c.json({ error: "unknown entity type" }, 400);
+  const body = DeleteBody.safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "expected { expectedVersion }" }, 400);
+  try {
+    const entity = await restoreEntity(
+      c.get("db"), type, c.req.param("id"), body.data.expectedVersion, c.get("user").id,
+    );
+    return c.json({ entity });
+  } catch (err) {
+    if (err instanceof VersionConflictError) {
+      return c.json({ error: "version conflict", current: err.current }, 409);
+    }
+    if (err instanceof NotDeletedError) return c.json({ error: "not deleted" }, 422);
     return c.json({ error: "not found" }, 404);
   }
 });
