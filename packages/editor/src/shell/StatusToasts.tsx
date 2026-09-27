@@ -2,9 +2,16 @@ import { useEffect } from "react";
 import { useEditorStore } from "../state/store";
 import { toast } from "../ui/toast";
 
-/** How the older panels phrase a failure. */
+/** How the older panels phrase a failure.
+ *
+ * Matches error keywords from:
+ * - API errors: can't, cannot, couldn't, could not, refused, failed, error, not allowed, HTTP status
+ * - Validation errors: must, change (calibration/deletion blocks)
+ * - Placement refusals: goes/stops inside (entrance, portal, room placement)
+ * - Input validation: before entering (distance entry in calibration)
+ */
 export function looksLikeError(message: string): boolean {
-  return /\b(can't|cannot|couldn't|could not|refused|failed|error|not allowed)\b|HTTP \d{3}/i.test(message);
+  return /\b(can't|cannot|couldn't|could not|refused|failed|error|not allowed|must|change)\b|(goes|stops) inside|before entering|HTTP \d{3}/i.test(message);
 }
 
 /**
