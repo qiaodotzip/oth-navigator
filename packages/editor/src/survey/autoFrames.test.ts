@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  MAX_FRAMES, SAMPLE_EVERY_MS, frameDifference, isNewScene, samplePlan,
+  MAX_FRAMES, SAMPLE_EVERY_MS, frameDifference, freshSamples, isNewScene, samplePlan,
 } from "./autoFrames";
 
 const solid = (v: number, pixels = 64) => {
@@ -108,5 +108,15 @@ describe("isNewScene", () => {
     const stepwise = drift.filter((v, i) =>
       i > 0 && isNewScene(solid(drift[i - 1]!), solid(v)));
     expect(stepwise).toEqual([]);
+  });
+});
+
+describe("freshSamples", () => {
+  it("skips moments that already have a frame close by, so running it again finds more rather than the same", () => {
+    expect(freshSamples([0, 2000, 4000, 6000], [0, 2400])).toEqual([4000, 6000]);
+  });
+
+  it("keeps every moment for footage with no frames yet", () => {
+    expect(freshSamples([0, 2000], [])).toEqual([0, 2000]);
   });
 });

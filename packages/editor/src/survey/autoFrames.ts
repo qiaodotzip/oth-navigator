@@ -68,3 +68,14 @@ export function isNewScene(
   if (!previous) return true;
   return frameDifference(previous, current) >= threshold;
 }
+
+/**
+ * The moments not already covered by a frame the footage has — so running it
+ * again on the same video finds more frames rather than the same ones twice,
+ * and a run that stopped halfway carries on from where it stopped.
+ */
+export function freshSamples(
+  plan: readonly number[], existingMs: readonly number[], toleranceMs = SAMPLE_EVERY_MS / 2,
+): number[] {
+  return plan.filter(t => !existingMs.some(e => Math.abs(e - t) < toleranceMs));
+}
