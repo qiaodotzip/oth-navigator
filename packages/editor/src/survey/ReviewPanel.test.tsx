@@ -26,20 +26,29 @@ const model = parseModel({
 
 const api = {
   keyframeFileUrl: (id: string, w?: number) => `/api/keyframes/${id}/file${w ? `?w=${w}` : ""}`,
-} as unknown as Api;
+  acceptPlace: vi.fn().mockResolvedValue({ sightings: 2 }),
+  rejectPlace: vi.fn().mockResolvedValue({ sightings: 2 }),
+};
 
 function setup() {
   const saver = {
     update: vi.fn().mockResolvedValue(true),
     remove: vi.fn().mockResolvedValue(true),
-  } as unknown as Saver;
-  render(<ReviewPanel api={api} saver={saver} />);
-  return saver as unknown as { update: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
+    // Runs the request, then reloads once — the saver's usual guard.
+    apply: vi.fn(async (_type: string, _id: string, run: () => Promise<unknown>) => {
+      await run();
+      return true;
+    }),
+  };
+  render(<ReviewPanel api={api as unknown as Api} saver={saver as unknown as Saver} />);
+  return saver;
 }
 
 beforeEach(() => {
   useEditorStore.getState().reset();
   useEditorStore.getState().setModel(model);
+  api.acceptPlace.mockClear();
+  api.rejectPlace.mockClear();
 });
 
 describe("ReviewPanel", () => {
@@ -70,21 +79,23 @@ describe("ReviewPanel", () => {
     expect(card.textContent).toContain("sign partly obscured");
   });
 
-  it("confirms the place and its sightings together on accept", async () => {
-    // Leaving the sightings proposed would put the place back in the queue.
+  it("accepts the place and its sightings in one request, not one per sighting", async () => {
+    // One claim, one write, one reload: it was a round trip per sighting,
+    // each followed by reloading the whole model.
     const saver = setup();
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
-    await waitFor(() => expect(saver.update).toHaveBeenCalledTimes(3));
-    expect(saver.update.mock.calls[0]![3]).toMatchObject({ status: "confirmed" });
-    expect(saver.update.mock.calls[1]![0]).toBe("sighting");
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalledTimes(1));
+    expect(api.acceptPlace).toHaveBeenCalledWith("p1", 0, { nameEn: "NTUC FairPrice", category: "retail" });
+    expect(saver.apply).toHaveBeenCalledTimes(1);
+    expect(saver.update).not.toHaveBeenCalled();
   });
 
   it("keeps a correction made before accepting", async () => {
-    const saver = setup();
+    setup();
     fireEvent.change(screen.getByLabelText("Name for p1"), { target: { value: "NTUC Finest" } });
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
-    await waitFor(() => expect(saver.update).toHaveBeenCalled());
-    expect(saver.update.mock.calls[0]![3]).toMatchObject({ nameEn: "NTUC Finest" });
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalled());
+    expect(api.acceptPlace.mock.calls[0]![2]).toMatchObject({ nameEn: "NTUC Finest" });
   });
 
   it("will not accept a name someone has emptied", () => {
@@ -93,10 +104,11 @@ describe("ReviewPanel", () => {
     expect(screen.getByRole("button", { name: "Accept" }).hasAttribute("disabled")).toBe(true);
   });
 
-  it("bins the sightings with the place on reject", async () => {
+  it("bins the place with its sightings in one request on reject", async () => {
     const saver = setup();
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
-    await waitFor(() => expect(saver.remove).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(api.rejectPlace).toHaveBeenCalledWith("p1", 0));
+    expect(saver.remove).not.toHaveBeenCalled();
   });
 
   it("says the queue is clear rather than showing nothing", () => {

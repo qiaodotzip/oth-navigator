@@ -19,7 +19,8 @@ import { reviewProgress } from "./review";
  * same server, same audit log, different job.
  */
 export function SurveyApp({ api }: { api: Api }) {
-  const saver = useMemo(() => createSaver(api), [api]);
+  // No validation: nothing here shows the report, and it is the slow half of a reload.
+  const saver = useMemo(() => createSaver(api, { validate: false }), [api]);
   const model = useEditorStore(s => s.model);
   const status = useEditorStore(s => s.status);
   const [captureId, setCaptureId] = useState<string | null>(null);

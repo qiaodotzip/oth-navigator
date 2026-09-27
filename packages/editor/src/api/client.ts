@@ -149,6 +149,20 @@ export function createApi(options: ApiOptions = {}) {
     deleteKeyframe: (id: string) =>
       request<void>(`/api/keyframes/${id}`, { method: "DELETE" }),
 
+    /** Confirms a proposed place, with any corrections, and all its sightings. */
+    acceptPlace: (id: string, expectedVersion: number, data: { nameEn: string; category: string }) =>
+      request<{ sightings: number }>(`/api/places/${id}/accept`, {
+        method: "POST",
+        body: json({ expectedVersion, ...data }),
+      }),
+
+    /** Retires a proposed place and its sightings together. */
+    rejectPlace: (id: string, expectedVersion: number) =>
+      request<{ sightings: number }>(`/api/places/${id}/reject`, {
+        method: "POST",
+        body: json({ expectedVersion }),
+      }),
+
     /** Retires a capture, its frames, and everything labelled on them. */
     deleteCapture: (id: string) =>
       request<{ frames: number }>(`/api/captures/${id}`, { method: "DELETE" }),

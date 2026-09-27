@@ -20,18 +20,15 @@ export function ReviewPanel({ api, saver }: { api: Api; saver: Saver }) {
   const queue = proposedPlaces(model);
   const { proposed, confirmed } = reviewProgress(model);
 
+  // The sightings go with the place, on the server, in one request: they are
+  // the same claim, and leaving them proposed would put the place back in the
+  // queue forever.
   async function accept(placeId: string, nameEn: string, category: string) {
     const entry = queue.find(q => q.place.id === placeId);
     if (!entry) return;
     setBusy(placeId);
-    await saver.update("place", placeId, entry.place.version, {
-      status: "confirmed", nameEn, category,
-    });
-    // The sightings are confirmed with it: they are the same claim, and leaving
-    // them proposed would put the place back in the queue forever.
-    for (const s of entry.sightings) {
-      await saver.update("sighting", s.id, s.version, { status: "confirmed" });
-    }
+    await saver.apply("place", placeId, () =>
+      api.acceptPlace(placeId, entry.place.version, { nameEn, category }));
     setBusy(null);
   }
 
@@ -39,8 +36,7 @@ export function ReviewPanel({ api, saver }: { api: Api; saver: Saver }) {
     const entry = queue.find(q => q.place.id === placeId);
     if (!entry) return;
     setBusy(placeId);
-    for (const s of entry.sightings) await saver.remove("sighting", s.id, s.version);
-    await saver.remove("place", placeId, entry.place.version);
+    await saver.apply("place", placeId, () => api.rejectPlace(placeId, entry.place.version));
     setBusy(null);
   }
 

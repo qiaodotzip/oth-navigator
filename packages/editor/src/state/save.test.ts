@@ -25,6 +25,31 @@ function fakeApi(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => useEditorStore.getState().reset());
 
+describe("saver.apply", () => {
+  it("runs any request through the same guard, and reloads once after it", async () => {
+    const getModel = vi.fn(async () => model);
+    const run = vi.fn(async () => ({}));
+    expect(await createSaver(fakeApi({ getModel })).apply("place", "p1", run)).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(getModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns a 409 into a conflict, like any other write", async () => {
+    const run = vi.fn(async () => { throw new ConflictError({ id: "p1", version: 4 }, null); });
+    expect(await createSaver(fakeApi()).apply("place", "p1", run)).toBe(false);
+    expect(useEditorStore.getState().conflict?.entityId).toBe("p1");
+  });
+});
+
+describe("a saver that does not validate", () => {
+  it("never asks for the report, which only the map editor shows", async () => {
+    const validate = vi.fn(async () => report);
+    await createSaver(fakeApi({ validate }), { validate: false }).refresh();
+    expect(validate).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().model).toEqual(model);
+  });
+});
+
 describe("saver.load", () => {
   it("loads like refresh when all is well", async () => {
     expect(await createSaver(fakeApi()).load()).toBe(true);

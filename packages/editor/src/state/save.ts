@@ -11,18 +11,23 @@ import { useEditorStore } from "./store";
  * 2. A successful write refreshes model and report together, so the canvas
  *    always shows what the server actually accepted rather than a local guess.
  * 3. Nothing throws at the call site; callers get a boolean.
+ *
+ * `validate: false` is for the survey, which never shows the report. Running
+ * the validator bakes every level's nav grid, which costs about half a second
+ * on each write for nothing anyone there looks at.
  */
-export function createSaver(api: Api) {
+export function createSaver(api: Api, options: { validate?: boolean } = {}) {
   const store = useEditorStore;
+  const validates = options.validate ?? true;
 
   async function refresh(): Promise<void> {
     const [model, report, levelImages] = await Promise.all([
       api.getModel(),
-      api.validate(),
+      validates ? api.validate() : Promise.resolve(null),
       api.listLevelImages(),
     ]);
     store.getState().setModel(model);
-    store.getState().setReport(report);
+    if (validates) store.getState().setReport(report);
     store.getState().setLevelImages(levelImages);
   }
 
@@ -81,6 +86,9 @@ export function createSaver(api: Api) {
 
     remove: (type: EntityType, id: string, expectedVersion: number) =>
       guard(type, id, () => api.deleteEntity(type, id, expectedVersion)),
+
+    /** Any other write, under the same rules: one request, one reload. */
+    apply: (type: EntityType, id: string, run: () => Promise<unknown>) => guard(type, id, run),
   };
 }
 
