@@ -53,10 +53,18 @@ const GROUP_LABELS: Record<LayerEntityType, string> = {
  * Everything on the active level, grouped by kind.
  *
  * Empty groups are kept rather than dropped: a teammate needs to see that
- * "Doorways (0)" exists before they will think to add one, and a list that
+ * "Entrances (0)" exists before they will think to add one, and a list that
  * silently omits categories reads as though the editor cannot do them.
+ *
+ * Doorways are the exception. No tool makes them any more, so an empty
+ * "Doorways (0)" would advertise something nobody can add; the group appears
+ * only where old data has some.
  */
 export function levelLayers(model: MapModel | null, levelId: string | null): LayerGroup[] {
+  return allLayers(model, levelId).filter(g => g.type !== "doorway" || g.items.length > 0);
+}
+
+function allLayers(model: MapModel | null, levelId: string | null): LayerGroup[] {
   const empty: LayerGroup[] = (Object.keys(GROUP_LABELS) as LayerEntityType[]).map(type => ({
     type,
     label: GROUP_LABELS[type],

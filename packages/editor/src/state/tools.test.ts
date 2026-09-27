@@ -20,4 +20,8 @@ describe("tools", () => {
   it("offers the pathway tool, which is how anything becomes reachable", () => {
     expect(TOOLBAR_TOOLS).toContain<Tool>("draw-pathway");
   });
+
+  it("does not offer Doorway, which pathways replaced and nothing saves", () => {
+    expect(TOOLBAR_TOOLS).not.toContain<Tool>("draw-doorway");
+  });
 });

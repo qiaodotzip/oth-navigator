@@ -27,7 +27,6 @@ export const TOOLBAR_TOOLS: Tool[] = [
   "draw-detail",
   "place-entrance",
   "place-portal",
-  // Doorway stays reachable — still right for a genuinely walled corridor —
-  // but it is no longer part of the guided sequence.
-  "draw-doorway",
+  // No Doorway. Pathways replaced it for this building, and the canvas never
+  // saved one: offering it was offering a button that did nothing.
 ];

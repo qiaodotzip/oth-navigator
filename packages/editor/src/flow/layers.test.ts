@@ -40,9 +40,14 @@ describe("levelLayers", () => {
     const g = levelLayers(null, null);
     expect(g.map(x => x.type)).toEqual([
       "area", "room", "detail", "pathway",
-      "doorway", "entrance", "portalEndpoint", "placement",
+      "entrance", "portalEndpoint", "placement",
     ]);
     expect(g.every(x => x.items.length === 0)).toBe(true);
+  });
+
+  it("lists doorways only where some exist, since no tool makes them any more", () => {
+    expect(groups("oth-L1").doorway?.items).toHaveLength(1);
+    expect(groups("oth-L2").doorway).toBeUndefined();
   });
 
   it("lists spaces on the active level only", () => {

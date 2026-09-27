@@ -15,6 +15,49 @@ import { fitViewport, screenToWorld, worldToScreen, zoomViewport } from "./viewp
 const SNAP_TOLERANCE_PX = 10;
 const GRID_M = 0.25;
 
+const PORTAL_LETTER = { lift: "L", escalator: "Es", stair: "S", ramp: "R" } as const;
+
+/**
+ * A point on the plan that means something: an entrance, or a stop of a lift or
+ * stair. Drawn at a fixed screen size, since a point has no extent to scale.
+ */
+function PointMarker({
+  testId, at, letter, fill, square = false, selected, title, onClick,
+}: {
+  testId: string;
+  at: [number, number];
+  letter: string;
+  fill: string;
+  square?: boolean;
+  selected: boolean;
+  title: string;
+  onClick: (event: React.MouseEvent) => void;
+}) {
+  const [x, y] = at;
+  const stroke = selected ? "#f2a33c" : "#ffffff";
+  return (
+    <g data-testid={testId} onClick={onClick} style={{ cursor: "pointer" }}>
+      <title>{title}</title>
+      {square ? (
+        <rect x={x - 9} y={y - 9} width={18} height={18} rx={3} fill={fill} stroke={stroke} strokeWidth={2} />
+      ) : (
+        <circle cx={x} cy={y} r={9} fill={fill} stroke={stroke} strokeWidth={2} />
+      )}
+      <text
+        x={x}
+        y={y + 4}
+        textAnchor="middle"
+        fontSize={letter.length > 1 ? 8 : 11}
+        fontWeight={700}
+        fill="#ffffff"
+        pointerEvents="none"
+      >
+        {letter}
+      </text>
+    </g>
+  );
+}
+
 export type PlanCanvasProps = {
   width: number;
   height: number;
@@ -329,6 +372,48 @@ export function PlanCanvas({
                   event.stopPropagation();
                   state.select({ type: "placement", id: p.id });
                   setDraggingPlacement(p.id);
+                }}
+              />
+            );
+          })}
+
+        {state.model?.entrances
+          .filter(e => e.levelId === state.activeLevelId && !e.deletedAt)
+          .map(e => (
+            <PointMarker
+              key={e.id}
+              testId={`entrance-${e.id}`}
+              at={worldToScreen(state.viewport, e.point)}
+              letter="E"
+              fill="#047857"
+              selected={state.selection?.id === e.id}
+              title={e.nameEn || "Entrance"}
+              onClick={event => {
+                if (state.tool !== "select") return;
+                event.stopPropagation();
+                state.select({ type: "entrance", id: e.id });
+              }}
+            />
+          ))}
+
+        {state.model?.portalEndpoints
+          .filter(ep => ep.levelId === state.activeLevelId && !ep.deletedAt)
+          .map(ep => {
+            const portal = state.model?.portals.find(p => p.id === ep.portalId);
+            return (
+              <PointMarker
+                key={ep.id}
+                testId={`portal-endpoint-${ep.id}`}
+                at={worldToScreen(state.viewport, ep.point)}
+                letter={PORTAL_LETTER[portal?.kind ?? "lift"]}
+                fill="#1d4ed8"
+                square
+                selected={state.selection?.id === ep.id}
+                title={portal?.nameEn || portal?.kind || "Lift or stair"}
+                onClick={event => {
+                  if (state.tool !== "select") return;
+                  event.stopPropagation();
+                  state.select({ type: "portalEndpoint", id: ep.id });
                 }}
               />
             );

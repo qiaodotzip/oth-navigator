@@ -5,8 +5,12 @@ import { createApi } from "./api/client";
 import { LoginScreen } from "./auth/LoginScreen";
 import { useCollaboration } from "./collab/useCollaboration";
 import { navigate } from "./route";
-import { layerEntityType, type LayerItem } from "./flow/layers";
+import { commitPoint } from "./flow/commitPoint";
+import type { LayerItem } from "./flow/layers";
+import { layerEntityType } from "./flow/layers";
 import { newPathway, newSpace } from "./flow/newSpace";
+import { removalsFor } from "./flow/removeLayer";
+import { EntranceInspector, PortalInspector } from "./panels/PointInspectors";
 import { AssetLibrary } from "./panels/AssetLibrary";
 import { BindPlacePanel } from "./panels/BindPlacePanel";
 import { ConflictBanner } from "./panels/ConflictBanner";
@@ -57,10 +61,14 @@ export function App() {
   const renameLayer = (item: LayerItem, nameEn: string) =>
     void saver.update(layerEntityType(item.type), item.id, item.version, { nameEn });
 
-  const deleteLayer = (item: LayerItem) =>
+  const deleteLayer = async (item: LayerItem) => {
+    if (!model) return;
     // Soft delete: recoverable and recorded in the audit log, so no confirmation
     // dialog on every click.
-    void saver.remove(layerEntityType(item.type), item.id, item.version);
+    for (const r of removalsFor(model, item)) {
+      if (!(await saver.remove(r.type, r.id, r.version))) return;
+    }
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -121,6 +129,18 @@ export function App() {
             onCommitPathway={polyline => {
               if (activeLevelId) void saver.create("pathway", newPathway(activeLevelId, polyline));
             }}
+            onCommitPoint={point => {
+              const state = useEditorStore.getState();
+              if (!state.model || !activeLevelId) return;
+              void commitPoint({
+                saver,
+                model: state.model,
+                tool: state.tool,
+                levelId: activeLevelId,
+                point,
+                say: state.setStatus,
+              });
+            }}
           />
         </main>
 
@@ -128,6 +148,8 @@ export function App() {
           <StepsPanel
             sections={{
               floorplan: <FloorplanPanel api={api} saver={saver} />,
+              entrances: <EntranceInspector saver={saver} />,
+              portals: <PortalInspector saver={saver} />,
               connect: (
                 <div className="space-y-3">
                   <PathwayInspector saver={saver} />

@@ -594,3 +594,47 @@ describe("walkway types on the canvas", () => {
     expect(screen.getByTestId("pathway-L1-p").getAttribute("stroke")).toBe("#38bdf8");
   });
 });
+
+describe("entrances and lifts", () => {
+  const withPoints = parseModel({
+    building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+    levels: [
+      { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 },
+      { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 },
+    ],
+    rooms: [{
+      id: "L1-a", levelId: "oth-L1", kind: "area",
+      footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 5, walkable: true,
+    }],
+    entrances: [{ id: "en-1", levelId: "oth-L1", roomId: "L1-a", point: [1, 1] }],
+    portals: [{ id: "lift-a", kind: "lift" }],
+    portalEndpoints: [
+      { id: "ep-1", portalId: "lift-a", levelId: "oth-L1", roomId: "L1-a", point: [5, 5] },
+      { id: "ep-2", portalId: "lift-a", levelId: "oth-L2", roomId: "L1-a", point: [5, 5] },
+    ],
+  });
+
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+    useEditorStore.getState().setModel(withPoints);
+  });
+
+  it("draws the level's entrances and lift stops, and only this level's", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("entrance-en-1")).toBeTruthy();
+    expect(screen.getByTestId("portal-endpoint-ep-1")).toBeTruthy();
+    expect(screen.queryByTestId("portal-endpoint-ep-2")).toBeNull();
+  });
+
+  it("selects an entrance clicked with the select tool", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.click(screen.getByTestId("entrance-en-1"));
+    expect(useEditorStore.getState().selection).toEqual({ type: "entrance", id: "en-1" });
+  });
+
+  it("selects a lift stop clicked with the select tool", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.click(screen.getByTestId("portal-endpoint-ep-1"));
+    expect(useEditorStore.getState().selection).toEqual({ type: "portalEndpoint", id: "ep-1" });
+  });
+});
