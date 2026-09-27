@@ -30,6 +30,7 @@ import { StepsPanel } from "./panels/StepsPanel";
 import { Toolbar } from "./panels/Toolbar";
 import { DetailExportButton } from "./panels/DetailExportButton";
 import { PlanCanvas } from "./plan/PlanCanvas";
+import { useElementSize } from "./plan/useElementSize";
 import { createSaver } from "./state/save";
 import { useEditorStore } from "./state/store";
 
@@ -42,6 +43,7 @@ export function App() {
   const activeLevelId = useEditorStore(s => s.activeLevelId);
   const status = useEditorStore(s => s.status);
   const [checked, setChecked] = useState(false);
+  const [canvasBox, canvasSize] = useElementSize();
 
   useEffect(() => {
     api.me().then(setUser).catch(() => setUser(null)).finally(() => setChecked(true));
@@ -112,10 +114,11 @@ export function App() {
           <LayersPanel onRename={renameLayer} onDelete={deleteLayer} />
         </aside>
 
-        <main className="min-w-0 flex-1 overflow-hidden">
+        <main ref={canvasBox} className="min-w-0 flex-1 overflow-hidden">
+          {canvasSize && (
           <PlanCanvas
-            width={900}
-            height={700}
+            width={canvasSize.width}
+            height={canvasSize.height}
             imageUrl={api.levelImageFileUrl}
             onReshapeRoom={(room, footprint) =>
               void saver.update("room", room.id, room.version, { footprint })
@@ -142,6 +145,7 @@ export function App() {
               });
             }}
           />
+          )}
         </main>
 
         <aside className="w-80 overflow-auto border-l bg-white">

@@ -10,7 +10,7 @@ import { PathwayShape } from "./PathwayShape";
 import { snapPoint } from "./snapping";
 import { Underlay } from "./Underlay";
 import { VertexHandles } from "./VertexHandles";
-import { fitViewport, screenToWorld, worldToScreen, zoomViewport } from "./viewport";
+import { fitViewport, panViewport, screenToWorld, worldToScreen, zoomViewport } from "./viewport";
 
 const SNAP_TOLERANCE_PX = 10;
 const GRID_M = 0.25;
@@ -145,6 +145,64 @@ export function PlanCanvas({
     };
   });
 
+  /**
+   * Panning: drag empty canvas in Select, or middle-drag / Space-drag in any
+   * tool. A drawing tool owns the left button, so it needs a way to move the
+   * view that is not also a click.
+   */
+  const spaceHeld = useRef(false);
+  const [pan, setPan] = useState<{ from: Vec2; origin: typeof state.viewport } | null>(null);
+  // A drag ends in a click on the same element; that click is not a corner.
+  const panMoved = useRef(false);
+
+  useEffect(() => {
+    const typing = (event: KeyboardEvent) =>
+      event.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName);
+    const down = (event: KeyboardEvent) => {
+      if (event.code === "Space" && !typing(event)) spaceHeld.current = true;
+    };
+    const up = (event: KeyboardEvent) => {
+      if (event.code === "Space") spaceHeld.current = false;
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pan) return;
+    const onMove = (event: MouseEvent) => {
+      const dx = event.clientX - pan.from[0];
+      const dy = event.clientY - pan.from[1];
+      if (Math.abs(dx) + Math.abs(dy) > 2) panMoved.current = true;
+      state.setViewport(panViewport(pan.origin, dx, dy));
+    };
+    const onUp = () => setPan(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [pan, state]);
+
+  function startPan(event: React.MouseEvent) {
+    const wantsPan =
+      event.button === 1 || spaceHeld.current || (event.button === 0 && state.tool === "select");
+    if (!wantsPan) return;
+    // Middle-click would otherwise start the browser's autoscroll.
+    event.preventDefault();
+    panMoved.current = false;
+    setPan({ from: [event.clientX, event.clientY], origin: state.viewport });
+  }
+
+  // With nothing to frame, fitViewport centres the origin, which is still a
+  // better answer than wherever the view had drifted to.
+  const fitToLevel = () => state.setViewport(fitViewport(contentBBox(rings, underlay), width, height));
+
   // The snap indicator belongs to a drawing tool. Without this it freezes
   // wherever the pointer last was and follows you into Select, looking like the
   // canvas is still armed.
@@ -216,6 +274,10 @@ export function PlanCanvas({
   }
 
   function onSurfaceClick(event: React.MouseEvent) {
+    if (panMoved.current || spaceHeld.current) {
+      panMoved.current = false;
+      return;
+    }
     if (state.tool === "select") return;
 
     if (state.tool === "calibrate") {
@@ -299,10 +361,12 @@ export function PlanCanvas({
           width={width}
           height={height}
           fill="transparent"
+          style={{ cursor: pan ? "grabbing" : state.tool === "select" ? "grab" : "crosshair" }}
+          onMouseDown={startPan}
           onClick={onSurfaceClick}
           onDoubleClick={commitDraft}
           onMouseMove={event => {
-            if (state.tool === "select") return;
+            if (state.tool === "select" || pan) return;
             setCursor(state.tool === "calibrate" ? rawWorld(event) : pointerWorld(event));
           }}
           onMouseLeave={() => setCursor(null)}
@@ -493,6 +557,20 @@ export function PlanCanvas({
       {state.tool !== "select" && (
         <DrawingHint tool={state.tool} pointCount={state.draft?.length ?? 0} />
       )}
+
+      <div className="absolute bottom-3 right-3 flex items-center gap-2">
+        <span className="rounded bg-white/90 px-2 py-1 text-xs text-stone-500 shadow-sm">
+          Drag to pan · Space-drag while drawing · scroll to zoom
+        </span>
+        <button
+          type="button"
+          aria-label="Fit to level"
+          className="rounded border bg-white px-3 py-1 text-sm shadow-sm hover:bg-stone-100"
+          onClick={fitToLevel}
+        >
+          Fit
+        </button>
+      </div>
     </div>
   );
 }

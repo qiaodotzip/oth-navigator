@@ -595,6 +595,66 @@ describe("walkway types on the canvas", () => {
   });
 });
 
+describe("panning", () => {
+  // Relative to wherever the canvas framed itself on mount.
+  const originX = () => useEditorStore.getState().viewport.originX;
+
+  function drag(from: [number, number], to: [number, number], button = 0) {
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.mouseDown(surface, { clientX: from[0], clientY: from[1], button });
+    fireEvent.mouseMove(window, { clientX: to[0], clientY: to[1], button });
+    fireEvent.mouseUp(window, { clientX: to[0], clientY: to[1], button });
+    // A browser follows a left-button drag with a click on the same element.
+    if (button === 0) fireEvent.click(surface, { clientX: to[0], clientY: to[1] });
+  }
+
+  it("pans when empty canvas is dragged with the select tool", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    const before = useEditorStore.getState().viewport;
+    drag([300, 300], [350, 320]);
+    const after = useEditorStore.getState().viewport;
+    expect(after.originX - before.originX).toBe(50);
+    expect(after.originY - before.originY).toBe(20);
+  });
+
+  it("pans with the middle button while drawing, without placing a corner", () => {
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} />);
+    const before = originX();
+    drag([300, 300], [340, 300], 1);
+    expect(originX() - before).toBe(40);
+    expect(useEditorStore.getState().draft).toBeNull();
+  });
+
+  it("pans with Space held while drawing, and the drag is not a click", () => {
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} />);
+    const before = originX();
+    fireEvent.keyDown(window, { key: " ", code: "Space" });
+    drag([300, 300], [330, 300]);
+    fireEvent.keyUp(window, { key: " ", code: "Space" });
+    expect(originX() - before).toBe(30);
+    expect(useEditorStore.getState().draft).toBeNull();
+  });
+
+  it("still places a corner on a plain click while drawing", () => {
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.mouseDown(surface, { clientX: 300, clientY: 300, button: 0 });
+    fireEvent.mouseUp(window, { clientX: 300, clientY: 300, button: 0 });
+    fireEvent.click(surface, { clientX: 300, clientY: 300 });
+    expect(useEditorStore.getState().draft).toHaveLength(1);
+  });
+
+  it("frames the level again from the Fit button", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    act(() => useEditorStore.getState().setViewport({ originX: -9999, originY: -9999, scale: 1 }));
+    fireEvent.click(screen.getByRole("button", { name: /fit/i }));
+    expect(useEditorStore.getState().viewport.originX).not.toBe(-9999);
+  });
+});
+
 describe("entrances and lifts", () => {
   const withPoints = parseModel({
     building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
