@@ -15,13 +15,14 @@ function oneTimePassword(): string {
  * the whole of "invite-only" for a team of four.
  */
 export async function inviteUser(
-  db: Database, email: string, displayName: string,
+  db: Database, email: string, displayName: string, invitedBy?: string,
 ): Promise<{ user: User; password: string }> {
   if (await findUserByEmail(db, email)) {
     throw new Error(`a user with email ${email} already exists`);
   }
   const password = oneTimePassword();
-  const user = await createUser(db, { email, password, displayName });
+  // A one-time password is meant to be replaced; the app asks until it is.
+  const user = await createUser(db, { email, password, displayName, invitedBy, mustChangePassword: true });
   return { user, password };
 }
 
@@ -40,11 +41,16 @@ export async function resetPassword(
 
   const password = oneTimePassword();
   await db.update(users)
-    .set({ passwordHash: await hashPassword(password) })
+    .set({ passwordHash: await hashPassword(password), mustChangePassword: true })
     .where(eq(users.id, existing.id));
 
   return {
-    user: { id: existing.id, email: existing.email, displayName: existing.displayName },
+    user: {
+      id: existing.id,
+      email: existing.email,
+      displayName: existing.displayName,
+      mustChangePassword: true,
+    },
     password,
   };
 }

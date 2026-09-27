@@ -118,3 +118,26 @@ describe("pathway routes", () => {
     expect(res.status).toBe(422);
   });
 });
+
+describe("level owners", () => {
+  it("saves and returns a floor's owners", async () => {
+    await app.request("/api/entities/level", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ data: {
+        id: "oth-L9", buildingId: "oth", code: "L9", ordinal: 9,
+        nameEn: "L9", nameZh: "九楼", elevationM: 40, heightM: 4,
+      } }),
+    });
+    const res = await app.request("/api/entities/level/oth-L9", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ expectedVersion: 0, data: { ownerIds: ["user_a"] } }),
+    });
+    expect(res.status).toBe(200);
+    const list = await (await app.request("/api/entities/level", { headers: { cookie } })).json() as {
+      items: { id: string; ownerIds: string[] }[];
+    };
+    expect(list.items.find(l => l.id === "oth-L9")?.ownerIds).toEqual(["user_a"]);
+  });
+});

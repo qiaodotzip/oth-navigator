@@ -31,7 +31,14 @@ authRoutes.post("/login", async c => {
     path: "/",
     expires: session.expiresAt,
   });
-  return c.json({ user: { id: row.id, email: row.email, displayName: row.displayName } });
+  return c.json({
+    user: {
+      id: row.id,
+      email: row.email,
+      displayName: row.displayName,
+      mustChangePassword: row.mustChangePassword,
+    },
+  });
 });
 
 authRoutes.post("/logout", async c => {

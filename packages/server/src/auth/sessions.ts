@@ -25,7 +25,12 @@ export async function resolveSession(db: Database, token: string): Promise<User 
   if (!row) return null;
   if (row.session.expiresAt.getTime() < Date.now()) return null;
   if (row.user.disabledAt) return null;
-  return { id: row.user.id, email: row.user.email, displayName: row.user.displayName };
+  return {
+    id: row.user.id,
+    email: row.user.email,
+    displayName: row.user.displayName,
+    mustChangePassword: row.user.mustChangePassword,
+  };
 }
 
 export async function revokeSession(db: Database, token: string): Promise<void> {

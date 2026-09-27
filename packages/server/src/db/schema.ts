@@ -11,6 +11,8 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   invitedBy: text("invited_by"),
   disabledAt: timestamp("disabled_at", { withTimezone: true }),
+  /** Set when an invite or reset issues a one-time password; cleared when its owner sets one. */
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
 }, t => ({
   emailIdx: uniqueIndex("users_email_idx").on(t.email),
 }));
@@ -50,6 +52,7 @@ export const levels = pgTable("levels", {
   nameZh: text("name_zh").notNull(),
   elevationM: doublePrecision("elevation_m").notNull(),
   heightM: doublePrecision("height_m").notNull(),
+  ownerIds: jsonb("owner_ids").$type<string[]>().notNull().default([]),
   ...auditColumns,
 });
 

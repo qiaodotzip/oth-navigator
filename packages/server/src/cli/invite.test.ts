@@ -1,7 +1,9 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../db/client";
 import { verifyPassword } from "../auth/password";
 import { findUserByEmail } from "../auth/users";
+import { users } from "../db/schema";
 import { createTestDb } from "../testing/harness";
 import { inviteUser, resetPassword } from "./invite";
 
@@ -61,5 +63,23 @@ describe("resetPassword", () => {
   it("is case-insensitive about the address, like the login is", async () => {
     await inviteUser(db, "wei@example.com", "Wei");
     await expect(resetPassword(db, "WEI@example.com")).resolves.toBeTruthy();
+  });
+});
+
+describe("one-time passwords", () => {
+  it("asks an invited person to set their own password", async () => {
+    const db = await createTestDb();
+    const { user } = await inviteUser(db, "new@example.com", "New Person");
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row!.mustChangePassword).toBe(true);
+  });
+
+  it("asks again after a reset", async () => {
+    const db = await createTestDb();
+    const { user } = await inviteUser(db, "again@example.com", "Again");
+    await db.update(users).set({ mustChangePassword: false }).where(eq(users.id, user.id));
+    await resetPassword(db, "again@example.com");
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row!.mustChangePassword).toBe(true);
   });
 });

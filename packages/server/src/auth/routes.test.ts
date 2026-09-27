@@ -75,4 +75,18 @@ describe("auth routes", () => {
     await db.update(users).set({ disabledAt: new Date() }).where(eq(users.email, "wei@example.com"));
     expect((await app.request("/api/auth/me", { headers: { cookie } })).status).toBe(401);
   });
+
+  it("says in the session when the password is a one-time one", async () => {
+    const cookie = (await login("wei@example.com", "a-good-passphrase")).headers.get("set-cookie") ?? "";
+    const me = await (await app.request("/api/auth/me", { headers: { cookie } })).json() as {
+      user: { mustChangePassword: boolean };
+    };
+    expect(me.user.mustChangePassword).toBe(false);
+
+    await db.update(users).set({ mustChangePassword: true }).where(eq(users.email, "wei@example.com"));
+    const again = await (await app.request("/api/auth/me", { headers: { cookie } })).json() as {
+      user: { mustChangePassword: boolean };
+    };
+    expect(again.user.mustChangePassword).toBe(true);
+  });
 });
