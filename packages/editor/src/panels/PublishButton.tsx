@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Api } from "../api/client";
+import { isUnauthorized, type Api } from "../api/client";
 import { useEditorStore } from "../state/store";
 
 export function PublishButton({ api }: { api: Api }) {
@@ -21,6 +21,8 @@ export function PublishButton({ api }: { api: Api }) {
           const result = await api.publish();
           setStatus(`Published ${result.version} (${result.warningCount} warnings).`);
         } catch (err) {
+          // The sign-in dialog over the page is the message; a raw 401 beside it is noise.
+          if (isUnauthorized(err)) return;
           setStatus(err instanceof Error ? err.message : String(err));
         } finally {
           setBusy(false);

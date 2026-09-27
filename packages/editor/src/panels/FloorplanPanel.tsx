@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Api } from "../api/client";
+import { isUnauthorized, type Api } from "../api/client";
 import { CalibrationError, calibrationFromMeasurement } from "../plan/calibration";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
@@ -23,6 +23,8 @@ export function FloorplanPanel({ api, saver }: { api: Api; saver: Saver }) {
       setStatus(`Added ${file.name}. Now set the scale.`);
       await saver.refresh();
     } catch (err) {
+      // The sign-in dialog over the page is the message; a raw 401 beside it is noise.
+      if (isUnauthorized(err)) return;
       // Header-validation rejections arrive here; show the server's own words.
       setStatus(err instanceof Error ? err.message : String(err));
     }
@@ -36,6 +38,8 @@ export function FloorplanPanel({ api, saver }: { api: Api; saver: Saver }) {
       await api.patchLevelImage(image.id, image.version, patch);
       await saver.refresh();
     } catch (err) {
+      // The sign-in dialog over the page is the message; a raw 401 beside it is noise.
+      if (isUnauthorized(err)) return;
       setStatus(err instanceof Error ? err.message : String(err));
     }
   }
@@ -53,6 +57,8 @@ export function FloorplanPanel({ api, saver }: { api: Api; saver: Saver }) {
       setStatus(`Scale set to ${metresPerPixel.toFixed(4)} m per pixel.`);
       await saver.refresh();
     } catch (err) {
+      // The sign-in dialog over the page is the message; a raw 401 beside it is noise.
+      if (isUnauthorized(err)) return;
       if (err instanceof CalibrationError) {
         setStatus(err.message);
         return;

@@ -57,4 +57,11 @@ describe("Header", () => {
     expect(spy).toHaveBeenCalledTimes(2); // once per floor: L1, L2
     spy.mockRestore();
   });
+
+  it("says in the switcher when the team could not be loaded", async () => {
+    useEditorStore.getState().setTeamLoadError();
+    renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: /Floor L1/ }));
+    expect(await screen.findByText(/couldn't load the team/i)).toBeTruthy();
+  });
 });

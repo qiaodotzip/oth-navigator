@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { Api } from "../api/client";
+import { isUnauthorized, type Api } from "../api/client";
 import { useEditorStore } from "../state/store";
 
 export function AssetLibrary({ api, onPlace }: { api: Api; onPlace: (assetId: string) => void }) {
@@ -19,6 +19,8 @@ export function AssetLibrary({ api, onPlace }: { api: Api; onPlace: (assetId: st
       setStatus(`Uploaded ${created.filename}.`);
       setAssets(await api.listAssets());
     } catch (err) {
+      // The sign-in dialog over the page is the message; a raw 401 beside it is noise.
+      if (isUnauthorized(err)) return;
       // Budget rejections arrive here; show the server's own words.
       setStatus(err instanceof Error ? err.message : String(err));
     }

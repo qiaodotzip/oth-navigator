@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../api/client";
 import { useEditorStore } from "../state/store";
 import { AssetLibrary } from "./AssetLibrary";
 
@@ -55,5 +56,16 @@ describe("AssetLibrary", () => {
     const broken = api({ listAssets: vi.fn(async () => { throw new Error("offline"); }) });
     render(<AssetLibrary api={broken} onPlace={vi.fn()} />);
     await waitFor(() => expect(useEditorStore.getState().assets).toEqual([]));
+  });
+
+  it("leaves an expired session to the sign-in dialog instead of showing a raw 401", async () => {
+    const expired = api({ uploadAsset: vi.fn(async () => { throw new ApiError(401, null); }) });
+    render(<AssetLibrary api={expired} onPlace={vi.fn()} />);
+    await waitFor(() => screen.getByText("library-arch.glb"));
+    fireEvent.change(screen.getByLabelText(/upload a \.glb/i), {
+      target: { files: [new File([new Uint8Array([1])], "big.glb")] },
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(useEditorStore.getState().status).toBeNull();
   });
 });

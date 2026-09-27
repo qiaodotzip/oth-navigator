@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../api/client";
 import { useEditorStore } from "../state/store";
 import { FloorplanPanel } from "./FloorplanPanel";
 
@@ -112,6 +113,17 @@ describe("FloorplanPanel", () => {
     useEditorStore.getState().setLevelImages([{ ...image, metresPerPixel: 0.071 }]);
     render(<FloorplanPanel {...deps()} />);
     expect(screen.getByText(/0\.071/)).toBeTruthy();
+  });
+
+  it("leaves an expired session to the sign-in dialog instead of showing a raw 401", async () => {
+    const d = deps({ uploadLevelImage: vi.fn(async () => { throw new ApiError(401, null); }) });
+    render(<FloorplanPanel {...d} />);
+    fireEvent.change(screen.getByLabelText(/add a floorplan/i), {
+      target: { files: [new File([new Uint8Array([1])], "L1.png")] },
+    });
+    await waitFor(() => expect(uploadCalls(d)).toHaveLength(1));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(useEditorStore.getState().status).toBeNull();
   });
 });
 

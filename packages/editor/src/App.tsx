@@ -33,7 +33,10 @@ import { useElementSize } from "./plan/useElementSize";
 import { createSaver } from "./state/save";
 import { useEditorStore } from "./state/store";
 
-/** The map editor. Only ever rendered signed in: AuthGate sees to that. */
+/**
+ * The map editor — the Build tab, until Plan 3 rebuilds it. It stays mounted
+ * through an expired session: AuthGate keeps it behind the sign-in dialog.
+ */
 export function App({ api, embedded = false }: { api: Api; embedded?: boolean }) {
   const saver = useMemo(() => createSaver(api), [api]);
   const user = useEditorStore(s => s.user);

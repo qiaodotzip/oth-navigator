@@ -17,6 +17,7 @@ export function FloorSwitcher({ current, tab }: { current: Level; tab: FloorTab 
   const report = useEditorStore(s => s.report);
   const levelImages = useEditorStore(s => s.levelImages);
   const me = useEditorStore(s => s.user);
+  const teamStatus = useEditorStore(s => s.teamStatus);
   const mine = (l: Level) => Boolean(me && l.ownerIds.includes(me.id));
 
   return (
@@ -36,35 +37,42 @@ export function FloorSwitcher({ current, tab }: { current: Level; tab: FloorTab 
           not Radix mounts it. Building it only while open keeps floorProgress's
           per-floor work off the hot path of every edit anywhere in the app. */}
       {open && (
-        <ul className="w-80">
-          {sortedLevels(model).map(level => {
-            const to = href({ name: "floor", code: level.code, tab, params: {} });
-            const build = model ? floorProgress(model, report, levelImages, level.id).build : null;
-            return (
-              <li key={level.id}>
-                <PopoverClose asChild>
-                  <a
-                    href={to}
-                    onClick={followLink(to)}
-                    className={`flex items-center gap-2 rounded px-2 py-1.5 hover:bg-stone-100 ${
-                      level.id === current.id ? "bg-stone-100" : ""
-                    }`}
-                  >
-                    <span className="w-8 font-semibold">{level.code}</span>
-                    <span className="min-w-0 flex-1 truncate text-stone-600">{level.nameEn}</span>
-                    {mine(level) && <YoursTag />}
-                    <OwnerAvatars ids={level.ownerIds} size={20} />
-                    {build && (
-                      <span className="w-14">
-                        <Progress value={build.done} max={build.total} label={`${level.code} build progress`} />
-                      </span>
-                    )}
-                  </a>
-                </PopoverClose>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="w-80">
+          {teamStatus === "error" && (
+            <p className="px-2 pb-1 text-xs text-danger">
+              Couldn't load the team, so owners show without names. Reload the page to try again.
+            </p>
+          )}
+          <ul>
+            {sortedLevels(model).map(level => {
+              const to = href({ name: "floor", code: level.code, tab, params: {} });
+              const build = model ? floorProgress(model, report, levelImages, level.id).build : null;
+              return (
+                <li key={level.id}>
+                  <PopoverClose asChild>
+                    <a
+                      href={to}
+                      onClick={followLink(to)}
+                      className={`flex items-center gap-2 rounded px-2 py-1.5 hover:bg-stone-100 ${
+                        level.id === current.id ? "bg-stone-100" : ""
+                      }`}
+                    >
+                      <span className="w-8 font-semibold">{level.code}</span>
+                      <span className="min-w-0 flex-1 truncate text-stone-600">{level.nameEn}</span>
+                      {mine(level) && <YoursTag />}
+                      <OwnerAvatars ids={level.ownerIds} size={20} />
+                      {build && (
+                        <span className="w-14">
+                          <Progress value={build.done} max={build.total} label={`${level.code} build progress`} />
+                        </span>
+                      )}
+                    </a>
+                  </PopoverClose>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
     </Popover>
   );

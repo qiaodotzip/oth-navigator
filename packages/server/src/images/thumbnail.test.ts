@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, rename, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
@@ -9,7 +9,7 @@ import { readThumbnail, thumbnailWidth } from "./thumbnail";
 
 vi.mock("node:fs/promises", async importOriginal => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
-  return { ...actual, writeFile: vi.fn(actual.writeFile) };
+  return { ...actual, writeFile: vi.fn(actual.writeFile), rename: vi.fn(actual.rename) };
 });
 
 async function jpeg(width: number, height: number): Promise<Uint8Array> {
@@ -82,5 +82,16 @@ describe("readThumbnail", () => {
     await expect(readThumbnail(dataDir, stored, 240)).rejects.toThrow("disk full");
     const names = await readdir(join(dataDir, "thumbs")).catch(() => []);
     expect(names).toHaveLength(0);
+  });
+
+  it("cleans up its temp file when the rename into place fails", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "oth-thumb-"));
+    const stored = await storeAsset(dataDir, await jpeg(1920, 1080), "jpg");
+    vi.mocked(writeFile).mockClear();
+    vi.mocked(rename).mockRejectedValueOnce(new Error("EPERM"));
+    await expect(readThumbnail(dataDir, stored, 240)).rejects.toThrow("EPERM");
+    // The temp file was written this time, so there was something to clean up.
+    expect(vi.mocked(writeFile).mock.calls.some(([p]) => String(p).endsWith(".tmp"))).toBe(true);
+    expect(await readdir(join(dataDir, "thumbs"))).toEqual([]);
   });
 });
