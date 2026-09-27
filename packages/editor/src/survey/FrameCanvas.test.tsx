@@ -183,6 +183,15 @@ describe("what has already been identified", () => {
     expect(screen.getByTestId("whole-frame-labels").textContent).toContain("Public Library");
   });
 
+  it("removes a whole-frame tag from its tray", () => {
+    // Ruling 19: the boxed case already had a test; the tray beneath the
+    // image, for a tag with no box, had none.
+    const onRemoveLabel = vi.fn();
+    render(<Drawing onRemoveLabel={onRemoveLabel} labels={[label("s2", places[1]!)]} />);
+    fireEvent.click(screen.getByLabelText("Remove tag Public Library from this frame"));
+    expect(onRemoveLabel.mock.calls[0]![0].sighting.id).toBe("s2");
+  });
+
   it("shows nothing over a frame nobody has tagged", () => {
     render(<Drawing />);
     expect(screen.queryByTestId("whole-frame-labels")).toBeNull();

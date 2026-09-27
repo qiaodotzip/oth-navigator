@@ -87,6 +87,10 @@ export function AddFootageDialog({ api, saver, level, captureId, open, onOpenCha
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const running = progress !== null;
+  // `busy` covers the gap before `running` starts — target() awaiting
+  // saver.create for new footage — where dismissing the dialog would leave
+  // an empty capture behind with nothing ever filed into it.
+  const locked = running || busy;
 
   // The video is a whole file held in memory; let it go when the dialog does.
   useEffect(() => () => {
@@ -178,11 +182,12 @@ export function AddFootageDialog({ api, saver, level, captureId, open, onOpenCha
         if (!mounted.current) return;
         await saver.refresh().catch(() => {});
         if (!mounted.current) return;
+        const kept = `${result.kept} frame${result.kept === 1 ? "" : "s"}`;
         toast({
           tone: "success",
           message: result.stopped
-            ? `Stopped. Kept ${result.kept} frames — run it again to carry on.`
-            : `Kept ${result.kept} frames from ${into.filename}.`,
+            ? `Stopped. Kept ${kept} — run it again to carry on.`
+            : `Kept ${kept} from ${into.filename}.`,
         });
         onOpenChange(false);
       } catch (err) {
@@ -238,11 +243,11 @@ export function AddFootageDialog({ api, saver, level, captureId, open, onOpenCha
     <Dialog
       open={open}
       onOpenChange={next => {
-        if (!running) onOpenChange(next);
+        if (!locked) onOpenChange(next);
       }}
       title={capture ? `Find more frames in ${capture.filename}` : "Add footage"}
       description={`Filed under ${level.code}. The video is never uploaded — only the frames worth keeping are.`}
-      dismissible={!running}
+      dismissible={!locked}
     >
       <div className="space-y-3">
         <label className="block">

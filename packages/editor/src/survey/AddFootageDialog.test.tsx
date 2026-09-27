@@ -104,6 +104,47 @@ describe("AddFootageDialog", () => {
     expect(useToasts.getState().toasts[0]!.message).toBe("Kept 3 frames from L1 east.mp4.");
   });
 
+  it("says one frame, not one frames, when only one is kept", async () => {
+    const { onOpenChange } = setup();
+    fireEvent.change(screen.getByLabelText("Choose the video file"), {
+      target: { files: [new File([new Uint8Array([1])], "one.mp4", { type: "video/mp4" })] },
+    });
+    const video = screen.getByTestId("footage-video");
+    // Short enough that samplePlan offers only the moment at 0ms.
+    Object.defineProperty(video, "duration", { value: 1.5, configurable: true });
+    fireEvent.loadedMetadata(video);
+    fireEvent.click(screen.getByRole("button", { name: /find frames automatically/i }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(useToasts.getState().toasts[0]!.message).toBe("Kept 1 frame from one.mp4.");
+  });
+
+  it("cannot be dismissed while a capture is being created", async () => {
+    // The gap between clicking and the first upload — target() awaiting
+    // saver.create — has no progress yet, so dismissible tied to `running`
+    // alone would let the dialog close here and leave an empty capture
+    // behind with nothing ever filed into it.
+    let resolveCreate: ((ok: boolean) => void) | null = null;
+    const saver = {
+      create: vi.fn(() => new Promise<boolean>(resolve => { resolveCreate = resolve; })),
+      update: vi.fn(async () => true),
+      refresh: vi.fn(async () => {}),
+    };
+    const upload = vi.fn().mockResolvedValue({});
+    const api = { uploadKeyframe: upload } as unknown as Api;
+    render(
+      <AddFootageDialog
+        api={api} saver={saver as unknown as Saver} level={L1} captureId={null}
+        open onOpenChange={vi.fn()} onCapture={vi.fn()} reader={reader()}
+      />,
+    );
+    openVideo();
+    fireEvent.click(screen.getByRole("button", { name: /find frames automatically/i }));
+    await waitFor(() => expect(saver.create).toHaveBeenCalled());
+    expect(screen.queryByLabelText("Close")).toBeNull();
+    resolveCreate!(true);
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(3));
+  });
+
   it("finds more frames in footage that has some, skipping the moments it already has", async () => {
     const { saver, upload } = setup({ captureId: "cap_1" });
     openVideo();
@@ -218,7 +259,7 @@ describe("AddFootageDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     release();
     await waitFor(() => expect(useToasts.getState().toasts[0]?.message)
-      .toBe("Stopped. Kept 1 frames — run it again to carry on."));
+      .toBe("Stopped. Kept 1 frame — run it again to carry on."));
     expect(upload).toHaveBeenCalledTimes(1);
   });
 
