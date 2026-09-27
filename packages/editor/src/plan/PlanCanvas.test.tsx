@@ -725,6 +725,26 @@ describe("entrances and lifts", () => {
     expect(useEditorStore.getState().selection).toEqual({ type: "entrance", id: "en-1" });
   });
 
+  it("shows faintly where a lift stops on other levels, so its next stop can be placed on it", () => {
+    // Each level frames itself, so "the same spot" is nowhere near the same
+    // place on screen. The ghost is the target.
+    useEditorStore.getState().setModel(parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: withPoints.levels,
+      rooms: withPoints.rooms,
+      portals: [{ id: "lift-b", kind: "lift" }],
+      portalEndpoints: [{ id: "b-2", portalId: "lift-b", levelId: "oth-L2", roomId: "L1-a", point: [3, 3] }],
+    }));
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("portal-ghost-b-2")).toBeTruthy();
+  });
+
+  it("does not ghost a lift that already stops on this level", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    // lift-a stops on L1 (ep-1) and L2 (ep-2); L1 needs no ghost of ep-2.
+    expect(screen.queryByTestId("portal-ghost-ep-2")).toBeNull();
+  });
+
   it("selects a lift stop clicked with the select tool", () => {
     render(<PlanCanvas width={800} height={600} />);
     fireEvent.click(screen.getByTestId("portal-endpoint-ep-1"));

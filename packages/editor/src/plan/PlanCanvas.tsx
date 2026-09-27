@@ -450,6 +450,36 @@ export function PlanCanvas({
             );
           })}
 
+        {/*
+          Where lifts stop on other levels but not yet on this one. Each level
+          frames itself, so "click the same spot" means nothing on screen
+          without a mark to click on. Never clickable itself: a Portal click on
+          it lands on the canvas at that spot, which is what joins the lift.
+        */}
+        {(() => {
+          const endpoints = (state.model?.portalEndpoints ?? []).filter(ep => !ep.deletedAt);
+          const stopsHere = new Set(
+            endpoints.filter(ep => ep.levelId === state.activeLevelId).map(ep => ep.portalId),
+          );
+          return endpoints
+            .filter(ep => ep.levelId !== state.activeLevelId && !stopsHere.has(ep.portalId))
+            .map(ep => {
+              const [x, y] = worldToScreen(state.viewport, ep.point);
+              const level = state.model?.levels.find(l => l.id === ep.levelId);
+              return (
+                <g key={`ghost-${ep.id}`} data-testid={`portal-ghost-${ep.id}`} pointerEvents="none">
+                  <rect
+                    x={x - 9} y={y - 9} width={18} height={18} rx={3}
+                    fill="none" stroke="#1d4ed8" strokeWidth={1.5} strokeDasharray="3 2"
+                  />
+                  <text x={x + 13} y={y + 4} fontSize={10} fill="#1d4ed8">
+                    {level?.code ?? ""}
+                  </text>
+                </g>
+              );
+            });
+        })()}
+
         {state.model?.entrances
           .filter(e => e.levelId === state.activeLevelId && !e.deletedAt)
           .map(e => (
