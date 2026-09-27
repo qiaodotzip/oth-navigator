@@ -58,3 +58,18 @@ describe("LevelSchema", () => {
     expect(() => LevelSchema.parse({ ...level, heightM: 0 })).toThrow();
   });
 });
+
+describe("level owners", () => {
+  const level = {
+    id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1,
+    nameEn: "Level 1", nameZh: "一楼", elevationM: 0, heightM: 6,
+  };
+
+  it("has no owners until someone is assigned", () => {
+    expect(LevelSchema.parse(level).ownerIds).toEqual([]);
+  });
+
+  it("keeps the owners it is given", () => {
+    expect(LevelSchema.parse({ ...level, ownerIds: ["user_a", "user_b"] }).ownerIds).toEqual(["user_a", "user_b"]);
+  });
+});

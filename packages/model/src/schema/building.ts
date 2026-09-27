@@ -28,6 +28,11 @@ export const LevelSchema = AuditFieldsSchema.extend({
   elevationM: z.number().finite(),
   /** Floor-to-floor height in metres. */
   heightM: z.number().positive(),
+  /**
+   * Who owns this floor's survey and build work. User ids, not names, so a
+   * rename does not orphan a floor. Editing-only: never published.
+   */
+  ownerIds: z.array(z.string().min(1)).default([]),
 });
 
 export type Building = z.infer<typeof BuildingSchema>;

@@ -46,7 +46,12 @@ export function buildBundle(model: MapModel, meta: BundleMeta): BundleFile[] {
 
   files.push({
     path: "building.json",
-    contents: stableStringify({ building: model.building, levels }),
+    // Owners are who does the editing — nothing a visitor needs, and user ids
+    // have no business in a public file.
+    contents: stableStringify({
+      building: model.building,
+      levels: levels.map(({ ownerIds: _owners, ...rest }) => rest),
+    }),
   });
 
   for (const level of levels) {

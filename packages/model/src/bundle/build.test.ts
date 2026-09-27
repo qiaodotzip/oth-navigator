@@ -123,3 +123,17 @@ describe("what the bundle deliberately omits", () => {
     expect(all).toContain("L1-lobby");
   });
 });
+
+describe("owners are never published", () => {
+  it("leaves level owners out of the public bundle", () => {
+    const owned = parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [{
+        id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼",
+        elevationM: 0, heightM: 6, ownerIds: ["user_secret"],
+      }],
+    });
+    const files = buildBundle(owned, { version: "v1", createdAt: "2026-09-27T00:00:00.000Z", createdBy: "t" });
+    expect(files.map(f => f.contents).join("\n")).not.toContain("user_secret");
+  });
+});
