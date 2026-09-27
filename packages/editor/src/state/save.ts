@@ -1,5 +1,5 @@
 import type { Api, EntityType } from "../api/client";
-import { ConflictError } from "../api/client";
+import { ApiError, ConflictError } from "../api/client";
 import { useEditorStore } from "./store";
 
 /**
@@ -44,8 +44,34 @@ export function createSaver(api: Api) {
     }
   }
 
+  /**
+   * The first load of a screen, which nothing is awaiting.
+   *
+   * An expired session sends you back to sign in; anything else is said out
+   * loud in the status bar. A bare `void refresh()` threw into nowhere, and the
+   * screen just sat there empty.
+   */
+  async function load(): Promise<boolean> {
+    try {
+      await refresh();
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        store.getState().setUser(null);
+        return false;
+      }
+      store.getState().setStatus(
+        err instanceof ApiError
+          ? `The server refused to load the map (HTTP ${err.status}). Try reloading the page.`
+          : "Can't reach the server. Check your connection and reload the page.",
+      );
+      return false;
+    }
+  }
+
   return {
     refresh,
+    load,
 
     create: (type: EntityType, data: Record<string, unknown>) =>
       guard(type, String(data.id ?? "new"), () => api.createEntity(type, data)),

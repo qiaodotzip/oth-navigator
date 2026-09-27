@@ -2,6 +2,7 @@ import { StrictMode, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { createApi } from "./api/client";
 import { App } from "./App";
+import { AuthGate } from "./auth/AuthGate";
 import { useRoute } from "./route";
 import { SurveyApp } from "./survey/SurveyApp";
 import "./styles.css";
@@ -10,7 +11,11 @@ import "./styles.css";
 function Root() {
   const route = useRoute();
   const api = useMemo(() => createApi(), []);
-  return route.startsWith("/survey") ? <SurveyApp api={api} /> : <App />;
+  return (
+    <AuthGate api={api}>
+      {route.startsWith("/survey") ? <SurveyApp api={api} /> : <App api={api} />}
+    </AuthGate>
+  );
 }
 
 createRoot(document.getElementById("root")!).render(

@@ -28,7 +28,7 @@ export function SurveyApp({ api }: { api: Api }) {
   const [renaming, setRenaming] = useState<string | null>(null);
 
   useEffect(() => {
-    void saver.refresh();
+    void saver.load();
   }, [saver]);
 
   // Null means the model has never loaded — almost always a server that is not
@@ -170,8 +170,7 @@ export function SurveyApp({ api }: { api: Api }) {
           </h2>
           {!loaded && (
             <p data-testid="captures-unloaded" className="px-1 py-2 text-xs text-amber-700">
-              Nothing loaded. If this does not clear, the server is probably not
-              running — start it with <code>npm run dev</code>.
+              Nothing has loaded yet. If this does not clear, reload the page.
             </p>
           )}
           {loaded && captures.length === 0 && (

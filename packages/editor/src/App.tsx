@@ -1,8 +1,7 @@
 import { ringCentroid } from "@oth/model";
 import { MapScene } from "@oth/renderer";
-import { useEffect, useMemo, useState } from "react";
-import { createApi } from "./api/client";
-import { LoginScreen } from "./auth/LoginScreen";
+import { useEffect, useMemo } from "react";
+import type { Api } from "./api/client";
 import { useCollaboration } from "./collab/useCollaboration";
 import { navigate } from "./route";
 import { commitPoint } from "./flow/commitPoint";
@@ -34,31 +33,22 @@ import { useElementSize } from "./plan/useElementSize";
 import { createSaver } from "./state/save";
 import { useEditorStore } from "./state/store";
 
-export function App() {
-  const api = useMemo(() => createApi(), []);
+/** The map editor. Only ever rendered signed in: AuthGate sees to that. */
+export function App({ api }: { api: Api }) {
   const saver = useMemo(() => createSaver(api), [api]);
   const user = useEditorStore(s => s.user);
-  const setUser = useEditorStore(s => s.setUser);
   const model = useEditorStore(s => s.model);
   const activeLevelId = useEditorStore(s => s.activeLevelId);
   const status = useEditorStore(s => s.status);
-  const [checked, setChecked] = useState(false);
   const [canvasBox, canvasSize] = useElementSize();
 
   useEffect(() => {
-    api.me().then(setUser).catch(() => setUser(null)).finally(() => setChecked(true));
-  }, [api, setUser]);
+    void saver.load();
+  }, [saver]);
 
-  useEffect(() => {
-    if (user) void saver.refresh();
-  }, [user, saver]);
-
-  // Before the early returns below, since hooks cannot be conditional — the
-  // flag is what keeps it quiet on the login screen.
   useCollaboration(api, Boolean(user));
 
-  if (!checked) return <div className="p-6 text-sm text-stone-500">Loading…</div>;
-  if (!user) return <LoginScreen api={api} onSignedIn={setUser} />;
+  if (!user) return null;
 
   const renameLayer = (item: LayerItem, nameEn: string) =>
     void saver.update(layerEntityType(item.type), item.id, item.version, { nameEn });

@@ -1,0 +1,52 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError, type Api } from "../api/client";
+import { useEditorStore } from "../state/store";
+import { AuthGate } from "./AuthGate";
+
+const ada = { id: "u1", email: "ada@oth.local", displayName: "Ada" };
+
+function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
+  return {
+    me: vi.fn().mockResolvedValue(ada),
+    login: vi.fn().mockResolvedValue(ada),
+    ...overrides,
+  } as unknown as Api;
+}
+
+beforeEach(() => {
+  useEditorStore.getState().reset();
+});
+
+describe("AuthGate", () => {
+  it("shows the tool to someone already signed in", async () => {
+    render(<AuthGate api={fakeApi()}><p>the survey</p></AuthGate>);
+    await waitFor(() => expect(screen.getByText("the survey")).toBeTruthy());
+    expect(useEditorStore.getState().user).toEqual(ada);
+  });
+
+  it("asks someone signed out to sign in, rather than showing the tool empty", async () => {
+    // A signed-out survey used to say the server was probably not running.
+    const api = fakeApi({ me: vi.fn().mockRejectedValue(new ApiError(401, null)) });
+    render(<AuthGate api={api}><p>the survey</p></AuthGate>);
+    await waitFor(() => expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy());
+    expect(screen.queryByText("the survey")).toBeNull();
+  });
+
+  it("goes straight to the tool that was asked for once signed in", async () => {
+    const api = fakeApi({ me: vi.fn().mockRejectedValue(new ApiError(401, null)) });
+    render(<AuthGate api={api}><p>the survey</p></AuthGate>);
+    await waitFor(() => screen.getByRole("button", { name: /sign in/i }));
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "ada@oth.local" } });
+    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await waitFor(() => expect(screen.getByText("the survey")).toBeTruthy());
+  });
+
+  it("returns to sign-in when the session is dropped mid-use", async () => {
+    render(<AuthGate api={fakeApi()}><p>the survey</p></AuthGate>);
+    await waitFor(() => screen.getByText("the survey"));
+    useEditorStore.getState().setUser(null);
+    await waitFor(() => expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy());
+  });
+});

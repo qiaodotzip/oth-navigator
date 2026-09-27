@@ -50,8 +50,10 @@ describe("SurveyApp", () => {
     // someone hunting for data that was never lost.
     const api = fakeApi({ getModel: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) });
     render(<SurveyApp api={api} />);
-    await waitFor(() => expect(screen.getByTestId("captures-unloaded")).toBeTruthy());
-    expect(screen.getByTestId("captures-unloaded").textContent).toMatch(/npm run dev/);
+    await waitFor(() => expect(screen.getByText(/can't reach the server/i)).toBeTruthy());
+    expect(screen.getByTestId("captures-unloaded")).toBeTruthy();
+    // Teammates use the hosted site; a terminal command is no help to them.
+    expect(screen.getByTestId("captures-unloaded").textContent).not.toMatch(/npm/);
   });
 
   it("says there is genuinely nothing once the model has loaded empty", async () => {

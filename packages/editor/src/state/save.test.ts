@@ -1,6 +1,6 @@
 import { parseModel } from "@oth/model";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ConflictError } from "../api/client";
+import { ApiError, ConflictError } from "../api/client";
 import { createSaver } from "./save";
 import { useEditorStore } from "./store";
 
@@ -24,6 +24,26 @@ function fakeApi(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => useEditorStore.getState().reset());
+
+describe("saver.load", () => {
+  it("loads like refresh when all is well", async () => {
+    expect(await createSaver(fakeApi()).load()).toBe(true);
+    expect(useEditorStore.getState().model).toEqual(model);
+  });
+
+  it("sends someone whose session expired back to sign in", async () => {
+    useEditorStore.getState().setUser({ id: "u1", email: "a@oth.local", displayName: "A" });
+    const getModel = vi.fn(async () => { throw new ApiError(401, null); });
+    expect(await createSaver(fakeApi({ getModel })).load()).toBe(false);
+    expect(useEditorStore.getState().user).toBeNull();
+  });
+
+  it("says the server cannot be reached, instead of throwing into the void", async () => {
+    const getModel = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    expect(await createSaver(fakeApi({ getModel })).load()).toBe(false);
+    expect(useEditorStore.getState().status).toMatch(/can't reach the server/i);
+  });
+});
 
 describe("saver", () => {
   it("refresh loads the model and the validation report together", async () => {
