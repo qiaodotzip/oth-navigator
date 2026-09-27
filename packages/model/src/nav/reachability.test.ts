@@ -88,6 +88,23 @@ describe("reachability rule", () => {
     expect(codes({ rooms: [l1Lobby, { ...l1Back, walkable: false }] })).toEqual([]);
   });
 
+  it("names an entrance standing where nobody can walk, rather than blaming every area", () => {
+    // 0.1 m from the lobby's edge is inside the wall band, so the flood fill
+    // has nowhere to start — and every area then reads as a missing pathway.
+    const m = parseModel({
+      building, levels, rooms: [l1Lobby],
+      entrances: [{ ...entrance, point: [0.1, 5] }],
+    });
+    const issues = validateModel(m, reachabilityRules).issues;
+    const offFloor = issues.find(i => i.code === "entrance.offFloor");
+    expect(offFloor).toMatchObject({ severity: "error", entityType: "entrance", entityId: "e-main" });
+    expect(offFloor?.message).toMatch(/move it/i);
+  });
+
+  it("says nothing about an entrance on open floor", () => {
+    expect(codes({ rooms: [l1Lobby] })).not.toContain("entrance.offFloor");
+  });
+
   it("errors when the model has no entrance at all", () => {
     const m = parseModel({ building, levels, rooms: [l1Lobby] });
     expect(validateModel(m, reachabilityRules).issues.map(i => i.code)).toContain("building.entrances.none");

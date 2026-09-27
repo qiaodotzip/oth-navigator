@@ -120,6 +120,20 @@ describe("StepsPanel", () => {
     expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-a" });
   });
 
+  it("selects the entrance an issue names", () => {
+    useEditorStore.getState().setReport({
+      issues: [{
+        severity: "error", code: "entrance.offFloor", message: "stands on a wall",
+        entityType: "entrance", entityId: "en-1", levelId: "oth-L1",
+      }],
+      errorCount: 1, warningCount: 0, ok: false,
+    });
+    render(<StepsPanel sections={{}} />);
+    fireEvent.click(screen.getByText("Entrances"));
+    fireEvent.click(screen.getByText("stands on a wall"));
+    expect(useEditorStore.getState().selection).toEqual({ type: "entrance", id: "en-1" });
+  });
+
   it("gives Dressing no status dot, since a level is not incomplete without it", () => {
     render(<StepsPanel sections={{}} />);
     const dressing = screen.getByTestId("section-dressing");

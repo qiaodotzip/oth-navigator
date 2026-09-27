@@ -1,5 +1,5 @@
 import { bboxOfRings, pointInPolygon } from "../../geometry/point";
-import { cellCentre, navGridGet } from "../../nav/grid";
+import { cellCentre, navGridGet, worldToCell } from "../../nav/grid";
 import { buildingReachability } from "../../nav/reachability";
 import { live } from "../../primitives";
 import type { Rule, ValidationIssue } from "../types";
@@ -20,6 +20,24 @@ const reachable: Rule = model => {
 
   const byLevel = buildingReachability(model);
   const issues: ValidationIssue[] = [];
+
+  // The flood fill silently skips an entrance on a closed cell. Say so here, or
+  // the only symptom is every area reading as a missing pathway.
+  for (const e of live(model.entrances)) {
+    const level = byLevel.get(e.levelId);
+    if (!level) continue;
+    const { col, row } = worldToCell(level.grid, e.point);
+    if (!navGridGet(level.grid, col, row)) {
+      issues.push({
+        severity: "error",
+        code: "entrance.offFloor",
+        message: `Entrance "${e.nameEn || e.id}" stands on a wall or off walkable floor, so routing cannot start from it. Move it into the open part of an area, or run a pathway through it.`,
+        entityType: "entrance",
+        entityId: e.id,
+        levelId: e.levelId,
+      });
+    }
+  }
 
   for (const room of rooms) {
     const level = byLevel.get(room.levelId);

@@ -74,8 +74,8 @@ export function StepsPanel({ sections: content }: { sections: Partial<Record<Sec
                         <button
                           className="text-left text-xs hover:underline"
                           onClick={() => {
-                            if (issue.entityType === "room") {
-                              select({ type: "room", id: issue.entityId });
+                            if (issue.entityType === "room" || issue.entityType === "entrance") {
+                              select({ type: issue.entityType, id: issue.entityId });
                             }
                           }}
                         >
