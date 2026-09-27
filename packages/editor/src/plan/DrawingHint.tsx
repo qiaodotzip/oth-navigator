@@ -24,9 +24,11 @@ function howTo(tool: Tool, pointCount: number): string {
       : "Click the first corner again to close, or double-click. Backspace undoes.";
   }
   if (tool === "draw-pathway") {
+    // The commonest surprise: people draw a loop expecting it to fill. A
+    // pathway is a line with a width, so a loop comes out as a ring.
     return pointCount < 2
-      ? "Click along the middle of where people walk."
-      : "Keep clicking, then double-click to finish. Backspace undoes.";
+      ? "Click along the middle of where people walk — a line, not an outline."
+      : "Keep clicking, then double-click to finish. For a filled open space, use Draw area instead.";
   }
   if (tool === "draw-detail") {
     if (pointCount === 0) return "Click a corner of the thing itself — its real extent.";

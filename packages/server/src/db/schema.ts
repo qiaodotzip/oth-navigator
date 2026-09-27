@@ -270,7 +270,6 @@ export const keyframes = pgTable("keyframes", {
   widthPx: integer("width_px").notNull(),
   heightPx: integer("height_px").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
-  pathwayKindId: text("pathway_kind_id"),
   ...auditColumns,
 }, t => ({ captureIdx: index("keyframes_capture_idx").on(t.captureId) }));
 
@@ -281,6 +280,7 @@ export const places = pgTable("places", {
   category: text("category").notNull(),
   levelId: text("level_id"),
   roomId: text("room_id"),
+  pathwayKindId: text("pathway_kind_id"),
   notes: text("notes").notNull().default(""),
   status: text("status").notNull().default("confirmed"),
   proposedBy: text("proposed_by").notNull().default(""),

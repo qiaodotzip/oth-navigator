@@ -1,4 +1,4 @@
-import { KeyframeSchema, PlaceSchema, SightingSchema, type Box, type Place } from "@oth/model";
+import { KeyframeSchema, PathwayKindSchema, PlaceSchema, SightingSchema, type Box, type Place } from "@oth/model";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FrameLabel } from "./labelled";
@@ -13,16 +13,22 @@ const places = [
   PlaceSchema.parse({ id: "p2", nameEn: "Public Library", category: "community" }),
 ];
 
+const walkwayKinds = [
+  PathwayKindSchema.parse({ id: "pk-1", nameEn: "Covered link", colorHex: "#38bdf8" }),
+];
+
 function setup(existing = places, labels: FrameLabel[] = []) {
   const onTag = vi.fn();
   const onRemoveLabel = vi.fn();
+  const onAddWalkwayKind = vi.fn();
   render(
     <PlaceTagger
       keyframe={keyframe} imageUrl="/f.jpg" places={existing} labels={labels}
-      onTag={onTag} onRemoveLabel={onRemoveLabel}
+      walkwayKinds={walkwayKinds} onTag={onTag} onRemoveLabel={onRemoveLabel}
+      onAddWalkwayKind={onAddWalkwayKind}
     />,
   );
-  return { onTag, onRemoveLabel };
+  return { onTag, onRemoveLabel, onAddWalkwayKind };
 }
 
 const label = (id: string, place: Place, box?: Box): FrameLabel => ({
@@ -42,7 +48,7 @@ describe("PlaceTagger", () => {
   it("tags the whole frame when no box is drawn", () => {
     const { onTag } = setup();
     fireEvent.change(screen.getByLabelText("Place name"), { target: { value: "Kopitiam" } });
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: /^Tag/ }));
     expect(onTag).toHaveBeenCalledWith(expect.objectContaining({ nameEn: "Kopitiam" }));
     expect(onTag.mock.calls[0]![0].box).toBeUndefined();
   });
@@ -54,7 +60,7 @@ describe("PlaceTagger", () => {
     fireEvent.mouseMove(frame, { clientX: 300, clientY: 240 });
     fireEvent.mouseUp(frame);
     fireEvent.change(screen.getByLabelText("Place name"), { target: { value: "Kopitiam" } });
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: /^Tag/ }));
     const box = onTag.mock.calls[0]![0].box;
     expect(box.x).toBeCloseTo(0.25, 2);
     expect(box.y).toBeCloseTo(0.2, 2);
@@ -88,7 +94,7 @@ describe("PlaceTagger", () => {
     const { onTag } = setup();
     fireEvent.change(screen.getByLabelText("Place name"), { target: { value: "Fresh Bakery" } });
     fireEvent.change(screen.getByLabelText("Category"), { target: { value: "lifestyle" } });
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: /^Tag/ }));
     expect(onTag).toHaveBeenCalledWith(
       expect.objectContaining({ placeId: null, nameEn: "Fresh Bakery", category: "lifestyle" }),
     );
@@ -96,14 +102,14 @@ describe("PlaceTagger", () => {
 
   it("refuses to tag with an empty name", () => {
     const { onTag } = setup();
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: /^Tag/ }));
     expect(onTag).not.toHaveBeenCalled();
   });
 
   it("refuses a name that is only spaces", () => {
     const { onTag } = setup();
     fireEvent.change(screen.getByLabelText("Place name"), { target: { value: "   " } });
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: /^Tag/ }));
     expect(onTag).not.toHaveBeenCalled();
   });
 
@@ -119,7 +125,7 @@ describe("PlaceTagger", () => {
     setup();
     const input = screen.getByLabelText("Place name") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "Kopitiam" } });
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: /^Tag/ }));
     expect(input.value).toBe("");
   });
 
@@ -219,5 +225,45 @@ describe("taking a wrong tag off a frame", () => {
   it("shows no tag list when the frame has none", () => {
     setup();
     expect(screen.queryByTestId("tags-on-frame")).toBeNull();
+  });
+});
+
+describe("tagging a walkway in the picture", () => {
+  it("tags the boxed floor as a walkway of a chosen type", () => {
+    // The thing the whole feature is for: point at a stretch of floor in a
+    // photo and say what kind of walkway it is.
+    const { onTag } = setup();
+    fireEvent.click(screen.getByTestId("what-walkway"));
+    fireEvent.change(screen.getByLabelText("Walkway type"), { target: { value: "pk-1" } });
+    fireEvent.change(screen.getByLabelText("Place name"), { target: { value: "Festive Walk east" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tag" }));
+    expect(onTag.mock.calls[0]![0]).toMatchObject({
+      nameEn: "Festive Walk east",
+      pathwayKindId: "pk-1",
+      category: "facility",
+    });
+  });
+
+  it("hides the tenant category, which means nothing for a walkway", () => {
+    setup();
+    expect(screen.getByLabelText("Category")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("what-walkway"));
+    expect(screen.queryByLabelText("Category")).toBeNull();
+  });
+
+  it("defines a new type without leaving the frame", () => {
+    const { onAddWalkwayKind } = setup();
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue("Ramp");
+    fireEvent.click(screen.getByTestId("what-walkway"));
+    fireEvent.click(screen.getByRole("button", { name: /new type/i }));
+    expect(onAddWalkwayKind).toHaveBeenCalledWith("Ramp");
+    prompt.mockRestore();
+  });
+
+  it("still tags an ordinary place when that is what it is", () => {
+    const { onTag } = setup();
+    fireEvent.change(screen.getByLabelText("Place name"), { target: { value: "Kopitiam" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tag" }));
+    expect(onTag.mock.calls[0]![0].pathwayKindId).toBeUndefined();
   });
 });

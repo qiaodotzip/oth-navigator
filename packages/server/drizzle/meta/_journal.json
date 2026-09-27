@@ -64,6 +64,13 @@
       "when": 1790478108393,
       "tag": "0008_short_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790478924212,
+      "tag": "0009_icy_star_brand",
+      "breakpoints": true
     }
   ]
 }

@@ -42,15 +42,6 @@ export const KeyframeSchema = AuditFieldsSchema.extend({
   imageId: SlugSchema,
   widthPx: z.number().int().positive(),
   heightPx: z.number().int().positive(),
-  /**
-   * The kind of walkway the camera was in when this frame was taken.
-   *
-   * A walkthrough is already a recording of a real route; this is what says
-   * what kind of route it was. Frame by frame along a capture it turns the
-   * sequence into a typed path — concourse, then covered link, then ramp —
-   * which is the thing no floorplan carries and no single photograph shows.
-   */
-  pathwayKindId: SlugSchema.optional(),
 });
 
 /** Fractions of the frame, so a box survives any resize or re-encode. */
@@ -69,6 +60,14 @@ export const PlaceSchema = AuditFieldsSchema.extend({
   levelId: SlugSchema.optional(),
   /** Empty until someone binds this to a traced room. */
   roomId: SlugSchema.optional(),
+  /**
+   * Set when this place is a walkway rather than a unit.
+   *
+   * A stretch of floor you can point at and name is a place like any other —
+   * it just gets built as a path rather than as a room, and this says which
+   * kind of path.
+   */
+  pathwayKindId: SlugSchema.optional(),
   notes: z.string().default(""),
   // Defaults to confirmed: anything a person typed in the survey tool is theirs
   // already. The importer is the only thing that writes "proposed".

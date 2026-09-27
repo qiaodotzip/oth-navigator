@@ -1,4 +1,4 @@
-import { TenantCategorySchema, type Box, type Keyframe, type Place } from "@oth/model";
+import { TenantCategorySchema, type Box, type Keyframe, type PathwayKind, type Place } from "@oth/model";
 import { useEffect, useRef, useState } from "react";
 import type { FrameLabel } from "./labelled";
 import { matchPlaces } from "./places";
@@ -10,6 +10,8 @@ export type Tag = {
   placeId: string | null;
   nameEn: string;
   category: (typeof CATEGORIES)[number];
+  /** Set when what was boxed is a walkway rather than a unit. */
+  pathwayKindId?: string;
   box?: Box;
 };
 
@@ -25,21 +27,29 @@ export function PlaceTagger({
   imageUrl,
   places,
   labels,
+  walkwayKinds,
   onTag,
   onRemoveLabel,
+  onAddWalkwayKind,
 }: {
   keyframe: Keyframe;
   imageUrl: string;
   places: readonly Place[];
   /** What has already been said about this frame, drawn over it. */
   labels: readonly FrameLabel[];
+  walkwayKinds: readonly PathwayKind[];
   onTag: (tag: Tag) => void;
   /** Remove one tag from this frame, without touching the place elsewhere. */
   onRemoveLabel: (label: FrameLabel) => void;
+  /** Define a new walkway type without leaving the frame you are looking at. */
+  onAddWalkwayKind: (nameEn: string) => void;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState<Tag["category"]>("retail");
+  // What is being boxed: a unit you go into, or a stretch of floor you cross.
+  const [what, setWhat] = useState<"place" | "walkway">("place");
+  const [walkwayKindId, setWalkwayKindId] = useState("");
   const [start, setStart] = useState<{ x: number; y: number } | null>(null);
   const [box, setBox] = useState<Box | null>(null);
 
@@ -78,7 +88,9 @@ export function PlaceTagger({
     onTag({
       placeId: exact?.id ?? null,
       nameEn: trimmed,
-      category: exact?.category ?? category,
+      // A walkway is a piece of the building, not a tenant.
+      category: what === "walkway" ? "facility" : exact?.category ?? category,
+      ...(what === "walkway" && walkwayKindId ? { pathwayKindId: walkwayKindId } : {}),
       ...(drawn ? { box: drawn } : {}),
     });
     setName("");
@@ -204,6 +216,50 @@ export function PlaceTagger({
         )}
       </div>
 
+      <div className="flex gap-1 text-xs">
+        {(["place", "walkway"] as const).map(option => (
+          <button
+            key={option}
+            data-testid={`what-${option}`}
+            className={`rounded border px-2 py-1 ${
+              what === option ? "bg-stone-800 text-white" : "hover:bg-stone-100"
+            }`}
+            onClick={() => setWhat(option)}
+          >
+            {option === "place" ? "A place" : "A walkway"}
+          </button>
+        ))}
+        <span className="self-center text-stone-500">
+          {what === "place"
+            ? "somewhere you go into"
+            : "a stretch of floor you cross"}
+        </span>
+      </div>
+
+      {what === "walkway" && (
+        <div className="flex gap-2">
+          <select
+            aria-label="Walkway type"
+            className="min-w-0 flex-1 rounded border px-2 py-1 text-sm"
+            value={walkwayKindId}
+            onChange={e => setWalkwayKindId(e.target.value)}
+          >
+            <option value="">Which kind?</option>
+            {walkwayKinds.map(k => <option key={k.id} value={k.id}>{k.nameEn}</option>)}
+          </select>
+          <button
+            className="rounded border px-2 py-1 text-xs"
+            onClick={() => {
+              // Defining a type mid-tag beats leaving the frame to go and do it.
+              const n = window.prompt("New walkway type, e.g. Covered link");
+              if (n && n.trim()) onAddWalkwayKind(n.trim());
+            }}
+          >
+            + New type
+          </button>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <input
           aria-label="Place name"
@@ -220,6 +276,7 @@ export function PlaceTagger({
           {matches.map(p => <option key={p.id} value={p.nameEn} />)}
         </datalist>
 
+        {what === "place" && (
         <select
           aria-label="Category"
           className="rounded border px-2 py-1 text-sm"
@@ -231,6 +288,7 @@ export function PlaceTagger({
         >
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        )}
 
         <button className="rounded bg-stone-800 px-3 py-1 text-sm text-white" onClick={submit}>
           {exact ? `Tag as ${exact.nameEn}` : "Tag"}

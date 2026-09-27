@@ -43,9 +43,6 @@ export async function exportCaptureForLabelling(
     levelId: capture.levelId,
     frames: frames.map(f => ({
       keyframeId: f.id,
-      // What kind of walkway the camera was in. Along the sequence this is the
-      // route, which is the context a single frame cannot give you.
-      pathwayKindId: f.pathwayKindId,
       file: `frames/${f.id}.${f.storagePath.endsWith(".png") ? "png" : "jpg"}`,
       timeMs: f.timeMs,
       widthPx: f.widthPx,

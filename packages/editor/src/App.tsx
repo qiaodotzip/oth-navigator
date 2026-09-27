@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createApi } from "./api/client";
 import { LoginScreen } from "./auth/LoginScreen";
 import { useCollaboration } from "./collab/useCollaboration";
+import { navigate } from "./route";
 import { layerEntityType, type LayerItem } from "./flow/layers";
 import { newPathway, newSpace } from "./flow/newSpace";
 import { AssetLibrary } from "./panels/AssetLibrary";
@@ -66,6 +67,12 @@ export function App() {
       <header className="flex items-center gap-4 border-b bg-white px-4 py-2">
         <h1 className="text-sm font-semibold">OTH Map Editor</h1>
         <LevelTabs />
+        <button
+          className="text-sm text-stone-500 hover:underline"
+          onClick={() => navigate("/survey")}
+        >
+          Survey &rarr;
+        </button>
         <div className="ml-auto flex items-center gap-3 text-sm">
           <PresenceBar />
           <span className="text-stone-500">{user.displayName}</span>
