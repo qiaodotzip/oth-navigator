@@ -169,9 +169,11 @@ export class TokenLimits {
     }
     if (writeCount > 0 && writes.length + writeCount > this.limits.writesPerMinute) {
       const wait = writes.length > 0 ? seconds(writes[0]! + MINUTE - now) : 60;
+      // Rehearsal 2's Claude tried to sleep in a shell through the wait: point it at a read instead.
       return {
         retryAfterS: wait,
-        message: `Slow down: this token has made ${times(this.limits.writesPerMinute, "change")} in the last minute. Wait ${wait} seconds, then carry on.`,
+        message: `Slow down: this token has made ${times(this.limits.writesPerMinute, "change")} in the last minute. Wait ${wait} seconds, then carry on. ` +
+          "Reads don't count: check your work with view_plan meanwhile.",
       };
     }
     if (kinds.includes("publish")) {

@@ -40,8 +40,16 @@ describe("TokenLimits", () => {
     const limits = new TokenLimits(small);
     expect(limits.admit("t", ["write"], 0)).toBeNull();
     expect(limits.admit("t", ["read", "read"], 1)).toBeNull();
-    expect(limits.admit("t", ["publish"], 2)).toMatchObject({
-      message: "Slow down: this token has made 1 change in the last minute. Wait 60 seconds, then carry on.",
+    expect(limits.admit("t", ["publish"], 2)).toMatchObject({ retryAfterS: 60 });
+  });
+
+  it("says how long a write must wait, and that reads go on meanwhile, so Claude looks over its work rather than sleeping", () => {
+    const limits = new TokenLimits(small);
+    expect(limits.admit("t", ["write"], 0)).toBeNull();
+    expect(limits.admit("t", ["write"], 15_000)).toEqual({
+      retryAfterS: 45,
+      message: "Slow down: this token has made 1 change in the last minute. Wait 45 seconds, then carry on. " +
+        "Reads don't count: check your work with view_plan meanwhile.",
     });
   });
 
