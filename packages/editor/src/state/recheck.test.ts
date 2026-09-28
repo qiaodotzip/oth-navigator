@@ -1,7 +1,8 @@
 import type { ValidationReport } from "@oth/model";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useToasts } from "../ui/toast";
-import { recheck } from "./recheck";
+import { recheck, useRecheck } from "./recheck";
 import { useEditorStore } from "./store";
 
 const report = (warningCount: number): ValidationReport => ({ issues: [], errorCount: 0, warningCount, ok: true });
@@ -71,6 +72,32 @@ describe("recheck", () => {
 
   it("says nothing once nobody is listening", async () => {
     await recheck({ validate: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) }, "check the places again", () => false);
+    expect(useToasts.getState().toasts).toHaveLength(0);
+  });
+});
+
+describe("useRecheck", () => {
+  it("checks once as a screen opens, and not again as it renders", async () => {
+    const api = { validate: vi.fn().mockResolvedValue(report(2)) };
+    const { rerender } = renderHook(() => useRecheck(api, "check the places again"));
+    await waitFor(() => expect(useEditorStore.getState().report).toEqual(report(2)));
+    rerender();
+    expect(api.validate).toHaveBeenCalledTimes(1);
+  });
+
+  it("says what it was doing when the check fails while the screen is open", async () => {
+    const api = { validate: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) };
+    renderHook(() => useRecheck(api, "refresh the to-do list"));
+    await waitFor(() => expect(useToasts.getState().toasts).toHaveLength(1));
+    expect(useToasts.getState().toasts[0]?.message).toBe("Couldn't refresh the to-do list. Check your connection, then retry.");
+  });
+
+  it("says nothing of a failure that lands after the screen has closed", async () => {
+    let fail!: (err: unknown) => void;
+    const api = { validate: vi.fn(() => new Promise<ValidationReport>((_, reject) => { fail = reject; })) };
+    const { unmount } = renderHook(() => useRecheck(api, "check the places again"));
+    unmount();
+    await act(async () => fail(new TypeError("Failed to fetch")));
     expect(useToasts.getState().toasts).toHaveLength(0);
   });
 });

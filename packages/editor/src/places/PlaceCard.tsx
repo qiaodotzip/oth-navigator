@@ -5,7 +5,7 @@ import { followLink } from "../route";
 import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
 import { BoxedFrame } from "./BoxedFrame";
-import { bestEvidence, imageWidthFor, statusLine, surveyLink, type Evidence } from "./evidence";
+import { bestEvidence, frameSrc, statusLine, surveyLink, type Evidence } from "./evidence";
 import { placesByRoom } from "./labels";
 
 /** The photo's width in CSS pixels: the inspector column's, inside the card's padding. */
@@ -14,11 +14,6 @@ const PHOTO_CSS_PX = 296;
 const THUMB_CSS_PX = 80;
 
 type CardApi = Pick<Api, "keyframeFileUrl">;
-
-/** The frame at the width to ask for: in device pixels, or a 2x laptop screen gets a blurred sign. */
-function frameSrc(api: CardApi, shown: Evidence, cssPx: number): string {
-  return api.keyframeFileUrl(shown.frame.id, imageWidthFor(cssPx * (window.devicePixelRatio || 1), shown.sighting.box));
-}
 
 /** A ✓ only once a person has checked both the place and the photo shown. */
 function vouched(place: Place, shown: Evidence | undefined): boolean {

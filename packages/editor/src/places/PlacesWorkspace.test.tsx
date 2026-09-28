@@ -1,5 +1,5 @@
 import { parseModel, type ValidationReport } from "@oth/model";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useCurrentRoute } from "../route";
 import { useEditorStore } from "../state/store";
@@ -72,7 +72,7 @@ describe("PlacesWorkspace", () => {
     expect(screen.getByRole("heading", { name: "2 of 3 confirmed places are on the map" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "1 waiting in Review →" }).getAttribute("href")).toBe("/floors/L1/review");
     // Unit 7. Not "nobody filmed": a room with none bound may well have been filmed.
-    expect(screen.getByRole("link", { name: "Rooms with no place bound: 1" }).getAttribute("href")).toBe("/floors/L1/build?step=bind");
+    expect(screen.getByRole("link", { name: "Rooms with no place bound: 1 →" }).getAttribute("href")).toBe("/floors/L1/build?step=bind");
     expect(screen.queryByText(/walkway/)).toBeNull();
   });
 
@@ -97,7 +97,8 @@ describe("PlacesWorkspace", () => {
     expect(rowIds()).toEqual(["place-row-pl_books", "place-row-pl_cafe"]);
     const books = within(screen.getByTestId("place-row-pl_books"));
     expect(books.getByText("Not on the map")).toBeTruthy();
-    expect(books.getByText("Anchor Books → no room yet")).toBeTruthy();
+    // The heading names it; the line under says only where it is.
+    expect(books.getByText("→ no room yet")).toBeTruthy();
     expect(books.getByRole("link", { name: "Bind it: Anchor Books" }).getAttribute("href"))
       .toBe("/floors/L1/build?place=pl_books&step=bind");
   });
@@ -111,16 +112,27 @@ describe("PlacesWorkspace", () => {
     fireEvent.click(chip(/^All/));
     expect(new URLSearchParams(window.location.search).get("filter")).toBe("all");
     const star = within(screen.getByTestId("place-row-pl_star"));
-    expect(star.getByText("Starbucks → Shop (L1-shop)")).toBeTruthy();
+    expect(star.getByText("→ Shop (L1-shop)")).toBeTruthy();
     expect(star.getByRole("link", { name: "Show on map: Starbucks" }).getAttribute("href"))
       .toBe("/floors/L1/build?select=room%3AL1-shop&step=bind");
   });
 
-  it("shows each place by its frame, zoomed to its box", () => {
-    at("/floors/L1/places?filter=all");
-    const star = screen.getByTestId("place-row-pl_star");
-    expect(star.querySelector("img")?.getAttribute("src")).toBe("/api/keyframes/kf_1/file?w=1600");
-    expect(within(star).getByTestId("frame-box")).toBeTruthy();
+  it("shows each place by its frame, zoomed to its box, sharp on the screen it is on", () => {
+    // As the card asks: 112 px of a 40% window is 280 frame pixels on a
+    // 1x screen, and 560 on a 2x one.
+    const was = window.devicePixelRatio;
+    try {
+      window.devicePixelRatio = 1;
+      at("/floors/L1/places?filter=all");
+      const star = () => screen.getByTestId("place-row-pl_star");
+      expect(star().querySelector("img")?.getAttribute("src")).toBe("/api/keyframes/kf_1/file?w=320");
+      expect(within(star()).getByTestId("frame-box")).toBeTruthy();
+      window.devicePixelRatio = 2;
+      act(() => useEditorStore.getState().setModel({ ...model }));
+      expect(star().querySelector("img")?.getAttribute("src")).toBe("/api/keyframes/kf_1/file?w=1600");
+    } finally {
+      window.devicePixelRatio = was;
+    }
   });
 
   it("says so when nothing is missing, once the check replaces an older report", async () => {
@@ -136,25 +148,34 @@ describe("PlacesWorkspace", () => {
     expect(rowIds()).toEqual([]);
   });
 
-  it("says a floor has no confirmed places yet", () => {
+  it("says a floor has no confirmed places yet, with no filters of nothing under it", () => {
     at("/floors/L2/places");
     expect(screen.getByRole("heading", { name: "No confirmed places on L2 yet" })).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Show places" })).toBeNull();
   });
 
-  it("points from every floor to the confirmed places no floor claims, which no floor's list counts", () => {
-    // Filmed on footage filed under no floor, with no floor of its own: Bind
-    // places offers it on every floor, but no floor's to-do list names it.
-    useEditorStore.getState().setModel(parseModel({
-      ...model,
-      captures: [...model.captures, { id: "cap_2", kind: "video", filename: "loose.mp4" }],
-      keyframes: [...model.keyframes, { id: "kf_3", captureId: "cap_2", imageId: "kf_3", widthPx: 640, heightPx: 480 }],
-      places: [...model.places, { id: "pl_loo", nameEn: "Toilets", category: "facility" }],
-      sightings: [...model.sightings, { id: "s5", placeId: "pl_loo", keyframeId: "kf_3" }],
-    }));
+  // Filmed on footage filed under no floor, with no floor of its own: Bind
+  // places offers it on every floor, but no floor's to-do list names it.
+  const withFloorless = () => parseModel({
+    ...model,
+    captures: [...model.captures, { id: "cap_2", kind: "video", filename: "loose.mp4" }],
+    keyframes: [...model.keyframes, { id: "kf_3", captureId: "cap_2", imageId: "kf_3", widthPx: 640, heightPx: 480 }],
+    places: [...model.places, { id: "pl_loo", nameEn: "Toilets", category: "facility" }],
+    sightings: [...model.sightings, { id: "s5", placeId: "pl_loo", keyframeId: "kf_3" }],
+  });
+
+  it("points from every floor with rooms to the confirmed places no floor claims, which no floor's list counts", () => {
+    useEditorStore.getState().setModel(withFloorless());
     at("/floors/L1/places?filter=all");
     expect(screen.getByRole("heading", { name: "2 of 3 confirmed places are on the map" })).toBeTruthy();
     expect(rowIds()).not.toContain("place-row-pl_loo");
-    expect(screen.getByRole("link", { name: "Places with no floor: 1" }).getAttribute("href"))
+    expect(screen.getByRole("link", { name: "Places with no floor: 1 →" }).getAttribute("href"))
       .toBe("/floors/L1/build?place=pl_loo&step=bind");
+  });
+
+  it("does not point there from a floor with no rooms, where Bind places has nothing to click", () => {
+    useEditorStore.getState().setModel(withFloorless());
+    at("/floors/L2/places");
+    expect(screen.queryByRole("link", { name: /Places with no floor/ })).toBeNull();
   });
 });

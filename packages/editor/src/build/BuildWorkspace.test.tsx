@@ -218,6 +218,21 @@ describe("BuildWorkspace — the to-do list", () => {
       .toMatch(/click the room where you see Festive Mall/i);
   });
 
+  it("lets go of the place in hand once a teammate binds it, so unbinding it later does not pick it again", () => {
+    open("/floors/L1/build?step=bind");
+    fireEvent.click(screen.getByRole("button", { name: /Festive Mall/ }));
+    const guide = () => screen.getByRole("region", { name: "Bind places guide" }).textContent;
+    expect(guide()).toMatch(/click the room where you see Festive Mall/i);
+    act(() => useEditorStore.getState().setModel({
+      ...model, places: [{ ...model.places[0]!, roomId: "L1-a", levelId: "oth-L1" }],
+    }));
+    expect(guide()).not.toMatch(/click the room where you see/i);
+    // Unbound again: waiting once more, but nobody has picked it.
+    act(() => useEditorStore.getState().setModel(model));
+    expect(guide()).not.toMatch(/click the room where you see/i);
+    expect(guide()).toMatch(/pick a place from the to-do list/i);
+  });
+
   it("says why a click placed nothing as an error, which stays until you dismiss it", async () => {
     open("/floors/L1/build?step=entrances");
     measure();

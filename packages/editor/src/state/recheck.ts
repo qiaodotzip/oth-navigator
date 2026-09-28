@@ -1,4 +1,5 @@
 import type { ValidationReport } from "@oth/model";
+import { useEffect } from "react";
 import type { Api } from "../api/client";
 import { reportFailure } from "../ui/failure";
 import { useEditorStore } from "./store";
@@ -41,4 +42,19 @@ export async function recheck(
   if (ticket !== latest) return;
   // A save that landed meanwhile brought a report of its own, from after it: keep that one.
   if (useEditorStore.getState().report === before) useEditorStore.getState().setReport(report);
+}
+
+/**
+ * `recheck` once as a screen opens, for Build and Places. A failure is said
+ * only while the screen is still open: one gone by the time the check fails
+ * has nothing left on it that the report would change.
+ */
+export function useRecheck(api: Pick<Api, "validate">, doing: string): void {
+  useEffect(() => {
+    let open = true;
+    void recheck(api, doing, () => open);
+    return () => {
+      open = false;
+    };
+  }, [api, doing]);
 }

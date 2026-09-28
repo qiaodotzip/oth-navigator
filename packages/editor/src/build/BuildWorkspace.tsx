@@ -14,14 +14,14 @@ import { PlanRoomLabels } from "../plan/RoomLabels";
 import { useElementSize } from "../plan/useElementSize";
 import { fitViewport } from "../plan/viewport";
 import { setParams, type FloorRoute } from "../route";
-import { recheck } from "../state/recheck";
+import { useRecheck } from "../state/recheck";
 import type { Saver } from "../state/save";
 import { ringsOnActiveLevel, useEditorStore, type Selection } from "../state/store";
 import { displayBBox, imageForLevel } from "../state/underlay";
 import { Button } from "../ui/Button";
 import { toast, useToasts } from "../ui/toast";
 import { deleteWithUndo } from "../ui/undo";
-import { BindTools } from "./BindPlaces";
+import { BindTools, waitingForRoom } from "./BindPlaces";
 import { selectionRemovals } from "./deleteSelection";
 import { FloorplanTools, PlanDropZone, patchPlan } from "./FloorplanTools";
 import { LayersDrawer } from "./LayersDrawer";
@@ -116,13 +116,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
 
   // Survey and Review save without validating, so the to-do list may be older
   // than a place tagged since, which Bind places would then never list.
-  useEffect(() => {
-    let mounted = true;
-    void recheck(api, "refresh the to-do list", () => mounted);
-    return () => {
-      mounted = false;
-    };
-  }, [api]);
+  useRecheck(api, "refresh the to-do list");
 
   // A missing or unknown ?step= becomes a real one, so the address is always worth sending.
   useEffect(() => {
@@ -150,6 +144,15 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
     takePlace(placeParam);
     setParams({ place: null });
   }, [placeParam]);
+
+  // The place in hand is let go once it stops waiting: bound by a teammate,
+  // by a Retry that went through late, or deleted. Held, it would come back
+  // into hand whenever it was next unbound, picked by nobody.
+  useEffect(() => {
+    if (!pendingPlaceId || !model) return;
+    const place = live(model.places).find(p => p.id === pendingPlaceId);
+    if (!place || !waitingForRoom(model, place)) setPendingPlaceId(null);
+  }, [model, pendingPlaceId]);
 
   // Leaving Build lets go of the selection. It is also the collaboration lock,
   // which would otherwise show you to teammates as editing that room from

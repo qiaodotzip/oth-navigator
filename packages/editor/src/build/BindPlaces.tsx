@@ -2,7 +2,8 @@ import { live, placeLevels, type MapModel, type Place, type Room } from "@oth/mo
 import { useState } from "react";
 import type { Api } from "../api/client";
 import { floorUnits } from "../flow/buildSteps";
-import { bestEvidence } from "../places/evidence";
+import { BoxedFrame } from "../places/BoxedFrame";
+import { bestEvidence, frameSrc, type Evidence } from "../places/evidence";
 import { placesByRoom } from "../places/labels";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
@@ -10,8 +11,10 @@ import { matchPlaces } from "../survey/places";
 import { Button } from "../ui/Button";
 import { offerUndo } from "../ui/offerUndo";
 
-/** Thumbnails are 240 px wide: the server makes them from the 4K frames. */
+/** The guide's photo is 240 px wide: the server makes it from the 4K frames. */
 const THUMB_WIDTH = 240;
+/** A picker thumbnail: `w-20`, as the card's rows are. */
+const PICKER_CSS_PX = 80;
 
 /**
  * The frame a place is shown by, the picture that says "this one": the one
@@ -19,8 +22,8 @@ const THUMB_WIDTH = 240;
  * different photos. A confirmed tag's comes first, since a proposed tag is
  * still a guess that Review may yet move or bin.
  */
-function placeFrame(model: MapModel, placeId: string): string | undefined {
-  return bestEvidence(model, placeId)[0]?.frame.id;
+function placeFrame(model: MapModel, placeId: string): Evidence | undefined {
+  return bestEvidence(model, placeId)[0];
 }
 
 /**
@@ -35,7 +38,7 @@ function openPlaces(model: MapModel, levelId: string): { here: Place[]; floorles
 }
 
 /** Whether a place still needs a room: one whose room was deleted does. */
-function waitingForRoom(model: MapModel, place: Place): boolean {
+export function waitingForRoom(model: MapModel, place: Place): boolean {
   const levels = placeLevels(model);
   // An unbound place is filed on its own floor, or the one it was filmed on.
   return floorUnits(model, levels.get(place.id), levels).waiting.includes(place);
@@ -93,14 +96,16 @@ export function BindPlaces({
 
   // By name, as the place card above lists them. A room can hold several on
   // purpose (L1's west concourses hold three gates each), so each is named,
-  // with an Unbind of its own.
+  // with an Unbind of its own. The card has already said how many and which
+  // are confirmed, so this says only what Unbind acts on. No ✓: on the labels
+  // and the card a ✓ means confirmed, not bound.
   const bound = placesByRoom(model).get(room.id) ?? [];
   const [only] = bound;
   if (bound.length === 1 && only) {
     return (
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-stone-700">
-          <span aria-hidden className="text-confirmed">✓ </span>Bound to <span className="font-medium">{only.nameEn}</span> from the survey.
+          Bound here: <span className="font-medium">{only.nameEn}</span>
         </p>
         <Button size="sm" disabled={busy} onClick={() => void unbind(only)}>
           Unbind
@@ -111,9 +116,7 @@ export function BindPlaces({
   if (bound.length > 1) {
     return (
       <div className="space-y-1">
-        <p className="text-xs text-stone-700">
-          <span aria-hidden className="text-confirmed">✓ </span>Bound to {bound.length} places from the survey:
-        </p>
+        <p className="text-xs text-stone-700">Bound here:</p>
         <ul aria-label="Bound places" className="space-y-1">
           {bound.map(place => (
             <li key={place.id} className="flex items-center justify-between gap-2">
@@ -199,7 +202,7 @@ export function BindPlaces({
   }
 
   const row = (p: Place) => {
-    const frame = placeFrame(model, p.id);
+    const shown = placeFrame(model, p.id);
     return (
       <li key={p.id}>
         <button
@@ -211,23 +214,28 @@ export function BindPlaces({
             p.id === pendingPlaceId ? "ring-2 ring-accent-ring" : ""
           }`}
         >
-          {frame ? (
-            <img
-              src={api.keyframeFileUrl(frame, THUMB_WIDTH)}
+          {/* Zoomed to its box, as the card and the Places rows show it, so the sign reads at this size. */}
+          {shown ? (
+            <BoxedFrame
+              as="span"
+              src={frameSrc(api, shown, PICKER_CSS_PX)}
+              frame={shown.frame}
+              box={shown.sighting.box}
+              tone={shown.sighting.status}
               alt=""
-              loading="lazy"
-              className="h-12 w-20 shrink-0 rounded bg-stone-200 object-cover"
+              className="w-20 shrink-0"
             />
           ) : (
-            <span className="flex h-12 w-20 shrink-0 items-center justify-center rounded bg-stone-100 text-xs text-stone-600">
-              No frame
+            <span className="flex aspect-video w-20 shrink-0 items-center justify-center rounded bg-stone-100 text-xs text-stone-600">
+              No photo
             </span>
           )}
           <span className="min-w-0">
             <span className="block truncate text-sm font-medium">{p.nameEn}</span>
             <span className="block text-xs text-stone-600">
               {p.category}
-              {p.id === pendingPlaceId ? " · from your to-do" : ""}
+              {/* In hand from the to-do list, a Places link or "Places with no floor". */}
+              {p.id === pendingPlaceId ? " · picked" : ""}
             </span>
           </span>
         </button>
@@ -283,12 +291,13 @@ export function BindTools({
 }) {
   const model = useEditorStore(s => s.model);
   const place = pendingPlaceId ? live(model?.places ?? []).find(p => p.id === pendingPlaceId) : undefined;
-  // One bound after all — by a Retry that went through late, say — already
-  // has its room, so there is nothing left to ask for.
+  // One bound after all — by a teammate, or a Retry that went through late —
+  // already has its room, so there is nothing left to ask for. Build lets go
+  // of it as well; this covers the one render before it does.
   if (!model || !place || !waitingForRoom(model, place)) {
     return <p className="text-xs text-stone-600">Or pick a place from the to-do list, then click the room it is in.</p>;
   }
-  const frame = placeFrame(model, place.id);
+  const frame = placeFrame(model, place.id)?.frame.id;
 
   return (
     <div role="status" className="flex items-start gap-2">

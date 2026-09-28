@@ -126,18 +126,20 @@ export function rowAction(model: MapModel, row: PlaceRow, levelCode: string): Ro
   return { label: "Bind it", to: bind(levelCode, { place: row.place.id }) };
 }
 
-/** "Starbucks → Shop (L1-shop-12)": where a place is on the map, in words. */
+/**
+ * "→ Shop (L1-shop-12)": where a place is on the map, in words. It follows
+ * the row's heading, which already names the place.
+ */
 export function whereText(model: MapModel, row: PlaceRow): string {
-  const name = row.place.nameEn;
   if (row.room) {
     const roomLevelId = row.room.levelId;
     const room = `${row.room.nameEn.trim() || "Unnamed room"} (${row.room.id})`;
-    if (row.onMap) return `${name} → ${room}`;
+    if (row.onMap) return `→ ${room}`;
     const code = live(model.levels).find(l => l.id === roomLevelId)?.code ?? "another floor";
-    return `${name} → ${room} on ${code}`;
+    return `→ ${room} on ${code}`;
   }
-  if (row.place.roomId) return `${name} → a room since deleted (${row.place.roomId})`;
-  return `${name} → no room yet`;
+  if (row.place.roomId) return `→ a room since deleted (${row.place.roomId})`;
+  return "→ no room yet";
 }
 
 export const PLACES_FILTERS = ["gaps", "on-map", "all"] as const;

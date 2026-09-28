@@ -1,5 +1,5 @@
 import { live, type Box, type Keyframe, type MapModel, type Place, type Sighting } from "@oth/model";
-import type { TeamMember } from "../api/client";
+import type { Api, TeamMember } from "../api/client";
 import { href } from "../route";
 
 /** One frame a place was seen in, by its best tag there. */
@@ -68,6 +68,15 @@ export function frameWindow(box: Box | undefined): FrameWindow {
 export function imageWidthFor(displayPx: number, box: Box | undefined): number {
   const needed = displayPx / frameWindow(box).size;
   return SERVED_WIDTHS.find(w => w >= needed) ?? 1600;
+}
+
+/**
+ * A frame's address, at the width a window of it shown `cssPx` wide needs on
+ * this screen. The card, the Places rows and Bind places' picker all ask
+ * through this, so one sign is never sharp in one and blurred in another.
+ */
+export function frameSrc(api: Pick<Api, "keyframeFileUrl">, shown: Evidence, cssPx: number): string {
+  return api.keyframeFileUrl(shown.frame.id, imageWidthFor(cssPx * (window.devicePixelRatio || 1), shown.sighting.box));
 }
 
 /**

@@ -102,8 +102,8 @@ describe("BindPlaces", () => {
     // alt="" (the button already names the place), so it has no img role to query by.
     const img = screen.getByRole("button", { name: "Bind to Festive Mall" }).querySelector("img");
     expect(img?.getAttribute("src")).toBe("/api/keyframes/kf_1/file?w=240");
-    // Never tagged in a frame, so it says so rather than showing an empty box.
-    expect(within(screen.getByRole("button", { name: "Bind to Anchor Books" })).getByText("No frame")).toBeTruthy();
+    // Never tagged in a frame, so it says so rather than showing an empty box, in the card's words.
+    expect(within(screen.getByRole("button", { name: "Bind to Anchor Books" })).getByText("No photo")).toBeTruthy();
   });
 
   it("leaves out proposals, walkways, other floors and places already bound", () => {
@@ -119,9 +119,12 @@ describe("BindPlaces", () => {
     expect(names(screen.getByRole("list", { name: "With no floor", hidden: true }))).toEqual(["Bind to Somewhere"]);
   });
 
-  it("puts the place chosen from the to-do list first", () => {
+  it("puts the place in hand first, and says it is the one picked", () => {
     setup({ pendingPlaceId: "pl_mall" });
     expect(names(screen.getByRole("list", { name: "On L1" }))[0]).toBe("Bind to Festive Mall");
+    // Picked from the to-do list, a Places link or "Places with no floor", so not "from your to-do".
+    expect(screen.getByRole("button", { name: "Bind to Festive Mall" }).textContent).toContain("retail · picked");
+    expect(screen.getByRole("button", { name: "Bind to Anchor Books" }).textContent).not.toContain("picked");
   });
 
   it("finds a place by name", () => {
@@ -184,10 +187,14 @@ describe("BindPlaces", () => {
     expect(update.mock.calls[1]![3]).toMatchObject({ verification: { status: "photo", evidence: ["kf_2"] } });
   });
 
-  it("shows each place by the frame its card leads with: a confirmed tag's box before one with none", () => {
+  it("shows each place by the frame its card leads with, zoomed to its box as the card shows it", () => {
     setup({ m: boxed });
     const button = screen.getByRole("button", { name: "Bind to Kopitiam" });
+    // A confirmed tag's box before one with none.
     expect(button.querySelector("img")?.getAttribute("src")).toBe("/api/keyframes/kf_2/file?w=240");
+    expect(within(button).getByTestId("frame-box")).toBeTruthy();
+    // Spans all the way down: a div inside a button is not allowed.
+    expect(button.querySelector("div, p")).toBeNull();
   });
 
   it("leaves the room alone when the place could not be bound", async () => {
@@ -212,7 +219,9 @@ describe("BindPlaces", () => {
   it("says what a bound room is, instead of offering to bind it again", () => {
     const bound: MapModel = parseModel({ ...base, places: [{ id: "pl_1", nameEn: "Library", category: "community", roomId: "L1-a" }] });
     setup({ m: bound });
-    expect(screen.getByText("Library")).toBeTruthy();
+    expect(screen.getByText("Library").parentElement?.textContent).toBe("Bound here: Library");
+    // No ✓: on the labels and the card it means confirmed, not bound.
+    expect(screen.queryByText(/✓/)).toBeNull();
     expect(screen.queryByRole("button", { name: /^Bind to / })).toBeNull();
   });
 
@@ -234,7 +243,7 @@ describe("BindPlaces", () => {
       ],
     });
     const { update } = setup({ m: concourse });
-    expect(screen.getByText(/Bound to 2 places from the survey/)).toBeTruthy();
+    expect(screen.getByText("Bound here:")).toBeTruthy();
     const held = within(screen.getByRole("list", { name: "Bound places" })).getAllByRole("listitem");
     expect(held.map(li => li.querySelector(".font-medium")?.textContent)).toEqual(["Gate 2", "Gate 3"]);
     fireEvent.click(screen.getByRole("button", { name: "Unbind Gate 3" }));

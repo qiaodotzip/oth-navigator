@@ -13,29 +13,34 @@ const pct = (v: number) => `${Math.round(v * 10_000) / 100}%`;
  *
  * A photo that will not load says so, and its box goes with it: a box drawn
  * round nothing would claim a sign nobody can see.
+ *
+ * `as="span"` for one inside a button, such as Bind places' picker, where a
+ * div or a paragraph is not allowed.
  */
-export function BoxedFrame({ src, frame, box, tone, alt, className = "" }: {
+export function BoxedFrame({ src, frame, box, tone, alt, className = "", as: Frame = "div" }: {
   src: string;
   frame: Pick<Keyframe, "widthPx" | "heightPx">;
   box: Box | undefined;
   tone: "confirmed" | "proposed";
   alt: string;
   className?: string;
+  as?: "div" | "span";
 }) {
   // By source, so stepping to another frame tries that one afresh.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const failed = failedSrc === src;
   const win = frameWindow(box);
+  const Note = Frame === "span" ? "span" : "p";
   return (
-    <div
-      className={`relative overflow-hidden rounded bg-stone-200 ${className}`}
+    <Frame
+      className={`relative block overflow-hidden rounded bg-stone-200 ${className}`}
       style={{ aspectRatio: `${frame.widthPx} / ${frame.heightPx}` }}
     >
       {failed ? (
         // leading-none: three lines of it fit an 80 px thumbnail.
-        <p className="absolute inset-0 flex items-center justify-center px-1 text-center text-xs leading-none text-stone-600">
+        <Note className="absolute inset-0 flex items-center justify-center px-1 text-center text-xs leading-none text-stone-600">
           The photo could not load.
-        </p>
+        </Note>
       ) : (
         // max-w-none: Tailwind's reset caps an img at its container's width, which would undo the zoom.
         <img
@@ -48,7 +53,8 @@ export function BoxedFrame({ src, frame, box, tone, alt, className = "" }: {
         />
       )}
       {box && !failed && (
-        <div
+        // A span, which is allowed in either; placed absolutely, it lays out as a block.
+        <span
           data-testid="frame-box"
           aria-hidden
           className={`absolute rounded-sm border-2 ${tone === "confirmed" ? "border-confirmed" : "border-dashed border-proposed"}`}
@@ -60,6 +66,6 @@ export function BoxedFrame({ src, frame, box, tone, alt, className = "" }: {
           }}
         />
       )}
-    </div>
+    </Frame>
   );
 }

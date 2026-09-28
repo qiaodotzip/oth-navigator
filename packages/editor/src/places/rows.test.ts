@@ -135,12 +135,12 @@ describe("rowAction", () => {
 });
 
 describe("whereText", () => {
-  it("says where each place is on the map", () => {
-    expect(whereText(model, row("pl_star"))).toBe("Starbucks → Shop (L1-shop)");
-    expect(whereText(model, row("pl_kiosk"))).toBe("Kiosk → Unnamed room (L1-kiosk)");
-    expect(whereText(model, row("pl_up"))).toBe("Up There → Upstairs (L2-shop) on L2");
-    expect(whereText(model, row("pl_gone"))).toBe("Gone Shop → a room since deleted (L1-old)");
-    expect(whereText(model, row("pl_books"))).toBe("Anchor Books → no room yet");
+  it("says where each place is on the map, after the row's heading has named it", () => {
+    expect(whereText(model, row("pl_star"))).toBe("→ Shop (L1-shop)");
+    expect(whereText(model, row("pl_kiosk"))).toBe("→ Unnamed room (L1-kiosk)");
+    expect(whereText(model, row("pl_up"))).toBe("→ Upstairs (L2-shop) on L2");
+    expect(whereText(model, row("pl_gone"))).toBe("→ a room since deleted (L1-old)");
+    expect(whereText(model, row("pl_books"))).toBe("→ no room yet");
   });
 });
 
