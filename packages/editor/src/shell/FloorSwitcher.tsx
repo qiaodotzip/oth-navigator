@@ -10,8 +10,11 @@ import { Progress } from "../ui/Progress";
 import { YoursTag } from "../ui/YoursTag";
 import { OwnerAvatars } from "./OwnerAvatars";
 
-/** "L1 · Yours ▾": every floor with its owners and build progress, one click away. */
-export function FloorSwitcher({ current, tab }: { current: Level; tab: FloorTab }) {
+/**
+ * "L1 · Yours ▾": every floor with its owners and build progress, one click
+ * away. From Build, each link opens the same step (`buildStep`) on that floor.
+ */
+export function FloorSwitcher({ current, tab, buildStep }: { current: Level; tab: FloorTab; buildStep?: string }) {
   const [open, setOpen] = useState(false);
   const model = useEditorStore(s => s.model);
   const report = useEditorStore(s => s.report);
@@ -45,7 +48,7 @@ export function FloorSwitcher({ current, tab }: { current: Level; tab: FloorTab 
           )}
           <ul>
             {sortedLevels(model).map(level => {
-              const to = href({ name: "floor", code: level.code, tab, params: {} });
+              const to = href({ name: "floor", code: level.code, tab, params: buildStep ? { step: buildStep } : {} });
               const build = model ? floorProgress(model, report, levelImages, level.id).build : null;
               return (
                 <li key={level.id}>

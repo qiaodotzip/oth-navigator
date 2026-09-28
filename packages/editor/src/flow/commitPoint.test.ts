@@ -35,7 +35,17 @@ describe("commitPoint", () => {
     const say = vi.fn();
     await commitPoint({ saver, model, tool: "place-entrance", levelId: "oth-L1", point: [500, 5], say, now: 3 });
     expect(saver.create).not.toHaveBeenCalled();
-    expect(say).toHaveBeenCalledWith(expect.stringMatching(/inside an area/i));
+    // As an error, which stays until dismissed: the click did not do what you meant.
+    expect(say).toHaveBeenCalledWith(expect.stringMatching(/inside an area/i), "error");
+  });
+
+  it("tells you to switch floor for a new lift's next stop", async () => {
+    const saver = fakeSaver();
+    const say = vi.fn();
+    await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L1", point: [80, 80], say, now: 9 });
+    expect(say).toHaveBeenCalledWith(
+      "New lift placed. Switch floor and click its dashed outline to add its next stop.", "success",
+    );
   });
 
   it("creates the lift before its first stop, so the stop has something to point at", async () => {
@@ -51,7 +61,7 @@ describe("commitPoint", () => {
     await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L2", point: [40, 40], say, now: 9 });
     expect(saver.create.mock.calls.map(c => c[0])).toEqual(["portalEndpoint"]);
     expect(saver.create.mock.calls[0]![1]).toMatchObject({ portalId: "lift-a", levelId: "oth-L2" });
-    expect(say).toHaveBeenCalledWith(expect.stringMatching(/joined/i));
+    expect(say).toHaveBeenCalledWith("Joined the lift or stair already at this spot on another floor.", "success");
   });
 
   it("does not add a stop when creating its lift failed", async () => {
@@ -110,6 +120,7 @@ describe("commitPoint", () => {
     saver.remove.mockResolvedValueOnce(false);
     const say = vi.fn();
     await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L1", point: [80, 80], say, now: 9 });
-    expect(say).toHaveBeenCalledWith(expect.stringMatching(/Entrances & lifts to-do/));
+    // A failure: it stays until dismissed, so you can go and do what it says.
+    expect(say).toHaveBeenCalledWith(expect.stringMatching(/Entrances & lifts to-do/), "error");
   });
 });

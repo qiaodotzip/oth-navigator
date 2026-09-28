@@ -13,6 +13,10 @@ import { PublishButton } from "./PublishButton";
 export function Header({ api, route }: { api: Api; saver: Saver; route: Route }) {
   const model = useEditorStore(s => s.model);
   const level = route.name === "floor" ? findLevel(model, route.code) : null;
+  // On Build, the floor links keep the step you are on. "New lift placed.
+  // Switch floor…" means its next stop is on the next floor at this same step,
+  // not wherever that floor's first unfinished step is.
+  const buildStep = route.name === "floor" && route.tab === "build" ? route.params.step : undefined;
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-stone-200 bg-white px-4">
@@ -21,8 +25,8 @@ export function Header({ api, route }: { api: Api; saver: Saver; route: Route })
       </a>
       {route.name === "floor" && level && (
         <>
-          <FloorSwitcher current={level} tab={route.tab ?? "build"} />
-          <FloorTabs level={level} tab={route.tab} />
+          <FloorSwitcher current={level} tab={route.tab ?? "build"} buildStep={buildStep} />
+          <FloorTabs level={level} tab={route.tab} buildStep={buildStep} />
         </>
       )}
       {route.name === "team" && <span className="text-stone-500">Team</span>}

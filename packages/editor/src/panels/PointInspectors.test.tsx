@@ -90,6 +90,12 @@ describe("PortalInspector", () => {
     expect(screen.getByTestId("portal-stops").textContent).toMatch(/L1.*L2/);
   });
 
+  it("says how to add the next stop to a lift with one, in the words the header uses", () => {
+    useEditorStore.getState().select({ type: "portalEndpoint", id: "ep-3" });
+    render(<PortalInspector saver={fakeSaver()} />);
+    expect(screen.getByText("Only one stop so far. Switch floor and click its dashed outline to add the next.")).toBeTruthy();
+  });
+
   it("turns a lift into a stair, which is not step-free", () => {
     const saver = fakeSaver();
     useEditorStore.getState().select({ type: "portalEndpoint", id: "ep-1" });

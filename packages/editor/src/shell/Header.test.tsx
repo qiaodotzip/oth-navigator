@@ -62,6 +62,19 @@ describe("Header", () => {
     await waitFor(() => expect(screen.queryByRole("link", { name: /^L2/ })).toBeNull());
   });
 
+  it("keeps the Build step when you switch floor from Build, or click Build again", async () => {
+    // "New lift placed. Switch floor…": its next stop is on the next floor, at the same step.
+    window.history.pushState({}, "", "/floors/L1/build?select=room%3AL1-a&step=entrances");
+    const api = fakeApi();
+    const route = { name: "floor" as const, code: "L1", tab: "build" as const, params: { step: "entrances", select: "room:L1-a" } };
+    render(<Header api={api} saver={createSaver(api)} route={route} />);
+    const tabs = within(screen.getByRole("navigation", { name: "Workspace" }));
+    expect(tabs.getByRole("link", { name: "Build" }).getAttribute("href")).toBe("/floors/L1/build?step=entrances");
+    expect(tabs.getByRole("link", { name: "Survey" }).getAttribute("href")).toBe("/floors/L1/survey");
+    fireEvent.click(screen.getByRole("button", { name: /Floor L1/ }));
+    expect((await screen.findByRole("link", { name: /^L2/ })).getAttribute("href")).toBe("/floors/L2/build?step=entrances");
+  });
+
   it("has no floor controls on the floors home", () => {
     renderHeader("/floors");
     expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();

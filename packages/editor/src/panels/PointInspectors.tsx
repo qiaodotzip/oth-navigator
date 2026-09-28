@@ -87,7 +87,7 @@ export function PortalInspector({ saver }: { saver: Saver }) {
   if (!endpoint || !portal) {
     return (
       <p className="p-3 text-xs text-stone-500">
-        Pick Portal and click where the lift or stair is. On the next level it shows
+        Pick Portal and click where the lift or stair is. On the next floor it shows
         as a dashed outline: click that to add its next stop.
       </p>
     );
@@ -134,7 +134,7 @@ export function PortalInspector({ saver }: { saver: Saver }) {
       </p>
       {stops.length < 2 && (
         <p className="text-xs text-amber-700">
-          Only one stop so far. Switch level and click its dashed outline to add the next.
+          Only one stop so far. Switch floor and click its dashed outline to add the next.
         </p>
       )}
     </div>

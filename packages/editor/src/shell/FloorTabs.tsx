@@ -5,15 +5,19 @@ import { useEditorStore } from "../state/store";
 
 const LABELS: Record<FloorTab, string> = { survey: "Survey", review: "Review", build: "Build" };
 
-/** Survey · Review (n) · Build for one floor; n is what is waiting on a person. */
-export function FloorTabs({ level, tab }: { level: Level; tab: FloorTab | null }) {
+/**
+ * Survey · Review (n) · Build for one floor; n is what is waiting on a person.
+ * On Build, clicking Build again stays on the step you are on (`buildStep`)
+ * rather than jumping to the first unfinished one.
+ */
+export function FloorTabs({ level, tab, buildStep }: { level: Level; tab: FloorTab | null; buildStep?: string }) {
   const model = useEditorStore(s => s.model);
   const waiting = waitingReview(model, level.id);
 
   return (
     <nav aria-label="Workspace" className="flex gap-1">
       {FLOOR_TABS.map(t => {
-        const to = href({ name: "floor", code: level.code, tab: t, params: {} });
+        const to = href({ name: "floor", code: level.code, tab: t, params: t === "build" && buildStep ? { step: buildStep } : {} });
         return (
           <a
             key={t}

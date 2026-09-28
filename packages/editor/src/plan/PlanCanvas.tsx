@@ -772,7 +772,7 @@ export function PlanCanvas({
           </span>
           <button
             type="button"
-            aria-label="Fit to level"
+            aria-label="Fit to floor"
             className="inline-flex items-center gap-1.5 rounded border border-stone-300 bg-white px-3 py-1 text-sm shadow-sm hover:bg-stone-100"
             onClick={fitToLevel}
           >
