@@ -515,6 +515,60 @@ describe("a PDF plan", () => {
     await waitFor(() => expect(screen.queryByText(/Uploading/)).toBeNull());
   });
 
+  /** A PATCH that keeps the plan's id, as the real server's does. */
+  const keepingId = () =>
+    vi.fn(async (id: string, version: number, patch: Record<string, unknown>) => ({ ...image, id, ...patch, version: version + 1 }));
+
+  it("keeps the plan that went in when its scale doesn't save, and Retry saves only what is missing", async () => {
+    useEditorStore.getState().setLevelImages([image]);
+    const patchLevelImage = keepingId().mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const a = pdfApi({ patchLevelImage });
+    render(<PlanDropZone api={a} />);
+    fireEvent.drop(screen.getByTestId("plan-drop-zone"), { dataTransfer: { files: [pdf()] } });
+    await waitFor(() => expect(lastToast()?.message).toBe("The plan is in, but its scale didn't save. Check your connection, then retry."));
+    // The plan the server has now, never the one it retired: an edit to that one would only be refused.
+    expect(useEditorStore.getState().levelImages.map(i => [i.id, i.metresPerPixel])).toEqual([["img_2", null]]);
+
+    await lastToast()!.action!.run();
+    expect(a.uploadLevelImage).toHaveBeenCalledTimes(1);
+    expect(patchLevelImage).toHaveBeenCalledTimes(2);
+    expect(a.uploadPlanSource).toHaveBeenCalledTimes(1);
+    expect(lastToast()?.message).toMatch(/^Added L2\.pdf\. Scale from the drawing's grid/);
+    expect(useEditorStore.getState().levelImages.map(i => [i.id, i.source?.pdfId])).toEqual([["img_2", "pdf_x"]]);
+  });
+
+  it("keeps the scaled plan when its PDF doesn't save, and Retry sends only the PDF", async () => {
+    const a = pdfApi({ patchLevelImage: keepingId() });
+    (a.uploadPlanSource as Mock).mockRejectedValueOnce(new ApiError(503, null));
+    render(<PlanDropZone api={a} />);
+    fireEvent.drop(screen.getByTestId("plan-drop-zone"), { dataTransfer: { files: [pdf()] } });
+    await waitFor(() => expect(lastToast()?.message).toBe("The plan is in, but its PDF didn't save. The server had a problem. Try again in a moment."));
+    const [shown] = useEditorStore.getState().levelImages;
+    expect(shown!.id).toBe("img_2");
+    expect(shown!.source).toBeUndefined();
+    expect(shown!.metresPerPixel).toBeCloseTo(0.05, 10);
+
+    await lastToast()!.action!.run();
+    expect(a.uploadLevelImage).toHaveBeenCalledTimes(1);
+    expect(a.patchLevelImage).toHaveBeenCalledTimes(1);
+    expect(a.uploadPlanSource).toHaveBeenCalledTimes(2);
+    expect(useEditorStore.getState().levelImages.map(i => i.source?.pdfId)).toEqual(["pdf_x"]);
+  });
+
+  it("says to open the Floorplan step when there is nowhere to ask which page, rather than stopping without a word", async () => {
+    const a = pdfApi();
+    // The drop zone alone: no Floorplan tools, so no page picker on screen.
+    render(<PlanDropZone api={a} />);
+    const sheet = { width: 400, height: 300, content: planSheet() };
+    const twoPages = new File([syntheticPdf([sheet, sheet]).slice()], "L2.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [twoPages] } });
+    await waitFor(() => expect(lastToast()?.message).toBe(
+      "Couldn't add L2.pdf yet: it has more than one page. Open the Floorplan step to choose a page."));
+    expect(lastToast()?.action?.label).toBe("Choose a page");
+    expect(a.uploadLevelImage).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Choose a file")).not.toBeDisabled();
+  });
+
   it("says a file called .pdf that isn't one is not a PDF", async () => {
     render(<PlanDropZone api={pdfApi()} />);
     fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [new File(["%PDF"], "L1.pdf", { type: "application/pdf" })] } });

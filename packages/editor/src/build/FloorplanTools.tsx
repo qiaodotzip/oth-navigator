@@ -1,17 +1,17 @@
 import { useState, type ChangeEvent, type ReactNode } from "react";
 import { create } from "zustand";
-import type { Api, LevelImage, LevelImagePatch } from "../api/client";
+import { ApiError, ConflictError, isUnauthorized, type Api, type LevelImage, type LevelImagePatch } from "../api/client";
 import { levelBelow } from "../flow/floors";
-import { NotAPdfError, importPdfPlan } from "../pdf/importPlan";
+import { NotAPdfError, PlanPartlyStoredError, finishPdfPlan, importPdfPlan, type Unfinished } from "../pdf/importPlan";
 import { PDF_MAX_BYTES, PdfUnreadableError } from "../pdf/pdfjs";
 import { CalibrationError, calibrationFromMeasurement, worldToImagePoint } from "../plan/calibration";
 import { useEditorStore } from "../state/store";
 import { displayCalibration, imageForLevel } from "../state/underlay";
 import { Button } from "../ui/Button";
-import { reportFailure } from "../ui/failure";
+import { reportFailure, serverWords, worthRetrying } from "../ui/failure";
 import { Popover, PopoverClose } from "../ui/Popover";
 import { toast } from "../ui/toast";
-import { PdfPagePicker, askForPage } from "./PdfPagePicker";
+import { PageNotAskedError, PdfPagePicker, askForPage } from "./PdfPagePicker";
 import { PAPER_SIZES, SHAPE_TOLERANCE, parseRatio, sheetScale, type PaperSize } from "./sheetScale";
 
 const ACCEPT = "application/pdf,.pdf,image/png,image/jpeg";
@@ -112,43 +112,103 @@ function planBelow(levelId: string): { code: string; image: LevelImage } | null 
   return below && image ? { code: below.code, image } : null;
 }
 
+/** The floor's plan as the server now has it, in place of any other: the server keeps one live plan a floor. */
+function showPlan(levelId: string, image: LevelImage): void {
+  const s = useEditorStore.getState();
+  s.setLevelImages([...s.levelImages.filter(i => i.levelId !== levelId), image]);
+}
+
+function doneAdding(levelId: string): void {
+  setAdding(levelId, null);
+  setStage(levelId, null);
+}
+
 /**
  * A PDF becomes the plan in this tab (spec §5.1: the server never parses it).
  * What goes wrong locally is said as the PDF's fault; what goes wrong on the
- * wire is said as the network's, with Retry.
+ * wire is said as the network's, with Retry. The plan is shown as each part
+ * of it is stored, so a failure part-way leaves the plan the server has on
+ * screen, never the one it retired.
  */
 async function uploadPdfPlan(api: Api, levelId: string, file: File): Promise<void> {
-  const done = () => {
-    setAdding(levelId, null);
-    setStage(levelId, null);
-  };
   setAdding(levelId, file.name);
   setStage(levelId, `Reading ${file.name}…`);
   let outcome: Awaited<ReturnType<typeof importPdfPlan>>;
   try {
     outcome = await importPdfPlan({
       api, levelId, file,
-      current: imageForLevel(useEditorStore.getState().levelImages, levelId),
-      below: planBelow(levelId),
+      current: () => imageForLevel(useEditorStore.getState().levelImages, levelId),
+      below: () => planBelow(levelId),
       choosePage: askForPage,
       stage: stage => setStage(levelId, stage),
+      onStored: image => showPlan(levelId, image),
     });
   } catch (err) {
-    done();
-    if (err instanceof NotAPdfError) {
+    doneAdding(levelId);
+    if (err instanceof PlanPartlyStoredError) {
+      reportUnfinished(api, levelId, file, err);
+    } else if (err instanceof NotAPdfError) {
       toast({ tone: "error", message: `Couldn't add ${file.name}: it isn't a PDF.` });
     } else if (err instanceof PdfUnreadableError) {
       toast({ tone: "error", message: `Couldn't add ${file.name}: ${err.message}. Export the sheet as a PNG or JPEG instead.` });
+    } else if (err instanceof PageNotAskedError) {
+      toast({
+        tone: "error",
+        message: `Couldn't add ${file.name} yet: it has more than one page. Open the Floorplan step to choose a page.`,
+        action: { label: "Choose a page", run: () => uploadPlan(api, levelId, file) },
+      });
     } else {
       reportFailure(err, { doing: `add ${file.name}`, retry: () => uploadPlan(api, levelId, file) });
     }
     return;
   }
-  done();
+  doneAdding(levelId);
   if (!outcome) return;
-  const s = useEditorStore.getState();
-  s.setLevelImages([...s.levelImages.filter(i => i.levelId !== levelId), outcome.image]);
   toast({ tone: "success", message: `Added ${file.name}. ${outcome.report}` });
+}
+
+/**
+ * Said when the plan went in but its scale and place, or its PDF, did not.
+ * Retry sends only what is missing: uploading again would retire the plan
+ * that did go in, and draw the sheet a second time.
+ */
+function reportUnfinished(api: Api, levelId: string, file: File, err: PlanPartlyStoredError): void {
+  const cause = err.cause;
+  // A 401 already opened the session-ended dialog; a toast would only contradict it.
+  if (isUnauthorized(cause)) return;
+  const { missing, patch } = err.unfinished;
+  const part = missing === "pdf" ? "PDF" : patch.metresPerPixel != null ? "scale" : "place";
+  const lost = `The plan is in, but its ${part} didn't save`;
+  if (cause instanceof ConflictError) {
+    toast({ tone: "error", message: `${lost}: someone changed it since. Reload to see the latest.` });
+  } else if (!worthRetrying(cause)) {
+    toast({ tone: "error", message: `${lost}: ${serverWords(cause) ?? `the server refused it (HTTP ${(cause as ApiError).status})`}.` });
+  } else {
+    toast({
+      tone: "error",
+      message: `${lost}. ${cause instanceof ApiError ? "The server had a problem. Try again in a moment." : "Check your connection, then retry."}`,
+      action: { label: "Retry", run: () => finishPdfPlanUpload(api, levelId, file, err.unfinished) },
+    });
+  }
+}
+
+/** Retry for a part-stored PDF plan: sends what it lacks, from the plan as it stands now. */
+async function finishPdfPlanUpload(api: Api, levelId: string, file: File, unfinished: Unfinished): Promise<void> {
+  // Nudged since, it has moved on a version; the save must carry the latest.
+  const live = useEditorStore.getState().levelImages.find(i => i.id === unfinished.image.id);
+  setAdding(levelId, file.name);
+  setStage(levelId, `Uploading ${file.name}…`);
+  let done: Awaited<ReturnType<typeof finishPdfPlan>>;
+  try {
+    done = await finishPdfPlan(api, { ...unfinished, image: live ?? unfinished.image }, image => showPlan(levelId, image));
+  } catch (err) {
+    doneAdding(levelId);
+    if (err instanceof PlanPartlyStoredError) reportUnfinished(api, levelId, file, err);
+    else reportFailure(err, { doing: `finish ${file.name}` });
+    return;
+  }
+  doneAdding(levelId);
+  toast({ tone: "success", message: `Added ${file.name}. ${done.report}` });
 }
 
 /** Per plan, the last save queued for it; forgotten once the queue is empty. */

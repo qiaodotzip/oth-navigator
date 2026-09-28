@@ -1,5 +1,5 @@
 import type { PlanSheet } from "@oth/model";
-import type { Api, LevelImage } from "../api/client";
+import type { Api, LevelImage, LevelImagePatch } from "../api/client";
 import { describeCalibration, type Calibration } from "./calibrate";
 import { placePlan, type Placed } from "./placement";
 import { PdfUnreadableError, looksLikePdf, openPdf, readBytes, type PdfDocument } from "./pdfjs";
@@ -18,16 +18,51 @@ export class NotAPdfError extends Error {
 
 export type PageChoice = { number: number; title: string };
 
+type PlanApi = Pick<Api, "uploadLevelImage" | "patchLevelImage" | "uploadPlanSource">;
+
 export type PdfImport = {
-  api: Pick<Api, "uploadLevelImage" | "patchLevelImage" | "uploadPlanSource">;
+  api: PlanApi;
   levelId: string;
   file: File;
-  /** This floor's plan now, which the new one replaces. */
-  current: LevelImage | null;
-  below: { code: string; image: LevelImage } | null;
+  /**
+   * This floor's plan now, which the new one replaces, and the floor below's.
+   * Asked for once the sheet is drawn: drawing takes seconds, and a plan
+   * moved meanwhile is placed from where it is by then.
+   */
+  current: () => LevelImage | null;
+  below: () => { code: string; image: LevelImage } | null;
   choosePage: (pages: PageChoice[]) => Promise<number | null>;
   stage?: (words: string) => void;
+  /**
+   * The plan as the server has it, after each request that stores part of it.
+   * The server retires the floor's old plan with the first, so a screen that
+   * waited for the last would go on editing a plan that is gone.
+   */
+  onStored?: (image: LevelImage) => void;
 };
+
+/** What a stored plan still lacks: its scale and place, then its PDF; or its PDF alone. */
+export type Unfinished = {
+  /** The plan as the server last answered. */
+  image: LevelImage;
+  missing: "scale" | "pdf";
+  patch: LevelImagePatch;
+  pdf: Blob;
+  filename: string;
+  sheet: PlanSheet;
+  report: string;
+};
+
+/**
+ * The plan went in, but a request after it failed. It carries what is still
+ * to send, so a Retry finishes the plan rather than uploading it again.
+ */
+export class PlanPartlyStoredError extends Error {
+  constructor(readonly unfinished: Unfinished, cause: unknown) {
+    super(`the plan is stored, but its ${unfinished.missing === "pdf" ? "PDF" : "scale"} didn't save`, { cause });
+    this.name = "PlanPartlyStoredError";
+  }
+}
 
 type Drawn = { jpeg: Blob; sheet: PlanSheet; metresPerPixel: number | null; calibration: Calibration; hasText: boolean };
 
@@ -107,14 +142,14 @@ async function drawPage(doc: PdfDocument, n: number, stage?: (w: string) => void
   }
 }
 
-function placementWords(placed: Placed, o: PdfImport, scaled: boolean): string {
+function placementWords(placed: Placed, below: { code: string; image: LevelImage } | null, scaled: boolean): string {
   if (!scaled) return "";
-  const onBelow = placed.on != null && placed.on === o.below?.image;
+  const onBelow = placed.on != null && placed.on === below?.image;
   if (placed.how === "same-sheet") {
-    return onBelow ? `It is placed over ${o.below!.code}'s plan, as the same drawing set.` : "It is placed where the plan it replaces was.";
+    return onBelow ? `It is placed over ${below!.code}'s plan, as the same drawing set.` : "It is placed where the plan it replaces was.";
   }
   if (placed.how === "centred") {
-    return onBelow ? `It is centred on ${o.below!.code}'s plan. Line it up with Align.` : "It is centred where the plan it replaces was. Line it up with Align.";
+    return onBelow ? `It is centred on ${below!.code}'s plan. Line it up with Align.` : "It is centred where the plan it replaces was. Line it up with Align.";
   }
   return "Line it up with Align.";
 }
@@ -123,7 +158,8 @@ function placementWords(placed: Placed, o: PdfImport, scaled: boolean): string {
  * A floor's PDF becomes its plan (spec §5.2 steps 1–4). The file is read in
  * this tab only. Three requests follow: the image, its calibration and place,
  * and the PDF with where on it the image is. Null when you did not choose a
- * page.
+ * page. Once the image is stored, a failure is a PlanPartlyStoredError that
+ * `finishPdfPlan` can pick up from.
  */
 export async function importPdfPlan(o: PdfImport): Promise<{ image: LevelImage; report: string } | null> {
   const bytes = await readBytes(o.file);
@@ -139,21 +175,54 @@ export async function importPdfPlan(o: PdfImport): Promise<{ image: LevelImage; 
     await close();
   }
 
+  const current = o.current();
+  const below = o.below();
   o.stage?.(`Uploading ${o.file.name}…`);
   const uploaded = await o.api.uploadLevelImage(o.levelId, new File([drawn.jpeg], imageName(o.file.name), { type: "image/jpeg" }));
+  o.onStored?.(uploaded);
   const placed = placePlan(
     { sheet: drawn.sheet, widthPx: uploaded.widthPx, heightPx: uploaded.heightPx, metresPerPixel: drawn.metresPerPixel },
-    o.current, o.below?.image ?? null,
+    current, below?.image ?? null,
   );
-  const patched = await o.api.patchLevelImage(uploaded.id, uploaded.version, {
-    ...(drawn.metresPerPixel != null ? { metresPerPixel: drawn.metresPerPixel } : {}),
-    offsetX: placed.offsetX,
-    offsetY: placed.offsetY,
-  });
-  const image = await o.api.uploadPlanSource(
-    patched.id, patched.version, new Blob([bytes.slice().buffer], { type: "application/pdf" }), o.file.name, drawn.sheet,
-  );
-  const report = [describeCalibration(drawn.calibration, drawn.hasText), placementWords(placed, o, drawn.metresPerPixel != null)]
-    .filter(Boolean).join(" ");
-  return { image, report };
+  return finishPdfPlan(o.api, {
+    image: uploaded,
+    missing: "scale",
+    patch: {
+      ...(drawn.metresPerPixel != null ? { metresPerPixel: drawn.metresPerPixel } : {}),
+      offsetX: placed.offsetX,
+      offsetY: placed.offsetY,
+    },
+    // The file itself: it is a Blob already, and a 50 MB PDF need not be copied again.
+    pdf: o.file,
+    filename: o.file.name,
+    sheet: drawn.sheet,
+    report: [describeCalibration(drawn.calibration, drawn.hasText), placementWords(placed, below, drawn.metresPerPixel != null)]
+      .filter(Boolean).join(" "),
+  }, o.onStored);
+}
+
+/**
+ * Sends what a stored plan still lacks, from where an import stopped. Each
+ * request carries the version the one before it brought back; `u.image` is
+ * the plan as it stands now, so a Retry after the plan was nudged still fits.
+ */
+export async function finishPdfPlan(
+  api: PlanApi, u: Unfinished, onStored?: (image: LevelImage) => void,
+): Promise<{ image: LevelImage; report: string }> {
+  let image = u.image;
+  if (u.missing === "scale") {
+    try {
+      image = await api.patchLevelImage(image.id, image.version, u.patch);
+    } catch (err) {
+      throw new PlanPartlyStoredError({ ...u, image }, err);
+    }
+    onStored?.(image);
+  }
+  try {
+    image = await api.uploadPlanSource(image.id, image.version, u.pdf, u.filename, u.sheet);
+  } catch (err) {
+    throw new PlanPartlyStoredError({ ...u, image, missing: "pdf" }, err);
+  }
+  onStored?.(image);
+  return { image, report: u.report };
 }

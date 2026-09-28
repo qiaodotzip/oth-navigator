@@ -1,7 +1,7 @@
 import type { PlanSheet } from "@oth/model";
 import { describe, expect, it, vi } from "vitest";
 import type { LevelImage } from "../api/client";
-import { NotAPdfError, importPdfPlan, type PageChoice, type PdfImport } from "./importPlan";
+import { NotAPdfError, PlanPartlyStoredError, finishPdfPlan, importPdfPlan, type PageChoice, type PdfImport } from "./importPlan";
 import { PdfUnreadableError, readBytes } from "./pdfjs";
 import { PLAN_SHEET_SCALE, planSheet, syntheticPdf } from "./testing/syntheticPdf";
 
@@ -33,7 +33,7 @@ function fakes() {
 }
 
 const options = (over: Partial<PdfImport> = {}): PdfImport => ({
-  api: fakes(), levelId: "oth-L2", file: asFile(sheetPdf()), current: null, below: null,
+  api: fakes(), levelId: "oth-L2", file: asFile(sheetPdf()), current: () => null, below: () => null,
   choosePage: vi.fn(async () => 1), ...over,
 });
 
@@ -53,6 +53,8 @@ describe("importPdfPlan", () => {
     expect(patch.metresPerPixel).toBeCloseTo(0.05, 10);
 
     const [, , sent, filename, sheet] = api.uploadPlanSource.mock.calls[0]!;
+    // The file itself: a 50 MB PDF is not copied again to send it.
+    expect(sent).toBe(o.file);
     expect(filename).toBe("L2.pdf");
     // Compared as plain arrays: FileReader hands back a Uint8Array from jsdom's realm.
     expect(Array.from(await readBytes(sent))).toEqual(Array.from(pdf));
@@ -69,7 +71,7 @@ describe("importPdfPlan", () => {
     const first = options();
     const below = (await importPdfPlan(first))!.image;
     const moved = { ...below, levelId: "oth-L1", offsetX: 40, offsetY: 90 };
-    const o = options({ below: { code: "L1", image: moved } });
+    const o = options({ below: () => ({ code: "L1", image: moved }) });
     const done = await importPdfPlan(o);
     const [, , patch] = (o.api as ReturnType<typeof fakes>).patchLevelImage.mock.calls[0]!;
     expect(patch).toMatchObject({ offsetX: 40, offsetY: 90 });
@@ -116,5 +118,57 @@ describe("importPdfPlan", () => {
     const stages: string[] = [];
     await importPdfPlan(options({ stage: s => stages.push(s) }));
     expect(stages).toEqual(["Reading L2.pdf…", "Drawing the plan…", "Uploading L2.pdf…"]);
+  });
+
+  it("reads the plans it places against once the sheet is drawn, so one moved meanwhile is placed from where it is", async () => {
+    const log: string[] = [];
+    await importPdfPlan(options({
+      stage: s => log.push(s),
+      current: () => { log.push("current"); return null; },
+      below: () => { log.push("below"); return null; },
+    }));
+    expect(log).toEqual(["Reading L2.pdf…", "Drawing the plan…", "current", "below", "Uploading L2.pdf…"]);
+  });
+
+  it("hands back each part of the plan as it is stored", async () => {
+    const stored: LevelImage[] = [];
+    const done = await importPdfPlan(options({ onStored: image => stored.push(image) }));
+    expect(stored.map(i => [i.version, i.metresPerPixel != null, i.source != null])).toEqual([[0, false, false], [1, true, false], [2, true, true]]);
+    expect(stored.at(-1)).toBe(done!.image);
+  });
+
+  it("keeps the plan that went in when its scale doesn't save, and finishing it sends only what is missing", async () => {
+    const api = fakes();
+    api.patchLevelImage.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const stored: LevelImage[] = [];
+    const err = await importPdfPlan(options({ api, onStored: image => stored.push(image) })).catch(e => e);
+    expect(err).toBeInstanceOf(PlanPartlyStoredError);
+    const { unfinished } = err as PlanPartlyStoredError;
+    expect(unfinished).toMatchObject({ missing: "scale", image: { id: "img_new", version: 0 } });
+    expect(stored.map(i => i.id)).toEqual(["img_new"]);
+    expect(api.uploadPlanSource).not.toHaveBeenCalled();
+
+    // The next try goes through: the fake answers as the server would again.
+    const done = await finishPdfPlan(api, unfinished);
+    expect(api.uploadLevelImage).toHaveBeenCalledTimes(1);
+    expect(api.patchLevelImage.mock.calls[1]![2].metresPerPixel).toBeCloseTo(0.05, 10);
+    expect(done.image).toMatchObject({ version: 2, source: { pdfId: "pdf_x" } });
+    expect(done.report).toMatch(/^Scale from the drawing's grid/);
+  });
+
+  it("keeps the scaled plan when its PDF doesn't save, and finishing it sends the PDF alone", async () => {
+    const api = fakes();
+    api.uploadPlanSource.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const o = options({ api });
+    const err = await importPdfPlan(o).catch(e => e);
+    expect(err).toBeInstanceOf(PlanPartlyStoredError);
+    const { unfinished } = err as PlanPartlyStoredError;
+    expect(unfinished).toMatchObject({ missing: "pdf", image: { version: 1 } });
+    expect(unfinished.image.metresPerPixel).toBeCloseTo(0.05, 10);
+
+    const done = await finishPdfPlan(api, unfinished);
+    expect(api.patchLevelImage).toHaveBeenCalledTimes(1);
+    expect(api.uploadPlanSource.mock.calls[1]![2]).toBe(o.file);
+    expect(done.image.source?.pdfId).toBe("pdf_x");
   });
 });
