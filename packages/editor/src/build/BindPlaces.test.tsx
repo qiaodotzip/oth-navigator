@@ -53,17 +53,22 @@ function setup({
   update = vi.fn(async (..._args: unknown[]) => true),
 } = {}) {
   useEditorStore.getState().setModel(m);
+  const api = fakeApi();
+  const refresh = vi.fn(async () => {});
   const onBound = vi.fn();
   const room = m.rooms.find(r => r.id === "L1-a")!;
   render(
-    <BindPlaces api={fakeApi()} saver={{ update } as unknown as Saver} room={room} pendingPlaceId={pendingPlaceId} onBound={onBound} />,
+    <BindPlaces api={api} saver={{ update, refresh } as unknown as Saver} room={room} pendingPlaceId={pendingPlaceId} onBound={onBound} />,
   );
-  return { update, onBound };
+  return { api, update, refresh, onBound, room };
 }
 
 // `hidden: true`, because the floorless list sits in a closed <details>.
 const names = (list: HTMLElement) =>
   within(list).getAllByRole("button", { hidden: true }).map(b => b.getAttribute("aria-label"));
+
+const toasts = () => useToasts.getState().toasts;
+const undoIt = async () => { await toasts().find(t => t.action?.label === "Undo")!.action!.run(); };
 
 beforeEach(() => {
   useEditorStore.getState().reset();
@@ -77,6 +82,8 @@ describe("BindPlaces", () => {
     // alt="" (the button already names the place), so it has no img role to query by.
     const img = screen.getByRole("button", { name: "Bind to Festive Mall" }).querySelector("img");
     expect(img?.getAttribute("src")).toBe("/api/keyframes/kf_1/file?w=240");
+    // Never tagged in a frame, so it says so rather than showing an empty box.
+    expect(within(screen.getByRole("button", { name: "Bind to Anchor Books" })).getByText("No frame")).toBeTruthy();
   });
 
   it("leaves out proposals, walkways, other floors and places already bound", () => {
@@ -110,14 +117,70 @@ describe("BindPlaces", () => {
     expect(update.mock.calls[0]).toEqual(["place", "pl_mall", 0, { roomId: "L1-a", levelId: "oth-L1" }]);
     expect(update.mock.calls[1]!.slice(0, 3)).toEqual(["room", "L1-a", 0]);
     expect(update.mock.calls[1]![3]).toMatchObject({ verification: { status: "photo", evidence: ["kf_1", "kf_2"] } });
+    // A room with no name of its own is "this room", never its raw id.
+    expect(toasts().at(-1)).toMatchObject({ message: "Bound this room to Festive Mall", action: { label: "Undo" } });
+  });
+
+  it("undoes a bind: the place loses its room and floor, the room its verification, then it reloads", async () => {
+    const { api, refresh, onBound, room } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Bind to Festive Mall" }));
+    await waitFor(() => expect(onBound).toHaveBeenCalled());
+    await undoIt();
+    // Each write moved its entity on one version; the room goes back first.
+    expect(vi.mocked(api.updateEntity).mock.calls).toEqual([
+      ["room", "L1-a", 1, { verification: room.verification }],
+      ["place", "pl_mall", 1, { roomId: null, levelId: null }],
+    ]);
+    expect(room.verification.status).toBe("unverified");
+    expect(refresh).toHaveBeenCalled();
+    expect(toasts().at(-1)).toMatchObject({ tone: "success", message: "Festive Mall is waiting for a room again" });
+  });
+
+  it("binds a place with no confirmed frame, but calls no room seen in a photo, and Undo puts back only the place", async () => {
+    const { api, update, onBound } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Bind to Anchor Books" }));
+    await waitFor(() => expect(onBound).toHaveBeenCalled());
+    expect(update.mock.calls).toEqual([["place", "pl_books", 0, { roomId: "L1-a", levelId: "oth-L1" }]]);
+    expect(toasts().at(-1)?.message).toBe("Bound this room to Anchor Books");
+    await undoIt();
+    // Its own floor comes back, not a cleared one.
+    expect(vi.mocked(api.updateEntity).mock.calls).toEqual([["place", "pl_books", 1, { roomId: null, levelId: "oth-L1" }]]);
+  });
+
+  it("vouches for a room with confirmed tags only, and shows a confirmed frame first", async () => {
+    const tagged = parseModel({
+      ...base,
+      places: [{ id: "pl_kopi", nameEn: "Kopitiam", category: "retail", levelId: "oth-L1" }],
+      sightings: [
+        { id: "s1", placeId: "pl_kopi", keyframeId: "kf_1", status: "proposed" },
+        { id: "s2", placeId: "pl_kopi", keyframeId: "kf_2" },
+      ],
+    });
+    const { update, onBound } = setup({ m: tagged });
+    const button = screen.getByRole("button", { name: "Bind to Kopitiam" });
+    expect(button.querySelector("img")?.getAttribute("src")).toBe("/api/keyframes/kf_2/file?w=240");
+    fireEvent.click(button);
+    await waitFor(() => expect(onBound).toHaveBeenCalled());
+    expect(update.mock.calls[1]![3]).toMatchObject({ verification: { status: "photo", evidence: ["kf_2"] } });
   });
 
   it("leaves the room alone when the place could not be bound", async () => {
     const update = vi.fn(async (..._args: unknown[]) => false);
     const { onBound } = setup({ update });
-    fireEvent.click(screen.getByRole("button", { name: "Bind to Anchor Books" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bind to Festive Mall" }));
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
     expect(onBound).not.toHaveBeenCalled();
+    expect(toasts()).toEqual([]);
+  });
+
+  it("says nothing went through when the room could not be verified, though the place is bound", async () => {
+    // The saver has already shown the room's failure, with Retry.
+    const update = vi.fn(async (...args: unknown[]) => args[0] === "place");
+    const { onBound } = setup({ update });
+    fireEvent.click(screen.getByRole("button", { name: "Bind to Festive Mall" }));
+    await waitFor(() => expect(onBound).toHaveBeenCalled());
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(toasts()).toEqual([]);
   });
 
   it("says what a bound room is, instead of offering to bind it again", () => {
@@ -127,9 +190,22 @@ describe("BindPlaces", () => {
     expect(screen.queryByRole("button", { name: /^Bind to / })).toBeNull();
   });
 
+  it("unbinds a room bound to the wrong place", async () => {
+    const bound: MapModel = parseModel({ ...base, places: [{ id: "pl_1", nameEn: "Library", category: "community", roomId: "L1-a" }] });
+    const { update } = setup({ m: bound });
+    fireEvent.click(screen.getByRole("button", { name: "Unbind" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Unbind" }).hasAttribute("disabled")).toBe(false));
+    expect(update.mock.calls).toEqual([["place", "pl_1", 0, { roomId: null }]]);
+  });
+
   it("says what to do when no place is waiting for a room", () => {
     setup({ m: parseModel(base) });
     expect(screen.getByText(/tag and review this floor's footage first/i)).toBeTruthy();
+  });
+
+  it("says where this floor's places come from when none are waiting here", () => {
+    setup({ m: parseModel({ ...base, places: [{ id: "pl_lost", nameEn: "Somewhere", category: "retail" }] }) });
+    expect(screen.getByText("No places filmed on L1 are waiting for a room. Places are confirmed in Review.")).toBeTruthy();
   });
 });
 
@@ -139,7 +215,7 @@ describe("BindTools", () => {
   it("asks for the room of the place chosen from the to-do list, with the frame it was filmed in", () => {
     render(<BindTools api={fakeApi()} pendingPlaceId="pl_mall" onCancel={vi.fn()} />);
     expect(screen.getByText(/click the room where you see/i).textContent).toContain("Festive Mall");
-    expect(screen.getByRole("img", { name: "Where Festive Mall was filmed" }).getAttribute("src")).toContain("kf_1");
+    expect(screen.getByRole("img", { name: "Where Festive Mall was filmed" }).getAttribute("src")).toBe("/api/keyframes/kf_1/file?w=240");
   });
 
   it("lets the choice go", () => {
@@ -151,6 +227,12 @@ describe("BindTools", () => {
 
   it("explains the step when no place is chosen", () => {
     render(<BindTools api={fakeApi()} pendingPlaceId={null} onCancel={vi.fn()} />);
+    expect(screen.getByText(/pick a place from the to-do list/i)).toBeTruthy();
+  });
+
+  it("stops asking for a room once the place in hand has one", () => {
+    render(<BindTools api={fakeApi()} pendingPlaceId="pl_taken" onCancel={vi.fn()} />);
+    expect(screen.queryByText(/click the room where you see/i)).toBeNull();
     expect(screen.getByText(/pick a place from the to-do list/i)).toBeTruthy();
   });
 });

@@ -1,18 +1,23 @@
-import { live, placeLevels, type Place, type Room } from "@oth/model";
+import { live, placeLevels, type Place, type Room, type Sighting } from "@oth/model";
 import { useState } from "react";
 import type { Api } from "../api/client";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { matchPlaces } from "../survey/places";
 import { Button } from "../ui/Button";
-import { toast } from "../ui/toast";
+import { offerUndo } from "../ui/offerUndo";
 
 /** Thumbnails are 240 px wide: the server makes them from the 4K frames. */
 const THUMB_WIDTH = 240;
 
-/** The first frame each place was seen in — the picture that says "this one". */
-function firstFrames(sightings: readonly { placeId: string; keyframeId: string }[]): Map<string, string> {
+/**
+ * The frame each place is shown by — the picture that says "this one". A
+ * confirmed tag's frame where there is one: a proposed tag is still a guess,
+ * and Review may yet move it or bin it.
+ */
+function placeFrames(sightings: readonly Sighting[]): Map<string, string> {
   const frames = new Map<string, string>();
+  for (const s of sightings) if (s.status === "confirmed" && !frames.has(s.placeId)) frames.set(s.placeId, s.keyframeId);
   for (const s of sightings) if (!frames.has(s.placeId)) frames.set(s.placeId, s.keyframeId);
   return frames;
 }
@@ -21,6 +26,10 @@ function firstFrames(sightings: readonly { placeId: string; keyframeId: string }
  * Binds a traced room to the place someone filmed there — where the geometry
  * and the footage, two independent descriptions of the building, meet. It is
  * also the first thing that moves a room off "unverified".
+ *
+ * A wrong bind is undone rather than confirmed first (spec §3): the toast
+ * after it carries Undo, and a bound room offers Unbind, which also reaches
+ * binds made before this screen existed.
  */
 export function BindPlaces({
   api,
@@ -40,17 +49,36 @@ export function BindPlaces({
   const [busy, setBusy] = useState(false);
   if (!model) return null;
 
+  const roomName = room.nameEn || "this room";
+
+  async function unbind(place: Place) {
+    setBusy(true);
+    try {
+      // Only the room: the place stays filed on its floor, so it is back in
+      // this floor's picker, ready for the room it belongs in.
+      await saver.update("place", place.id, place.version, { roomId: null });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const bound = live(model.places).find(p => p.roomId === room.id);
   if (bound) {
     return (
-      <p className="text-xs text-stone-700">
-        <span aria-hidden className="text-confirmed">✓ </span>Bound to <span className="font-medium">{bound.nameEn}</span> from the survey.
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-stone-700">
+          <span aria-hidden className="text-confirmed">✓ </span>Bound to <span className="font-medium">{bound.nameEn}</span> from the survey.
+        </p>
+        <Button size="sm" disabled={busy} onClick={() => void unbind(bound)}>
+          Unbind
+        </Button>
+      </div>
     );
   }
 
   // Confirmed units nothing has claimed: a proposal is still Review's to
-  // decide, and a walkway is built as a path, not bound to a room.
+  // decide, and a walkway is built as a path, not bound to a room. A bound
+  // place is never listed, so it is never ringed as the one in hand either.
   const open = live(model.places).filter(p => p.status === "confirmed" && !p.pathwayKindId && !p.roomId);
   if (open.length === 0) {
     return (
@@ -65,26 +93,62 @@ export function BindPlaces({
   const here = matchPlaces(open.filter(p => floors.get(p.id) === room.levelId), query).sort(pendingFirst);
   const floorless = matchPlaces(open.filter(p => floors.get(p.id) === undefined), query).sort(pendingFirst);
   const sightings = live(model.sightings);
-  const frames = firstFrames(sightings);
+  const frames = placeFrames(sightings);
   const code = model.levels.find(l => l.id === room.levelId)?.code ?? "this floor";
 
   async function bind(place: Place) {
     setBusy(true);
-    const evidence = sightings.filter(s => s.placeId === place.id).map(s => s.keyframeId);
+    // Confirmed tags only: a proposed one is a guess, and vouches for nothing.
+    const evidence = sightings.filter(s => s.placeId === place.id && s.status === "confirmed").map(s => s.keyframeId);
     try {
       // The place takes the room's floor as well, so one filmed on footage
       // with no floor is filed where it was found. When it does not land, the
       // saver has already said why (with Retry where that could help), and
       // the room is left unverified rather than vouched for by nothing.
       if (!(await saver.update("place", place.id, place.version, { roomId: room.id, levelId: room.levelId }))) return;
-      await saver.update("room", room.id, room.version, {
+      // "Seen in a photo" needs a photo: with no confirmed frame, the place
+      // is bound but the room stays as it was.
+      const verifying = evidence.length > 0;
+      const verified = verifying && (await saver.update("room", room.id, room.version, {
         verification: { status: "photo", evidence, verifiedAt: new Date().toISOString() },
-      });
-      toast({ tone: "success", message: `Bound ${room.nameEn || room.id} to ${place.nameEn}.` });
+      }));
+      // A room write that failed has its own toast, with Retry; "Bound"
+      // beside it would read as though everything went through.
+      if (!verifying || verified) announceBind(place, verified);
       onBound();
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * "Bound this room to Gate 1 · Undo". Each write moved its entity on one
+   * version, so Undo expects exactly that: a teammate's change since is
+   * refused, not overwritten. It puts back only what the bind changed, room
+   * first, the reverse of the bind; the steps are kept across attempts, so
+   * Retry carries on from where the last try stopped.
+   */
+  function announceBind(place: Place, verified: boolean) {
+    const steps: (() => Promise<unknown>)[] = [
+      ...(verified
+        ? [() => api.updateEntity("room", room.id, room.version + 1, { verification: room.verification })]
+        : []),
+      // Only unbound places are offered, so it had no room; an explicit null
+      // clears a floor it did not have either.
+      () => api.updateEntity("place", place.id, place.version + 1, { roomId: null, levelId: place.levelId ?? null }),
+    ];
+    offerUndo({
+      message: `Bound ${roomName} to ${place.nameEn}`,
+      undone: `${place.nameEn} is waiting for a room again`,
+      what: `the bind to ${place.nameEn}`,
+      run: async () => {
+        while (steps.length > 0) {
+          await steps[0]!();
+          steps.shift();
+        }
+      },
+      refresh: saver.refresh,
+    });
   }
 
   const row = (p: Place) => {
@@ -114,7 +178,7 @@ export function BindPlaces({
           )}
           <span className="min-w-0">
             <span className="block truncate text-sm font-medium">{p.nameEn}</span>
-            <span className="block text-xs text-stone-500">
+            <span className="block text-xs text-stone-600">
               {p.category}
               {p.id === pendingPlaceId ? " · from your to-do" : ""}
             </span>
@@ -137,8 +201,10 @@ export function BindPlaces({
       {here.length > 0 ? (
         <ul aria-label={`On ${code}`} className="space-y-1">{here.map(row)}</ul>
       ) : (
-        <p className="text-xs text-stone-500">
-          {query ? `Nothing on ${code} matches "${query}".` : `No places filmed on ${code} are waiting for a room.`}
+        <p className="text-xs text-stone-600">
+          {query
+            ? `Nothing on ${code} matches "${query}".`
+            : `No places filmed on ${code} are waiting for a room. Places are confirmed in Review.`}
         </p>
       )}
       {floorless.length > 0 && (
@@ -163,10 +229,12 @@ export function BindTools({
 }) {
   const model = useEditorStore(s => s.model);
   const place = pendingPlaceId ? live(model?.places ?? []).find(p => p.id === pendingPlaceId) : undefined;
-  if (!model || !place) {
+  // One bound after all — by a Retry that went through late, say — already
+  // has its room, so there is nothing left to ask for.
+  if (!model || !place || place.roomId) {
     return <p className="text-xs text-stone-600">Or pick a place from the to-do list, then click the room it is in.</p>;
   }
-  const frame = live(model.sightings).find(s => s.placeId === place.id)?.keyframeId;
+  const frame = placeFrames(live(model.sightings)).get(place.id);
 
   return (
     <div role="status" className="flex items-start gap-2">
