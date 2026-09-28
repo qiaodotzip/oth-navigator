@@ -87,7 +87,40 @@ describe("floorOutline", () => {
         { id: "pl_sb", name: "Starbucks", category: "retail", status: "confirmed", roomId: "L1-shop-12", version: 0 },
         { id: "pl_gc", name: "Gong Cha", category: "retail", status: "proposed", roomId: null, version: 0 },
       ],
+      objectKinds: [],
+      objects: [],
     });
+  });
+});
+
+describe("floorOutline and objects", () => {
+  it("lists every kind of object with its places, this floor's objects, and marks an object's place", () => {
+    const withObjects = parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [
+        { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "Level 1", nameZh: "一楼", elevationM: 0, heightM: 6 },
+        { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "Level 2", nameZh: "二楼", elevationM: 6, heightM: 4 },
+      ],
+      captures: [{ id: "cap_1", kind: "video", filename: "L1 walk.mp4", levelId: "oth-L1" }],
+      keyframes: [{ id: "kf_1", captureId: "cap_1", timeMs: 0, imageId: "kf_1", widthPx: 640, heightPx: 480 }],
+      objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+      places: [{ id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "ok_bin" }],
+      sightings: [{ id: "sg_1", placeId: "pl_bin", keyframeId: "kf_1" }],
+      placements: [
+        { id: "L1-wastebin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [10.004, 5.651, 0], rotationDeg: 90, sightingIds: ["sg_1"] },
+        { id: "L2-wastebin-1", levelId: "oth-L2", objectKindId: "ok_bin", position: [1, 1, 0], sightingIds: [] },
+      ],
+    });
+    const outline = floorOutline(withObjects, findLevel(withObjects, "L1")!, new Map());
+    expect(outline.objectKinds).toEqual([
+      { id: "ok_bin", name: "wastebin", size: { w: 0.5, d: 0.5, h: 1 }, look: "Box", placeIds: ["pl_bin"], version: 0 },
+    ]);
+    expect(outline.objects).toEqual([
+      { id: "L1-wastebin-1", kindId: "ok_bin", position: [10, 5.65], rotationDeg: 90, sightings: 1, version: 0 },
+    ]);
+    expect(outline.places).toEqual([
+      { id: "pl_bin", name: "wastebin", category: "facility", status: "confirmed", roomId: null, version: 0, objectKindId: "ok_bin" },
+    ]);
   });
 });
 

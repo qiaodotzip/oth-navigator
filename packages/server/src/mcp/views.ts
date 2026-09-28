@@ -4,6 +4,8 @@ import {
 } from "@oth/model";
 import type { DraftTally } from "../drafts/service";
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export type FloorSummary = {
   id: string;
   code: string;
@@ -76,6 +78,16 @@ export function floorOutline(model: MapModel, level: Level, names: ReadonlyMap<s
     }),
     places: places.filter(p => floorOf.get(p.id) === level.id).map(p => ({
       id: p.id, name: p.nameEn, category: p.category, status: p.status, roomId: p.roomId ?? null, version: p.version,
+      ...(p.objectKindId ? { objectKindId: p.objectKindId } : {}),
+    })),
+    // Kinds are the same on every floor (Plan 6A), so each is listed with its places, wherever they were filmed.
+    objectKinds: live(model.objectKinds).map(k => ({
+      id: k.id, name: k.nameEn, size: k.size, look: k.assetId ? "Model" : "Box",
+      placeIds: places.filter(p => p.objectKindId === k.id).map(p => p.id), version: k.version,
+    })),
+    objects: live(model.placements).filter(p => p.levelId === level.id && p.objectKindId).map(p => ({
+      id: p.id, kindId: p.objectKindId!, position: [round2(p.position[0]), round2(p.position[1])],
+      rotationDeg: p.rotationDeg, sightings: p.sightingIds.length, version: p.version,
     })),
   };
 }

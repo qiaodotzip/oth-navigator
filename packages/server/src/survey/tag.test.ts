@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../db/client";
-import { captures, keyframes, places, sightings } from "../db/schema";
+import { captures, keyframes, objectKinds, places, sightings } from "../db/schema";
 import { createEntity } from "../entities/repository";
 import { createTestDb } from "../testing/harness";
 import { TagRefusal, tagFrame } from "./tag";
@@ -60,5 +60,60 @@ describe("tagFrame", () => {
     );
     expect(await db.select().from(places)).toEqual([]);
     expect(await db.select().from(sightings)).toEqual([]);
+  });
+});
+
+describe("tagFrame and objects", () => {
+  beforeEach(async () => {
+    await createEntity(db, "objectKind", { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }, "u_sc");
+    await createEntity(db, "place", { id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "ok_bin" }, "u_sc");
+  });
+
+  it("makes a new kind at the size given, and its place on no floor", async () => {
+    const tagged = await tagFrame(db, {
+      frameId: "kf_1", nameEn: "Vending machine", category: "facility", object: true, size: { w: 1, d: 0.8, h: 1.9 },
+    }, "u_wei", CLAIM);
+    expect(tagged).toMatchObject({ newPlace: true, newKind: true, madeObject: false });
+    expect((await db.select().from(objectKinds).where(eq(objectKinds.id, tagged.objectKindId!)))[0])
+      .toMatchObject({ nameEn: "Vending machine", size: { w: 1, d: 0.8, h: 1.9 } });
+    expect((await db.select().from(places).where(eq(places.id, tagged.placeId)))[0])
+      .toMatchObject({ objectKindId: tagged.objectKindId, levelId: null, status: "proposed" });
+  });
+
+  it("reuses a kind of the same name, and its place, whatever the spelling, at the kind's own size", async () => {
+    const tagged = await tagFrame(db, {
+      frameId: "kf_1", nameEn: " Wastebin ", category: "facility", object: true, size: { w: 2, d: 2, h: 2 },
+    }, "u_wei", CLAIM);
+    expect(tagged).toMatchObject({ placeId: "pl_bin", objectKindId: "ok_bin", newPlace: false, newKind: false });
+    expect((await db.select().from(objectKinds)).map(k => k.size)).toEqual([{ w: 0.5, d: 0.5, h: 1 }]);
+  });
+
+  it("tags two of an object in one frame, each with its own box, and refuses a second with no box", async () => {
+    const left = { x: 0.1, y: 0.4, w: 0.1, h: 0.2 };
+    const right = { x: 0.7, y: 0.4, w: 0.1, h: 0.2 };
+    await tagFrame(db, { frameId: "kf_1", placeId: "pl_bin", object: true, box: left }, "u_wei", CLAIM);
+    await tagFrame(db, { frameId: "kf_1", placeId: "pl_bin", object: true, box: right }, "u_wei", CLAIM);
+    expect(await db.select().from(sightings).where(eq(sightings.placeId, "pl_bin"))).toHaveLength(2);
+    await expect(tagFrame(db, { frameId: "kf_1", placeId: "pl_bin", object: true }, "u_wei", CLAIM))
+      .rejects.toThrow(/^Frame kf_1 already has a tag for wastebin \(sg_\w+\)\. Two of an object in one frame are two tags, each with its own box\.$/);
+  });
+
+  it("makes a proposal the kind's place, and leaves a confirmed place to a person", async () => {
+    await createEntity(db, "place", { id: "pl_cooler", nameEn: "water cooler", category: "facility", status: "proposed" }, "u_sc");
+    const tagged = await tagFrame(db, { frameId: "kf_1", placeId: "pl_cooler", object: true }, "u_wei", CLAIM);
+    expect(tagged).toMatchObject({ placeId: "pl_cooler", newKind: true, madeObject: true });
+    expect((await db.select().from(places).where(eq(places.id, "pl_cooler")))[0]?.objectKindId).toBe(tagged.objectKindId);
+    expect((await db.select().from(objectKinds).where(eq(objectKinds.id, tagged.objectKindId!)))[0]?.size).toEqual({ w: 0.5, d: 0.5, h: 1 });
+
+    await createEntity(db, "place", { id: "pl_rb", nameEn: "recycling bin", category: "facility", levelId: "oth-L1" }, "u_sc");
+    await expect(tagFrame(db, { frameId: "kf_1", placeId: "pl_rb", object: true }, "u_wei", CLAIM)).rejects.toThrow(
+      "recycling bin is a confirmed place, not an object yet. A person makes it one with This is an object in Places: " +
+      "tag it with its placeId as a place, and name it in your report.",
+    );
+  });
+
+  it("takes a size with an object only", async () => {
+    await expect(tagFrame(db, { frameId: "kf_1", nameEn: "Kiosk", category: "retail", size: { w: 1, d: 1, h: 1 } }, "u_wei", CLAIM))
+      .rejects.toThrow("size goes with object only: it is a new kind's size.");
   });
 });

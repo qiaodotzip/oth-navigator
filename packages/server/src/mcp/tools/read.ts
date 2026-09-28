@@ -62,7 +62,8 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
     title: "Get a floor",
     description:
       "One floor as ids, names, kinds and versions: its rooms (with the surveyed place bound to each), " +
-      "walkways, entrances, lift and escalator stops, and the places surveyed on it. get gives any one of them in full.",
+      "walkways, entrances, lift and escalator stops, and the places surveyed on it, and the kinds of object with " +
+      "the objects on this floor. get gives any one of them in full.",
     inputSchema: { floor: FLOOR },
     annotations: READ_ONLY,
   }, ({ floor }) => runTool(ctx, async () => {

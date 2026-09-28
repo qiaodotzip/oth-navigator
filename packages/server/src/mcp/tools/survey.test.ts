@@ -60,6 +60,36 @@ describe("tag_frame", () => {
   });
 });
 
+describe("tag_frame and objects", () => {
+  it("tags an object on its kind's place, making the kind at the size Claude estimates, through the token", async () => {
+    const { text, isError } = await call(client, "tag_frame", {
+      frameId: "kf_2", nameEn: "Vending machine", category: "facility", object: true,
+      size: { w: 1, d: 0.8, h: 1.9 }, box: { x: 0.2, y: 0.2, w: 0.3, h: 0.6 },
+    });
+    expect(isError).toBe(false);
+    const tagged = JSON.parse(text) as { objectKindId: string; newKind: boolean; status: string };
+    expect(tagged).toMatchObject({ newKind: true, status: "proposed" });
+    const [trail] = await f.db.select().from(auditLog).where(eq(auditLog.entityId, tagged.objectKindId));
+    expect(trail).toMatchObject({ entityType: "objectKind", action: "create", via: f.tokenId });
+  });
+
+  it("says when a size went unused because the kind exists", async () => {
+    await call(client, "tag_frame", { frameId: "kf_1", nameEn: "wastebin", category: "facility", object: true, box: { x: 0, y: 0, w: 0.2, h: 0.2 } });
+    const { text } = await call(client, "tag_frame", {
+      frameId: "kf_2", nameEn: "Wastebin", category: "facility", object: true, size: { w: 3, d: 3, h: 3 }, box: { x: 0, y: 0, w: 0.2, h: 0.2 },
+    });
+    expect(text.split("\n")[1]).toBe(
+      "That kind of object exists already, at its own size, so size was not used. update the objectKind to change it.",
+    );
+  });
+
+  it("refuses a side over 10 m, which is almost always centimetres", async () => {
+    expect((await call(client, "tag_frame", {
+      frameId: "kf_2", nameEn: "Bin", category: "facility", object: true, size: { w: 50, d: 50, h: 100 },
+    })).isError).toBe(true);
+  });
+});
+
 describe("review_place", () => {
   it("accepts a proposal with its tags, corrected, and says how to undo it; reopen undoes it", async () => {
     const accepted = await call(client, "review_place", { placeId: "pl_gc", decision: "accept", expectedVersion: 0, nameEn: "Gong Cha" });

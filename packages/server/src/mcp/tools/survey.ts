@@ -16,6 +16,10 @@ const VERSION = z.number().int().min(0).describe("The version you last read, fro
 const FRACTION = z.number().min(0).max(1);
 const BOX = z.object({ x: FRACTION, y: FRACTION, w: FRACTION, h: FRACTION })
   .describe("Which part of the frame, in fractions of it: x and y from the top left, then w and h.");
+/** Metres. Over 10 m is almost always centimetres typed as metres (6A's MAX_OBJECT_SIDE_M). */
+const SIDE = z.number().positive().max(10);
+const SIZE = z.object({ w: SIDE, d: SIDE, h: SIDE })
+  .describe("A new kind's size in metres: width, depth and height, estimated from the frame. Left out, 0.5 × 0.5 × 1.");
 const WRITES = { readOnlyHint: false, destructiveHint: false } as const;
 
 /** The survey's own refusals, as refusals the model reads. */
@@ -42,27 +46,37 @@ export function registerSurveyTools(server: McpServer, ctx: ToolContext): void {
       "A tag on a new or proposed place waits in Review with its place: a person accepts it there, or you do " +
       `with review_place when ${name} asks you to. Review lists only proposed places, so a tag on a place ` +
       "already confirmed is not shown there: it stays a proposal until review_place with decision accept runs " +
-      `on that place, which confirms its proposed tags. ${name} can ask you to do that.`,
+      `on that place, which confirms its proposed tags. ${name} can ask you to do that.` +
+      " Objects, such as a wastebin or a water cooler: set object true and box each one. By name, the kind of that name " +
+      "is found whatever its spelling, or made at size; by the placeId of your own proposal, the proposal becomes the " +
+      "kind's place. Two of an object in one frame are two tags, each with its own box.",
     inputSchema: {
       frameId: ID,
       placeId: ID.optional(),
       nameEn: z.string().trim().min(1).max(120).optional(),
       category: TenantCategorySchema.optional(),
       box: BOX.optional(),
+      object: z.boolean().optional().describe("True when the frame shows an object, such as a wastebin: the tag goes on its kind's place."),
+      size: SIZE.optional(),
     },
     annotations: WRITES,
   }, input => runTool(ctx, async () => {
     const tagged = await refusing(tagFrame(ctx.db, input, ctx.user.id, claim));
     if (tagged.levelId) ctx.seenOn(tagged.levelId);
-    const answer = JSON.stringify({ ...tagged, status: claim.status });
-    if (claim.status !== "proposed" || tagged.placeStatus !== "confirmed") return reply(answer);
+    const lines = [JSON.stringify({ ...tagged, status: claim.status })];
     // No screen in the app would ever show this tag, so the model has to be
     // told what does confirm it.
-    return reply(
-      `${answer}\n${tagged.placeId} is already confirmed, and Review lists only proposed places, so this tag is not shown ` +
-      `there. It stays a proposal until review_place with decision accept runs on ${tagged.placeId}, which confirms its ` +
-      `proposed tags. ${name} can ask you to do that.`,
-    );
+    if (claim.status === "proposed" && tagged.placeStatus === "confirmed") {
+      lines.push(
+        `${tagged.placeId} is already confirmed, and Review lists only proposed places, so this tag is not shown ` +
+        `there. It stays a proposal until review_place with decision accept runs on ${tagged.placeId}, which confirms its ` +
+        `proposed tags. ${name} can ask you to do that.`,
+      );
+    }
+    if (input.size && tagged.objectKindId && !tagged.newKind) {
+      lines.push("That kind of object exists already, at its own size, so size was not used. update the objectKind to change it.");
+    }
+    return reply(lines.join("\n"));
   }));
 
   server.registerTool("review_place", {
