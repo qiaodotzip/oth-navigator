@@ -1,4 +1,4 @@
-import { live, type Level, type MapModel } from "@oth/model";
+import { live, type Level, type MapModel, type Ring } from "@oth/model";
 import { FLOOR_TABS, type FloorTab } from "../route";
 
 /** Floors from the bottom up, deleted ones left out. */
@@ -18,6 +18,18 @@ export function levelBelow(model: MapModel | null, levelId: string): Level | nul
   const levels = sortedLevels(model);
   const i = levels.findIndex(l => l.id === levelId);
   return i > 0 ? levels[i - 1]! : null;
+}
+
+/**
+ * The floor below's room footprints, drawn faintly under a plan so it can be
+ * dragged into line with them (Align, on the Floorplan step). `below` is
+ * null wherever there is nothing to line up on — the lowest floor, or a
+ * screen that only offers Align on some steps.
+ */
+export function belowRingsFor(model: MapModel | null, below: Level | null): Ring[] | undefined {
+  return model && below
+    ? live(model.rooms).filter(r => r.levelId === below.id && r.kind !== "detail").map(r => r.footprint)
+    : undefined;
 }
 
 /**

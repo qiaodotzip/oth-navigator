@@ -1,6 +1,6 @@
 import { parseModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { findLevel, levelBelow, pickTab, sortedLevels, yourFloor } from "./floors";
+import { belowRingsFor, findLevel, levelBelow, pickTab, sortedLevels, yourFloor } from "./floors";
 
 const lvl = (code: string, ordinal: number, ownerIds: string[] = []) => ({
   id: `oth-${code}`, buildingId: "oth", code, ordinal, nameEn: code, nameZh: code,
@@ -10,6 +10,10 @@ const lvl = (code: string, ordinal: number, ownerIds: string[] = []) => ({
 const model = parseModel({
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
   levels: [lvl("L3", 3, ["u_aisha"]), lvl("L1", 1, ["u_sc"]), lvl("L2", 2, ["u_wei", "u_gone"])],
+  rooms: [
+    { id: "L1-room", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 3 },
+    { id: "L1-detail", levelId: "oth-L1", kind: "detail", footprint: [[1, 1], [2, 1], [2, 2], [1, 2]], heightM: 1 },
+  ],
 });
 
 describe("floors", () => {
@@ -42,5 +46,12 @@ describe("floors", () => {
     expect(pickTab("review", false)).toBe("review");
     expect(pickTab(null, true)).toBe("survey");
     expect(pickTab("junk", false)).toBe("build");
+  });
+
+  it("gives the floor below's room footprints, details left out, and nothing with no floor below", () => {
+    const l1 = findLevel(model, "L1")!;
+    expect(belowRingsFor(model, l1)).toEqual([[[0, 0], [10, 0], [10, 10], [0, 10]]]);
+    expect(belowRingsFor(model, null)).toBeUndefined();
+    expect(belowRingsFor(null, l1)).toBeUndefined();
   });
 });

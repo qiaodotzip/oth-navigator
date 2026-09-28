@@ -4,7 +4,7 @@ import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 
 import type { Api } from "../api/client";
 import { commitPoint } from "../flow/commitPoint";
 import { BUILD_STEPS, buildStepsDone, type BuildStepId } from "../flow/floorProgress";
-import { levelBelow } from "../flow/floors";
+import { belowRingsFor, levelBelow } from "../flow/floors";
 import { newPathway, newSpace } from "../flow/newSpace";
 import { LockBanner } from "../panels/LockBanner";
 import { roomLabels } from "../places/labels";
@@ -19,6 +19,7 @@ import type { Saver } from "../state/save";
 import { ringsOnActiveLevel, useEditorStore, type Selection } from "../state/store";
 import { displayBBox, imageForLevel } from "../state/underlay";
 import { Button } from "../ui/Button";
+import { useRefuseWindowFileDrop } from "../ui/fileDrop";
 import { toast, useToasts } from "../ui/toast";
 import { deleteWithUndo } from "../ui/undo";
 import { BindTools, waitingForRoom } from "./BindPlaces";
@@ -112,12 +113,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
   const selectValue = route.params.select ?? "";
 
   const below = step === "floorplan" && levelId ? levelBelow(model, levelId) : null;
-  const belowRings = useMemo(
-    () => (model && below
-      ? live(model.rooms).filter(r => r.levelId === below.id && r.kind !== "detail").map(r => r.footprint)
-      : undefined),
-    [model, below],
-  );
+  const belowRings = useMemo(() => belowRingsFor(model, below), [model, below]);
 
   // Survey and Review save without validating, so the to-do list may be older
   // than a place tagged since, which Bind places would then never list.
@@ -167,19 +163,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
   // Only the plan's drop box takes a file. One let go anywhere else would be
   // opened by the browser in place of the editor, and what you had half done
   // with it; so it is refused, with the cursor saying so.
-  useEffect(() => {
-    const refuse = (event: DragEvent) => {
-      if (event.defaultPrevented) return; // The drop box took it.
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
-    };
-    window.addEventListener("dragover", refuse);
-    window.addEventListener("drop", refuse);
-    return () => {
-      window.removeEventListener("dragover", refuse);
-      window.removeEventListener("drop", refuse);
-    };
-  }, []);
+  useRefuseWindowFileDrop();
 
   function zoomTo(target: NonNullable<Selection>) {
     if (!canvasSize) return;
