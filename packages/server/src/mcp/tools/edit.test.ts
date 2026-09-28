@@ -1,13 +1,16 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createUser, type User } from "../../auth/users";
 import { auditLog, captures, keyframes, levels, places, rooms, sightings } from "../../db/schema";
-import { createEntity, updateEntity } from "../../entities/repository";
+import { createEntity, softDeleteEntity, updateEntity } from "../../entities/repository";
 import { acquireLock, releaseLock } from "../../locks/service";
+import { rejectPlace } from "../../survey/review";
 import { call, mcpFixture, type McpFixture } from "../testing";
 
 const ROOM = { id: "L1-shop-12", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [4, 0], [4, 4], [0, 4]], heightM: 4, nameEn: "Shop 12" };
+const STATUS = "A place's or a tag's status changes only through review_place, which keeps its tags in step.";
+const AMY_EDITING = "Not saved: Amy is editing room L1-shop-12 now. Leave it, and try again once they have moved on.";
 let f: McpFixture;
 let client: Client;
 let amy: User;
@@ -19,7 +22,23 @@ beforeEach(async () => {
   client = await f.connect();
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 const room = async (id = ROOM.id) => (await f.db.select().from(rooms).where(eq(rooms.id, id)))[0];
+const place = async (id = "pl_1") => (await f.db.select().from(places).where(eq(places.id, id)))[0];
+const tag = async (id = "sg_1") => (await f.db.select().from(sightings).where(eq(sightings.id, id)))[0];
+
+/** Frame kf_1 of capture cap_1, with Amy's tag sg_1 on it naming her place pl_1. */
+async function taggedFrame(): Promise<void> {
+  await f.db.insert(captures).values({ id: "cap_1", kind: "video", filename: "L1 walk.mp4", levelId: "oth-L1" });
+  await f.db.insert(keyframes).values({
+    id: "kf_1", captureId: "cap_1", timeMs: 1000, imageId: "kf_1", storagePath: "assets/aa/x.jpg", checksum: "x", widthPx: 640, heightPx: 480, sizeBytes: 1,
+  });
+  await createEntity(f.db, "place", { id: "pl_1", nameEn: "A", category: "retail" }, amy.id);
+  await createEntity(f.db, "sighting", { id: "sg_1", placeId: "pl_1", keyframeId: "kf_1" }, amy.id);
+}
 
 describe("create", () => {
   it("adds a room as its person, through its token", async () => {
@@ -35,6 +54,32 @@ describe("create", () => {
       .toBe("There is already a room L1-shop-12. Choose another id, or update that one.");
   });
 
+  it("points to restore when the id taken is a deleted one's", async () => {
+    await softDeleteEntity(f.db, "room", ROOM.id, 0, amy.id);
+    expect((await call(client, "create", { type: "room", data: ROOM })).text)
+      .toBe("There is already a room L1-shop-12, but it is deleted. restore brings it back, or choose another id.");
+  });
+
+  it("says an id someone adds while it runs is taken, and writes nothing over theirs", async () => {
+    // Amy's room lands between create's look for the id and its own write.
+    const insert = f.db.insert.bind(f.db);
+    let raced = false;
+    vi.spyOn(f.db, "insert").mockImplementation(((table: Parameters<typeof insert>[0]) => {
+      if (table !== rooms || raced) return insert(table);
+      raced = true;
+      return {
+        values: async (values: never) => {
+          await createEntity(f.db, "room", { ...ROOM, id: "L1-shop-13", nameEn: "Amy's" }, amy.id);
+          return insert(table).values(values);
+        },
+      };
+    }) as never);
+    const { text, isError } = await call(client, "create", { type: "room", data: { ...ROOM, id: "L1-shop-13", nameEn: "Wei's" } });
+    expect(isError).toBe(true);
+    expect(text).toBe("Not saved: room L1-shop-13 already exists, added while this ran. Read it with get, then choose another id or update that one.");
+    expect((await room("L1-shop-13"))?.nameEn).toBe("Amy's");
+  });
+
   it("says what the model's schema refused, and adds nothing", async () => {
     const { text, isError } = await call(client, "create", { type: "room", data: { ...ROOM, id: "r-bad", footprint: [[0, 0], [1, 1]] } });
     expect(isError).toBe(true);
@@ -46,6 +91,8 @@ describe("create", () => {
     await call(client, "create", { type: "place", data: { id: "pl_new", nameEn: "Gong Cha", category: "retail", status: "confirmed" } });
     expect((await f.db.select().from(places).where(eq(places.id, "pl_new")))[0])
       .toMatchObject({ status: "proposed", proposedBy: "Claude Code (Wei)" });
+    await call(client, "create", { type: "sighting", data: { id: "sg_new", placeId: "pl_new", keyframeId: "kf_1", status: "confirmed", proposedBy: "Amy" } });
+    expect(await tag("sg_new")).toMatchObject({ status: "proposed", proposedBy: "Claude Code (Wei)" });
   });
 
   it("won't make a floor with owners", async () => {
@@ -78,13 +125,22 @@ describe("update", () => {
     expect((await f.db.select().from(levels).where(eq(levels.id, "oth-L1")))[0]?.ownerIds).toEqual([f.wei.id]);
     await createEntity(f.db, "place", { id: "pl_1", nameEn: "A", category: "retail", status: "proposed" }, amy.id);
     expect((await call(client, "update", { type: "place", id: "pl_1", expectedVersion: 0, data: { status: "confirmed" } })).text)
-      .toBe("A place's or a tag's status changes only through review_place, which keeps its tags in step.");
+      .toBe(STATUS);
+  });
+
+  it("won't change who proposed a place or tag, nor a tag's status", async () => {
+    await createEntity(f.db, "place", { id: "pl_1", nameEn: "A", category: "retail", status: "proposed", proposedBy: "Amy" }, amy.id);
+    await createEntity(f.db, "sighting", { id: "sg_1", placeId: "pl_1", keyframeId: "kf_1", status: "proposed", proposedBy: "Amy" }, amy.id);
+    expect((await call(client, "update", { type: "place", id: "pl_1", expectedVersion: 0, data: { proposedBy: "Wei" } })).text).toBe(STATUS);
+    expect((await call(client, "update", { type: "sighting", id: "sg_1", expectedVersion: 0, data: { status: "confirmed" } })).text).toBe(STATUS);
+    expect(await place()).toMatchObject({ proposedBy: "Amy", version: 0 });
+    expect(await tag()).toMatchObject({ status: "proposed", version: 0 });
   });
 
   it("won't edit what someone has open, even its own person in a browser tab", async () => {
     await acquireLock(f.db, "room", ROOM.id, amy.id, 300);
     expect((await call(client, "update", { type: "room", id: ROOM.id, expectedVersion: 0, data: { nameEn: "X" } })).text)
-      .toBe("Not saved: Amy is editing room L1-shop-12 now. Leave it, and try again once they have moved on.");
+      .toBe(AMY_EDITING);
     await releaseLock(f.db, "room", ROOM.id, amy.id);
     await acquireLock(f.db, "room", ROOM.id, f.wei.id, 300);
     expect((await call(client, "update", { type: "room", id: ROOM.id, expectedVersion: 0, data: { nameEn: "X" } })).text)
@@ -109,20 +165,69 @@ describe("delete and restore", () => {
       .toBe("room L1-shop-12 isn't deleted, so there is nothing to restore.");
   });
 
-  it("bins a frame with its tags, and restores them together, at the version read", async () => {
-    await f.db.insert(captures).values({ id: "cap_1", kind: "video", filename: "L1 walk.mp4", levelId: "oth-L1" });
-    await f.db.insert(keyframes).values({
-      id: "kf_1", captureId: "cap_1", timeMs: 1000, imageId: "kf_1", storagePath: "assets/aa/x.jpg", checksum: "x", widthPx: 640, heightPx: 480, sizeBytes: 1,
-    });
-    await createEntity(f.db, "place", { id: "pl_1", nameEn: "A", category: "retail" }, amy.id);
-    await createEntity(f.db, "sighting", { id: "sg_1", placeId: "pl_1", keyframeId: "kf_1" }, amy.id);
+  it("won't delete or restore what someone has open", async () => {
+    await acquireLock(f.db, "room", ROOM.id, amy.id, 300);
+    expect((await call(client, "delete", { type: "room", id: ROOM.id, expectedVersion: 0 })).text).toBe(AMY_EDITING);
+    expect((await room())?.deletedAt).toBeNull();
+    await releaseLock(f.db, "room", ROOM.id, amy.id);
+    await call(client, "delete", { type: "room", id: ROOM.id, expectedVersion: 0 });
+    await acquireLock(f.db, "room", ROOM.id, amy.id, 300);
+    expect((await call(client, "restore", { type: "room", id: ROOM.id, expectedVersion: 1 })).text).toBe(AMY_EDITING);
+    expect((await room())?.deletedAt).toBeInstanceOf(Date);
+  });
 
+  it("bins a frame with its tags, and restores them together, at the version read", async () => {
+    await taggedFrame();
     expect((await call(client, "delete", { type: "keyframe", id: "kf_1", expectedVersion: 3 })).text).toMatch(/^Not saved: keyframe kf_1 is at version 0 and you sent 3\./);
     expect((await call(client, "delete", { type: "keyframe", id: "kf_1", expectedVersion: 0 })).text)
       .toBe('Binned frame kf_1 with 1 tag. To undo: restore with type "keyframe", id "kf_1" and expectedVersion 1.');
-    expect((await f.db.select().from(sightings).where(eq(sightings.id, "sg_1")))[0]?.deletedAt).toBeInstanceOf(Date);
-    expect((await call(client, "restore", { type: "keyframe", id: "kf_1", expectedVersion: 1 })).text).toBe("Restored frame kf_1 with 1 tag.");
-    expect((await f.db.select().from(sightings).where(eq(sightings.id, "sg_1")))[0]?.deletedAt).toBeNull();
+    expect((await tag())?.deletedAt).toBeInstanceOf(Date);
+    expect((await call(client, "restore", { type: "keyframe", id: "kf_1", expectedVersion: 1 })).text).toBe("Restored frame kf_1 with 1 tag, at version 2.");
+    expect((await tag())?.deletedAt).toBeNull();
+  });
+
+  it("keeps where a frame's file is kept out of a conflict, as get does", async () => {
+    await taggedFrame();
+    const binning = (await call(client, "delete", { type: "keyframe", id: "kf_1", expectedVersion: 3 })).text;
+    await call(client, "delete", { type: "keyframe", id: "kf_1", expectedVersion: 0 });
+    const restoring = (await call(client, "restore", { type: "keyframe", id: "kf_1", expectedVersion: 0 })).text;
+    expect(binning).toMatch(/^Not saved: keyframe kf_1 is at version 0 and you sent 3\./);
+    expect(restoring).toMatch(/^Not saved: keyframe kf_1 is at version 1 and you sent 0\./);
+    for (const text of [binning, restoring]) {
+      expect(text).toContain('"widthPx":640');
+      expect(text).not.toMatch(/storagePath|checksum|assets\/aa/);
+    }
+  });
+
+  it("won't delete a tag binned with its frame again, so the frame's restore still brings it back", async () => {
+    await taggedFrame();
+    await call(client, "delete", { type: "keyframe", id: "kf_1", expectedVersion: 0 });
+    const binned = await tag();
+    expect((await call(client, "delete", { type: "sighting", id: "sg_1", expectedVersion: 1 })).text)
+      .toBe("sighting sg_1 is already deleted; restore brings it back.");
+    expect(await tag()).toMatchObject({ version: 1, deletedAt: binned?.deletedAt });
+    expect((await call(client, "restore", { type: "keyframe", id: "kf_1", expectedVersion: 1 })).text).toBe("Restored frame kf_1 with 1 tag, at version 2.");
+    expect((await tag())?.deletedAt).toBeNull();
+  });
+
+  it("says when there is no such frame, or it is binned already, or it isn't binned", async () => {
+    await taggedFrame();
+    expect((await call(client, "delete", { type: "keyframe", id: "kf_nope", expectedVersion: 0 })).text).toBe("There is no frame kf_nope.");
+    expect((await call(client, "restore", { type: "keyframe", id: "kf_nope", expectedVersion: 0 })).text).toBe("There is no frame kf_nope.");
+    expect((await call(client, "restore", { type: "keyframe", id: "kf_1", expectedVersion: 0 })).text).toBe("Frame kf_1 isn't binned.");
+    await call(client, "delete", { type: "keyframe", id: "kf_1", expectedVersion: 0 });
+    expect((await call(client, "delete", { type: "keyframe", id: "kf_1", expectedVersion: 1 })).text)
+      .toBe("Frame kf_1 is already binned; restore brings it back.");
+  });
+
+  it("restores a rejected place with the tags rejected with it", async () => {
+    await taggedFrame();
+    await rejectPlace(f.db, "pl_1", 0, amy.id);
+    expect((await tag())?.deletedAt).toBeInstanceOf(Date);
+    expect((await call(client, "restore", { type: "place", id: "pl_1", expectedVersion: 1 })).text)
+      .toBe("Restored place pl_1 with 1 tag, at version 2.");
+    expect((await place())?.deletedAt).toBeNull();
+    expect((await tag())?.deletedAt).toBeNull();
   });
 
   it("leaves captures and places to their own ways", async () => {

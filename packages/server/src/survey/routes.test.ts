@@ -3,12 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import sharp from "sharp";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
 import { readImageSize } from "../images/inspect";
 import { createUser } from "../auth/users";
 import type { Database } from "../db/client";
 import { auditLog, keyframes as keyframeRows, sightings as sightingRows } from "../db/schema";
+import { VersionConflictError } from "../entities/repository";
 import { createTestDb, json } from "../testing/harness";
 
 let db: Database;
@@ -60,6 +61,10 @@ beforeEach(async () => {
   await post("/api/entities/capture", {
     data: { id: "cap_1", kind: "video", filename: "L1 walk.mp4", durationMs: 90000 },
   });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("keyframe upload", () => {
@@ -315,5 +320,22 @@ describe("binning and restoring a frame, on the record", () => {
     expect((await bin(kf)).status).toBe(204);
     expect((await frameRow(kf)).version).toBe(1);
     expect(await json(await restore(kf))).toEqual({ sightings: 1 });
+  });
+
+  it("answers a frame changed mid-bin or mid-restore with 409 and the frame as it is, never a 500", async () => {
+    // These routes send no version, so only a second writer landing inside
+    // the transaction gets here; the stub stands in for that writer.
+    const kf = await taggedFrame();
+    const now = { id: kf, version: 5 };
+    vi.spyOn(db, "transaction").mockRejectedValueOnce(new VersionConflictError(now));
+    const binning = await bin(kf);
+    expect(binning.status).toBe(409);
+    expect(await json(binning)).toEqual({ error: "version conflict", current: now });
+
+    expect((await bin(kf)).status).toBe(204);
+    vi.spyOn(db, "transaction").mockRejectedValueOnce(new VersionConflictError(now));
+    const restoring = await restore(kf);
+    expect(restoring.status).toBe(409);
+    expect(await json(restoring)).toEqual({ error: "version conflict", current: now });
   });
 });

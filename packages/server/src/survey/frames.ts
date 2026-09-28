@@ -9,6 +9,16 @@ export type Binned = { sightings: number } | "missing" | "already";
 export type Restored = { sightings: number } | "missing" | "not-deleted";
 
 /**
+ * A frame changed since it was read, with the frame as it is now. Where its
+ * file is kept means nothing outside this server, and Claude Code reads a
+ * conflict's current value, so it leaves out the two fields `get` does.
+ */
+function conflict(frame: typeof keyframes.$inferSelect): VersionConflictError {
+  const { storagePath: _path, checksum: _checksum, ...rest } = frame;
+  return new VersionConflictError(toModelRow(rest as Row));
+}
+
+/**
  * Retires a frame and everything said about it. Lifted from the route so
  * that Claude Code's delete does exactly what Survey's bin does.
  *
@@ -30,7 +40,7 @@ export async function binFrame(db: Database, id: string, actorId: string, expect
     if (!before) return "missing";
     if (before.deletedAt) return "already";
     if (expectedVersion !== undefined && before.version !== expectedVersion) {
-      throw new VersionConflictError(toModelRow(before as Row));
+      throw conflict(before);
     }
 
     const at = new Date();
@@ -42,7 +52,7 @@ export async function binFrame(db: Database, id: string, actorId: string, expect
       .set({ deletedAt: at, version: sql`${keyframes.version} + 1`, updatedBy: actorId, updatedAt: at })
       .where(and(eq(keyframes.id, id), eq(keyframes.version, before.version)))
       .returning();
-    if (!after) throw new VersionConflictError(toModelRow(before as Row));
+    if (!after) throw conflict(before);
     await recordAudit(tx, "keyframe", id, "delete", actorId, before as Row, after as Row);
     return { sightings: tagged.length };
   });
@@ -61,7 +71,7 @@ export async function restoreFrame(db: Database, id: string, actorId: string, ex
     if (!before) return "missing";
     if (!before.deletedAt) return "not-deleted";
     if (expectedVersion !== undefined && before.version !== expectedVersion) {
-      throw new VersionConflictError(toModelRow(before as Row));
+      throw conflict(before);
     }
 
     const binned = await tx.select().from(sightings)
@@ -72,7 +82,7 @@ export async function restoreFrame(db: Database, id: string, actorId: string, ex
       .set({ deletedAt: null, version: sql`${keyframes.version} + 1`, updatedBy: actorId, updatedAt: new Date() })
       .where(and(eq(keyframes.id, id), eq(keyframes.version, before.version)))
       .returning();
-    if (!after) throw new VersionConflictError(toModelRow(before as Row));
+    if (!after) throw conflict(before);
     await recordAudit(tx, "keyframe", id, "restore", actorId, before as Row, after as Row);
     return { sightings: binned.length };
   });

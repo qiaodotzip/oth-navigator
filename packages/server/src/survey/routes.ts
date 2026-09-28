@@ -6,6 +6,7 @@ import { readAsset, storeAsset } from "../assets/storage";
 import { requireUser } from "../auth/middleware";
 import { captures, keyframes, sightings } from "../db/schema";
 import { toModelRow } from "../db/rows";
+import { VersionConflictError } from "../entities/repository";
 import { IMAGE_MAX_BYTES, InvalidImageError, readImageSize } from "../images/inspect";
 import { readThumbnail, thumbnailWidth } from "../images/thumbnail";
 import { binFrame, restoreFrame } from "./frames";
@@ -128,9 +129,16 @@ keyframeRoutes.post("/", async c => {
  * the tags binned with the first.
  */
 keyframeRoutes.delete("/:id", async c => {
-  const binned = await binFrame(c.get("db"), c.req.param("id"), c.get("user").id);
-  if (binned === "missing") return c.json({ error: "not found" }, 404);
-  return c.body(null, 204);
+  try {
+    const binned = await binFrame(c.get("db"), c.req.param("id"), c.get("user").id);
+    if (binned === "missing") return c.json({ error: "not found" }, 404);
+    return c.body(null, 204);
+  } catch (err) {
+    // A tag or the frame changed mid-bin: an editorial event with the frame as
+    // it is now, like every other write's, not a 500 that invites a blind retry.
+    if (err instanceof VersionConflictError) return c.json({ error: "version conflict", current: err.current }, 409);
+    throw err;
+  }
 });
 
 /**
@@ -142,10 +150,15 @@ keyframeRoutes.delete("/:id", async c => {
  * the bin.
  */
 keyframeRoutes.post("/:id/restore", async c => {
-  const restored = await restoreFrame(c.get("db"), c.req.param("id"), c.get("user").id);
-  if (restored === "missing") return c.json({ error: "not found" }, 404);
-  if (restored === "not-deleted") return c.json({ error: "not deleted" }, 422);
-  return c.json({ sightings: restored.sightings });
+  try {
+    const restored = await restoreFrame(c.get("db"), c.req.param("id"), c.get("user").id);
+    if (restored === "missing") return c.json({ error: "not found" }, 404);
+    if (restored === "not-deleted") return c.json({ error: "not deleted" }, 422);
+    return c.json({ sightings: restored.sightings });
+  } catch (err) {
+    if (err instanceof VersionConflictError) return c.json({ error: "version conflict", current: err.current }, 409);
+    throw err;
+  }
 });
 
 /**

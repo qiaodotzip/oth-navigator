@@ -19,9 +19,15 @@ const REMOVABLE = [...ENTITY_TYPES, "keyframe"] as const;
 const OWNERS = "A token can't change who owns a floor. A teammate does that on the Floors page.";
 const STATUS = "A place's or a tag's status changes only through review_place, which keeps its tags in step.";
 
-async function exists(ctx: ToolContext, type: EntityType, id: string): Promise<boolean> {
+/** The row as it stands, deleted or not. */
+async function find(ctx: ToolContext, type: EntityType, id: string): Promise<Row | undefined> {
   const { table } = entityRegistry[type];
-  return ((await ctx.db.select().from(table).where(eq(table.id, id))) as Row[]).length > 0;
+  return ((await ctx.db.select().from(table).where(eq(table.id, id))) as Row[])[0];
+}
+
+/** Postgres's unique_violation, from pg and PGlite alike. An entity table's only unique key is its id. */
+function isDuplicate(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === "23505";
 }
 
 function onFloor(ctx: ToolContext, row: Row): void {
@@ -42,10 +48,22 @@ export function registerEditTools(server: McpServer, ctx: ToolContext): void {
   }, ({ type, data }) => runTool(ctx, async () => {
     if (type === "level" && Array.isArray(data.ownerIds) && data.ownerIds.length > 0) throw new Refusal(OWNERS);
     const id = typeof data.id === "string" ? data.id : "";
-    if (id && (await exists(ctx, type, id))) throw new Refusal(`There is already a ${type} ${id}. Choose another id, or update that one.`);
+    const taken = id ? await find(ctx, type, id) : undefined;
+    if (taken) {
+      throw new Refusal(taken.deletedAt == null
+        ? `There is already a ${type} ${id}. Choose another id, or update that one.`
+        : `There is already a ${type} ${id}, but it is deleted. restore brings it back, or choose another id.`);
+    }
     // Spec §11.3, whichever tool it comes through.
     const input = type === "place" || type === "sighting" ? { ...data, status: CLAUDE_TAG_STATUS, proposedBy: claimant } : data;
-    const row = await createEntity(ctx.db, type, input, ctx.user.id);
+    let row: Row;
+    try {
+      row = await createEntity(ctx.db, type, input, ctx.user.id);
+    } catch (err) {
+      // Someone added the same id between the look above and this write.
+      if (isDuplicate(err)) throw new Refusal(`Not saved: ${type} ${id} already exists, added while this ran. Read it with get, then choose another id or update that one.`);
+      throw err;
+    }
     onFloor(ctx, row);
     return reply(`Created ${type} ${String(row.id)}, at version 0.`);
   }));
@@ -82,12 +100,16 @@ export function registerEditTools(server: McpServer, ctx: ToolContext): void {
     if (type === "keyframe") {
       const binned = await binFrame(ctx.db, id, ctx.user.id, expectedVersion);
       if (binned === "missing") throw new Refusal(`There is no frame ${id}.`);
-      if (binned === "already") throw new Refusal(`Frame ${id} is already binned.`);
+      if (binned === "already") throw new Refusal(`Frame ${id} is already binned; restore brings it back.`);
       return reply(
         `Binned frame ${id} with ${count(binned.sightings, "tag")}. ` +
         `To undo: restore with type "keyframe", id "${id}" and expectedVersion ${expectedVersion + 1}.`,
       );
     }
+    // Ruling 10: deleting it again would stamp a new moment on it, and a tag
+    // binned with its frame, or rejected with its place, would then no longer
+    // come back with them. /api/entities is left as it is.
+    if ((await find(ctx, type, id))?.deletedAt != null) throw new Refusal(`${type} ${id} is already deleted; restore brings it back.`);
     const row = await softDeleteEntity(ctx.db, type, id, expectedVersion, ctx.user.id);
     onFloor(ctx, row);
     return reply(
@@ -110,7 +132,8 @@ export function registerEditTools(server: McpServer, ctx: ToolContext): void {
       const back = await restoreFrame(ctx.db, id, ctx.user.id, expectedVersion);
       if (back === "missing") throw new Refusal(`There is no frame ${id}.`);
       if (back === "not-deleted") throw new Refusal(`Frame ${id} isn't binned.`);
-      return reply(`Restored frame ${id} with ${count(back.sightings, "tag")}.`);
+      // restoreFrame refuses any version but the one sent, and moves it one on.
+      return reply(`Restored frame ${id} with ${count(back.sightings, "tag")}, at version ${expectedVersion + 1}.`);
     }
     if (type === "place") {
       const back = await restorePlace(ctx.db, id, expectedVersion, ctx.user.id);
