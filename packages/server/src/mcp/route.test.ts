@@ -9,7 +9,9 @@ import { MCP_PATH } from "../tokens/bearer";
 import { mintToken, revokeToken } from "../tokens/service";
 import { BadTokens, LIMITS, TokenLimits } from "./limits";
 import { SERVER_FAILED } from "./results";
-import { FROM_A_BROWSER, NO_TOKEN, POST_ONLY, REFUSED, TOKEN_IN_BODY, TOO_LARGE, TOO_MANY_BAD_TOKENS } from "./route";
+import {
+  CANT_CHECK_NOW, FROM_A_BROWSER, NO_TOKEN, POST_ONLY, REFUSED, TOKEN_IN_BODY, TOO_LARGE, TOO_MANY_BAD_TOKENS,
+} from "./route";
 import { GATE_KEY, LIST, TEAM_CODE, call, mcpFixture, type McpFixture } from "./testing";
 
 const DAY = 24 * 3600_000;
@@ -20,23 +22,32 @@ const error = async (res: Response) => (await json<{ error: string }>(res)).erro
 
 /**
  * Another server on the fixture's database, as after a deploy: it has
- * accepted no token yet. It counts the reads its calls make of the database.
+ * accepted no token yet. It counts the reads its calls make of the database,
+ * and can make them fail.
  */
 function redeploy(f: McpFixture, mcp: AppDeps["mcp"] = {}) {
   let reads = 0;
+  let failing = false;
   const db = new Proxy(f.db, {
     get(target, key) {
       const value = Reflect.get(target, key) as unknown;
       if (typeof value !== "function") return value;
       return (...args: unknown[]) => {
-        if (key === "select") reads++;
+        if (key === "select") {
+          reads++;
+          if (failing) throw new Error("Connection terminated unexpectedly");
+        }
         return Reflect.apply(value, target, args) as unknown;
       };
     },
   });
   const app = createApp({ db, dataDir: f.dataDir, teamCode: null, mcp });
   return {
+    app,
     reads: () => reads,
+    failReads: (on: boolean) => {
+      failing = on;
+    },
     post: (secret: string) => app.request(MCP_PATH, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${secret}` },
@@ -164,7 +175,7 @@ describe("refusing a token", () => {
     expect(booted.reads()).toBe(reads);
   });
 
-  it("during a flood, takes a token made since it last read the live tokens a minute later", async () => {
+  it("during a flood, takes a token made elsewhere once it next reads the live tokens, a minute later", async () => {
     const f = await mcpFixture();
     let clock = Date.now();
     const booted = redeploy(f, { badTokens: new BadTokens({ max: 1, windowMs: 3600_000 }), now: () => clock });
@@ -174,6 +185,44 @@ describe("refusing a token", () => {
     expect((await booted.post(fresh.secret)).status).toBe(429);
     clock += 60_000;
     expect((await booted.post(fresh.secret)).status).toBe(200);
+  });
+
+  it("during a flood, takes a token made on the Team page at once", async () => {
+    const f = await mcpFixture();
+    const booted = redeploy(f, { badTokens: new BadTokens({ max: 1, windowMs: 3600_000 }) });
+    expect((await booted.post(guess(0))).status).toBe(401);
+    // Wei's token goes through, and the live tokens are read to let it.
+    expect((await booted.post(f.secret)).status).toBe(200);
+    const login = await booted.app.request("/api/auth/login", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId: f.wei.id }),
+    });
+    const cookie = login.headers.get("set-cookie") ?? "";
+    const made = await booted.app.request("/api/tokens", {
+      method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ name: "Wei's desktop" }),
+    });
+    expect(made.status).toBe(201);
+    const { secret } = await json<{ secret: string }>(made);
+    expect((await booted.post(secret)).status).toBe(200);
+  });
+
+  it("answers 429, not 500, while it can't read the live tokens, and reads again a few seconds on", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const f = await mcpFixture();
+    let clock = Date.now();
+    const booted = redeploy(f, { badTokens: new BadTokens({ max: 1, windowMs: 3600_000 }), now: () => clock });
+    expect((await booted.post(guess(0))).status).toBe(401);
+    booted.failReads(true);
+    const failed = await booted.post(f.secret);
+    expect(failed.status).toBe(429);
+    expect(failed.headers.get("retry-after")).toBe("5");
+    expect(await error(failed)).toBe(CANT_CHECK_NOW);
+    booted.failReads(false);
+    const reads = booted.reads();
+    clock += 4_000;
+    expect((await booted.post(f.secret)).status).toBe(429);
+    expect(booted.reads()).toBe(reads);
+    clock += 1_000;
+    expect((await booted.post(f.secret)).status).toBe(200);
   });
 
   it("refuses a token that no longer works from memory, after looking it up once", async () => {

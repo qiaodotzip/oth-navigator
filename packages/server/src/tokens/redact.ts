@@ -27,7 +27,7 @@ export function redactError(err: unknown): unknown {
   if (hidden === full) return err;
   if (!(err instanceof Error)) return hidden;
   const copy = new Error(redactSecrets(err.message));
-  copy.name = err.name;
+  copy.name = redactSecrets(err.name);
   copy.stack = hidden;
   return copy;
 }

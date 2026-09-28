@@ -53,6 +53,12 @@ describe("redactError", () => {
     }
     expect((redactError(pg) as Error).message).toBe("duplicate key value violates unique constraint");
   });
+
+  it("hides a token in the error's name too", () => {
+    const err = new Error("refused");
+    err.name = `TokenError ${SECRET}`;
+    expect((redactError(err) as Error).name).toBe("TokenError oth_pat_[redacted]");
+  });
 });
 
 describe("the server's error log", () => {

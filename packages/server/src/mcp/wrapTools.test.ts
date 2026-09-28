@@ -6,8 +6,9 @@ import { z } from "zod";
 import { currentVia } from "../entities/via";
 import type { ToolContext } from "./context";
 import { Refusal, SERVER_FAILED, reply, runTool } from "./results";
+import { buildMcpServer } from "./server";
 import { call } from "./testing";
-import { wrapTools } from "./wrapTools";
+import { isWrapped, wrapTools } from "./wrapTools";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -71,8 +72,32 @@ describe("wrapTools", () => {
     expect(ctx.seenOn).toHaveBeenCalledTimes(1);
   });
 
-  it("closes the older tool() form, which would register a tool around it", () => {
+  it("wraps a handler put in later with update", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const server = wrapTools(new McpServer({ name: "oth-map", version: "1.0.0" }), stubContext());
+    const tool = server.registerTool("later", {}, () => reply("ok"));
+    tool.update({
+      callback: () => {
+        throw new Error("relation \"places\" does not exist");
+      },
+    });
+    expect(await call(await connected(server), "later")).toMatchObject({ isError: true, text: SERVER_FAILED });
+  });
+
+  it("closes the other ways to register a tool around it: tool() and registerToolTask", () => {
     const server = wrapTools(new McpServer({ name: "oth-map", version: "1.0.0" }), stubContext());
     expect(() => server.tool("old", () => reply("ok"))).toThrow(/registerTool/);
+    expect(() => server.experimental.tasks.registerToolTask("task", {}, {
+      createTask: async () => { throw new Error("unused"); },
+      getTask: async () => { throw new Error("unused"); },
+      getTaskResult: async () => { throw new Error("unused"); },
+    })).toThrow(/registerTool/);
+  });
+
+  it("leaves no tool on the map's server unwrapped", () => {
+    const server = buildMcpServer(stubContext());
+    const tools = (server as unknown as { _registeredTools: Record<string, { handler: unknown }> })._registeredTools;
+    expect(Object.keys(tools)).toContain("list_floors");
+    for (const [name, tool] of Object.entries(tools)) expect(isWrapped(tool.handler), name).toBe(true);
   });
 });

@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
 import { MAY_PUBLISH_BY_DEFAULT } from "./policy";
-import { TooManyTokensError, listTokens, mintToken, revokeToken } from "./service";
+import { TooManyTokensError, hashToken, listTokens, mintToken, revokeToken } from "./service";
 
 const CreateBody = z.object({
   name: z.string().trim().min(1).max(60),
@@ -27,6 +27,8 @@ tokenRoutes.post("/", async c => {
   if (!body.success) return c.json({ error: "Give the token a name, such as the laptop it is for." }, 400);
   try {
     const made = await mintToken(c.get("db"), c.get("user"), body.data);
+    // So it works at once even while a flood of made-up tokens holds /mcp shut.
+    c.get("liveTokens").add(hashToken(made.secret));
     // Shown once: nothing on this server can show the token again, and no
     // cache between here and the browser may keep a copy.
     return c.json(made, 201, { "cache-control": "no-store" });

@@ -3,12 +3,10 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
 import type { AppEnv } from "../app";
-import type { Database } from "../db/client";
 import type { PresenceTracker } from "../presence/service";
 import { MCP_PATH, bearerSecret } from "../tokens/bearer";
-import {
-  hashToken, liveTokenHashes, looksLikeToken, resolveToken, type ResolvedToken, type TokenRefusal,
-} from "../tokens/service";
+import type { LiveTokens } from "../tokens/live";
+import { hashToken, looksLikeToken, resolveToken, type ResolvedToken, type TokenRefusal } from "../tokens/service";
 import { BAD_TOKEN_LIMIT, RefusedTokens, callKinds, type BadTokens, type TokenLimits } from "./limits";
 import { buildMcpServer } from "./server";
 
@@ -16,6 +14,12 @@ export type McpDeps = {
   limits: TokenLimits;
   /** Made-up tokens across the whole server, like wrong team codes. */
   badTokens: BadTokens;
+  /**
+   * Every live token's hash, checked while a flood has the window full:
+   * `accepted` is empty after a deploy, so without it a flood would lock out
+   * every real token until the window passed. The Team page adds to it.
+   */
+  liveTokens: LiveTokens;
   presence: PresenceTracker;
   now?: () => number;
 };
@@ -35,12 +39,10 @@ export const TOO_LARGE = "That request is larger than 256 KB. Send less at once.
 export const TOKEN_IN_BODY =
   "That request has a Claude Code token in it. Tokens never go into the map: take it out and send the request again.";
 export const POST_ONLY = "Claude Code talks to this address with POST only.";
+export const CANT_CHECK_NOW = "The map can't check tokens just now. Wait a few seconds, then try again.";
 
 /** A token anywhere in a body: in a note or a name it would reach the audit trail. */
 const TOKEN_IN_TEXT = /oth_pat_[A-Za-z0-9_-]{43}/;
-
-/** How stale the live tokens' hashes may be while a flood has the window full. */
-const LIVE_HASHES_EVERY_MS = 60_000;
 
 function unauthorized(c: Context<AppEnv>, message: string, invalid: boolean) {
   return c.json({ error: message }, 401, {
@@ -66,24 +68,6 @@ export function mcpRoutes(deps: McpDeps) {
   const refused = new RefusedTokens();
   /** The floor each person's Claude was last on, for presence. */
   const lastFloor = new Map<string, string | null>();
-
-  /**
-   * Every live token's hash, read at most once a minute and shared by every
-   * request that waits on it. `accepted` is empty after a deploy, so without
-   * this a flood would lock out every real token until the window passed.
-   */
-  let live: { at: number; hashes: Promise<Set<string>> } | null = null;
-  function liveHashes(db: Database, at: number): Promise<Set<string>> {
-    if (!live || at - live.at >= LIVE_HASHES_EVERY_MS) {
-      const read = { at, hashes: liveTokenHashes(db, new Date(at)) };
-      live = read;
-      // A failed read is tried again by the next request, not kept for a minute.
-      read.hashes.catch(() => {
-        if (live === read) live = null;
-      });
-    }
-    return live.hashes;
-  }
 
   // Nothing /mcp answers is for a cache: a tool's answer is the map as one
   // person may see it, and a refusal is about one token.
@@ -111,8 +95,13 @@ export function mcpRoutes(deps: McpDeps) {
 
     const db = c.get("db");
     const guess = !accepted.has(hash);
-    if (guess && deps.badTokens.blocked(at) && !(await liveHashes(db, at)).has(hash)) {
-      return c.json({ error: TOO_MANY_BAD_TOKENS }, 429, { "retry-after": String(BAD_TOKEN_LIMIT.windowMs / 1000) });
+    if (guess && deps.badTokens.blocked(at)) {
+      const live = await deps.liveTokens.hashes(at);
+      // Unable to tell a real token from a guess, it says so rather than fail.
+      if (!live) return c.json({ error: CANT_CHECK_NOW }, 429, { "retry-after": "5" });
+      if (!live.has(hash)) {
+        return c.json({ error: TOO_MANY_BAD_TOKENS }, 429, { "retry-after": String(BAD_TOKEN_LIMIT.windowMs / 1000) });
+      }
     }
     if (guess) deps.badTokens.begin();
     let found: ResolvedToken | undefined;

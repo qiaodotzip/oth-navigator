@@ -18,6 +18,7 @@ import { captureRoutes, keyframeRoutes } from "./survey/routes";
 import { PresenceTracker } from "./presence/service";
 import { publishRoutes } from "./publish/routes";
 import { staticRoutes } from "./static";
+import { LiveTokens } from "./tokens/live";
 import { redactError } from "./tokens/redact";
 import { tokenRoutes } from "./tokens/routes";
 import type { TokenInfo } from "./tokens/service";
@@ -49,8 +50,14 @@ export type AppDeps = {
   mcp?: Partial<Pick<McpDeps, "limits" | "badTokens" | "now">>;
 };
 
-/** `token` is set only on /mcp, for a call that came through a Claude Code token. */
-export type AppEnv = { Variables: { db: Database; user: User; dataDir: string; token: TokenInfo } };
+/**
+ * `token` is set only on /mcp, for a call that came through a Claude Code
+ * token. `liveTokens` is the app's one holder of the live tokens' hashes,
+ * shared by /mcp and the Team page's routes.
+ */
+export type AppEnv = {
+  Variables: { db: Database; user: User; dataDir: string; token: TokenInfo; liveTokens: LiveTokens };
+};
 
 export function createApp(deps: AppDeps) {
   const app = new Hono<AppEnv>();
@@ -62,10 +69,12 @@ export function createApp(deps: AppDeps) {
   // there cannot put a raw error in a response or drop the cookie's Secure.
   const deployed = isDeployed(config);
   const exposeErrors = deps.exposeErrors ?? !deployed;
+  const liveTokens = new LiveTokens(deps.db);
 
   app.use("*", async (c, next) => {
     c.set("db", deps.db);
     c.set("dataDir", dataDir);
+    c.set("liveTokens", liveTokens);
     await next();
   });
 
@@ -107,6 +116,7 @@ export function createApp(deps: AppDeps) {
   app.route("/", mcpRoutes({
     limits: deps.mcp?.limits ?? new TokenLimits(),
     badTokens: deps.mcp?.badTokens ?? new BadTokens(),
+    liveTokens,
     presence,
     now: deps.mcp?.now,
   }));
