@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
-import { isUnauthorized, type Api, type TokenList } from "../api/client";
+import { isUnauthorized, type Api, type ApiToken, type TokenList } from "../api/client";
 import { followLink, href } from "../route";
 import { useEditorStore } from "../state/store";
 import { NewTokenDialog } from "../team/NewTokenDialog";
@@ -7,6 +7,7 @@ import { dayMonth } from "../team/tokenText";
 import { Button } from "../ui/Button";
 import { Popover } from "../ui/Popover";
 import { relativeTime } from "../ui/relativeTime";
+import { useClaudeCodePanel } from "./claudePanel";
 
 /** The Team page's Claude Code section, where tokens are revoked. */
 const TEAM_SECTION = `${href({ name: "team" })}#claude-code`;
@@ -34,6 +35,11 @@ function Step({ n, title, children }: { n: number; title: ReactNode; children: R
   );
 }
 
+/** Your own tokens that still work. The server drops revoked and expired ones; expiry is checked again here. */
+export function myLiveTokens(list: TokenList | null, userId: string | null, now = Date.now()): ApiToken[] {
+  return (list?.tokens ?? []).filter(t => t.ownerId === userId && Date.parse(t.expiresAt) > now);
+}
+
 /**
  * Connecting your own Claude Code, from any screen: the steps, what to ask
  * it, and your tokens. A dot says you have one that still works. Tokens are
@@ -44,7 +50,8 @@ export function ClaudeCodeButton({ api }: { api: Api }) {
   const userId = user?.id ?? null;
   const [list, setList] = useState<TokenList | null>(null);
   const [failed, setFailed] = useState(false);
-  const [open, setOpen] = useState(false);
+  const open = useClaudeCodePanel(s => s.open);
+  const setOpen = useClaudeCodePanel(s => s.setOpen);
   const [creating, setCreating] = useState(false);
   const dotId = useId();
 
@@ -63,12 +70,21 @@ export function ClaudeCodeButton({ api }: { api: Api }) {
     if (userId) void load();
   }, [load, userId]);
 
-  // A session that ends with the panel open must not reopen it on sign-in.
-  if (!user && open) setOpen(false);
+  // Again each time the panel opens, however it was opened: its trigger, or the setup wizard's link.
+  useEffect(() => {
+    if (open && userId) void load();
+  }, [open, userId, load]);
 
-  // The list is the whole team's; the server drops revoked and expired ones, and this checks expiry again.
-  const now = Date.now();
-  const mine = (list?.tokens ?? []).filter(t => t.ownerId === userId && Date.parse(t.expiresAt) > now);
+  // A session that ends with the panel open must not reopen it on sign-in.
+  useEffect(() => {
+    if (!user && open) setOpen(false);
+  }, [user, open, setOpen]);
+
+  // The panel is this button's: gone with it, so it never springs open on the next mount.
+  useEffect(() => () => setOpen(false), [setOpen]);
+
+  // The list is the whole team's.
+  const mine = myLiveTokens(list, userId);
   const live = mine.length > 0;
 
   return (
@@ -77,10 +93,7 @@ export function ClaudeCodeButton({ api }: { api: Api }) {
       <Popover
         align="end"
         open={open}
-        onOpenChange={next => {
-          setOpen(next);
-          if (next && userId) void load();
-        }}
+        onOpenChange={setOpen}
         trigger={
           <Button size="sm" className="shrink-0 whitespace-nowrap" aria-describedby={live ? dotId : undefined}>
             {live && <span data-dot aria-hidden className="h-2 w-2 rounded-full bg-confirmed" />}

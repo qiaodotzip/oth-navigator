@@ -4,6 +4,7 @@ import { ApiError, type ApiToken } from "../api/client";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { ClaudeCodeButton } from "./ClaudeCodeButton";
+import { openClaudeCodePanel } from "./claudePanel";
 
 const me = { id: "u_sc", email: "sc@oth.local", displayName: "Stef Chan" };
 const SECRET = `oth_pat_${"s".repeat(43)}`;
@@ -159,6 +160,15 @@ describe("ClaudeCodeButton", () => {
     await waitFor(() => expect(listTokens).toHaveBeenCalledTimes(2));
     await act(async () => {});
     expect(within(panel).queryByRole("alert")).toBeNull();
+  });
+
+  it("opens from the setup wizard's link, loading your tokens as it does", async () => {
+    const listTokens = listed([]);
+    render(<ClaudeCodeButton api={fakeApi({ listTokens })} />);
+    await waitFor(() => expect(listTokens).toHaveBeenCalledTimes(1));
+    act(() => openClaudeCodePanel());
+    expect(await screen.findByRole("list", { name: "Steps" })).toBeTruthy();
+    await waitFor(() => expect(listTokens).toHaveBeenCalledTimes(2));
   });
 
   it("does not spring open by itself after the session ends with it open and you sign back in", async () => {
