@@ -186,6 +186,19 @@ describe("CheckStep", () => {
     expect(drafts.queryByRole("button", { name: /^Show all/ })).toBeNull();
   });
 
+  it.each([
+    ["shows a section of exactly 20 rows whole", 20, false],
+    ["folds a section of 21 rows to its first 20", 21, true],
+  ])("%s", async (_what, n, folds) => {
+    const rows = Array.from({ length: n }, (_, i) => change({
+      auditId: `a_d${i}`, group: "drafts", summary: `Rejected the draft Shop ${i}`, entityType: "roomDraft", entityId: `rd_${i}`, action: "delete",
+    }));
+    open(fakeSetupApi({ listClaudeChanges: vi.fn().mockResolvedValue(rows) }));
+    const drafts = within(await screen.findByRole("region", { name: "Drafts rejected or set aside" }));
+    expect(drafts.getAllByRole("listitem")).toHaveLength(20);
+    expect(drafts.queryByRole("button", { name: `Show all ${n}` }) !== null).toBe(folds);
+  });
+
   it("lists the drafts set aside for you first, so a folded section still shows them", async () => {
     const rejects = Array.from({ length: 22 }, (_, i) => change({
       auditId: `a_r${i}`, group: "drafts", summary: `Rejected the draft Shop ${i}`, entityType: "roomDraft", entityId: `rd_${i}`, action: "delete",
