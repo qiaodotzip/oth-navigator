@@ -20,7 +20,7 @@ const HINTS: ReadonlyArray<[string, string]> = [
  */
 export function FrameView({
   api, frame, alt, labels, draft, onDraft, onDrawn, onMoveLabel, onRemoveLabel, tagBar,
-  candidates, levels, levelId, counts, walkwayKinds, onTag, onAddWalkwayKind, strip,
+  candidates, levels, levelId, counts, walkwayKinds, rooms, onTag, onAddWalkwayKind, strip,
 }: {
   api: Pick<Api, "keyframeFileUrl">;
   frame: Keyframe;
@@ -37,6 +37,7 @@ export function FrameView({
   levelId: string;
   counts: ReadonlyMap<string, number>;
   walkwayKinds: readonly PathwayKind[];
+  rooms: ReadonlySet<string>;
   onTag: (tag: Tag) => boolean;
   onAddWalkwayKind: (nameEn: string) => Promise<string | null>;
   strip: { frames: readonly Keyframe[]; statuses: ReadonlyMap<string, FrameStatus>; onPick: (id: string) => void };
@@ -66,6 +67,7 @@ export function FrameView({
         levelId={levelId}
         counts={counts}
         walkwayKinds={walkwayKinds}
+        rooms={rooms}
         box={draft}
         onTag={onTag}
         onAddWalkwayKind={onAddWalkwayKind}

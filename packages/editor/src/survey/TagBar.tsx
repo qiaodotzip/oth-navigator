@@ -2,6 +2,7 @@ import {
   OBJECT_SIZE_GUESS, TenantCategorySchema, type Box, type PathwayKind, type Place, type TenantCategory,
 } from "@oth/model";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { boundToRoom } from "../places/objects";
 import { Button } from "../ui/Button";
 import { exactPlace, suggestPlaces } from "./suggest";
 import { drawnBox, sizeText, type Tag } from "./tagging";
@@ -37,6 +38,8 @@ export const TagBar = forwardRef<TagBarHandle, {
   levelId: string;
   counts: ReadonlyMap<string, number>;
   walkwayKinds: readonly PathwayKind[];
+  /** The ids of the rooms on the map: a place bound to one is a unit, and is never made an object. */
+  rooms: ReadonlySet<string>;
   box: Box | null;
   /**
    * Whether the tag was taken. One refused — the last change is still
@@ -45,7 +48,7 @@ export const TagBar = forwardRef<TagBarHandle, {
   onTag: (tag: Tag) => boolean;
   /** Makes a walkway type and says its id, or null if it could not. */
   onAddWalkwayKind: (nameEn: string) => Promise<string | null>;
-}>(function TagBar({ candidates, levels, levelId, counts, walkwayKinds, box, onTag, onAddWalkwayKind }, ref) {
+}>(function TagBar({ candidates, levels, levelId, counts, walkwayKinds, rooms, box, onTag, onAddWalkwayKind }, ref) {
   const input = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState<TenantCategory>("retail");
@@ -58,9 +61,16 @@ export const TagBar = forwardRef<TagBarHandle, {
   const pool = what === "object" ? candidates.filter(p => !p.pathwayKindId) : candidates;
   const exact = exactPlace(pool, levels, levelId, name);
   const suggestions = suggestPlaces(pool, levels, levelId, name, counts).slice(0, MAX_SUGGESTIONS);
+  // A place surveyed as a place, about to become a kind of object: every
+  // other frame of it goes with it, so the button says so.
+  const converting = what === "object" && exact && !exact.objectKindId ? exact : null;
+  // The rule "This is an object" in Places follows too.
+  const refused = converting && boundToRoom(converting, rooms)
+    ? `${converting.nameEn} is a room on the map, so it can't be an object.`
+    : null;
   const objectNote = what !== "object" || name.trim() === "" || exact?.objectKindId ? null
-    : exact ? `${exact.nameEn} becomes a kind of object.`
-    : `A new kind of object. It shows as a ${sizeText(OBJECT_SIZE_GUESS)} box until you set its size in Places.`;
+    : refused ?? (exact ? `${exact.nameEn} becomes a kind of object.`
+      : `A new kind of object. It shows as a ${sizeText(OBJECT_SIZE_GUESS)} box until you set its size in Places.`);
 
   function submit() {
     const trimmed = name.trim();
@@ -68,6 +78,7 @@ export const TagBar = forwardRef<TagBarHandle, {
       input.current?.focus();
       return;
     }
+    if (refused) return;
     const drawn = drawnBox(box);
     const taken = onTag({
       placeId: exact?.id ?? null,
@@ -78,7 +89,11 @@ export const TagBar = forwardRef<TagBarHandle, {
       ...(what === "object" ? { object: true } : {}),
       ...(drawn ? { box: drawn } : {}),
     });
-    if (taken) setName("");
+    if (!taken) return;
+    setName("");
+    // Objects are few and far between. Left on, the mode would make the
+    // next shop tagged a kind of object.
+    if (what === "object") setWhat("place");
   }
 
   useImperativeHandle(ref, () => ({ focus: () => input.current?.focus(), submit }));
@@ -188,12 +203,14 @@ export const TagBar = forwardRef<TagBarHandle, {
           </>
         )}
 
-        <Button variant="primary" onClick={submit}>{exact ? `Tag as ${exact.nameEn}` : "Tag"}</Button>
+        <Button variant="primary" disabled={Boolean(refused)} onClick={submit}>
+          {converting ? `Make ${converting.nameEn} an object` : exact ? `Tag as ${exact.nameEn}` : "Tag"}
+        </Button>
       </div>
       <p className="mt-1.5 text-xs text-stone-500">
         {drawnBox(box) ? "Tagging the boxed area." : "Tagging the whole frame — drag on it to box something."}
       </p>
-      {objectNote && <p className="mt-1 text-xs text-stone-600">{objectNote}</p>}
+      {objectNote && <p className={`mt-1 text-xs ${refused ? "text-danger" : "text-stone-600"}`}>{objectNote}</p>}
     </div>
   );
 });

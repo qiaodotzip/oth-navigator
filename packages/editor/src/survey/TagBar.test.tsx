@@ -15,7 +15,7 @@ const levels = new Map<string, string | undefined>([["p1", L1], ["p2", L1], ["p3
 const counts = new Map([["p1", 7], ["p3", 1]]);
 const kinds = [PathwayKindSchema.parse({ id: "pk-1", nameEn: "Covered link", colorHex: "#38bdf8" })];
 
-function setup(box: Box | null = null, candidates = places) {
+function setup(box: Box | null = null, candidates = places, rooms: ReadonlySet<string> = new Set()) {
   // Every tag is taken, unless a test says otherwise.
   const onTag = vi.fn<[Tag], boolean>(() => true);
   const onAddWalkwayKind = vi.fn(async () => "pk-2");
@@ -23,7 +23,7 @@ function setup(box: Box | null = null, candidates = places) {
   render(
     <TagBar
       ref={ref} candidates={candidates} levels={levels} levelId={L1} counts={counts}
-      walkwayKinds={kinds} box={box} onTag={onTag} onAddWalkwayKind={onAddWalkwayKind}
+      walkwayKinds={kinds} rooms={rooms} box={box} onTag={onTag} onAddWalkwayKind={onAddWalkwayKind}
     />,
   );
   return { onTag, onAddWalkwayKind, ref, name: screen.getByLabelText("Place name") as HTMLInputElement };
@@ -190,13 +190,67 @@ describe("tagging an object", () => {
     expect(onTag.mock.calls[0]![0]).toMatchObject({ placeId: "p_bin", object: true });
   });
 
-  it("says a place already surveyed becomes a kind of object, and tags that place", () => {
+  it("says a place already surveyed becomes a kind of object, and its button says it will make it one", () => {
     const { onTag, name } = setup(null, withObjects);
     fireEvent.click(screen.getByTestId("what-object"));
     fireEvent.change(name, { target: { value: "water cooler" } });
     expect(screen.getByText("Water cooler becomes a kind of object.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Tag as Water cooler" }));
+    expect(screen.queryByRole("button", { name: "Tag as Water cooler" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Make Water cooler an object" }));
     expect(onTag.mock.calls[0]![0]).toMatchObject({ placeId: "p_cool", object: true });
+  });
+
+  it("goes back to Place once an object's tag is taken, since objects are few and far between", () => {
+    const { name } = setup(null, withObjects);
+    fireEvent.click(screen.getByTestId("what-object"));
+    fireEvent.change(name, { target: { value: "wastebin" } });
+    fireEvent.keyDown(name, { key: "Enter" });
+    expect(screen.getByTestId("what-place").getAttribute("aria-pressed")).toBe("true");
+    // So the next name typed is a place again, and a shop is never made an object by the mode left on.
+    fireEvent.change(name, { target: { value: "NTUC FairPrice" } });
+    expect(screen.getByRole("button", { name: "Tag as NTUC FairPrice" })).toBeTruthy();
+  });
+
+  it("stays on Object when the tag is not taken, so it is sent again as one", () => {
+    const { onTag, name } = setup(null, withObjects);
+    onTag.mockReturnValue(false);
+    fireEvent.click(screen.getByTestId("what-object"));
+    fireEvent.change(name, { target: { value: "wastebin" } });
+    fireEvent.keyDown(name, { key: "Enter" });
+    expect(screen.getByTestId("what-object").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  describe("a place bound to a room on the map", () => {
+    const starbucks = PlaceSchema.parse({ id: "p_star", nameEn: "Starbucks", category: "retail", roomId: "L1-shop" });
+    const withShop = [...withObjects, starbucks];
+
+    it("is never made an object: it says why, and tags nothing", () => {
+      const { onTag, name } = setup(null, withShop, new Set(["L1-shop"]));
+      fireEvent.click(screen.getByTestId("what-object"));
+      fireEvent.change(name, { target: { value: "starbucks" } });
+      expect(screen.getByText("Starbucks is a room on the map, so it can't be an object.")).toBeTruthy();
+      const button = screen.getByRole("button", { name: "Make Starbucks an object" }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      fireEvent.keyDown(name, { key: "Enter" });
+      expect(onTag).not.toHaveBeenCalled();
+      expect(name.value).toBe("starbucks");
+    });
+
+    it("can be, once its room is gone from the map", () => {
+      const { onTag, name } = setup(null, withShop, new Set());
+      fireEvent.click(screen.getByTestId("what-object"));
+      fireEvent.change(name, { target: { value: "starbucks" } });
+      fireEvent.click(screen.getByRole("button", { name: "Make Starbucks an object" }));
+      expect(onTag.mock.calls[0]![0]).toMatchObject({ placeId: "p_star", object: true });
+    });
+
+    it("is still tagged as a place", () => {
+      const { onTag, name } = setup(null, withShop, new Set(["L1-shop"]));
+      fireEvent.change(name, { target: { value: "starbucks" } });
+      fireEvent.click(screen.getByRole("button", { name: "Tag as Starbucks" }));
+      expect(onTag.mock.calls[0]![0]).toMatchObject({ placeId: "p_star" });
+      expect(onTag.mock.calls[0]![0].object).toBeUndefined();
+    });
   });
 
   it("marks a kind of object among the name's suggestions", () => {

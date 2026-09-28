@@ -329,6 +329,23 @@ describe("SurveyWorkspace", () => {
     expect(calls[1]![1]).toMatchObject({ placeId: "p_cool" });
   });
 
+  it("will not make a place bound to a room on the map an object", () => {
+    const withShop = parseModel({
+      ...model,
+      rooms: [{ id: "L1-shop", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 4 }],
+      places: [...model.places, { id: "p_star", nameEn: "Starbucks", category: "retail", levelId: "oth-L1", roomId: "L1-shop" }],
+    });
+    useEditorStore.getState().setModel(withShop);
+    const api = at("", fakeApi({ getModel: vi.fn().mockResolvedValue(withShop) }));
+    fireEvent.click(screen.getByTestId("what-object"));
+    const name = screen.getByLabelText("Place name");
+    fireEvent.change(name, { target: { value: "Starbucks" } });
+    key("Enter", name);
+    expect(screen.getByText("Starbucks is a room on the map, so it can't be an object.")).toBeTruthy();
+    expect(api.updateEntity).not.toHaveBeenCalled();
+    expect(api.createEntity).not.toHaveBeenCalled();
+  });
+
   it("sends an object tag whose place failed again on Retry, reusing the kind the first try made", async () => {
     const saved = {
       objectKinds: [] as unknown[], places: [...model.places] as unknown[], sightings: [...model.sightings] as unknown[],

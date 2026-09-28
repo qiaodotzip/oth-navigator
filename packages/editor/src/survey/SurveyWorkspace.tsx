@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Api } from "../api/client";
 import { setParams } from "../route";
 import type { Saver } from "../state/save";
+import { mapRoomIds } from "../places/objects";
 import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
 import { Chip } from "../ui/Chip";
@@ -70,6 +71,8 @@ export function SurveyWorkspace({ api, saver, level, params }: {
     () => linkablePlaces(live(model?.places ?? []), levels, level.id), [model, levels, level.id]);
   const floorPlaces = useMemo(
     () => candidates.filter(p => levels.get(p.id) === level.id), [candidates, levels, level.id]);
+  // A place bound to one of these is a unit, and the tag bar never makes it an object.
+  const mapRooms = useMemo(() => (model ? mapRoomIds(model) : new Set<string>()), [model]);
   const frame = view.frame;
   const labels = useMemo(() => (frame ? labelsForFrame(model, frame.id) : []), [model, frame]);
   const [draft, setDraft] = useState<Box | null>(null);
@@ -405,6 +408,7 @@ export function SurveyWorkspace({ api, saver, level, params }: {
         levelId={level.id}
         counts={counts}
         walkwayKinds={live(model.pathwayKinds)}
+        rooms={mapRooms}
         onTag={tag}
         onAddWalkwayKind={addWalkwayKind}
         strip={{ frames: view.shown, statuses: view.statuses, onPick: id => setParams({ frame: id }) }}
