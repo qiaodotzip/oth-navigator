@@ -14,3 +14,9 @@ export const SPACE_STROKE = "#57534e";
  * space's own, drawn dashed and faint so it reads as a guide.
  */
 export const BELOW_STROKE = SPACE_STROKE;
+
+/**
+ * A draft from the drawing, in the proposed colour (`proposed` in
+ * tailwind.config): it is a claim until someone accepts it.
+ */
+export const PROPOSED_STROKE = "#0284c7";

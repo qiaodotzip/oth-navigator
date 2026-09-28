@@ -1,10 +1,11 @@
-import { RoomDraftSchema, type RoomDraft } from "@oth/model";
+import { RoomDraftSchema, RoomSchema, parseModel, type Room, type RoomDraft } from "@oth/model";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
+import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
-import { loadDrafts, useDrafts, useRoomDrafts } from "./drafts";
+import { coverage, draftBox, draftView, loadDrafts, useDraftView, useDrafts, useRoomDrafts } from "./drafts";
 
 const draft = (id: string): RoomDraft => RoomDraftSchema.parse({
   id, levelId: "oth-L2", nameEn: id, kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
@@ -63,5 +64,72 @@ describe("the drafts store", () => {
     rerender({ levelId: "oth-L2" });
     await vi.waitFor(() => expect(api.listRoomDrafts).toHaveBeenCalledTimes(2));
     expect((api.listRoomDrafts as unknown as { mock: { calls: string[][] } }).mock.calls.map(c => c[0])).toEqual(["oth-L1", "oth-L2"]);
+  });
+});
+
+const square = (x: number, y: number, s: number): [number, number][] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
+const room = (id: string, ring: [number, number][], kind: Room["kind"] = "room"): Room =>
+  RoomSchema.parse({ id, levelId: "oth-L2", kind, footprint: ring, heightM: 4 });
+const shaped = (id: string, ring: [number, number][] | undefined, over: Partial<RoomDraft> = {}): RoomDraft =>
+  ({ ...draft(id), footprint: ring, ...over });
+
+describe("coverage", () => {
+  it("is how much of a room a draft covers", () => {
+    expect(coverage(shaped("d", square(0, 0, 10)), room("r", square(0, 0, 10)))).toBeCloseTo(1, 1);
+    expect(coverage(shaped("d", square(0, 0, 10)), room("r", square(5, 0, 10)))).toBeCloseTo(0.5, 1);
+    expect(coverage(shaped("d", square(0, 0, 10)), room("r", square(30, 30, 5)))).toBe(0);
+    expect(coverage(shaped("d", undefined), room("r", square(0, 0, 10)))).toBe(0);
+  });
+  it("counts nothing a draft's hole leaves out", () => {
+    const ring = shaped("d", square(0, 0, 10), { holes: [square(2, 2, 6)] });
+    expect(coverage(ring, room("r", square(2, 2, 6)))).toBe(0);
+  });
+});
+
+describe("draftView", () => {
+  it("sorts drafts into those to review, those already on the map, and open spaces to draw by hand", () => {
+    const view = draftView(
+      [shaped("new", square(0, 0, 10)), shaped("copy", square(50, 50, 10)), shaped("plaza", undefined)],
+      [room("L2-shop", square(50.2, 50.2, 9.6))],
+    );
+    expect(view.review.map(d => d.id)).toEqual(["new"]);
+    expect(view.covered).toEqual([{ draft: expect.objectContaining({ id: "copy" }), roomId: "L2-shop" }]);
+    expect(view.open.map(d => d.id)).toEqual(["plaza"]);
+  });
+
+  it("hides the copies a second search makes of rooms accepted from the first", () => {
+    // Accepted rooms are drafts' exact shapes, so searching again finds them already on the map.
+    const accepted = [room("L2-shop", square(0, 0, 10)), room("L2-store", square(20, 0, 10))];
+    const again = [shaped("a", square(0, 0, 10)), shaped("b", square(20, 0, 10))];
+    expect(draftView(again, accepted).review).toEqual([]);
+  });
+
+  it("never takes a hall for a column standing in it, or a column for the hall", () => {
+    const view = draftView(
+      [shaped("hall", square(0, 0, 30)), shaped("col", square(10, 10, 1), { kind: "detail" })],
+      [room("L2-column", square(10, 10, 1), "detail"), room("L2-kiosk", square(40, 40, 5))],
+    );
+    expect(view.review.map(d => d.id)).toEqual(["hall"]);
+    expect(view.covered.map(c => c.roomId)).toEqual(["L2-column"]);
+  });
+});
+
+describe("draftBox and useDraftView", () => {
+  it("frames a draft with 4 m round it, and an open space 15 m round its name", () => {
+    expect(draftBox(shaped("d", square(0, 0, 10)))).toEqual({ minX: -4, minY: -4, maxX: 14, maxY: 14 });
+    expect(draftBox(shaped("p", undefined, { labelPoint: [60, 60] }))).toEqual({ minX: 45, minY: 45, maxX: 75, maxY: 75 });
+  });
+
+  it("gives everything that asks one answer, until the drafts or the map change", () => {
+    useEditorStore.getState().setModel(parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [{ id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 }],
+    }));
+    act(() => useDrafts.getState().setDrafts("oth-L2", [draft("rd_a")]));
+    const a = renderHook(() => useDraftView("oth-L2")).result.current;
+    const b = renderHook(() => useDraftView("oth-L2")).result.current;
+    expect(a).toBe(b);
+    act(() => useDrafts.getState().setDrafts("oth-L2", [draft("rd_a"), draft("rd_b")]));
+    expect(renderHook(() => useDraftView("oth-L2")).result.current.review).toHaveLength(2);
   });
 });

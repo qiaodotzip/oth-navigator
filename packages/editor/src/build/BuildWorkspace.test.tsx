@@ -1,4 +1,4 @@
-import { PlacementSchema, parseModel, type ValidationReport } from "@oth/model";
+import { PlacementSchema, RoomDraftSchema, parseModel, type ValidationReport } from "@oth/model";
 import type { RoomLabel } from "@oth/renderer";
 import { useGLTF } from "@react-three/drei";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -11,6 +11,7 @@ import { fakeApi } from "../testing/fakeApi";
 import { recall } from "../ui/remember";
 import { useToasts } from "../ui/toast";
 import { BuildWorkspace } from "./BuildWorkspace";
+import { useDrafts } from "./drafts";
 
 /**
  * The 3D scene has a stand-in, and only the scene: WebGL is not there to draw
@@ -80,6 +81,7 @@ beforeEach(() => {
   scene.props = null;
   localStorage.clear();
   useToasts.getState().clear();
+  useDrafts.getState().reset();
   const s = useEditorStore.getState();
   s.reset();
   s.setUser({ id: "u_sc", email: "sc@oth.local", displayName: "Stef Chan" });
@@ -609,5 +611,25 @@ describe("BuildWorkspace — keys", () => {
     act(() => useEditorStore.getState().setViewport({ originX: -9999, originY: -9999, scale: 1 }));
     fireEvent.keyDown(window, { key: "f" });
     expect(useEditorStore.getState().viewport.originX).not.toBe(-9999);
+  });
+});
+
+describe("BuildWorkspace — drafts from the drawing", () => {
+  const found = RoomDraftSchema.parse({
+    id: "rd_1", levelId: "oth-L1", nameEn: "Changing Room", kind: "room",
+    footprint: [[50, 0], [60, 0], [60, 10], [50, 10]], labelPoint: [55, 5], areaM2: 90,
+    source: { checksum: "c".repeat(64), page: 1 },
+  });
+
+  it("draws the floor's drafts on Areas & rooms, and only there", async () => {
+    const { api } = open("/floors/L1/build?step=rooms", { listRoomDrafts: vi.fn().mockResolvedValue([found]) });
+    measure();
+    expect(await screen.findByTestId("draft-rd_1")).toBeTruthy();
+    expect(api.listRoomDrafts).toHaveBeenCalledWith("oth-L1");
+    // Under the room labels, so a draft's wash never hides a room's name.
+    const labels = screen.getByTestId("room-labels");
+    expect(screen.getByTestId("draft-layer").compareDocumentPosition(labels) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(stepper().getByRole("button", { name: /^Pathways/ }));
+    expect(screen.queryByTestId("draft-rd_1")).toBeNull();
   });
 });

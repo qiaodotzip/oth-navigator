@@ -24,6 +24,7 @@ import { deleteWithUndo } from "../ui/undo";
 import { BindTools, waitingForRoom } from "./BindPlaces";
 import { selectionRemovals } from "./deleteSelection";
 import { useRoomDrafts } from "./drafts";
+import { DraftsOnPlan } from "./DraftsOnPlan";
 import { FloorplanTools, PlanDropZone, patchPlan } from "./FloorplanTools";
 import { LayersDrawer } from "./LayersDrawer";
 import { PreviewPanel, PreviewToggle, usePreview, usePreviewOptions } from "./PreviewToggle";
@@ -358,7 +359,11 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
               imageUrl={api.levelImageFileUrl}
               showHint={false}
               belowRings={belowRings}
-              overlays={<PlanRoomLabels labels={labels} />}
+              // Drafts under the room labels, so a room's name is never hidden by a draft's wash.
+              overlays={<>
+                {step === "rooms" && <DraftsOnPlan levelId={levelId} />}
+                <PlanRoomLabels labels={labels} />
+              </>}
               // The save is handed back, so the canvas holds the plan where it
               // was dropped until the save lands rather than jumping back first.
               onMoveUnderlay={offset => (image ? patchPlan(api, image, offset, { doing: "move the plan" }) : undefined)}
