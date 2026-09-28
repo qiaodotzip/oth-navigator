@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { LevelImage } from "../api/client";
 import { useDrafts } from "../build/drafts";
+import { patchPlan } from "../build/FloorplanTools";
 import { findRoomsInDrawing } from "../pdf/findInDrawing";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
@@ -145,6 +146,33 @@ describe("FloorplanStep", () => {
     expect(guide().getByText("The drawing lines up with L2's rooms.").textContent).toBe("The drawing lines up with L2's rooms.");
     expect(screen.queryByText(/already has/)).toBeNull();
     expect(screen.queryByText(/Couldn't check/)).toBeNull();
+  });
+
+  it("drops the lines-up line once the plan moves, and keeps it dropped as the step reloads, until Find rooms runs again", async () => {
+    useEditorStore.getState().setModel(withRooms);
+    const lines = "The drawing lines up with L2's rooms.";
+    const api = fakeApi({
+      listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [found], linedUp: { pairs: 162 } }),
+      patchLevelImage: vi.fn(async (_id: string, version: number, patch: Record<string, unknown>) => ({ ...plan(), ...patch, version: version + 1 })),
+    });
+    const { unmount } = open([plan()], api);
+    expect(await guide().findByText(lines)).toBeTruthy();
+    await act(async () => {
+      await patchPlan(api, plan(), { offsetX: 3, offsetY: 0 }, { doing: "move the plan" });
+    });
+    expect(screen.queryByText(lines)).toBeNull();
+    expect(guide().getByText("Couldn't check the drawing against L2's 2 rooms: look before step 5.")).toBeTruthy();
+    // Back, then Next: the step loads the floor's drafts afresh, and the server still says they line up.
+    unmount();
+    open(useEditorStore.getState().levelImages, api);
+    await waitFor(() => expect(api.listRoomDrafts).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+    expect(screen.queryByText(lines)).toBeNull();
+    // Find rooms on the plan where it sits now: the answer counts again.
+    (findRoomsInDrawing as unknown as Mock).mockResolvedValue({ drafts: [found], rooms: 1, open: 0, skipped: [] });
+    fireEvent.click(guide().getByRole("button", { name: "Find rooms in the drawing" }));
+    fireEvent.click(await guide().findByRole("button", { name: "Find again" }));
+    expect(await guide().findByText(lines)).toBeTruthy();
   });
 
   it("says plainly it couldn't check the drawing, once Find rooms has run and neither answer came", () => {

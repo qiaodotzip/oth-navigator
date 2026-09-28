@@ -1,7 +1,7 @@
 import { live, type Level } from "@oth/model";
 import { useEffect, useMemo } from "react";
 import type { Api } from "../api/client";
-import { loadDrafts, useLinedUp, useLineUp } from "../build/drafts";
+import { loadDrafts, useLinedUp } from "../build/drafts";
 import { DraftsFind } from "../build/DraftsFind";
 import { DraftsOnPlan } from "../build/DraftsOnPlan";
 import { FloorplanTools, PlanDropZone, patchPlan } from "../build/FloorplanTools";
@@ -35,9 +35,9 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
   // One line under the tools says whether the drawing lines up with the rooms
   // already on the floor: it doesn't (amber), it does, or, once Find rooms
   // has run and neither was said, that it couldn't be checked.
-  const lineUp = useLineUp(level.id);
-  const linedUp = useLinedUp(level.id);
   const ctx = useStepContext(level);
+  const lineUp = ctx?.lineUp;
+  const linedUp = useLinedUp(level.id);
   const found = ctx !== null && roomsFound(ctx);
   const existingRooms = useMemo(
     () => (model ? live(model.rooms).filter(r => r.levelId === level.id).length : 0),

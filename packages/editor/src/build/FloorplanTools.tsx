@@ -99,8 +99,7 @@ export async function uploadPlan(api: Api, levelId: string, file: File): Promise
     reportFailure(err, { doing: `add ${file.name}`, retry: () => uploadPlan(api, levelId, file) });
     return;
   }
-  const s = useEditorStore.getState();
-  s.setLevelImages([...s.levelImages.filter(i => i.levelId !== levelId), created]);
+  showPlan(levelId, created);
   setAdding(levelId, null);
   toast({ tone: "success", message: `Added ${file.name}. Now set its scale.` });
 }
@@ -113,10 +112,21 @@ function planBelow(levelId: string): { code: string; image: LevelImage } | null 
   return below && image ? { code: below.code, image } : null;
 }
 
-/** The floor's plan as the server now has it, in place of any other: the server keeps one live plan a floor. */
+/**
+ * The floor's plan as the server now has it, in place of any other: the server
+ * keeps one live plan a floor. Every new plan comes through here, an image or
+ * each stored part of a PDF, so whatever the drafts said about lining up was
+ * said of the plan before.
+ */
 function showPlan(levelId: string, image: LevelImage): void {
   const s = useEditorStore.getState();
   s.setLevelImages([...s.levelImages.filter(i => i.levelId !== levelId), image]);
+  useDrafts.getState().planChanged(levelId);
+}
+
+/** Whether a change moves the plan over the floor: its place or its scale. Opacity moves nothing. */
+function movesPlan(patch: LevelImagePatch): boolean {
+  return patch.offsetX !== undefined || patch.offsetY !== undefined || patch.metresPerPixel !== undefined;
 }
 
 function doneAdding(levelId: string): void {
@@ -291,6 +301,8 @@ async function sendPlanPatch(
   }
   const s = useEditorStore.getState();
   s.setLevelImages(s.levelImages.map(i => (i.id === updated.id ? updated : i)));
+  // Moved (Align) or rescaled: the drafts' line-up answer was about where the plan sat before.
+  if (movesPlan(patch)) useDrafts.getState().planChanged(updated.levelId);
   if (words.done) toast({ tone: "success", message: words.done });
   return true;
 }

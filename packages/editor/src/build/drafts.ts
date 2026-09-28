@@ -20,6 +20,14 @@ type DraftsState = {
    * v4), kept and cleared exactly as `lineUpByLevel` is. At most one of the two.
    */
   linedUpByLevel: Readonly<Record<string, LinedUp | undefined>>;
+  /**
+   * Floors whose plan was added, replaced, moved or rescaled in this tab
+   * since Find rooms last ran on them. The server's line-up check compares the
+   * drafts with the rooms, never with the plan, so a load would bring its old
+   * answer back for a plan nobody has checked. On these floors the loads'
+   * `lineUp` and `linedUp` are set aside until the next search saves.
+   */
+  planChangedByLevel: Readonly<Record<string, true>>;
   /** The draft in hand. Part B's own, so the map's selection (state/store.ts) is left alone. */
   selectedId: string | null;
   /** Whether drafts already on the map are drawn too. */
@@ -29,6 +37,10 @@ type DraftsState = {
   /** A request to frame part of the plan. `seq` makes the same box asked twice two requests. */
   frame: { box: BBox; seq: number } | null;
   setDrafts: (levelId: string, drafts: RoomDraftRow[], lineUp?: LineUp, linedUp?: LinedUp) => void;
+  /** The floor's plan changed (FloorplanTools): what its drafts said about lining up no longer holds. */
+  planChanged: (levelId: string) => void;
+  /** A search's drafts, just saved: found on the plan as it is now, so the line-up check counts again. */
+  searched: (levelId: string, drafts: RoomDraftRow[]) => void;
   select: (id: string | null) => void;
   setShowCovered: (on: boolean) => void;
   setFinding: (words: string | null) => void;
@@ -36,7 +48,7 @@ type DraftsState = {
   reset: () => void;
 };
 
-const initial = { byLevel: {}, lineUpByLevel: {}, linedUpByLevel: {}, selectedId: null, showCovered: false, finding: null, frame: null };
+const initial = { byLevel: {}, lineUpByLevel: {}, linedUpByLevel: {}, planChangedByLevel: {}, selectedId: null, showCovered: false, finding: null, frame: null };
 
 /**
  * Each floor's count of what has changed its drafts, a load's start included.
@@ -50,7 +62,7 @@ function change(levelId: string): number {
   return n;
 }
 
-export const useDrafts = create<DraftsState>(set => ({
+export const useDrafts = create<DraftsState>((set, get) => ({
   ...initial,
   setDrafts: (levelId, drafts, lineUp, linedUp) => {
     change(levelId);
@@ -58,13 +70,27 @@ export const useDrafts = create<DraftsState>(set => ({
       // A draft in hand that this floor's new list no longer has is let go; one on another floor is not.
       const wasHere = (s.byLevel[levelId] ?? []).some(d => d.id === s.selectedId);
       const stillHere = drafts.some(d => d.id === s.selectedId);
+      const unchecked = s.planChangedByLevel[levelId] === true;
       return {
         byLevel: { ...s.byLevel, [levelId]: drafts },
-        lineUpByLevel: { ...s.lineUpByLevel, [levelId]: lineUp },
-        linedUpByLevel: { ...s.linedUpByLevel, [levelId]: linedUp },
+        lineUpByLevel: { ...s.lineUpByLevel, [levelId]: unchecked ? undefined : lineUp },
+        linedUpByLevel: { ...s.linedUpByLevel, [levelId]: unchecked ? undefined : linedUp },
         selectedId: wasHere && !stillHere ? null : s.selectedId,
       };
     });
+  },
+  planChanged: levelId => set(s => ({
+    planChangedByLevel: { ...s.planChangedByLevel, [levelId]: true },
+    lineUpByLevel: { ...s.lineUpByLevel, [levelId]: undefined },
+    linedUpByLevel: { ...s.linedUpByLevel, [levelId]: undefined },
+  })),
+  searched: (levelId, drafts) => {
+    set(s => {
+      const planChangedByLevel = { ...s.planChangedByLevel };
+      delete planChangedByLevel[levelId];
+      return { planChangedByLevel };
+    });
+    get().setDrafts(levelId, drafts);
   },
   select: id => set({ selectedId: id }),
   setShowCovered: on => set({ showCovered: on }),

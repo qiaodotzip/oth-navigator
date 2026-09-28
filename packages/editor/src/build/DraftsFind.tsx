@@ -97,7 +97,8 @@ async function run(
   say(first);
   try {
     const found = await work(say);
-    useDrafts.getState().setDrafts(search.levelId, found.drafts);
+    // Found on the plan as it sits now (a search the plan moved under is refused): the line-up check counts again.
+    useDrafts.getState().searched(search.levelId, found.drafts);
     toast({ tone: "success", message: describeFind(found, { inSetup: search.inSetup }) });
     // The save (PUT) doesn't carry lineUp; only the GET does (contract v3),
     // and this is exactly when a person needs the warning. loadDrafts's own

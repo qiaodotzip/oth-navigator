@@ -214,6 +214,50 @@ describe("patchPlan", () => {
   });
 });
 
+describe("a plan change and the drafts' line-up answer", () => {
+  const linedUp = (levelId: string) => useDrafts.getState().linedUpByLevel[levelId];
+  const lineUp = (levelId: string) => useDrafts.getState().lineUpByLevel[levelId];
+  const L2_OFF = { dx: 3, dy: 0, pairs: 5 };
+
+  beforeEach(() => {
+    useEditorStore.getState().setLevelImages([image, { ...image, id: "img_9", levelId: "oth-L2" }]);
+    useDrafts.getState().setDrafts("oth-L1", [], undefined, { pairs: 162 });
+    useDrafts.getState().setDrafts("oth-L2", [], L2_OFF);
+  });
+
+  it("sets the answer aside when the floor's plan is replaced, until Find rooms runs on it, and leaves other floors' alone", async () => {
+    await uploadPlan(api(), "oth-L1", file("L1 v2.jpg"));
+    expect(linedUp("oth-L1")).toBeUndefined();
+    expect(lineUp("oth-L2")).toEqual(L2_OFF);
+    // The drafts reload: the server still pairs them with the rooms, but nobody has checked this plan.
+    act(() => useDrafts.getState().setDrafts("oth-L1", [], undefined, { pairs: 162 }));
+    expect(linedUp("oth-L1")).toBeUndefined();
+    // Find rooms runs on the new plan: its answer counts again.
+    act(() => useDrafts.getState().searched("oth-L1", []));
+    act(() => useDrafts.getState().setDrafts("oth-L1", [], undefined, { pairs: 162 }));
+    expect(linedUp("oth-L1")).toEqual({ pairs: 162 });
+  });
+
+  it.each([
+    ["moved (Align)", { offsetX: 5, offsetY: 2 }],
+    ["rescaled", { metresPerPixel: 0.21 }],
+  ])("sets the answer aside when the plan is %s, a warning as well as an all-clear", async (_how, patch) => {
+    await patchPlan(api(), image, patch, { doing: "change the plan" });
+    expect(linedUp("oth-L1")).toBeUndefined();
+    act(() => useDrafts.getState().setDrafts("oth-L1", [], { dx: 11.7, dy: -4.8, pairs: 5 }));
+    expect(lineUp("oth-L1")).toBeUndefined();
+    expect(lineUp("oth-L2")).toEqual(L2_OFF);
+  });
+
+  it("keeps the answer through an opacity change, which moves nothing, and through a move that didn't save", async () => {
+    await patchPlan(api(), image, { opacity: 0.8 }, { doing: "change the plan's opacity" });
+    expect(linedUp("oth-L1")).toEqual({ pairs: 162 });
+    const refused = api({ patchLevelImage: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) });
+    expect(await patchPlan(refused, image, { offsetX: 5, offsetY: 2 }, { doing: "move the plan" })).toBe(false);
+    expect(linedUp("oth-L1")).toEqual({ pairs: 162 });
+  });
+});
+
 describe("FloorplanTools", () => {
   beforeEach(() => useEditorStore.getState().setLevelImages([image]));
 
@@ -521,6 +565,15 @@ describe("a PDF plan", () => {
       /^Added L2\.pdf\. Scale from the drawing's grid: 0\.5000 m per point, 2 of 2 dimension runs agree\./));
     expect(patches(a)[0]![2]).toMatchObject({ metresPerPixel: expect.closeTo(0.05, 10) });
     expect(useEditorStore.getState().levelImages.map(i => i.source?.pdfId)).toEqual(["pdf_x"]);
+  });
+
+  it("sets the floor's line-up answer aside once a PDF becomes its plan", async () => {
+    useDrafts.getState().setDrafts("oth-L1", [], undefined, { pairs: 162 });
+    const a = pdfApi();
+    render(<PlanDropZone api={a} />);
+    fireEvent.drop(screen.getByTestId("plan-drop-zone"), { dataTransfer: { files: [pdf()] } });
+    await waitFor(() => expect(lastToast()?.message).toMatch(/^Added L2\.pdf\./));
+    expect(useDrafts.getState().linedUpByLevel["oth-L1"]).toBeUndefined();
   });
 
   it("says what it is doing while it works on the sheet", async () => {
