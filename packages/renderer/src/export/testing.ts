@@ -1,4 +1,4 @@
-import { ColorUtils, WebIO, getBounds, type Document, type Material, type Node as GltfNode } from "@gltf-transform/core";
+import { ColorUtils, Document, WebIO, getBounds, type Material, type Node as GltfNode } from "@gltf-transform/core";
 import { parseModel, type MapModel } from "@oth/model";
 import type { AssetBytes } from "./floorGlb";
 
@@ -117,4 +117,39 @@ export function materialOf(node: GltfNode): Material {
 /** A preview colour as the file stores it: linear, from sRGB hex. */
 export function linear(hex: string): [number, number, number] {
   return ColorUtils.hexToFactor<[number, number, number]>(Number.parseInt(hex.slice(1), 16), [0, 0, 0]);
+}
+
+/**
+ * A tiny uploaded model: one triangle 2 m along x and 1 m up, painted with a
+ * texture, as a `body` node with a `lid` child using the same mesh, the way
+ * Blender exports a small hierarchy.
+ */
+export async function triangleGlb(): Promise<Uint8Array> {
+  const doc = new Document();
+  const buffer = doc.createBuffer();
+  const texture = doc.createTexture("bin label").setMimeType("image/png")
+    .setImage(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+  const material = doc.createMaterial("bin green").setBaseColorFactor([0.1, 0.5, 0.2, 1]).setBaseColorTexture(texture);
+  const position = doc.createAccessor("triangle").setType("VEC3").setBuffer(buffer)
+    .setArray(new Float32Array([0, 0, 0, 2, 0, 0, 0, 1, 0]));
+  const mesh = doc.createMesh("bin").addPrimitive(doc.createPrimitive().setAttribute("POSITION", position).setMaterial(material));
+  const body = doc.createNode("body").setMesh(mesh).addChild(doc.createNode("lid").setMesh(mesh));
+  doc.getRoot().setDefaultScene(doc.createScene("bin").addChild(body));
+  return new WebIO().writeBinary(doc);
+}
+
+/** A .glb holding only a JSON chunk, for files the export must turn away. */
+export function glbFromJson(json: object): Uint8Array {
+  const text = new TextEncoder().encode(JSON.stringify(json));
+  const padded = new Uint8Array(Math.ceil(text.length / 4) * 4).fill(0x20);
+  padded.set(text);
+  const bytes = new Uint8Array(20 + padded.length);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0x46546c67, true); // "glTF"
+  view.setUint32(4, 2, true);
+  view.setUint32(8, bytes.length, true);
+  view.setUint32(12, padded.length, true);
+  view.setUint32(16, 0x4e4f534a, true); // "JSON"
+  bytes.set(padded, 20);
+  return bytes;
 }
