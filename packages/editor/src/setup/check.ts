@@ -51,19 +51,21 @@ export type ShowTarget = { kind: "select"; selection: NonNullable<Selection> } |
 
 /**
  * What Show does for a change, if it can do anything. A stop is shown at its
- * end here, and a place at the room it is bound to. A draft row (rejected,
- * set aside, or made into a room) frames its outline from the floor's own
- * drafts, without selecting: it isn't a thing the map can select, and Claude
- * or a teammate may hold the room a select would otherwise lock. Only a draft
- * with an outline can be framed; an open draft (the drawing left it open, no
- * shape traced) has none.
+ * end here, and a place at the room it is bound to. A draft row (rejected or
+ * set aside) frames its outline, without selecting: it isn't a thing the map
+ * can select, and Claude or a teammate may hold the room a select would
+ * otherwise lock. The outline comes from the row's own box first (it carries
+ * one even once the draft is deleted, which a rejected one is), else the
+ * floor's own drafts. Only a draft with an outline can be framed; an open
+ * draft (the drawing left it open, no shape traced) has none.
  */
 export function showTarget(
-  model: MapModel | null, change: Pick<ClaudeChange, "entityType" | "entityId">, levelId: string,
+  model: MapModel | null, change: Pick<ClaudeChange, "entityType" | "entityId" | "box">, levelId: string,
   drafts: readonly RoomDraftRow[] = [],
 ): ShowTarget | null {
   const { entityType: type, entityId: id } = change;
   if (type === "roomDraft") {
+    if (change.box) return { kind: "frame", box: change.box };
     const draft = drafts.find(d => d.id === id);
     return draft?.footprint ? { kind: "frame", box: draftBox(draft) } : null;
   }

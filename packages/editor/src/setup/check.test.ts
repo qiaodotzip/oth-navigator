@@ -51,6 +51,12 @@ describe("showTarget", () => {
     expect(on("roomDraft", "rd_open", [draft("rd_open", { footprint: undefined })])).toBeNull();
     expect(on("objectKind", "ok_bin")).toBeNull();
   });
+
+  it("frames a draft row's own box first, even with an empty drafts store; null without either (contract v3, amendment 3)", () => {
+    const box = { minX: 1, minY: 2, maxX: 3, maxY: 4 };
+    expect(showTarget(model, { entityType: "roomDraft", entityId: "rd_1", box }, "oth-L1", [])).toEqual({ kind: "frame", box });
+    expect(showTarget(model, { entityType: "roomDraft", entityId: "rd_1" }, "oth-L1", [])).toBeNull();
+  });
 });
 
 describe("checkSections", () => {

@@ -143,6 +143,17 @@ describe("CheckStep", () => {
     expect(await screen.findByRole("button", { name: "Show: Rejected the draft Column 12" })).toBeDisabled();
   });
 
+  it("Show frames a rejected draft's own box, with no draft in the floor's drafts (contract v3, amendment 3)", async () => {
+    const boxed = { ...rejected, box: { minX: 26, minY: -4, maxX: 44, maxY: 14 } };
+    open(fakeSetupApi({ listClaudeChanges: vi.fn().mockResolvedValue([made, boxed, sure, guess, path, tag]) }));
+    const show = await screen.findByRole("button", { name: "Show: Rejected the draft Column 12" });
+    expect(show).toBeEnabled();
+    const before = useEditorStore.getState().viewport;
+    fireEvent.click(show);
+    expect(useEditorStore.getState().selection).toBeNull();
+    expect(useEditorStore.getState().viewport).not.toEqual(before);
+  });
+
   it("Undo takes a change back, says so, and reloads the map", async () => {
     const { api, saver } = open();
     fireEvent.click(await screen.findByRole("button", { name: "Undo: Made Starbucks from a draft" }));

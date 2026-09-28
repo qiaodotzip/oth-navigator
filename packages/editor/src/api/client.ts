@@ -1,5 +1,5 @@
 import type { MapModel, ValidationReport } from "@oth/model";
-import type { DraftSource, PlanSheet, PlanSource, RoomDraft, RoomDraftInput, RoomKind } from "@oth/model";
+import type { BBox, DraftSource, PlanSheet, PlanSource, RoomDraft, RoomDraftInput, RoomKind } from "@oth/model";
 import type { LockEntry, PresenceEntry } from "../collab/types";
 
 export class ApiError extends Error {
@@ -204,6 +204,8 @@ export type ClaudeChange = {
    */
   entityType: string;
   entityId: string;
+  /** A draft row's own footprint, in metres; set for entityType "roomDraft" only, even a rejected one. */
+  box?: BBox;
   /** The audit log's action: create, update, delete, restore. */
   action: string;
   /** Objects placed only: high with two or more anchors, low for a capture-order guess (spec §5.4). */
