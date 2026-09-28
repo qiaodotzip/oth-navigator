@@ -19,16 +19,3 @@ export const TOOL_LABELS: Record<Tool, string> = {
   calibrate: "Measure scale",
   "align-plan": "Align",
 };
-
-/** The tools the toolbar offers, in the order a level is usually built. */
-export const TOOLBAR_TOOLS: Tool[] = [
-  "select",
-  "draw-area",
-  "draw-room",
-  "draw-pathway",
-  "draw-detail",
-  "place-entrance",
-  "place-portal",
-  // No Doorway. Pathways replaced it for this building, and the canvas never
-  // saved one: offering it was offering a button that did nothing.
-];

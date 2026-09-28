@@ -54,7 +54,7 @@ describe("Workspace", () => {
   });
 
   // I1: an expired session must not blank a floor's tab behind the sign-in
-  // dialog. App.test.tsx pins the same rule for Build, which needs WebGL.
+  // dialog. BuildWorkspace.test.tsx and the test below pin the same rule for Build.
   it("keeps a floor's tab on screen through an expired session", async () => {
     const api = fakeApi();
     window.history.pushState({}, "", "/floors/L1/survey");
@@ -99,5 +99,31 @@ describe("Workspace", () => {
     fireEvent.click(screen.getByRole("link", { name: /Review/ }));
     await screen.findByDisplayValue("Festive Mall");
     expect((api as unknown as { getModel: ReturnType<typeof vi.fn> }).getModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens Build inside the shell, and loads the map only once", async () => {
+    const api = fakeApi();
+    window.history.pushState({}, "", "/floors/L1/build?step=rooms");
+    render(<Workspace api={api} />);
+    expect(await screen.findByRole("navigation", { name: "Build steps" })).toBeTruthy();
+    // The workspace's own load; the old editor loaded again on top of it.
+    expect(api.getModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Build on screen through an expired session", async () => {
+    const api = fakeApi();
+    window.history.pushState({}, "", "/floors/L1/build?step=rooms");
+    render(
+      <AuthGate api={api}>
+        <Workspace api={api} />
+      </AuthGate>,
+    );
+    expect(await screen.findByRole("navigation", { name: "Build steps" })).toBeTruthy();
+
+    act(() => useEditorStore.getState().endSession("expired"));
+
+    // By text: the dialog hides the page from role queries, not from the screen.
+    expect(screen.getByText("Areas & rooms", { selector: "h2" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: /session ended/i })).toBeTruthy();
   });
 });

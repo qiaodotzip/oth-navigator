@@ -1,7 +1,7 @@
 import { live } from "@oth/model";
 import { useEffect, useMemo } from "react";
 import type { Api } from "../api/client";
-import { App } from "../App";
+import { BuildWorkspace } from "../build/BuildWorkspace";
 import { findLevel, pickTab } from "../flow/floors";
 import { ReviewWorkspace } from "../review/ReviewWorkspace";
 import { href, navigate, type FloorRoute } from "../route";
@@ -18,9 +18,10 @@ import { toast } from "../ui/toast";
  * Survey and Review share one saver that skips validation: every survey rule
  * is a warning, so nothing they write can change what blocks publishing, and
  * skipping it saves half a second on every tag. Neither loads the model —
- * the shell already has. Build is still the old editor until Plan 3.
+ * the shell already has. The Build tab is `BuildWorkspace`, on the shell's
+ * saver, which validates: what Build draws can change what blocks publishing.
  */
-export function FloorWorkspace({ api, route }: { api: Api; saver: Saver; route: FloorRoute }) {
+export function FloorWorkspace({ api, saver, route }: { api: Api; saver: Saver; route: FloorRoute }) {
   const model = useEditorStore(s => s.model);
   const activeLevelId = useEditorStore(s => s.activeLevelId);
   const setActiveLevel = useEditorStore(s => s.setActiveLevel);
@@ -57,5 +58,11 @@ export function FloorWorkspace({ api, route }: { api: Api; saver: Saver; route: 
   if (route.tab === "review") {
     return <ReviewWorkspace api={api} saver={surveySaver} level={level} params={route.params} />;
   }
-  return <App api={api} embedded />;
+  // Build reads the active level everywhere. Until it is this floor, a link's
+  // ?select= would be judged against the wrong one and dropped.
+  if (activeLevelId !== level.id) {
+    return <p className="p-8 text-sm text-stone-500">Loading the floor…</p>;
+  }
+  // Keyed by floor, so a half-finished choice on one floor never follows you to the next.
+  return <BuildWorkspace key={level.id} api={api} saver={saver} route={route} />;
 }
