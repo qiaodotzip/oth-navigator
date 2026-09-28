@@ -91,6 +91,23 @@ describe("wallPieces", () => {
     }
   });
 
+  it("shares a thin room's walls with its neighbours first, whichever the sweep meets first", () => {
+    // A 0.3 m sliver along A's top, with B above it. B reaches 0.5 m further
+    // west than the sliver, so the west-to-east sweep meets A and B first.
+    const a = box("L1-a", 0, 0, 4, 4);
+    const sliver = box("L1-s", 1, 4, 4, 4.3);
+    const b = box("L1-b", 0.5, 4.3, 4, 8);
+    for (const rooms of [[a, sliver, b], [a, b, sliver], [sliver, a, b], [sliver, b, a], [b, a, sliver], [b, sliver, a]]) {
+      const pieces = wallPieces(rooms);
+      const walls = shared(pieces).map(p => `${[...p.rooms].sort().join("|")} ${length(p).toFixed(2)}`).sort();
+      // A and B meet only where the sliver doesn't reach.
+      expect(walls).toEqual(["L1-a|L1-b 0.50", "L1-a|L1-s 3.00", "L1-b|L1-s 3.00"]);
+      expect(shared(pieces).find(p => p.rooms.includes("L1-b") && p.rooms.includes("L1-a"))!.thicknessM).toBeCloseTo(0.3);
+      // The three shared, A's other three sides and the 0.5 m of its top that B doesn't reach, the sliver's two ends, B's other three.
+      expect(pieces).toHaveLength(3 + 4 + 2 + 3);
+    }
+  });
+
   it("merges rooms whichever way round their outlines are drawn", () => {
     const clockwise = room("L1-b", [[4, 0], [4, 3], [8, 3], [8, 0]]);
     expect(shared(wallPieces([box("L1-a", 0, 0, 4, 3), clockwise]))).toHaveLength(1);

@@ -52,13 +52,8 @@ const pointAt = (e: Edge, t: number): Vec2 => [e.a[0] + e.ux * t, e.a[1] + e.uy 
 const midpoint = (p: Vec2, q: Vec2): Vec2 => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
 const distance = (p: Vec2, q: Vec2) => Math.hypot(p[0] - q[0], p[1] - q[1]);
 
-/** Whether all but a sliver of the stretch from t0 to t1 is already a shared wall. */
-function alreadyShared(shares: readonly Interval[], t0: number, t1: number): boolean {
-  const from = Math.min(t0, t1);
-  const to = Math.max(t0, t1);
-  const free = subtractIntervals(to - from, shares.map(([p, q]): Interval => [p - from, q - from]));
-  return free.reduce((sum, [p, q]) => sum + q - p, 0) < MIN_SHARED_M;
-}
+/** Edges i and j could be one wall along [t0, t1] of edge i, `gap` apart on average. */
+type Candidate = { i: number; j: number; t0: number; t1: number; gap: number };
 
 /**
  * Every room's boundary as wall pieces, with one wall wherever two rooms meet.
@@ -75,8 +70,7 @@ export function wallPieces(rooms: readonly Room[], stats?: { pairsTested: number
   // Sorted west to east, so each edge meets only the few that overlap it in x:
   // a whole floor is thousands of edges, and every pair would be millions.
   const edges = rooms.flatMap(edgesOf).sort((p, q) => p.minX - q.minX);
-  const covered: Interval[][] = edges.map(() => []);
-  const pieces: WallPiece[] = [];
+  const candidates: Candidate[] = [];
 
   for (let i = 0; i < edges.length; i++) {
     const e = edges[i]!;
@@ -97,28 +91,45 @@ export function wallPieces(rooms: readonly Room[], stats?: { pairsTested: number
 
       const p0 = pointAt(e, t0);
       const p1 = pointAt(e, t1);
+      const gap0 = distance(p0, pointAt(f, along(f, p0)));
+      const gap1 = distance(p1, pointAt(f, along(f, p1)));
+      if (gap0 > MERGE_GAP_M || gap1 > MERGE_GAP_M) continue;
+      candidates.push({ i, j, t0, t1, gap: (gap0 + gap1) / 2 });
+    }
+  }
+
+  // A room thinner than the merge gap puts the rooms either side of it within
+  // reach of each other. Nearest first, the thin room's own walls claim their
+  // stretches before its neighbours can reach across it, whichever the sweep
+  // met first.
+  candidates.sort((x, y) => x.gap - y.gap);
+  const covered: Interval[][] = edges.map(() => []);
+  const pieces: WallPiece[] = [];
+
+  for (const { i, j, t0, t1 } of candidates) {
+    const e = edges[i]!;
+    const f = edges[j]!;
+    // What either edge has already shared, measured along e from t0. Only the
+    // rest of the stretch is still free to be this pair's wall.
+    const taken = [
+      ...covered[i]!,
+      ...covered[j]!.map(([u0, u1]): Interval => [along(e, pointAt(f, u0)), along(e, pointAt(f, u1))]),
+    ].map(([p, q]): Interval => [p - t0, q - t0]);
+
+    for (const [from, to] of subtractIntervals(t1 - t0, taken, MIN_SHARED_M)) {
+      const p0 = pointAt(e, t0 + from);
+      const p1 = pointAt(e, t0 + to);
       const q0 = pointAt(f, along(f, p0));
       const q1 = pointAt(f, along(f, p1));
-      const gap0 = distance(p0, q0);
-      const gap1 = distance(p1, q1);
-      if (gap0 > MERGE_GAP_M || gap1 > MERGE_GAP_M) continue;
-
-      // A room thinner than the merge gap puts the rooms either side of it
-      // within reach of each other. Once a stretch is shared it is taken: a
-      // second wall over it would stand across the thin room, stacked on the first.
-      const u0 = along(f, q0);
-      const u1 = along(f, q1);
-      if (alreadyShared(covered[i]!, t0, t1) || alreadyShared(covered[j]!, u0, u1)) continue;
-
       pieces.push({
         a: midpoint(p0, q0),
         b: midpoint(p1, q1),
         // Coincident edges have no gap to measure. They still get a wall.
-        thicknessM: Math.max((gap0 + gap1) / 2, DEFAULT_WALL_M),
+        thicknessM: Math.max((distance(p0, q0) + distance(p1, q1)) / 2, DEFAULT_WALL_M),
         rooms: [e.roomId, f.roomId],
       });
-      covered[i]!.push([t0, t1]);
-      covered[j]!.push([u0, u1]);
+      covered[i]!.push([t0 + from, t0 + to]);
+      covered[j]!.push([along(f, q0), along(f, q1)]);
     }
   }
 
