@@ -1,5 +1,6 @@
 import { bboxOfRing, parseModel, type OrientedRect } from "@oth/model";
 import { describe, expect, it } from "vitest";
+import { SLAB_HEIGHT_M } from "./geometry";
 import {
   DEFAULT_SHAFT_M, RISER_M, flightSteps, nextStopAbove, portalParts, risesTowardPositive, shaftBlocks,
 } from "./portals";
@@ -45,11 +46,20 @@ const upright: OrientedRect = { centre: [0, 5], axis: [0, 1], halfLength: 5, hal
 const middle = (s: { a: readonly number[]; b: readonly number[] }) => (s.a[1]! + s.b[1]!) / 2;
 
 describe("flightSteps", () => {
-  it("climbs the whole rise in risers of about 17 cm", () => {
+  it("climbs from this floor's walking surface to the next one's, in risers of about 17 cm", () => {
     const steps = flightSteps(upright, 6, true);
     expect(steps).toHaveLength(Math.ceil(6 / RISER_M));
-    expect(steps.at(-1)!.topM).toBeCloseTo(6);
-    expect(steps[0]!.topM).toBeCloseTo(6 / steps.length);
+    expect(steps.at(-1)!.topM).toBeCloseTo(6 + SLAB_HEIGHT_M);
+    expect(steps[0]!.topM).toBeCloseTo(SLAB_HEIGHT_M + 6 / steps.length);
+  });
+
+  it("builds thin treads two risers deep, never below the floor, not a solid wedge", () => {
+    const steps = flightSteps(upright, 6, true);
+    const riser = 6 / steps.length;
+    expect(steps[0]!.baseM).toBeCloseTo(SLAB_HEIGHT_M);
+    for (const s of steps.slice(1)) expect(s.topM - s.baseM).toBeCloseTo(2 * riser);
+    expect(steps.every(s => s.baseM >= SLAB_HEIGHT_M - 1e-9)).toBe(true);
+    expect(steps.at(-1)!.baseM).toBeGreaterThan(5);
   });
 
   it("rises toward the end it is asked to", () => {
@@ -97,6 +107,18 @@ describe("portalParts", () => {
     expect(l2!.ring).toEqual(sq(29, 9, 32, 11));
   });
 
+  it("stands a shaft up to the next floor, whatever the floor's own height says, and the top one its height", () => {
+    const gapped = parseModel({
+      building,
+      levels: [level(1, 0, 6), level(2, 6.5, 5)],
+      rooms: halls.slice(0, 2),
+      portals: [{ id: "lift-a", kind: "lift" }],
+      portalEndpoints: [stop("lift-a-1", "lift-a", 1, [30, 10]), stop("lift-a-2", "lift-a", 2, [30, 10])],
+    });
+    expect(portalParts(gapped, "oth-L1").shafts[0]!.heightM).toBeCloseTo(6.5);
+    expect(portalParts(gapped, "oth-L2").shafts[0]!.heightM).toBe(5);
+  });
+
   it("walls a shaft on every side", () => {
     const [shaft] = portalParts(model, "oth-L1").shafts;
     const blocks = shaftBlocks(shaft!);
@@ -107,14 +129,14 @@ describe("portalParts", () => {
   it("builds an escalator's flight on its lower floor, climbing to the next, toward the upper stop", () => {
     const flight = portalParts(model, "oth-L1").flights.find(f => f.portalId === "esc-1")!;
     expect(flight.kind).toBe("escalator");
-    expect(flight.steps.at(-1)!.topM).toBeCloseTo(6);
+    expect(flight.steps.at(-1)!.topM).toBeCloseTo(6 + SLAB_HEIGHT_M);
     expect(middle(flight.steps.at(-1)!)).toBeGreaterThan(5);
     expect(portalParts(model, "oth-L2").flights.some(f => f.portalId === "esc-1")).toBe(false);
   });
 
   it("takes a flight's outline from the upper stop when the lower has none", () => {
     const flight = portalParts(model, "oth-L2").flights.find(f => f.portalId === "stair-1")!;
-    expect(flight.steps.at(-1)!.topM).toBeCloseTo(5);
+    expect(flight.steps.at(-1)!.topM).toBeCloseTo(5 + SLAB_HEIGHT_M);
   });
 
   it("builds no flight for an escalator with no outline at either stop", () => {
@@ -137,6 +159,50 @@ describe("portalParts", () => {
       ],
     });
     expect(portalParts(flat, "oth-L1").flights).toEqual([]);
+  });
+});
+
+describe("flipping a flight", () => {
+  // Three floors of stairs, each stop traced, each upper stop at the north end.
+  const stairs = (flipped: Record<string, boolean>) => parseModel({
+    building,
+    levels: [level(1, 0, 6), level(2, 6, 5), level(3, 11, 5)],
+    rooms: halls,
+    portals: [{ id: "st", kind: "stair" }],
+    portalEndpoints: [1, 2, 3].map(n =>
+      stop(`st-${n}`, "st", n, [15, 7], { footprint: sq(14, 0, 16, 8), flipped: flipped[`st-${n}`] ?? false })),
+  });
+  const risesNorth = (m: ReturnType<typeof stairs>, levelId: string) => {
+    const f = portalParts(m, levelId).flights[0]!;
+    return middle(f.steps.at(-1)!) > middle(f.steps[0]!);
+  };
+
+  it("climbs toward the upper stop when nothing is flipped", () => {
+    const m = stairs({});
+    expect(risesNorth(m, "oth-L1")).toBe(true);
+    expect(risesNorth(m, "oth-L2")).toBe(true);
+  });
+
+  it("turns round the flight rising from a flipped lower stop, and only that one", () => {
+    const m = stairs({ "st-1": true });
+    expect(risesNorth(m, "oth-L1")).toBe(false);
+    expect(risesNorth(m, "oth-L2")).toBe(true);
+  });
+
+  it("takes a flag on the top stop as the flight arriving there", () => {
+    const m = stairs({ "st-3": true });
+    expect(risesNorth(m, "oth-L1")).toBe(true);
+    expect(risesNorth(m, "oth-L2")).toBe(false);
+  });
+
+  it("reads a middle stop's flag as its own flight's, not the one arriving at it", () => {
+    const m = stairs({ "st-2": true });
+    expect(risesNorth(m, "oth-L1")).toBe(true);
+    expect(risesNorth(m, "oth-L2")).toBe(false);
+  });
+
+  it("lets the lower stop win when both stops carry the flag", () => {
+    expect(risesNorth(stairs({ "st-2": true, "st-3": true }), "oth-L2")).toBe(false);
   });
 });
 

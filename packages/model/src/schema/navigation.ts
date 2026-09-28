@@ -66,7 +66,9 @@ export const PortalEndpointSchema = AuditFieldsSchema.extend({
   footprint: RingSchema.optional(),
   /**
    * The flight rising from this stop climbs toward the end nearer the next
-   * stop up. When that guess is wrong, a person flips it.
+   * stop up. When that guess is wrong, a person flips it, and the inspector's
+   * Flip writes it here, on the lower stop. The top stop has no flight rising
+   * from it, so a flag there turns the flight arriving at it.
    */
   flipped: z.boolean().default(false),
 });

@@ -12,6 +12,10 @@ const STAIR_COLOUR = "#b9ae96";
  * A level's lift shafts and the flights that climb from it.
  * The file is not `Portals.tsx`: on a case-insensitive disk that and
  * `portals.ts` are one import, as `Markers.tsx` and `markers.ts` were.
+ *
+ * A flight's top step is level with the floor it arrives on, so where that
+ * floor's slab reaches over it the two faces lie in one plane. The flights
+ * are pulled forward in depth to win there, as the selected walls are.
  */
 export function Portals({ model, levelId, ghosted = false }: { model: MapModel; levelId: string; ghosted?: boolean }) {
   const parts = useMemo(() => portalParts(model, levelId), [model, levelId]);
@@ -28,10 +32,16 @@ export function Portals({ model, levelId, ghosted = false }: { model: MapModel; 
         <meshStandardMaterial color={SHAFT_COLOUR} transparent opacity={ghosted ? 0.2 : 0.45} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
       <mesh geometry={geometries.escalators} castShadow receiveShadow>
-        <meshStandardMaterial color={ESCALATOR_COLOUR} transparent={ghosted} opacity={ghosted ? 0.35 : 1} side={THREE.DoubleSide} />
+        <meshStandardMaterial
+          color={ESCALATOR_COLOUR} transparent={ghosted} opacity={ghosted ? 0.35 : 1} side={THREE.DoubleSide}
+          polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1}
+        />
       </mesh>
       <mesh geometry={geometries.stairs} castShadow receiveShadow>
-        <meshStandardMaterial color={STAIR_COLOUR} transparent={ghosted} opacity={ghosted ? 0.35 : 1} side={THREE.DoubleSide} />
+        <meshStandardMaterial
+          color={STAIR_COLOUR} transparent={ghosted} opacity={ghosted ? 0.35 : 1} side={THREE.DoubleSide}
+          polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1}
+        />
       </mesh>
     </group>
   );

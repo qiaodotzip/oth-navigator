@@ -3,6 +3,7 @@ import {
   type Level, type MapModel, type OrientedRect, type PortalEndpoint, type PortalKind, type Ring, type Vec2,
 } from "@oth/model";
 import type { Block } from "./blocks";
+import { SLAB_HEIGHT_M } from "./geometry";
 
 /** A lift car's shaft, when the drawing gives no outline. */
 export const DEFAULT_SHAFT_M = 2.4;
@@ -45,12 +46,15 @@ export function risesTowardPositive(rect: OrientedRect, upperPoint: Vec2 | null,
 }
 
 /**
- * A flight as stepped blocks standing on the floor, from the low end to the
- * high one. The top step is level with the floor above. Each block runs
- * across the flight, as deep as one tread.
+ * A flight as treads, from the low end to the high one. It climbs from this
+ * floor's walking surface, the top of its slab, to the next floor's, so the
+ * top step is level with the floor it arrives on. Each tread runs across the
+ * flight, as deep as one going, and only two risers thick, so a flight
+ * reads as steps and not as a solid wedge as tall as the floor.
  */
 export function flightSteps(rect: OrientedRect, riseM: number, towardPositive: boolean, riserM = RISER_M): Block[] {
   const count = Math.max(1, Math.ceil(riseM / riserM - 1e-9));
+  const riser = riseM / count;
   const depth = (2 * rect.halfLength) / count;
   const dir = towardPositive ? 1 : -1;
   const [ux, uy] = rect.axis;
@@ -61,7 +65,9 @@ export function flightSteps(rect: OrientedRect, riseM: number, towardPositive: b
     const s = dir * (-rect.halfLength + depth * (i + 0.5));
     const cx = rect.centre[0] + ux * s;
     const cy = rect.centre[1] + uy * s;
-    steps.push({ a: [cx - vx, cy - vy], b: [cx + vx, cy + vy], thicknessM: depth, baseM: 0, topM: (riseM * (i + 1)) / count });
+    const topM = SLAB_HEIGHT_M + (riseM * (i + 1)) / count;
+    const baseM = Math.max(SLAB_HEIGHT_M, topM - 2 * riser);
+    steps.push({ a: [cx - vx, cy - vy], b: [cx + vx, cy + vy], thicknessM: depth, baseM, topM });
   }
   return steps;
 }
@@ -69,6 +75,18 @@ export function flightSteps(rect: OrientedRect, riseM: number, towardPositive: b
 function squareAround(point: Vec2, size: number): Ring {
   const h = size / 2;
   return [[point[0] - h, point[1] - h], [point[0] + h, point[1] - h], [point[0] + h, point[1] + h], [point[0] - h, point[1] + h]];
+}
+
+/**
+ * How tall a shaft stands on a floor: up to the next floor's elevation, so
+ * the stops' shafts meet whatever the floors' own heights say. The top floor,
+ * or one with no rise to the next, uses its own height.
+ */
+function shaftHeightM(model: MapModel, level: Level): number {
+  const floors = live(model.levels).sort((a, b) => a.ordinal - b.ordinal);
+  const above = floors[floors.findIndex(l => l.id === level.id) + 1];
+  const gap = above ? above.elevationM - level.elevationM : 0;
+  return gap > 0 ? gap : level.heightM;
 }
 
 /** A shaft's sides, as blocks on its outline. */
@@ -84,11 +102,16 @@ export function shaftBlocks(shaft: Shaft): Block[] {
 /**
  * What the lifts, escalators and stairs build on one level.
  *
- * A lift builds a shaft at every stop, one storey tall, so the stops stack
- * into one shaft. An escalator, stair or ramp builds a flight on the lower
- * of each pair of stops, from its outline (or the upper stop's) up to the
- * upper floor. With no outline at either stop, or no rise between the floors,
- * it builds no flight and is shown only by its markers.
+ * A lift builds a shaft at every stop, up to the next floor, so the stops
+ * stack into one shaft. An escalator, stair or ramp builds a flight on the
+ * lower of each pair of stops, from its outline (or the upper stop's) up to
+ * the upper floor. With no outline at either stop, or no rise between the
+ * floors, it builds no flight and is shown only by its markers.
+ *
+ * A flight is flipped when its lower stop says so, which is the stop the
+ * inspector's Flip writes to (Task 7). The top stop has no flight rising
+ * from it, so a flag there can only mean the flight arriving at it; a
+ * middle stop's flag is its own flight's, never the one below.
  */
 export function portalParts(model: MapModel, levelId: string): { shafts: Shaft[]; flights: Flight[] } {
   const shafts: Shaft[] = [];
@@ -98,7 +121,11 @@ export function portalParts(model: MapModel, levelId: string): { shafts: Shaft[]
     if (portal.kind === "lift") {
       for (const { stop, level } of stops) {
         if (stop.levelId !== levelId) continue;
-        shafts.push({ portalId: portal.id, ring: stop.footprint ?? squareAround(stop.point, DEFAULT_SHAFT_M), heightM: level.heightM });
+        shafts.push({
+          portalId: portal.id,
+          ring: stop.footprint ?? squareAround(stop.point, DEFAULT_SHAFT_M),
+          heightM: shaftHeightM(model, level),
+        });
       }
       continue;
     }
@@ -111,7 +138,8 @@ export function portalParts(model: MapModel, levelId: string): { shafts: Shaft[]
       if (!outline || rise <= 0) continue;
       const rect = minAreaRect(outline);
       if (rect.halfLength <= 0) continue;
-      const toward = risesTowardPositive(rect, upper.stop.point, lower.stop.flipped);
+      const flipped = lower.stop.flipped || (i + 2 === stops.length && upper.stop.flipped);
+      const toward = risesTowardPositive(rect, upper.stop.point, flipped);
       flights.push({ portalId: portal.id, kind: portal.kind, steps: flightSteps(rect, rise, toward) });
     }
   }

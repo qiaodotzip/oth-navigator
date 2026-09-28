@@ -12,7 +12,11 @@ function cross(o: Vec2, a: Vec2, b: Vec2): number {
   return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 }
 
-/** Andrew's monotone chain; counter-clockwise, no repeated point. */
+/**
+ * Andrew's monotone chain: the hull counter-clockwise, with no repeated or
+ * collinear point. Points all on one line give just its two ends. Fewer than
+ * three points have no hull to take and come back sorted, repeats and all.
+ */
 export function convexHull(points: readonly Vec2[]): Vec2[] {
   const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   if (pts.length <= 2) return pts;
@@ -40,6 +44,8 @@ function eastward(a: Vec2): Vec2 {
  * The smallest rectangle around an outline. The best rectangle has a side
  * along an edge of the convex hull, so trying each hull edge is exact. It
  * turns a traced escalator into the flight's length, width and direction.
+ * An outline with no length, every point in one place, gives a rectangle
+ * of no size at its first point.
  */
 export function minAreaRect(ring: Ring): OrientedRect {
   const hull = convexHull(ring);
