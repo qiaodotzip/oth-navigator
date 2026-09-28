@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { ApiError, isUnauthorized, type Api, type ApiToken } from "../api/client";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
@@ -39,6 +39,7 @@ export function NewTokenDialog({
   const [secret, setSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const ids = useId();
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -75,8 +76,10 @@ export function NewTokenDialog({
     >
       {secret ? (
         <div className="space-y-3">
+          {/* Focused and selected as it appears, ready to copy; nothing is copied until you do. */}
           <textarea
             readOnly
+            autoFocus
             aria-label="Command to connect Claude Code"
             value={command}
             rows={4}
@@ -92,17 +95,25 @@ export function NewTokenDialog({
         <form onSubmit={submit} className="space-y-3">
           <label className="block text-sm">
             Name
-            <input className={FIELD} placeholder="Wei's laptop" autoComplete="off" required value={name} onChange={e => setName(e.target.value)} />
+            <input className={FIELD} placeholder="Laptop" autoComplete="off" required value={name} onChange={e => setName(e.target.value)} />
           </label>
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" className="mt-1" checked={mayPublish} onChange={e => setMayPublish(e.target.checked)} />
-            <span>
-              May publish
-              <span className="block text-xs text-stone-500">
+          <div className="flex items-start gap-2 text-sm">
+            <input
+              id={`${ids}-publish`}
+              type="checkbox"
+              className="mt-1"
+              aria-describedby={`${ids}-publish-hint`}
+              checked={mayPublish}
+              onChange={e => setMayPublish(e.target.checked)}
+            />
+            <div>
+              <label htmlFor={`${ids}-publish`}>May publish</label>
+              {/* Outside the label, so the tick's name stays "May publish" and this is read as its description. */}
+              <p id={`${ids}-publish-hint`} className="text-xs text-stone-500">
                 Leave this off unless Claude should publish the map without you. It still can't publish while the map has errors.
-              </span>
-            </span>
-          </label>
+              </p>
+            </div>
+          </div>
           {error && <p role="alert" className="text-sm text-danger">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <Button onClick={onClose} disabled={busy}>Cancel</Button>

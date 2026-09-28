@@ -11,6 +11,12 @@ const HEAD = "border-b border-stone-200 py-2";
 const CELL = "border-b border-stone-100 py-2";
 
 /**
+ * "Wei Kang's Laptop". Anyone may revoke anyone's token, and two people's may
+ * share a name, so a Revoke button and its toast say whose.
+ */
+const whose = (token: ApiToken) => `${token.ownerName}'s ${token.name}`;
+
+/**
  * The Team page's Claude Code section (spec §6.1). You make a token for
  * your own Claude Code, and see and revoke everyone's. The team is flat, so
  * anyone may revoke any token, as anyone may add a teammate.
@@ -39,10 +45,10 @@ export function ClaudeCode({ api }: { api: Api }) {
     setRevoking(token.id);
     try {
       await api.revokeToken(token.id);
-      toast({ tone: "success", message: `Revoked ${token.name}. Claude Code can no longer reach the map with it.` });
+      toast({ tone: "success", message: `Revoked ${whose(token)}. Claude Code can no longer reach the map with it.` });
       await reload();
     } catch (err) {
-      reportFailure(err, { doing: `revoke ${token.name}`, retry: () => revoke(token) });
+      reportFailure(err, { doing: `revoke ${whose(token)}`, retry: () => revoke(token) });
     } finally {
       setRevoking(null);
     }
@@ -93,11 +99,11 @@ export function ClaudeCode({ api }: { api: Api }) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    aria-label={`Revoke ${token.name}`}
+                    aria-label={revoking === token.id ? `Revoking ${whose(token)}…` : `Revoke ${whose(token)}`}
                     disabled={revoking === token.id}
                     onClick={() => void revoke(token)}
                   >
-                    Revoke
+                    {revoking === token.id ? "Revoking…" : "Revoke"}
                   </Button>
                 </td>
               </tr>
