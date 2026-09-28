@@ -1,12 +1,14 @@
 import type { Node as GltfNode, Scene } from "@gltf-transform/core";
 import { live, type Level, type MapModel, type Room } from "@oth/model";
-import { blocksGeometry, type Block } from "../blocks";
+import { blocksGeometry, quadsGeometry, type Block } from "../blocks";
 import { CATEGORY_TINT, roomTints } from "../categoryTint";
 import { CONTEXT_ORIGIN_NOTE } from "../contextExport";
 import { modelToThree } from "../coords";
 import { roomsToDraw } from "../LevelGroup";
 import { floorColour, railBlock, roomFloorGeometry, wallBlock } from "../levelParts";
 import { massingOf } from "../massing";
+import { STRIP_HEIGHT_M, STRIP_OPACITY, pathwayColour, stripQuads } from "../pathwayStrips";
+import { PORTAL_COLOUR, SHAFT_OPACITY, flightColour, portalParts, shaftBlocks } from "../portals";
 import { levelStructure, type LevelStructure } from "../structure";
 import { wallColor } from "../theme";
 import { BALUSTRADE_COLOUR, BALUSTRADE_OPACITY } from "../voids";
@@ -107,6 +109,46 @@ function addVoids(ctx: FloorContext): void {
   }
 }
 
+const SHAFT_PAINT: Paint = { name: "lift shaft", colour: PORTAL_COLOUR.shaft, opacity: SHAFT_OPACITY, doubleSided: true };
+
+/** Stops: each lift's shaft on this floor, and each flight that climbs from it, named after its portal (Plan 5D). */
+function addStops(ctx: FloorContext): void {
+  const portals = new Map(live(ctx.model.portals).map(p => [p.id, p]));
+  const name = (portalId: string) => {
+    const portal = portals.get(portalId);
+    return portal ? label(portal.nameEn, portal.id) : portalId;
+  };
+  const { shafts, flights } = portalParts(ctx.model, ctx.level.id);
+  for (const shaft of shafts) {
+    const node = ctx.writer.mesh(name(shaft.portalId), blocksGeometry(shaftBlocks(shaft)), SHAFT_PAINT);
+    if (node) ctx.groups.Stops.addChild(node.setExtras({ othId: shaft.portalId, kind: "lift" }));
+  }
+  for (const flight of flights) {
+    const paint: Paint = { name: flight.kind, colour: flightColour(flight.kind), doubleSided: true };
+    const node = ctx.writer.mesh(name(flight.portalId), blocksGeometry(flight.steps), paint);
+    if (node) ctx.groups.Stops.addChild(node.setExtras({ othId: flight.portalId, kind: flight.kind }));
+  }
+}
+
+/** Pathways: one strip per pathway, in its kind's colour, just above the slabs. */
+function addPathways(ctx: FloorContext): void {
+  const kinds = live(ctx.model.pathwayKinds);
+  for (const pathway of live(ctx.model.pathways)) {
+    if (pathway.levelId !== ctx.level.id) continue;
+    const quads = stripQuads(pathway.polyline, pathway.widthM);
+    if (quads.length === 0) continue;
+    const kind = kinds.find(k => k.id === pathway.kindId);
+    const paint: Paint = {
+      name: kind ? kind.nameEn : "pathway",
+      colour: pathwayColour(pathway, kinds),
+      opacity: STRIP_OPACITY,
+      doubleSided: true,
+    };
+    const node = ctx.writer.mesh(label(pathway.nameEn, pathway.id), quadsGeometry(quads, STRIP_HEIGHT_M), paint);
+    if (node) ctx.groups.Pathways.addChild(node.setExtras({ othId: pathway.id, widthM: pathway.widthM }));
+  }
+}
+
 /** Floors: one mesh per room the preview draws, with its voids cut, tinted as the preview tints it. */
 function addFloors(ctx: FloorContext): void {
   const placements = live(ctx.model.placements).filter(p => p.levelId === ctx.level.id);
@@ -146,6 +188,8 @@ export async function buildFloorGlb(
     addFloors(ctx);
     addWalls(ctx);
     addVoids(ctx);
+    addStops(ctx);
+    addPathways(ctx);
   }
   writer.setNote(floorExportNote(stacked), { floors: levels.map(l => l.code) });
   return writer.write();

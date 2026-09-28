@@ -4,11 +4,13 @@ import { describe, expect, it } from "vitest";
 import { CATEGORY_TINT } from "../categoryTint";
 import { CONTEXT_ORIGIN_NOTE } from "../contextExport";
 import { SLAB_HEIGHT_M } from "../geometry";
+import { DEFAULT_PATHWAY_COLOUR, STRIP_HEIGHT_M, STRIP_OPACITY } from "../pathwayStrips";
+import { PORTAL_COLOUR, SHAFT_OPACITY } from "../portals";
 import { roomColor, wallColor } from "../theme";
 import { BALUSTRADE_COLOUR, BALUSTRADE_HEIGHT_M, BALUSTRADE_OPACITY, BALUSTRADE_THICKNESS_M } from "../voids";
 import { FLOOR_GROUPS, STACKED_NOTE, buildFloorGlb } from "./floorGlb";
 import {
-  bounds, child, floorModel, floorNodes, group, linear, materialOf, names, noModels, readGlb, sq, worldVertices,
+  bounds, child, DELETED, floorModel, floorNodes, group, linear, materialOf, names, noModels, readGlb, sq, worldVertices,
 } from "./testing";
 
 const exported = async (model: MapModel, levelIds: string[]) => readGlb(await buildFloorGlb(model, levelIds, noModels));
@@ -199,5 +201,78 @@ describe("buildFloorGlb — Voids", () => {
 
   it("rails nothing on a floor with no void", async () => {
     expect(names(group(await exported(floorModel, ["oth-L2"]), "L2", "Voids"))).toEqual([]);
+  });
+});
+
+describe("buildFloorGlb — Stops", () => {
+  it("builds the lift's shaft on every floor it stops at, and the escalator's flight on the floor it climbs from", async () => {
+    const doc = await exported(floorModel, ["oth-L1", "oth-L2"]);
+    expect(names(group(doc, "L1", "Stops")).sort()).toEqual(["Escalator 1", "Lift A"]);
+    expect(names(group(doc, "L2", "Stops"))).toEqual(["Lift A"]);
+    expect(child(group(doc, "L1", "Stops"), "Escalator 1").getExtras()).toEqual({ othId: "esc-1", kind: "escalator" });
+  });
+
+  it("raises a shaft to the next floor, and the top floor's to its own height", async () => {
+    const doc = await exported(floorModel, ["oth-L1", "oth-L2"]);
+    const low = bounds(child(group(doc, "L1", "Stops"), "Lift A"));
+    expect(low.minY).toBeCloseTo(0);
+    expect(low.maxY).toBeCloseTo(6);
+    // Half the shaft's 0.12 m glass stands outside its outline.
+    expect(low.minX).toBeCloseTo(29 - 0.06);
+    const top = bounds(child(group(doc, "L2", "Stops"), "Lift A"));
+    expect(top.minY).toBeCloseTo(6);
+    expect(top.maxY).toBeCloseTo(11);
+  });
+
+  it("climbs the escalator to the floor above, its top step level with that floor, inside its outline", async () => {
+    const flight = bounds(child(group(await exported(floorModel, ["oth-L1"]), "L1", "Stops"), "Escalator 1"));
+    expect(flight.maxY).toBeCloseTo(6 + SLAB_HEIGHT_M);
+    expect(flight.minX).toBeGreaterThanOrEqual(21 - 1e-6);
+    expect(flight.maxX).toBeLessThanOrEqual(23 + 1e-6);
+  });
+
+  it("paints the shaft see-through and the flight in the preview's colours", async () => {
+    const stops = group(await exported(floorModel, ["oth-L1"]), "L1", "Stops");
+    const shaft = materialOf(child(stops, "Lift A"));
+    expect(shaft.getAlphaMode()).toBe("BLEND");
+    expect(shaft.getAlpha()).toBeCloseTo(SHAFT_OPACITY);
+    expectColour(shaft, PORTAL_COLOUR.shaft);
+    const escalator = materialOf(child(stops, "Escalator 1"));
+    expect(escalator.getName()).toBe("escalator");
+    expectColour(escalator, PORTAL_COLOUR.escalator);
+  });
+
+  it("builds nothing for a deleted escalator", async () => {
+    const gone: MapModel = { ...floorModel, portals: floorModel.portals.map(p => (p.id === "esc-1" ? { ...p, deletedAt: DELETED } : p)) };
+    expect(names(group(await exported(gone, ["oth-L1"]), "L1", "Stops"))).toEqual(["Lift A"]);
+  });
+});
+
+describe("buildFloorGlb — Pathways", () => {
+  it("lays each live pathway as a strip, named after it or by its id", async () => {
+    const pathways = group(await exported(floorModel, ["oth-L1"]), "L1", "Pathways");
+    expect(names(pathways)).toEqual(["Way in", "L1-east"]);
+    expect(child(pathways, "Way in").getExtras()).toEqual({ othId: "L1-in", widthM: 2 });
+  });
+
+  it("lays a strip as wide as its pathway, just above the slabs", async () => {
+    const strip = bounds(child(group(await exported(floorModel, ["oth-L1"]), "L1", "Pathways"), "Way in"));
+    expect(strip.minX).toBeCloseTo(1);
+    expect(strip.maxX).toBeCloseTo(3);
+    expect(strip.minZ).toBeCloseTo(-2);
+    expect(strip.maxZ).toBeCloseTo(5);
+    expect(strip.minY).toBeCloseTo(STRIP_HEIGHT_M);
+    expect(strip.maxY).toBeCloseTo(STRIP_HEIGHT_M);
+  });
+
+  it("paints a strip in its kind's colour, and one with no kind in the plan's blue", async () => {
+    const pathways = group(await exported(floorModel, ["oth-L1"]), "L1", "Pathways");
+    const concourse = materialOf(child(pathways, "Way in"));
+    expect(concourse.getName()).toBe("Concourse");
+    expectColour(concourse, "#f97316");
+    expect(concourse.getAlpha()).toBeCloseTo(STRIP_OPACITY);
+    const plain = materialOf(child(pathways, "L1-east"));
+    expect(plain.getName()).toBe("pathway");
+    expectColour(plain, DEFAULT_PATHWAY_COLOUR);
   });
 });
