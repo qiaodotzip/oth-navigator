@@ -1,5 +1,5 @@
 import { RoomDraftSchema, parseModel, type RoomDraft } from "@oth/model";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { ApiError } from "../api/client";
 import { createSaver } from "../state/save";
@@ -56,6 +56,45 @@ beforeEach(() => {
   s.setModel(model);
   s.setActiveLevel("oth-L2");
   useDrafts.getState().setDrafts("oth-L2", all);
+});
+
+describe("DraftsPanel: drafts Claude set aside for a person", () => {
+  const aside = (reason: string) => ({ by: "u_sc", reason, at: "2026-09-29T03:00:00.000Z" });
+  const asideCopy = { ...copy, setAside: aside("It lies over the hall; a person should say which is right.") };
+  const asidePlaza = { ...plaza, setAside: aside("The drawing leaves it open.") };
+
+  beforeEach(() => {
+    useEditorStore.getState().setTeam([{ id: "u_sc", displayName: "Stef Chan" }]);
+    useDrafts.getState().setDrafts("oth-L2", [shop, store, asideCopy, asidePlaza]);
+  });
+
+  it("counts them among the drafts to review, and says how many Claude set aside", () => {
+    setup({ listRoomDrafts: vi.fn().mockResolvedValue([shop, store, asideCopy, asidePlaza]) });
+    expect(screen.getByText("3 drafts to review")).toBeTruthy();
+    expect(screen.getByText(/1 set aside by Claude/)).toBeTruthy();
+    expect(screen.queryByText(/already on the map/)).toBeNull();
+  });
+
+  it("says who set the draft in hand aside, and why", () => {
+    setup({ listRoomDrafts: vi.fn().mockResolvedValue([shop, store, asideCopy, asidePlaza]) });
+    hold(asideCopy);
+    expect(within(screen.getByRole("group", { name: "Draft: Hall" }))
+      .getByText("Set aside by Stef Chan's Claude: It lies over the hall; a person should say which is right.")).toBeTruthy();
+    hold(shop);
+    expect(within(screen.getByRole("group", { name: "Draft: Shop" })).queryByText(/^Set aside by/)).toBeNull();
+  });
+
+  it("marks an open space Claude set aside, with its reason", () => {
+    setup({ listRoomDrafts: vi.fn().mockResolvedValue([shop, store, asideCopy, asidePlaza]) });
+    expect(screen.getByText("Set aside by Stef Chan's Claude: The drawing leaves it open.")).toBeTruthy();
+  });
+
+  it("leaves them out of Accept all: each is decided knowingly", async () => {
+    const api = setup({ listRoomDrafts: vi.fn().mockResolvedValue([shop, store, asideCopy, asidePlaza]) });
+    fireEvent.click(screen.getByRole("button", { name: "Accept all 2 not set aside" }));
+    await waitFor(() => expect(api.acceptRoomDrafts).toHaveBeenCalledTimes(1));
+    expect((api.acceptRoomDrafts as unknown as Mock).mock.calls[0]![0].map((i: { id: string }) => i.id)).toEqual(["rd_shop", "rd_store"]);
+  });
 });
 
 describe("DraftsPanel", () => {

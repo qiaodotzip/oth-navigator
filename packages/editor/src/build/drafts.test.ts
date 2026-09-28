@@ -148,6 +148,18 @@ describe("draftView", () => {
     expect(draftView(again, accepted).review).toEqual([]);
   });
 
+  it("keeps a draft Claude set aside for a person to review, even one already on the map", () => {
+    const setAside = { by: "u_sc", reason: "It lies over a room traced by hand.", at: "2026-09-29T03:00:00.000Z" };
+    const view = draftView(
+      [shaped("new", square(0, 0, 10)), { ...shaped("copy", square(50, 50, 10)), setAside }],
+      [room("L2-shop", square(50.2, 50.2, 9.6))],
+    );
+    expect(view.review.map(d => d.id)).toEqual(["new", "copy"]);
+    expect(view.review[1]!.setAside).toEqual(setAside);
+    expect(view.covered).toEqual([]);
+    expect(view.shapes.has("copy")).toBe(true);
+  });
+
   it("never takes a hall for a column standing in it, or a column for the hall", () => {
     const view = draftView(
       [shaped("hall", square(0, 0, 30)), shaped("col", square(10, 10, 1), { kind: "detail" })],

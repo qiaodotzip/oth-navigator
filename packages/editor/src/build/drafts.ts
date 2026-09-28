@@ -1,14 +1,14 @@
 import { bboxOfRing, draftMatch, live, type BBox, type Room, type RoomDraft } from "@oth/model";
 import { useEffect } from "react";
 import { create } from "zustand";
-import type { Api } from "../api/client";
+import type { Api, RoomDraftRow } from "../api/client";
 import { draftNameSpot, type DraftShape } from "../plan/DraftLayer";
 import { useEditorStore } from "../state/store";
 import { reportFailure } from "../ui/failure";
 
 type DraftsState = {
-  /** Each floor's drafts waiting for review, as the server last gave them. */
-  byLevel: Readonly<Record<string, RoomDraft[]>>;
+  /** Each floor's drafts waiting for review, as the server last gave them, Claude's set-aside marks and all. */
+  byLevel: Readonly<Record<string, RoomDraftRow[]>>;
   /** The draft in hand. Part B's own, so the map's selection (state/store.ts) is left alone. */
   selectedId: string | null;
   /** Whether drafts already on the map are drawn too. */
@@ -17,7 +17,7 @@ type DraftsState = {
   finding: string | null;
   /** A request to frame part of the plan. `seq` makes the same box asked twice two requests. */
   frame: { box: BBox; seq: number } | null;
-  setDrafts: (levelId: string, drafts: RoomDraft[]) => void;
+  setDrafts: (levelId: string, drafts: RoomDraftRow[]) => void;
   select: (id: string | null) => void;
   setShowCovered: (on: boolean) => void;
   setFinding: (words: string | null) => void;
@@ -83,10 +83,10 @@ export function useRoomDrafts(api: Pick<Api, "listRoomDrafts">, levelId: string 
 }
 
 export type DraftView = {
-  review: RoomDraft[];
-  covered: { draft: RoomDraft; roomId: string }[];
+  review: RoomDraftRow[];
+  covered: { draft: RoomDraftRow; roomId: string }[];
   /** Spaces the drawing leaves open: drawn by hand at their names. */
-  open: RoomDraft[];
+  open: RoomDraftRow[];
   /** How each draft with an outline is drawn, by id: worked out here, once per sort, not on every frame. */
   shapes: ReadonlyMap<string, DraftShape>;
 };
@@ -98,8 +98,12 @@ export type DraftView = {
  * way alone would hide a new hall built round a riser, since the hall covers
  * all of the riser. A column is measured against columns only, so a hall is
  * never taken for a column standing in it.
+ *
+ * A draft Claude set aside is a person's to decide, so it is always to
+ * review, even when it is already on the map: hidden there, the person it
+ * was left for would never see it.
  */
-export function draftView(drafts: readonly RoomDraft[], rooms: readonly Room[]): DraftView {
+export function draftView(drafts: readonly RoomDraftRow[], rooms: readonly Room[]): DraftView {
   const shapes = new Map<string, DraftShape>();
   const view: DraftView = { review: [], covered: [], open: [], shapes };
   for (const d of drafts) {
@@ -109,14 +113,14 @@ export function draftView(drafts: readonly RoomDraft[], rooms: readonly Room[]):
     }
     const { copyOf, overRooms } = draftMatch(d, rooms);
     shapes.set(d.id, { ...draftNameSpot(d), overRooms });
-    if (copyOf) view.covered.push({ draft: d, roomId: copyOf.id });
+    if (copyOf && !d.setAside) view.covered.push({ draft: d, roomId: copyOf.id });
     else view.review.push(d);
   }
   return view;
 }
 
-const NO_DRAFTS: readonly RoomDraft[] = [];
-let lastView: { drafts: readonly RoomDraft[] | undefined; rooms: string; levelId: string | null; view: DraftView } | null = null;
+const NO_DRAFTS: readonly RoomDraftRow[] = [];
+let lastView: { drafts: readonly RoomDraftRow[] | undefined; rooms: string; levelId: string | null; view: DraftView } | null = null;
 
 /**
  * The open floor's drafts, sorted. One answer, shared by the plan, the review

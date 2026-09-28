@@ -1,6 +1,6 @@
 import type { RoomDraft, RoomKind } from "@oth/model";
 import { useEffect, useRef, useState } from "react";
-import type { Api } from "../api/client";
+import type { Api, RoomDraftRow, TeamMember } from "../api/client";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
@@ -19,6 +19,13 @@ const KINDS: { value: RoomKind; label: string }[] = [
 ];
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** "Set aside by Stef Chan's Claude: <its reason>", for a draft Claude left for a person; null for any other. */
+function setAsideWords(d: RoomDraftRow, team: readonly TeamMember[]): string | null {
+  if (!d.setAside) return null;
+  const who = team.find(m => m.id === d.setAside!.by)?.displayName;
+  return `Set aside by ${who ? `${who}'s` : "a teammate's"} Claude: ${d.setAside.reason}`;
+}
 
 /**
  * Each open space's name for its buttons. The drawing can print one name
@@ -52,11 +59,16 @@ function openSpaceNames(open: readonly RoomDraft[]): Map<string, string> {
  * the buttons are off and the keys, Skip's included, do nothing. Skip there
  * would move the draft in hand, and the decision would then take up the one
  * after the draft it decided, not after the one you skipped to.
+ *
+ * A draft Claude set aside for a person waits with the rest, counted among
+ * those to review, and says whose Claude set it aside and why. Accept all
+ * leaves those out: like one already on the map, each is decided knowingly.
  */
 export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
   const levelId = useEditorStore(s => s.activeLevelId);
   const mapSelection = useEditorStore(s => s.selection);
   const tool = useEditorStore(s => s.tool);
+  const team = useEditorStore(s => s.team);
   const view = useDraftView(levelId);
   const selectedId = useDrafts(s => s.selectedId);
   const showCovered = useDrafts(s => s.showCovered);
@@ -69,6 +81,9 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
   const shown = showCovered ? [...view.review, ...view.covered.map(c => c.draft)] : view.review;
   const selected = shown.find(d => d.id === selectedId) ?? null;
   const coveredIds = new Set(view.covered.map(c => c.draft.id));
+  const setAside = view.review.filter(d => d.setAside).length;
+  // What Accept all takes: every draft to review but those Claude set aside for a person.
+  const free = view.review.filter(d => !d.setAside);
 
   // A new draft in hand starts from its own name and kind. Keyed on its id
   // alone: a reload that brings back the same draft keeps a name being typed.
@@ -140,7 +155,7 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
   const acceptAll = () => {
     if (!ctx) return;
     // The draft in hand goes with its corrections; the rest as they were found.
-    const decisions = view.review.map(d => (d.id === selected?.id && name.trim()
+    const decisions = free.map(d => (d.id === selected?.id && name.trim()
       ? { draft: d, nameEn: name.trim(), kind }
       : { draft: d, nameEn: d.nameEn, kind: d.kind }));
     void decide(async () => {
@@ -169,6 +184,7 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
     <section aria-label="Drafts from the drawing" className="space-y-2">
       <p className="text-xs text-stone-700">
         <span className="font-medium">{`${plural(view.review.length, "draft", "drafts")} to review`}</span>
+        {setAside > 0 && ` · ${setAside} set aside by Claude`}
         {view.covered.length > 0 && ` · ${view.covered.length} already on the map`}
       </p>
       {view.covered.length > 0 && (
@@ -194,6 +210,7 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
           <p className="text-xs text-stone-600">
             {`${Math.round(selected.areaM2)} m²`}{coveredIds.has(selected.id) ? " · already on the map" : ""}
           </p>
+          {selected.setAside && <p className="text-xs text-yours">{setAsideWords(selected, team)}</p>}
           <div className="flex flex-wrap gap-1">
             <Button size="sm" variant="primary" disabled={busy || !name.trim()} onClick={accept}>Accept <Kbd>A</Kbd></Button>
             <Button size="sm" disabled={busy} onClick={reject}>Reject <Kbd>R</Kbd></Button>
@@ -203,8 +220,10 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
       ) : shown.length > 0 ? (
         <Button size="sm" onClick={() => take(shown[0]!)}>Review the drafts</Button>
       ) : null}
-      {view.review.length > 1 && (
-        <Button size="sm" disabled={busy} onClick={acceptAll}>{`Accept all ${view.review.length} to review`}</Button>
+      {free.length > 1 && (
+        <Button size="sm" disabled={busy} onClick={acceptAll}>
+          {setAside > 0 ? `Accept all ${free.length} not set aside` : `Accept all ${free.length} to review`}
+        </Button>
       )}
       {view.open.length > 0 && (
         <div>
@@ -213,12 +232,16 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
           <ul className="mt-1 space-y-1">
             {view.open.map(d => {
               const label = openNames.get(d.id) ?? d.nameEn;
+              const aside = setAsideWords(d, team);
               return (
-                <li key={d.id} className="flex items-center gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => drawByHand(d)}>{label}</Button>
-                  <Button size="sm" variant="ghost" aria-label={`Done with ${label}`} disabled={busy} onClick={() => doneWith(d)}>
-                    Done
-                  </Button>
+                <li key={d.id}>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => drawByHand(d)}>{label}</Button>
+                    <Button size="sm" variant="ghost" aria-label={`Done with ${label}`} disabled={busy} onClick={() => doneWith(d)}>
+                      Done
+                    </Button>
+                  </div>
+                  {aside && <p className="pl-2.5 text-xs text-yours">{aside}</p>}
                 </li>
               );
             })}
