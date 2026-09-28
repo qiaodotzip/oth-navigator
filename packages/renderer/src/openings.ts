@@ -1,4 +1,6 @@
-import { distancePointToSegment, pointInPolygon, type Doorway, type Pathway, type Room, type Vec2 } from "@oth/model";
+import {
+  distancePointToSegment, pointInPolygon, segmentsProperlyIntersect, type Doorway, type Pathway, type Room, type Vec2,
+} from "@oth/model";
 import { subtractIntervals, type Interval } from "./intervals";
 import type { WallPiece } from "./wallPlan";
 
@@ -203,7 +205,9 @@ export function isWalkableArea(room: Room): boolean {
   return room.kind === "area" && room.walkable;
 }
 
-type AreaEdge = { a: Vec2; b: Vec2; ux: number; uy: number; minX: number; maxX: number; minY: number; maxY: number };
+type AreaEdge = {
+  area: string; a: Vec2; b: Vec2; ux: number; uy: number; minX: number; maxX: number; minY: number; maxY: number;
+};
 
 /** Every edge of the walkable areas among these rooms, holes included: a kiosk can stand in an area's hole. */
 function areaEdges(rooms: readonly Room[]): AreaEdge[] {
@@ -217,7 +221,7 @@ function areaEdges(rooms: readonly Room[]): AreaEdge[] {
         const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
         if (len < 1e-9) continue;
         edges.push({
-          a, b, ux: (b[0] - a[0]) / len, uy: (b[1] - a[1]) / len,
+          area: room.id, a, b, ux: (b[0] - a[0]) / len, uy: (b[1] - a[1]) / len,
           minX: Math.min(a[0], b[0]), maxX: Math.max(a[0], b[0]),
           minY: Math.min(a[1], b[1]), maxY: Math.max(a[1], b[1]),
         });
@@ -249,8 +253,8 @@ function narrowed(lo: number, hi: number, v0: number, v1: number, min: number, m
   return [Math.max(lo, Math.min(s0, s1)), Math.min(hi, Math.max(s0, s1))];
 }
 
-/** A stretch of wall with an area in front of it, and how far out the area's nearest edge is. */
-type Facing = { interval: Interval; gap: number };
+/** A stretch of wall with areas in front of it, how far out the nearest one is, and which they are. */
+type Facing = { interval: Interval; gap: number; areas: string[] };
 
 /**
  * The stretches of the piece that a walkable area lies in front of, on the
@@ -276,19 +280,56 @@ function facingStretches(f: Frame, out: Vec2, edges: readonly AreaEdge[]): Facin
     if (hi <= lo) continue;
     const t0 = ta + (tb - ta) * lo, t1 = ta + (tb - ta) * hi;
     const h0 = ha + (hb - ha) * lo, h1 = ha + (hb - ha) * hi;
-    found.push({ interval: [Math.min(t0, t1), Math.max(t0, t1)], gap: Math.max(0, Math.min(h0, h1)) });
+    found.push({ interval: [Math.min(t0, t1), Math.max(t0, t1)], gap: Math.max(0, Math.min(h0, h1)), areas: [e.area] });
   }
 
   found.sort((p, q) => p.interval[0] - q.interval[0]);
-  const joined: Array<{ interval: [number, number]; gap: number }> = [];
-  for (const { interval: [from, to], gap } of found) {
+  const joined: Array<{ interval: [number, number]; gap: number; areas: string[] }> = [];
+  for (const { interval: [from, to], gap, areas } of found) {
     const last = joined[joined.length - 1];
     if (last && from <= last.interval[1] + BOX_SLACK_M) {
       last.interval[1] = Math.max(last.interval[1], to);
       last.gap = Math.min(last.gap, gap);
-    } else joined.push({ interval: [from, to], gap });
+      for (const area of areas) if (!last.areas.includes(area)) last.areas.push(area);
+    } else joined.push({ interval: [from, to], gap, areas: [...areas] });
   }
   return joined;
+}
+
+/** The point of the segment nearest p. */
+function nearestOnSegment(p: Vec2, a: Vec2, b: Vec2): Vec2 {
+  const vx = b[0] - a[0];
+  const vy = b[1] - a[1];
+  const lenSq = vx * vx + vy * vy;
+  const t = lenSq > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / lenSq)) : 0;
+  return [a[0] + t * vx, a[1] + t * vy];
+}
+
+/** The nearest point to p on the outline of any of these areas. */
+function nearestOfAreas(p: Vec2, areas: readonly string[], edgesOf: ReadonlyMap<string, readonly AreaEdge[]>): Vec2 | null {
+  let best: Vec2 | null = null;
+  let bestD = Infinity;
+  for (const area of areas) {
+    for (const e of edgesOf.get(area) ?? []) {
+      const q = nearestOnSegment(p, e.a, e.b);
+      const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (d < bestD) { best = q; bestD = d; }
+    }
+  }
+  return best;
+}
+
+/** Whether the straight line from p to q crosses a wall of any room but this one (Ruling 10). */
+function crossesAnotherRoom(p: Vec2, q: Vec2, pieces: readonly WallPiece[], roomId: string): boolean {
+  const minX = Math.min(p[0], q[0]) - BOX_SLACK_M, maxX = Math.max(p[0], q[0]) + BOX_SLACK_M;
+  const minY = Math.min(p[1], q[1]) - BOX_SLACK_M, maxY = Math.max(p[1], q[1]) + BOX_SLACK_M;
+  for (const w of pieces) {
+    if (Math.max(w.a[0], w.b[0]) < minX || Math.min(w.a[0], w.b[0]) > maxX) continue;
+    if (Math.max(w.a[1], w.b[1]) < minY || Math.min(w.a[1], w.b[1]) > maxY) continue;
+    if (w.rooms.every(id => id === roomId)) continue;
+    if (segmentsProperlyIntersect(p, q, w.a, w.b)) return true;
+  }
+  return false;
 }
 
 /**
@@ -321,29 +362,38 @@ function pathwayDoor(pieces: readonly WallPiece[], own: readonly number[], pathw
  * and between stretches equally near, on the longest. It is as wide as a
  * pathway's opening at most, and centred on the stretch. A stretch narrower
  * than MIN_DOOR_M gets no door.
+ *
+ * A door that would look straight across another room's wall to the nearest
+ * point of the area it opens onto would open onto that room's back, so the
+ * next-nearest stretch is tried instead (Ruling 10).
  */
 function areaDoor(
-  pieces: readonly WallPiece[], own: readonly number[], room: Room | undefined, edges: readonly AreaEdge[],
+  pieces: readonly WallPiece[], own: readonly number[], room: Room | undefined,
+  edges: readonly AreaEdge[], edgesOf: ReadonlyMap<string, readonly AreaEdge[]>,
 ): Door | null {
   if (!room) return null;
-  let best: { index: number; stretch: Interval; gap: number } | null = null;
+  const candidates: Array<{ index: number; f: Frame; stretch: Interval; gap: number; areas: string[] }> = [];
   for (const index of own) {
     const f = frameOf(pieces[index]!);
     const out = f && outwardOf(f, room);
     if (!f || !out) continue;
-    for (const { interval: stretch, gap } of facingStretches(f, out, edges)) {
-      const length = stretch[1] - stretch[0];
-      if (length + 1e-9 < MIN_DOOR_M) continue;
-      if (best === null || gap < best.gap || (gap === best.gap && length > best.stretch[1] - best.stretch[0])) {
-        best = { index, stretch, gap };
-      }
+    for (const { interval: stretch, gap, areas } of facingStretches(f, out, edges)) {
+      if (stretch[1] - stretch[0] + 1e-9 >= MIN_DOOR_M) candidates.push({ index, f, stretch, gap, areas });
     }
   }
-  if (best === null) return null;
-  const [from, to] = best.stretch;
-  const middle = (from + to) / 2;
-  const half = Math.min(to - from, MAX_PATH_OPENING_M) / 2;
-  return { index: best.index, interval: [middle - half, middle + half] };
+  // Nearest first, then longest. The sort is stable, so a full tie keeps wall order.
+  const lengthOf = ([from, to]: Interval) => to - from;
+  candidates.sort((p, q) => p.gap - q.gap || lengthOf(q.stretch) - lengthOf(p.stretch));
+
+  for (const { index, f, stretch: [from, to], areas } of candidates) {
+    const middle = (from + to) / 2;
+    const centre = pointAt(f, middle);
+    const target = nearestOfAreas(centre, areas, edgesOf);
+    if (target && crossesAnotherRoom(centre, target, pieces, room.id)) continue;
+    const half = Math.min(to - from, MAX_PATH_OPENING_M) / 2;
+    return { index, interval: [middle - half, middle + half] };
+  }
+  return null;
 }
 
 /**
@@ -379,10 +429,16 @@ export function wallRuns(
   });
 
   const edges = areaEdges(rooms);
+  const edgesOf = new Map<string, AreaEdge[]>();
+  for (const e of edges) {
+    const list = edgesOf.get(e.area);
+    if (list) list.push(e);
+    else edgesOf.set(e.area, [e]);
+  }
   const byId = new Map(rooms.map(r => [r.id, r]));
   for (const [roomId, own] of ownPieces) {
     if (opened.has(roomId)) continue;
-    const door = pathwayDoor(pieces, own, pathways) ?? areaDoor(pieces, own, byId.get(roomId), edges);
+    const door = pathwayDoor(pieces, own, pathways) ?? areaDoor(pieces, own, byId.get(roomId), edges, edgesOf);
     if (door) cuts[door.index]!.push(door.interval);
   }
 

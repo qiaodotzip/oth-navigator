@@ -258,6 +258,29 @@ describe("wallRuns", () => {
       expect(onFront(wallRuns(shop(), [], [], [theShop, space(sq(-10, -10, 2, 0))]))).toEqual([[2, 6]]);
     });
 
+    describe("with a neighbour standing between it and the area", () => {
+      // A kiosk 4 m by 2 m stands between the shop's front and a concourse 4 m out.
+      const kiosk: WallPiece[] = [
+        { a: [1, -3], b: [5, -3], thicknessM: 0.15, rooms: ["L1-kiosk"] },
+        { a: [5, -3], b: [5, -1], thicknessM: 0.15, rooms: ["L1-kiosk"] },
+        { a: [5, -1], b: [1, -1], thicknessM: 0.15, rooms: ["L1-kiosk"] },
+        { a: [1, -1], b: [1, -3], thicknessM: 0.15, rooms: ["L1-kiosk"] },
+      ];
+      const rooms = [theShop, walled("L1-kiosk", sq(1, -3, 5, -1)), space(sq(-10, -10, 20, -4))];
+      const ofShop = (runs: WallPiece[]) => runs.filter(r => r.rooms.includes("L1-shop"));
+
+      it("stays closed when the kiosk stands between it and the only area it faces", () => {
+        expect(ofShop(wallRuns([...shop(), ...kiosk], [], [], rooms))).toEqual(shop());
+      });
+
+      it("opens onto the next-nearest area instead, when nothing stands between", () => {
+        // A second area 5 m off the west wall: farther than the concourse, but in clear view.
+        const runs = ofShop(wallRuns([...shop(), ...kiosk], [], [], [...rooms, space(sq(-10, 0, -5, 4))]));
+        expect(onFront(runs)).toEqual([[0, 6]]);
+        expect(onWest(runs).map(r => [r6(r.a[1]), r6(r.b[1])])).toEqual([[4, 3.5], [0.5, 0]]);
+      });
+    });
+
     it("never looks back through the room at an area behind it", () => {
       // The back wall, which faces the area, is shared with the room behind.
       const backed = shop().map(p => (p.a[1] === 4 && p.b[1] === 4 ? { ...p, rooms: ["L1-shop", "L1-back"] } : p));
