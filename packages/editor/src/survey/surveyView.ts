@@ -40,6 +40,8 @@ export type SurveyView = {
   counts: Record<SurveyFilter, number>;
   /** What the filter lets through — plus the frame in view, even once it no longer matches. */
   shown: Keyframe[];
+  /** The filter lets nothing through: `shown` is the frame in view alone, there only because it is in view. */
+  noneMatch: boolean;
   frame: Keyframe | null;
   /** The frame's position in `frames`, from 0; -1 with no frame. */
   index: number;
@@ -62,7 +64,7 @@ export function surveyView(model: MapModel | null, levelId: string, params: Surv
   if (!model) {
     return {
       captures: [], unfiled: [], capture: null, frames: [], statuses,
-      counts: filterCounts([], statuses), shown: [], frame: null, index: -1, place: null,
+      counts: filterCounts([], statuses), shown: [], noneMatch: false, frame: null, index: -1, place: null,
     };
   }
 
@@ -91,9 +93,10 @@ export function surveyView(model: MapModel | null, levelId: string, params: Surv
     frames.find(passes) ??
     null;
   const shown = frames.filter(f => passes(f) || f.id === frame?.id);
+  const noneMatch = frame !== null && !frames.some(passes);
 
   return {
-    captures, unfiled, capture, frames, statuses, counts, shown, frame,
+    captures, unfiled, capture, frames, statuses, counts, shown, noneMatch, frame,
     index: frame ? frames.indexOf(frame) : -1,
     place,
   };

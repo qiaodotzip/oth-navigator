@@ -452,7 +452,8 @@ export function SurveyWorkspace({ api, saver, level, params }: {
                 </Chip>
               ))}
               {view.place && (
-                <Chip selected onClick={() => setParams({ place: null, frame: null })}>Seen: {view.place.nameEn} ×</Chip>
+                // Like a filter chip, letting the place go leaves the frame in view.
+                <Chip selected onClick={() => setParams({ place: null })}>Seen: {view.place.nameEn} ×</Chip>
               )}
             </div>
           )}
@@ -480,6 +481,15 @@ export function SurveyWorkspace({ api, saver, level, params }: {
             <Button size="sm" variant="primary" onClick={() => openFootage(null)}>+ Add footage</Button>
           </div>
         </div>
+        {view.noneMatch && (
+          // The frame in view stays, alone in the strip, and the arrows have
+          // nowhere to go: this says why, where it would otherwise be silence.
+          <p role="status" className="border-b border-stone-200 bg-stone-50 px-4 py-2 text-sm text-stone-600">
+            {view.place
+              ? `${view.place.nameEn} isn't seen in any other frame.`
+              : `No other frames are ${FILTER_LABEL[read.filter].toLowerCase()}.`}
+          </p>
+        )}
         {body}
       </div>
       {hasFrames && (
@@ -490,7 +500,8 @@ export function SurveyWorkspace({ api, saver, level, params }: {
           levelCode={level.code}
           placeFilter={view.place?.id ?? null}
           onRemove={removeLabel}
-          onPickPlace={id => setParams({ place: id, frame: null })}
+          // A place chosen opens on a frame it is seen in; one let go leaves the frame in view.
+          onPickPlace={id => setParams(id ? { place: id, frame: null } : { place: null })}
         />
       )}
       {footage && (

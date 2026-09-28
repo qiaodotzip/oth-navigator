@@ -192,6 +192,46 @@ describe("SurveyWorkspace", () => {
     expect(screen.getByText(/Frame 1 of 3/)).toBeTruthy();
   });
 
+  it("keeps the frame in view when the place is let go, by its chip or in the panel", () => {
+    at();
+    fireEvent.click(sidePanel().getByRole("button", { name: /^Kopitiam/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Seen: Kopitiam/ }));
+    expect(param("place")).toBeNull();
+    expect(screen.getByText(/Frame 1 of 3/)).toBeTruthy();
+
+    fireEvent.click(sidePanel().getByRole("button", { name: /^Kopitiam/ }));
+    fireEvent.click(sidePanel().getByRole("button", { name: /^Kopitiam/ }));
+    expect(param("place")).toBeNull();
+    expect(screen.getByText(/Frame 1 of 3/)).toBeTruthy();
+  });
+
+  it("says no other frame matches when the filter lets through none but the frame in view", async () => {
+    // Otherwise the strip holds one frame and the arrows do nothing, without a word.
+    at("", savingApi());
+    fireEvent.click(within(screen.getByRole("group", { name: "Show frames" })).getByRole("button", { name: /Untagged/ }));
+    expect(screen.queryByText("No other frames are untagged.")).toBeNull();
+    await tagAs("Kiosk");
+    expect(screen.getByText("No other frames are untagged.")).toBeTruthy();
+    expect(screen.getByText(/Frame 3 of 3/)).toBeTruthy();
+  });
+
+  it("says the place is seen in no other frame when only the frame in view is left", () => {
+    useEditorStore.getState().setModel(parseModel({
+      ...model,
+      places: [...model.places, { id: "p_atm", nameEn: "ATM", category: "facility", levelId: "oth-L1" }],
+    }));
+    at("?frame=kf_3&place=p_atm");
+    expect(screen.getByText("ATM isn't seen in any other frame.")).toBeTruthy();
+    expect(screen.getByText(/Frame 3 of 3/)).toBeTruthy();
+  });
+
+  it("puts the frame shown in place of one the address names that is not there", () => {
+    // An old link, to a frame binned since.
+    at("?frame=kf_gone");
+    expect(screen.getByText(/Frame 3 of 3/)).toBeTruthy();
+    expect(param("frame")).toBe("kf_3");
+  });
+
   it("links a name that exists, whatever its case, rather than making it again", async () => {
     // Review Focus 3.
     const api = at();
