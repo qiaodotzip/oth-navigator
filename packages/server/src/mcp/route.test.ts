@@ -1,18 +1,49 @@
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createApp, type AppDeps } from "../app";
 import { buildings, users } from "../db/schema";
-import { GATE_COOKIE, WrongCodes, gateToken } from "../gate/gate";
+import { GATE_COOKIE, gateToken } from "../gate/gate";
 import { PresenceTracker } from "../presence/service";
 import { json } from "../testing/harness";
+import { MCP_PATH } from "../tokens/bearer";
 import { mintToken, revokeToken } from "../tokens/service";
-import { LIMITS, TokenLimits } from "./limits";
+import { BadTokens, LIMITS, TokenLimits } from "./limits";
 import { SERVER_FAILED } from "./results";
 import { FROM_A_BROWSER, NO_TOKEN, POST_ONLY, REFUSED, TOKEN_IN_BODY, TOO_LARGE, TOO_MANY_BAD_TOKENS } from "./route";
-import { GATE_KEY, LIST, TEAM_CODE, call, mcpFixture } from "./testing";
+import { GATE_KEY, LIST, TEAM_CODE, call, mcpFixture, type McpFixture } from "./testing";
 
 const DAY = 24 * 3600_000;
 const made = (fill: string) => `oth_pat_${fill.repeat(43)}`;
+/** The nth made-up token, each one different. */
+const guess = (n: number) => `oth_pat_${String(n).padStart(43, "x")}`;
 const error = async (res: Response) => (await json<{ error: string }>(res)).error;
+
+/**
+ * Another server on the fixture's database, as after a deploy: it has
+ * accepted no token yet. It counts the reads its calls make of the database.
+ */
+function redeploy(f: McpFixture, mcp: AppDeps["mcp"] = {}) {
+  let reads = 0;
+  const db = new Proxy(f.db, {
+    get(target, key) {
+      const value = Reflect.get(target, key) as unknown;
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        if (key === "select") reads++;
+        return Reflect.apply(value, target, args) as unknown;
+      };
+    },
+  });
+  const app = createApp({ db, dataDir: f.dataDir, teamCode: null, mcp });
+  return {
+    reads: () => reads,
+    post: (secret: string) => app.request(MCP_PATH, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${secret}` },
+      body: JSON.stringify(LIST),
+    }),
+  };
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -92,7 +123,7 @@ describe("refusing a token", () => {
   });
 
   it("turns away a flood of made-up tokens unchecked, while a token already in use still works", async () => {
-    const f = await mcpFixture({ deps: { mcp: { badTokens: new WrongCodes({ max: 3, windowMs: 60_000 }) } } });
+    const f = await mcpFixture({ deps: { mcp: { badTokens: new BadTokens({ max: 3, windowMs: 60_000 }) } } });
     const client = await f.connect();
     for (const fill of ["a", "b", "c"]) expect((await f.raw(LIST, { authorization: `Bearer ${made(fill)}` })).status).toBe(401);
     const flooded = await f.raw(LIST, { authorization: `Bearer ${made("d")}` });
@@ -103,11 +134,63 @@ describe("refusing a token", () => {
   });
 
   it("never counts a teammate's expired token as a guess", async () => {
-    const f = await mcpFixture({ deps: { mcp: { badTokens: new WrongCodes({ max: 1, windowMs: 60_000 }) } } });
+    const f = await mcpFixture({ deps: { mcp: { badTokens: new BadTokens({ max: 1, windowMs: 60_000 }) } } });
     const old = await mintToken(f.db, f.wei, { name: "old", mayPublish: false }, new Date(Date.now() - 91 * DAY));
     for (let i = 0; i < 3; i++) expect((await f.raw(LIST, { authorization: `Bearer ${old.secret}` })).status).toBe(401);
     const other = await mintToken(f.db, f.wei, { name: "other", mayPublish: false });
     expect((await f.raw(LIST, { authorization: `Bearer ${other.secret}` })).status).toBe(200);
+  });
+
+  it("counts lookups still running, so a burst of made-up tokens sent at once reaches the database only up to the limit", async () => {
+    const f = await mcpFixture();
+    const booted = redeploy(f, { badTokens: new BadTokens({ max: 3, windowMs: 60_000 }) });
+    const answers = await Promise.all(Array.from({ length: 40 }, (_, i) => booted.post(guess(i))));
+    const statuses = answers.map(res => res.status);
+    expect(statuses.filter(s => s === 401)).toHaveLength(3);
+    expect(statuses.filter(s => s === 429)).toHaveLength(37);
+    // Three lookups, and at most one read of the live tokens for all the rest.
+    expect(booted.reads()).toBeLessThanOrEqual(4);
+  });
+
+  it("after a deploy and a flood of made-up tokens, still takes a token made before it started", async () => {
+    const f = await mcpFixture();
+    const booted = redeploy(f);
+    for (let i = 0; i < 20; i++) expect((await booted.post(guess(i))).status, `guess ${i}`).toBe(401);
+    expect((await booted.post(guess(20))).status).toBe(429);
+    expect((await booted.post(f.secret)).status).toBe(200);
+    // The live tokens are read at most once a minute, however many more guesses come.
+    const reads = booted.reads();
+    for (let i = 21; i < 31; i++) expect((await booted.post(guess(i))).status).toBe(429);
+    expect(booted.reads()).toBe(reads);
+  });
+
+  it("during a flood, takes a token made since it last read the live tokens a minute later", async () => {
+    const f = await mcpFixture();
+    let clock = Date.now();
+    const booted = redeploy(f, { badTokens: new BadTokens({ max: 1, windowMs: 3600_000 }), now: () => clock });
+    expect((await booted.post(guess(0))).status).toBe(401);
+    expect((await booted.post(f.secret)).status).toBe(200);
+    const fresh = await mintToken(f.db, f.wei, { name: "fresh", mayPublish: false });
+    expect((await booted.post(fresh.secret)).status).toBe(429);
+    clock += 60_000;
+    expect((await booted.post(fresh.secret)).status).toBe(200);
+  });
+
+  it("refuses a token that no longer works from memory, after looking it up once", async () => {
+    const f = await mcpFixture();
+    const old = await mintToken(f.db, f.wei, { name: "old", mayPublish: false }, new Date(Date.now() - 91 * DAY));
+    const booted = redeploy(f);
+    expect(await error(await booted.post(old.secret))).toBe(REFUSED.expired);
+    let reads = booted.reads();
+    expect(await error(await booted.post(old.secret))).toBe(REFUSED.expired);
+    expect(booted.reads()).toBe(reads);
+
+    expect((await booted.post(f.secret)).status).toBe(200);
+    await revokeToken(f.db, f.tokenId, f.wei.id);
+    expect(await error(await booted.post(f.secret))).toBe(REFUSED.revoked);
+    reads = booted.reads();
+    expect(await error(await booted.post(f.secret))).toBe(REFUSED.revoked);
+    expect(booted.reads()).toBe(reads);
   });
 });
 
@@ -131,6 +214,29 @@ describe("what a call may carry", () => {
     const res = await f.raw({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "list_floors", arguments: { note: f.secret } } });
     expect(res.status).toBe(422);
     expect(await error(res)).toBe(TOKEN_IN_BODY);
+  });
+
+  it("refuses a token in a body however its JSON escapes it", async () => {
+    const f = await mcpFixture();
+    const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "list_floors", arguments: { note: f.secret } } })
+      .replace("oth_pat_", "\\u006fth\\u005fpat_");
+    expect(body).not.toContain(f.secret);
+    const res = await f.raw(body);
+    expect(res.status).toBe(422);
+    expect(await error(res)).toBe(TOKEN_IN_BODY);
+  });
+
+  it("tells every cache to keep no answer", async () => {
+    const f = await mcpFixture();
+    const answers = [
+      await f.raw(LIST),
+      await f.raw(LIST, { authorization: undefined }),
+      await f.raw(LIST, { origin: "https://evil.example" }),
+      await f.app.request(MCP_PATH, { method: "GET", headers: { authorization: `Bearer ${f.secret}` } }),
+      await f.raw({ ...LIST, params: { pad: "x".repeat(LIMITS.bodyBytes) } }),
+    ];
+    expect(answers.map(res => res.status)).toEqual([200, 401, 403, 405, 413]);
+    for (const res of answers) expect(res.headers.get("cache-control"), String(res.status)).toBe("no-store");
   });
 
   it("slows a token down past its reads a minute, with Retry-After", async () => {

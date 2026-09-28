@@ -3,6 +3,7 @@ import type { ToolContext } from "./context";
 import { registerEditTools } from "./tools/edit";
 import { registerReadTools } from "./tools/read";
 import { registerSurveyTools } from "./tools/survey";
+import { wrapTools } from "./wrapTools";
 
 /** What Claude is told as it connects: the rules a person learns from the app itself. */
 export function instructions(name: string): string {
@@ -19,7 +20,7 @@ export function instructions(name: string): string {
 
 /** One server per request: stateless, so nothing is held across a deploy (spec §6.3). */
 export function buildMcpServer(ctx: ToolContext): McpServer {
-  const server = new McpServer({ name: "oth-map", version: "1.0.0" }, { instructions: instructions(ctx.user.displayName) });
+  const server = wrapTools(new McpServer({ name: "oth-map", version: "1.0.0" }, { instructions: instructions(ctx.user.displayName) }), ctx);
   registerReadTools(server, ctx);
   registerSurveyTools(server, ctx);
   registerEditTools(server, ctx);

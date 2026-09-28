@@ -6,10 +6,10 @@ import type { User } from "./auth/users";
 import { isDeployed, loadConfig } from "./config";
 import type { Database } from "./db/client";
 import { entityRoutes } from "./entities/routes";
-import { WrongCodes, teamGate } from "./gate/gate";
+import { teamGate } from "./gate/gate";
 import { levelImageRoutes } from "./images/routes";
 import { lockRoutes } from "./locks/routes";
-import { BAD_TOKEN_LIMIT, TokenLimits } from "./mcp/limits";
+import { BadTokens, TokenLimits } from "./mcp/limits";
 import { mcpRoutes, type McpDeps } from "./mcp/route";
 import { modelRoutes } from "./model/routes";
 import { presenceRoutes } from "./presence/routes";
@@ -106,7 +106,7 @@ export function createApp(deps: AppDeps) {
   // answer GET /mcp with the app's page.
   app.route("/", mcpRoutes({
     limits: deps.mcp?.limits ?? new TokenLimits(),
-    badTokens: deps.mcp?.badTokens ?? new WrongCodes(BAD_TOKEN_LIMIT),
+    badTokens: deps.mcp?.badTokens ?? new BadTokens(),
     presence,
     now: deps.mcp?.now,
   }));

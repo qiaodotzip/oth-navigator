@@ -126,6 +126,17 @@ export async function resolveToken(db: Database, secret: string, now: Date = new
   };
 }
 
+/**
+ * The hashes of every token that is neither revoked nor expired, and never the
+ * tokens, which are not kept. /mcp checks a token against them while a flood
+ * of made-up ones has its window full.
+ */
+export async function liveTokenHashes(db: Database, now: Date = new Date()): Promise<Set<string>> {
+  const rows = await db.select({ hash: apiTokens.tokenHash }).from(apiTokens)
+    .where(and(isNull(apiTokens.revokedAt), gt(apiTokens.expiresAt, now)));
+  return new Set(rows.map(r => r.hash));
+}
+
 /** Everyone's live tokens, oldest first. The team is flat: anyone sees, and may revoke, any. */
 export async function listTokens(db: Database, now: Date = new Date()): Promise<TokenListing[]> {
   const rows = await db.select({ token: apiTokens, ownerName: users.displayName }).from(apiTokens)

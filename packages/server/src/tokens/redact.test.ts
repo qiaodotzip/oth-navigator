@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
 import type { Database } from "../db/client";
@@ -34,6 +35,24 @@ describe("redactError", () => {
     expect(out.message).toBe("upstream refused oth_pat_[redacted]");
     expect(out.stack ?? "").not.toContain(SECRET);
   });
+
+  it("hides a token in whatever else the error carries: pg's detail, drizzle's params, a cause", () => {
+    const pg = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505", detail: `Key (name)=(${SECRET}) already exists.`,
+    });
+    const drizzle = Object.assign(new Error("Failed query: insert into notes"), { params: ["x", SECRET] });
+    const caused = new Error("save failed", { cause: pg });
+    const thrown = { detail: SECRET };
+    for (const err of [pg, drizzle, caused, thrown]) {
+      const out = redactError(err);
+      expect(out).not.toBe(err);
+      // What console.error prints for it, and deeper.
+      const printed = typeof out === "string" ? out : inspect(out, { depth: 5 });
+      expect(printed).toContain("[redacted]");
+      expect(printed).not.toContain(SECRET);
+    }
+    expect((redactError(pg) as Error).message).toBe("duplicate key value violates unique constraint");
+  });
 });
 
 describe("the server's error log", () => {
@@ -47,6 +66,21 @@ describe("the server's error log", () => {
     expect(res.status).toBe(500);
     const printed = logged.mock.calls.flat()
       .map(a => (a instanceof Error ? `${a.message}\n${a.stack ?? ""}` : String(a))).join("\n");
+    expect(printed).toContain("[redacted]");
+    expect(printed).not.toContain(SECRET);
+  });
+
+  it("never prints a token from pg's detail either", async () => {
+    vi.stubEnv("RAILWAY_ENVIRONMENT_NAME", "production");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const broken = {
+      select: () => {
+        throw Object.assign(new Error("duplicate key value"), { detail: `Key (note)=(${SECRET}) already exists.` });
+      },
+    } as unknown as Database;
+    const res = await createApp({ db: broken }).request("/api/auth/people");
+    expect(res.status).toBe(500);
+    const printed = logged.mock.calls.flat().map(a => inspect(a, { depth: 5 })).join("\n");
     expect(printed).toContain("[redacted]");
     expect(printed).not.toContain(SECRET);
   });

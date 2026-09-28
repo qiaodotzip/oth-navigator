@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LIMITS, TokenLimits, callKinds } from "./limits";
+import { BadTokens, LIMITS, RefusedTokens, TokenLimits, callKinds } from "./limits";
 
 const tool = (name: string) => ({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } });
 
@@ -71,5 +71,53 @@ describe("TokenLimits", () => {
     expect(limits.enter("other")).toBe(true);
     limits.leave("t");
     expect(limits.enter("t")).toBe(true);
+  });
+});
+
+describe("BadTokens", () => {
+  it("counts lookups still running, so a burst sent at once can't all reach the database", () => {
+    const bad = new BadTokens({ max: 3, windowMs: 60_000 });
+    bad.begin();
+    bad.begin();
+    expect(bad.blocked(0)).toBe(false);
+    bad.begin();
+    expect(bad.blocked(0)).toBe(true);
+    // A lookup that found a real token gives its place back and records nothing.
+    bad.end(false, 0);
+    expect(bad.blocked(0)).toBe(false);
+  });
+
+  it("records only a token nobody made, and forgets it once the window has passed", () => {
+    const bad = new BadTokens({ max: 1, windowMs: 60_000 });
+    bad.begin();
+    bad.end(true, 0);
+    expect(bad.blocked(59_999)).toBe(true);
+    expect(bad.blocked(60_000)).toBe(false);
+  });
+});
+
+describe("RefusedTokens", () => {
+  it("remembers a revoked or expired token for good, and a disabled person's for a minute", () => {
+    const refused = new RefusedTokens();
+    refused.add("r", "revoked", 0);
+    refused.add("e", "expired", 0);
+    refused.add("d", "disabled", 0);
+    const tomorrow = 24 * 3600_000;
+    expect(refused.get("r", tomorrow)).toBe("revoked");
+    expect(refused.get("e", tomorrow)).toBe("expired");
+    // A person can be enabled again, so their tokens are looked up again soon.
+    expect(refused.get("d", 59_999)).toBe("disabled");
+    expect(refused.get("d", 60_000)).toBeUndefined();
+    expect(refused.get("never-seen", 0)).toBeUndefined();
+  });
+
+  it("keeps at most its limit, forgetting the oldest first", () => {
+    const refused = new RefusedTokens(2);
+    refused.add("a", "revoked", 0);
+    refused.add("b", "revoked", 0);
+    refused.add("c", "revoked", 0);
+    expect(refused.get("a", 0)).toBeUndefined();
+    expect(refused.get("b", 0)).toBe("revoked");
+    expect(refused.get("c", 0)).toBe("revoked");
   });
 });

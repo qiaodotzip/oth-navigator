@@ -5,7 +5,7 @@ import type { Database } from "../db/client";
 import type { Row } from "../db/rows";
 import { users } from "../db/schema";
 import { NotDeletedError, NotFoundError, VersionConflictError } from "../entities/repository";
-import { withVia } from "../entities/via";
+import { currentVia, withVia } from "../entities/via";
 import { redactError } from "../tokens/redact";
 import type { ToolContext } from "./context";
 
@@ -84,11 +84,14 @@ function describeZod(err: ZodError): string {
  * whatever goes wrong comes back as a refusal the model can read. A raw
  * error never goes back: the SDK would pass its message on as it stands,
  * and that can carry a query or a path.
+ *
+ * wrapTools runs every handler through it, and most handlers run their own
+ * inside. The inner one only answers errors: the call is already shown.
  */
 export async function runTool(
   ctx: ToolContext, fn: () => Promise<CallToolResult>, subject?: Subject | readonly Subject[],
 ): Promise<CallToolResult> {
-  ctx.seenOn(null);
+  if (currentVia() !== ctx.token.id) ctx.seenOn(null);
   try {
     return await withVia(ctx.token.id, fn);
   } catch (err) {

@@ -1,3 +1,5 @@
+import type { TokenRefusal } from "../tokens/service";
+
 /**
  * Per token (spec §6.4). The counters are kept in memory, which works
  * because Railway runs one instance; a deploy resets them, which only ever
@@ -18,6 +20,78 @@ export type Limits = typeof LIMITS;
  * team codes (gate/gate.ts), so a flood of them cannot hammer the database.
  */
 export const BAD_TOKEN_LIMIT = { max: 20, windowMs: 15 * 60_000 };
+
+/**
+ * Made-up tokens across the whole server, in a sliding window like wrong team
+ * codes. A lookup still running counts too: otherwise a burst of tokens sent
+ * all at once would each reach the database before the first was answered.
+ */
+export class BadTokens {
+  private times: number[] = [];
+  private pending = 0;
+
+  constructor(private readonly limit: { max: number; windowMs: number } = BAD_TOKEN_LIMIT) {}
+
+  /** Whether a token not yet accepted is turned away without a lookup. */
+  blocked(now: number): boolean {
+    this.times = this.times.filter(t => now - t < this.limit.windowMs);
+    return this.times.length + this.pending >= this.limit.max;
+  }
+
+  /** A lookup begins. `end` must follow, however it ends. */
+  begin(): void {
+    this.pending++;
+  }
+
+  /** A lookup is over. Only a token nobody made is recorded as a guess. */
+  end(unknown: boolean, now: number): void {
+    this.pending--;
+    if (unknown) this.times.push(now);
+  }
+}
+
+/** A token that exists but no longer works. */
+export type KnownRefusal = Exclude<TokenRefusal, "malformed" | "unknown">;
+
+/** Enough for every token the team could have made, many times over. */
+const REFUSED_KEPT = 1000;
+
+/**
+ * A disabled person can be enabled again, so their tokens are looked up again
+ * after this. A revoked or an expired token never works again.
+ */
+const DISABLED_KEPT_MS = 60_000;
+
+/**
+ * Tokens that exist but were refused, by hash, answered from memory: a
+ * teammate's Claude Code retrying an expired token reaches the database once,
+ * however long it keeps trying. Bounded, forgetting the oldest first.
+ */
+export class RefusedTokens {
+  private readonly held = new Map<string, { reason: KnownRefusal; until: number }>();
+
+  constructor(private readonly max: number = REFUSED_KEPT) {}
+
+  get(hash: string, now: number): KnownRefusal | undefined {
+    const entry = this.held.get(hash);
+    if (!entry) return undefined;
+    if (now >= entry.until) {
+      this.held.delete(hash);
+      return undefined;
+    }
+    return entry.reason;
+  }
+
+  add(hash: string, reason: KnownRefusal, now: number): void {
+    this.held.delete(hash);
+    while (this.held.size >= this.max) {
+      const oldest = this.held.keys().next();
+      if (oldest.done) break;
+      this.held.delete(oldest.value);
+    }
+    this.held.set(hash, { reason, until: reason === "disabled" ? now + DISABLED_KEPT_MS : Infinity });
+  }
+}
 
 /**
  * Every tool that only reads. Anything else, including a tool added later
