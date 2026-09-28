@@ -391,12 +391,10 @@ describe("a write followed quickly by another", () => {
   });
 
   it("leaves the store alone when the reply carries no version to trust", async () => {
-    const api = fakeApi({
-      getModel: vi.fn(() => new Promise(() => {})),
-      updateEntity: vi.fn(async () => ({})),
-    });
+    const updateEntity = vi.fn(async () => ({}));
+    const api = fakeApi({ getModel: vi.fn(() => new Promise(() => {})), updateEntity });
     void createSaver(api).update("placement", "L1-bin-1", 0, { position: [5, 4, 0] });
-    await vi.waitFor(() => expect(api.updateEntity).toHaveBeenCalled());
+    await vi.waitFor(() => expect(updateEntity).toHaveBeenCalled());
     await Promise.resolve();
     expect(held()).toMatchObject({ version: 0, position: [3, 3, 0] });
   });

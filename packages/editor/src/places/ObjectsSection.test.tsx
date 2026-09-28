@@ -1,4 +1,5 @@
 import { parseModel, type Level } from "@oth/model";
+import { buildObjectKindGlb } from "@oth/renderer";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,11 +30,18 @@ const model = parseModel({
     { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 },
   ],
   rooms: [{ id: "L1-shop", levelId: "oth-L1", kind: "room", footprint: sq(0), heightM: 4 }],
-  objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+  objectKinds: [
+    { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } },
+    // A shop made an object by mistake: nothing of it is on the map.
+    { id: "ok_guardian", nameEn: "Guardian", size: { w: 0.5, d: 0.5, h: 1 } },
+  ],
   captures: [{ id: "cap_1", kind: "video", filename: "level 1.mp4", levelId: "oth-L1" }],
   keyframes: ["kf_1", "kf_2", "kf_3", "kf_4", "kf_5"].map(frame),
   places: [
     { id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "ok_bin" },
+    { id: "pl_guardian", nameEn: "Guardian", category: "retail", levelId: "oth-L1", objectKindId: "ok_guardian" },
+    // As on the live server: a wastebin, tagged under a name cut short.
+    { id: "pl_wast", nameEn: "wast", category: "facility" },
     { id: "pl_cooler", nameEn: "water cooler", category: "facility" },
     { id: "pl_fire", nameEn: "Fire cabinet", category: "facility", status: "proposed" },
     { id: "pl_bin_l2", nameEn: "Wastebin", category: "facility", levelId: "oth-L2" },
@@ -62,7 +70,9 @@ function setup(overrides: Parameters<typeof fakeApi>[0] = {}) {
 }
 
 const row = () => within(screen.getByTestId("object-row-ok_bin"));
+const guardian = () => within(screen.getByTestId("object-row-ok_guardian"));
 const turning = () => within(screen.getByRole("form", { name: "Turn a place into an object" }));
+const toasts = () => useToasts.getState().toasts.map(t => t.message);
 
 beforeEach(() => {
   useEditorStore.getState().reset();
@@ -84,9 +94,10 @@ describe("ObjectsSection", () => {
     expect(row().getByRole("link", { name: "5 frames" }).getAttribute("href")).toMatch(/^\/floors\/L1\/survey\?capture=cap_1&frame=kf_/);
   });
 
-  it("hints at Build's Dressing step for putting an object on the map by hand", () => {
+  it("hints at Build's Dressing step for putting an object on the map by hand, in one sentence", () => {
     setup();
-    expect(screen.getByText(/select a room in Build's Dressing step and use Objects…/)).toBeTruthy();
+    expect(screen.getByText("To put one on the map, open Build's Dressing step, select a room and use the Objects… button."))
+      .toBeTruthy();
   });
 
   it("points Place one on the map at the active floor's Dressing step", () => {
@@ -96,29 +107,50 @@ describe("ObjectsSection", () => {
 
   it("changes a kind's size, refusing one typed in centimetres before anything is sent", async () => {
     const api = setup();
-    fireEvent.click(row().getByRole("button", { name: "Change the size of wastebin" }));
-    const form = within(screen.getByRole("form", { name: "Size of wastebin" }));
+    fireEvent.click(row().getByRole("button", { name: "Change the name or size of wastebin" }));
+    const form = within(screen.getByRole("form", { name: "Name and size of wastebin" }));
     fireEvent.change(form.getByLabelText("Width in metres"), { target: { value: "60" } });
-    fireEvent.click(form.getByRole("button", { name: "Save size" }));
+    fireEvent.click(form.getByRole("button", { name: "Save" }));
     expect(form.getByRole("alert").textContent).toBe("60 m is more than 10 m. Sizes are in metres: 60 cm is 0.6.");
     expect(api.updateEntity).not.toHaveBeenCalled();
 
     fireEvent.change(form.getByLabelText("Width in metres"), { target: { value: "0.6" } });
-    fireEvent.click(form.getByRole("button", { name: "Save size" }));
+    fireEvent.click(form.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("objectKind", "ok_bin", 0, { size: { w: 0.6, d: 0.5, h: 1 } }));
-    await waitFor(() => expect(screen.queryByRole("form", { name: "Size of wastebin" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("form", { name: "Name and size of wastebin" })).toBeNull());
+  });
+
+  it("renames a kind, sending only the name when the size is unchanged", async () => {
+    const api = setup();
+    fireEvent.click(row().getByRole("button", { name: "Change the name or size of wastebin" }));
+    const form = within(screen.getByRole("form", { name: "Name and size of wastebin" }));
+    fireEvent.change(form.getByLabelText("Name"), { target: { value: " Litter bin " } });
+    fireEvent.click(form.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("objectKind", "ok_bin", 0, { nameEn: "Litter bin" }));
+  });
+
+  it("refuses a name another kind has, compared as the survey compares names, and sends nothing", () => {
+    const api = setup();
+    fireEvent.click(row().getByRole("button", { name: "Change the name or size of wastebin" }));
+    const form = within(screen.getByRole("form", { name: "Name and size of wastebin" }));
+    fireEvent.change(form.getByLabelText("Name"), { target: { value: "  guardian " } });
+    fireEvent.click(form.getByRole("button", { name: "Save" }));
+    expect(form.getByRole("alert").textContent).toBe("There is a kind called Guardian already.");
+    expect(api.updateEntity).not.toHaveBeenCalled();
   });
 
   it("offers every place that could be an object: proposals and places no floor claims, but not one bound or a walkway", () => {
     setup();
     const options = [...(turning().getByLabelText("Which place?") as HTMLSelectElement).options].map(o => o.textContent);
     // By name, as people read it: "Wastebin" sorts before "water cooler".
-    expect(options).toEqual(["Choose a place…", "Fire cabinet (proposed)", "Wastebin", "water cooler"]);
+    expect(options).toEqual(["Choose a place…", "Fire cabinet (proposed)", "wast", "Wastebin", "water cooler"]);
   });
 
   it("turns a place into an object, asking for its size: the kind first, then the place", async () => {
     const api = setup();
     fireEvent.change(turning().getByLabelText("Which place?"), { target: { value: "pl_cooler" } });
+    // Named for the place unless you say otherwise.
+    expect((turning().getByLabelText("Which kind?") as HTMLInputElement).value).toBe("water cooler");
     fireEvent.change(turning().getByLabelText("Width in metres"), { target: { value: "0.4" } });
     fireEvent.change(turning().getByLabelText("Depth in metres"), { target: { value: "0.4" } });
     fireEvent.change(turning().getByLabelText("Height in metres"), { target: { value: "1.2" } });
@@ -128,16 +160,104 @@ describe("ObjectsSection", () => {
     expect(type).toBe("objectKind");
     expect(kind).toMatchObject({ nameEn: "water cooler", size: { w: 0.4, d: 0.4, h: 1.2 } });
     expect(api.updateEntity).toHaveBeenCalledWith("place", "pl_cooler", 0, { objectKindId: kind.id });
+    await waitFor(() => expect(toasts()).toContain("water cooler is an object now (0.4 × 0.4 × 1.2 m)."));
   });
 
-  it("joins a kind of the same name rather than making a second, and says so instead of asking a size", async () => {
+  it("offers the kinds there are, to join one", () => {
+    setup();
+    const options = [...document.querySelectorAll("#object-kind-names option")] as HTMLOptionElement[];
+    expect(options.map(o => o.value)).toEqual(["Guardian", "wastebin"]);
+  });
+
+  it("joins a kind of the same name rather than making a second, showing its size but not letting it change here", async () => {
     const api = setup();
     fireEvent.change(turning().getByLabelText("Which place?"), { target: { value: "pl_bin_l2" } });
-    expect(turning().getByText("Wastebin joins the kind wastebin, at its size, 0.5 × 0.5 × 1 m.")).toBeTruthy();
-    expect(turning().queryByLabelText("Width in metres")).toBeNull();
+    expect(turning().getByText("Wastebin becomes a wastebin, at its size. Change the size on its row above.")).toBeTruthy();
+    const width = turning().getByLabelText("Width in metres") as HTMLInputElement;
+    expect([width.value, width.readOnly]).toEqual(["0.5", true]);
     fireEvent.click(turning().getByRole("button", { name: "This is an object" }));
     await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("place", "pl_bin_l2", 0, { objectKindId: "ok_bin" }));
     expect(api.createEntity).not.toHaveBeenCalled();
+  });
+
+  it("joins a kind chosen by name, whatever the place is called: wast is a wastebin", async () => {
+    const api = setup();
+    fireEvent.change(turning().getByLabelText("Which place?"), { target: { value: "pl_wast" } });
+    fireEvent.change(turning().getByLabelText("Which kind?"), { target: { value: "wastebin" } });
+    expect((turning().getByLabelText("Height in metres") as HTMLInputElement).value).toBe("1");
+    fireEvent.click(turning().getByRole("button", { name: "This is an object" }));
+    await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("place", "pl_wast", 0, { objectKindId: "ok_bin" }));
+    expect(api.createEntity).not.toHaveBeenCalled();
+    await waitFor(() => expect(toasts()).toContain("wast is now a wastebin (0.5 × 0.5 × 1 m)."));
+  });
+
+  it("makes a new kind of a name typed that no kind has", async () => {
+    const api = setup();
+    fireEvent.change(turning().getByLabelText("Which place?"), { target: { value: "pl_wast" } });
+    fireEvent.change(turning().getByLabelText("Which kind?"), { target: { value: "Litter bin" } });
+    expect((turning().getByLabelText("Width in metres") as HTMLInputElement).readOnly).toBe(false);
+    fireEvent.click(turning().getByRole("button", { name: "This is an object" }));
+    await waitFor(() => expect(api.updateEntity).toHaveBeenCalled());
+    const [, kind] = api.createEntity!.mock.calls[0] as [string, Record<string, unknown>];
+    expect(kind).toMatchObject({ nameEn: "Litter bin", size: { w: 0.5, d: 0.5, h: 1 } });
+    expect(api.updateEntity).toHaveBeenCalledWith("place", "pl_wast", 0, { objectKindId: kind.id });
+  });
+
+  it("refuses a blank kind, and sends nothing", () => {
+    const api = setup();
+    fireEvent.change(turning().getByLabelText("Which place?"), { target: { value: "pl_wast" } });
+    fireEvent.change(turning().getByLabelText("Which kind?"), { target: { value: "  " } });
+    fireEvent.click(turning().getByRole("button", { name: "This is an object" }));
+    expect(turning().getByRole("alert").textContent).toBe("Give the kind a name.");
+    expect(api.createEntity).not.toHaveBeenCalled();
+    expect(api.updateEntity).not.toHaveBeenCalled();
+  });
+
+  it("starts the kind afresh from the next place chosen", () => {
+    setup();
+    fireEvent.change(turning().getByLabelText("Which place?"), { target: { value: "pl_wast" } });
+    fireEvent.change(turning().getByLabelText("Which kind?"), { target: { value: "wastebin" } });
+    fireEvent.change(turning().getByLabelText("Which place?"), { target: { value: "pl_cooler" } });
+    expect((turning().getByLabelText("Which kind?") as HTMLInputElement).value).toBe("water cooler");
+  });
+
+  describe("Not an object", () => {
+    it("is offered only for a kind with nothing on the map", () => {
+      setup();
+      expect(row().queryByRole("button", { name: /Not an object/ })).toBeNull();
+      expect(guardian().getByRole("button", { name: "Not an object: Guardian" })).toBeTruthy();
+    });
+
+    it("puts its places back as places, then deletes the kind, and says so", async () => {
+      const api = setup();
+      fireEvent.click(guardian().getByRole("button", { name: "Not an object: Guardian" }));
+      await waitFor(() => expect(api.deleteEntity).toHaveBeenCalledWith("objectKind", "ok_guardian", 0));
+      expect(api.updateEntity).toHaveBeenCalledWith("place", "pl_guardian", 0, { objectKindId: null });
+      expect(api.updateEntity!.mock.invocationCallOrder[0]).toBeLessThan(api.deleteEntity!.mock.invocationCallOrder[0]!);
+      await waitFor(() => expect(toasts()).toContain("Guardian is no longer a kind of object. Guardian is back among the places."));
+    });
+
+    it("keeps the kind when a place could not be put back, so nothing is left an object of nothing", async () => {
+      const api = setup({ updateEntity: vi.fn().mockRejectedValue(new ApiError(422, { error: "invalid entity" })) });
+      fireEvent.click(guardian().getByRole("button", { name: "Not an object: Guardian" }));
+      await waitFor(() => expect(api.updateEntity).toHaveBeenCalled());
+      await waitFor(() => expect(toasts()).toContain("Couldn't save your change: invalid entity."));
+      expect(api.deleteEntity).not.toHaveBeenCalled();
+      expect(toasts().some(m => m.includes("no longer"))).toBe(false);
+    });
+  });
+
+  it("says why a kind's file could not be made, with one full stop", async () => {
+    vi.mocked(buildObjectKindGlb).mockRejectedValueOnce(new Error("No room to export."));
+    setup();
+    fireEvent.click(row().getByRole("button", { name: "Export wastebin for modelling" }));
+    await waitFor(() => expect(toasts()).toContain("Couldn't make wastebin's file: No room to export."));
+  });
+
+  it("says, on Upload model, to delete the box and surroundings before exporting from Blender", () => {
+    setup();
+    expect(row().getByText("Upload model").closest("label")!.getAttribute("title"))
+      .toBe("Delete the box and the surroundings in Blender before you export, so only your model comes back.");
   });
 
   it("refuses a blank size on the form, with the reason, and sends nothing", () => {

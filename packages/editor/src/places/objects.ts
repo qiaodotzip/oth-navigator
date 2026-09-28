@@ -1,4 +1,5 @@
 import { live, type MapModel, type ObjectKind, type Place, type Placement } from "@oth/model";
+import { normalName } from "../survey/suggest";
 import { kindNamed, newId } from "../survey/tagging";
 import { bestEvidence, type Evidence } from "./evidence";
 
@@ -59,6 +60,19 @@ export function framesText(frames: number): string {
   return frames === 0 ? "No frames" : `${frames} frame${frames === 1 ? "" : "s"}`;
 }
 
+/** The ids of the rooms on the map, for `boundToRoom`. */
+export function mapRoomIds(model: MapModel): Set<string> {
+  return new Set(live(model.rooms).map(r => r.id));
+}
+
+/**
+ * Whether a place is bound to a room on the map: a unit you go into, which is
+ * never an object. A room since deleted no longer counts.
+ */
+export function boundToRoom(place: Place, rooms: ReadonlySet<string>): boolean {
+  return Boolean(place.roomId && rooms.has(place.roomId));
+}
+
 /**
  * The places "This is an object" may turn into one (spec §5.1): any live
  * place that is not one already, not a walkway, and not bound to a room on
@@ -66,9 +80,9 @@ export function framesText(frames: number): string {
  * floor claims, which no floor's checklist lists.
  */
 export function objectCandidates(model: MapModel): Place[] {
-  const rooms = new Set(live(model.rooms).map(r => r.id));
+  const rooms = mapRoomIds(model);
   return live(model.places)
-    .filter(p => !p.objectKindId && !p.pathwayKindId && !(p.roomId && rooms.has(p.roomId)))
+    .filter(p => !p.objectKindId && !p.pathwayKindId && !boundToRoom(p, rooms))
     .sort((a, b) => a.nameEn.localeCompare(b.nameEn) || a.id.localeCompare(b.id));
 }
 
@@ -102,17 +116,42 @@ export type MakeObject = {
 };
 
 /**
- * "This is an object" (spec §5.1): the kind the place becomes, named after it
- * and at the size asked. A kind of the same name is joined at its own size
- * rather than doubled, the rule Survey's Object tag follows.
+ * "This is an object" (spec §5.1): the kind the place becomes, by the name
+ * given — the place's own unless you chose another — at the size asked. A
+ * kind of that name is joined at its own size rather than doubled, the rule
+ * Survey's Object tag follows, so a place called "wast" can join "wastebin".
  */
 export function makeObjectWrites(
-  place: Place, size: ObjectSize, kinds: readonly ObjectKind[], id: (prefix: string) => string = newId,
+  place: Place, kindName: string, size: ObjectSize, kinds: readonly ObjectKind[], id: (prefix: string) => string = newId,
 ): MakeObject {
-  const same = kindNamed(live(kinds), place.nameEn);
+  const same = kindNamed(live(kinds), kindName);
   if (same) return { objectKind: null, objectKindId: same.id };
   const objectKindId = id("ok");
-  return { objectKind: { id: objectKindId, nameEn: place.nameEn, nameZh: place.nameZh, size }, objectKindId };
+  const nameEn = kindName.trim();
+  // The place's Chinese name is its own; a kind named otherwise has none yet.
+  const nameZh = normalName(nameEn) === normalName(place.nameEn) ? place.nameZh : "";
+  return { objectKind: { id: objectKindId, nameEn, nameZh, size }, objectKindId };
+}
+
+/**
+ * Why a kind can't be called this, or null if it can. Two live kinds of one
+ * name would split the survey's tags between them, so names are compared as
+ * the survey compares them.
+ */
+export function kindNameProblem(kinds: readonly ObjectKind[], kindId: string, name: string): string | null {
+  if (name.trim() === "") return "Give the kind a name.";
+  const other = kindNamed(live(kinds).filter(k => k.id !== kindId), name);
+  return other ? `There is a kind called ${other.nameEn} already.` : null;
+}
+
+/**
+ * "Not an object", the undo for a place made an object by mistake: the
+ * kind's places, to be plain places again before the kind goes. Null while
+ * any object of the kind is on the map, which would be left a kind of nothing.
+ */
+export function notAnObject(model: MapModel, kindId: string): Place[] | null {
+  if (live(model.placements).some(p => p.objectKindId === kindId)) return null;
+  return live(model.places).filter(p => p.objectKindId === kindId);
 }
 
 /**

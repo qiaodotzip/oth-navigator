@@ -1,7 +1,8 @@
 import { parseModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import {
-  framesText, makeObjectWrites, objectCandidates, objectRows, onMapText, parseSize, referenceObject, sizeFields,
+  boundToRoom, framesText, kindNameProblem, makeObjectWrites, mapRoomIds, notAnObject, objectCandidates, objectRows,
+  onMapText, parseSize, referenceObject, sizeFields,
 } from "./objects";
 
 const iso = "2026-09-20T00:00:00.000Z";
@@ -132,7 +133,7 @@ describe("makeObjectWrites", () => {
   const cooler = model.places.find(p => p.id === "pl_cooler")!;
 
   it("makes a kind named for the place, at the size asked, and says which kind the place joins", () => {
-    expect(makeObjectWrites(cooler, { w: 0.4, d: 0.4, h: 1.2 }, model.objectKinds, () => "ok_new")).toEqual({
+    expect(makeObjectWrites(cooler, "water cooler", { w: 0.4, d: 0.4, h: 1.2 }, model.objectKinds, () => "ok_new")).toEqual({
       objectKind: { id: "ok_new", nameEn: "water cooler", nameZh: "", size: { w: 0.4, d: 0.4, h: 1.2 } },
       objectKindId: "ok_new",
     });
@@ -140,7 +141,74 @@ describe("makeObjectWrites", () => {
 
   it("joins a kind of the same name, whatever its case, at that kind's size", () => {
     const again = { ...cooler, id: "pl_bin_l2", nameEn: "Wastebin " };
-    expect(makeObjectWrites(again, { w: 9, d: 9, h: 9 }, model.objectKinds)).toEqual({ objectKind: null, objectKindId: "ok_bin" });
+    expect(makeObjectWrites(again, "Wastebin ", { w: 9, d: 9, h: 9 }, model.objectKinds))
+      .toEqual({ objectKind: null, objectKindId: "ok_bin" });
+  });
+
+  it("joins the kind chosen whatever the place is called, so wast can be a wastebin", () => {
+    const wast = { ...cooler, id: "pl_wast", nameEn: "wast" };
+    expect(makeObjectWrites(wast, "wastebin", { w: 9, d: 9, h: 9 }, model.objectKinds))
+      .toEqual({ objectKind: null, objectKindId: "ok_bin" });
+  });
+
+  it("never joins a deleted kind", () => {
+    expect(makeObjectWrites(cooler, "Old bench", { w: 2, d: 0.6, h: 0.5 }, model.objectKinds, () => "ok_new").objectKindId)
+      .toBe("ok_new");
+  });
+
+  it("names a new kind as typed, and gives it the place's Chinese name only when it is named for the place", () => {
+    const wast = { ...cooler, id: "pl_wast", nameEn: "wast", nameZh: "垃圾" };
+    const size = { w: 0.4, d: 0.4, h: 0.9 };
+    expect(makeObjectWrites(wast, " Litter bin ", size, model.objectKinds, () => "ok_new").objectKind)
+      .toEqual({ id: "ok_new", nameEn: "Litter bin", nameZh: "", size });
+    expect(makeObjectWrites(wast, "Wast", size, model.objectKinds, () => "ok_new").objectKind)
+      .toEqual({ id: "ok_new", nameEn: "Wast", nameZh: "垃圾", size });
+  });
+});
+
+describe("kindNameProblem", () => {
+  it("accepts a new name, or the kind's own in another case", () => {
+    expect(kindNameProblem(model.objectKinds, "ok_bin", "Litter bin")).toBeNull();
+    expect(kindNameProblem(model.objectKinds, "ok_bin", "Wastebin")).toBeNull();
+  });
+
+  it("refuses a blank name", () => {
+    expect(kindNameProblem(model.objectKinds, "ok_bin", "  ")).toBe("Give the kind a name.");
+  });
+
+  it("refuses the name of another live kind, as the survey matches names", () => {
+    expect(kindNameProblem(model.objectKinds, "ok_bin", "  recycling   BIN "))
+      .toBe("There is a kind called Recycling bin already.");
+  });
+
+  it("lets a deleted kind's name be used again", () => {
+    expect(kindNameProblem(model.objectKinds, "ok_bin", "Old bench")).toBeNull();
+  });
+});
+
+describe("notAnObject", () => {
+  it("gives the places of a kind none of which is on the map, to be places again", () => {
+    expect(notAnObject(model, "ok_recycle")?.map(p => p.id)).toEqual(["pl_recycle"]);
+  });
+
+  it("refuses while any object of the kind is on the map, which would be left a kind of nothing", () => {
+    expect(notAnObject(model, "ok_bin")).toBeNull();
+  });
+
+  it("does not count an object since deleted", () => {
+    const cleared = parseModel({ ...model, placements: [model.placements.find(p => p.id === "L1-bin-gone")!] });
+    expect(notAnObject(cleared, "ok_bin")?.map(p => p.id)).toEqual(["pl_bin"]);
+  });
+});
+
+describe("boundToRoom", () => {
+  const rooms = mapRoomIds(model);
+
+  it("says a place bound to a room on the map is bound, and one whose room was deleted is not", () => {
+    const place = (id: string) => model.places.find(p => p.id === id)!;
+    expect(boundToRoom(place("pl_star"), rooms)).toBe(true);
+    expect(boundToRoom(place("pl_gone"), rooms)).toBe(false);
+    expect(boundToRoom(place("pl_cooler"), rooms)).toBe(false);
   });
 });
 
