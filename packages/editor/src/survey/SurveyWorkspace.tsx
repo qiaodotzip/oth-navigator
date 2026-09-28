@@ -90,6 +90,17 @@ export function SurveyWorkspace({ api, saver, level, params }: {
   // A drawn box belongs to the frame it was drawn on.
   useEffect(() => setDraft(null), [frame?.id]);
 
+  // With no frame in the address, the one on screen is only worked out — the
+  // first untagged under the filter — and tagging it, or choosing a filter,
+  // works out another. Written into the address, it stays until you move. A
+  // frame the address names but this footage lacks, binned or from other
+  // footage, gives way the same way, so the address is the frame you see. A
+  // replace, as setParams always is, so Back does not step through it.
+  const frameId = frame?.id ?? null;
+  useEffect(() => {
+    if (frameId && read.frame !== frameId) setParams({ frame: frameId });
+  }, [frameId, read.frame]);
+
   async function holding(work: () => Promise<void>): Promise<void> {
     writing.current += 1;
     setWrites(n => n + 1);

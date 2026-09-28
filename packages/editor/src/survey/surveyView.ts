@@ -52,8 +52,10 @@ export type SurveyView = {
  *
  * With no frame asked for, it opens on the first frame the filter lets through
  * that has no tag — the next piece of work — or else the first it lets
- * through. The frame in view stays in `shown` after it is tagged, so tagging
- * it does not make it vanish from under you; the arrow keys then move on.
+ * through; the workspace then writes that frame into the address, since this
+ * choice moves on the moment the frame is tagged. The frame in view stays in
+ * `shown` after it is tagged, so tagging it does not make it vanish from
+ * under you; the arrow keys then move on.
  */
 export function surveyView(model: MapModel | null, levelId: string, params: SurveyParams): SurveyView {
   const statuses = frameStatuses(model);

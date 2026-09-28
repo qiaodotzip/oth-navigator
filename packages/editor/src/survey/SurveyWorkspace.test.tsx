@@ -50,6 +50,28 @@ function at(search = "", api = fakeApi({ getModel: vi.fn().mockResolvedValue(mod
 const param = (name: string) => new URLSearchParams(window.location.search).get(name);
 const key = (k: string, target: Element = document.body) => fireEvent.keyDown(target, { key: k });
 
+/** An api whose reload shows what was tagged, as the server's does. */
+function savingApi(base = model) {
+  const saved = { places: [...base.places] as unknown[], sightings: [...base.sightings] as unknown[] };
+  const createEntity = vi.fn(async (type: string, data: Record<string, unknown>) => {
+    (type === "place" ? saved.places : saved.sightings).push(data);
+    return data;
+  });
+  return fakeApi({ getModel: vi.fn(async () => parseModel({ ...base, ...saved })), createEntity });
+}
+
+/** Tags the frame in view with a new name, and waits for the reload to bring the tag back. */
+async function tagAs(nameEn: string) {
+  const name = screen.getByLabelText("Place name");
+  fireEvent.change(name, { target: { value: nameEn } });
+  key("Enter", name);
+  await waitFor(() =>
+    expect(useEditorStore.getState().model!.places.some(p => p.nameEn === nameEn)).toBe(true));
+}
+
+const sidePanel = () =>
+  within(screen.getByRole("complementary", { name: "This frame and the floor's places" }));
+
 beforeEach(() => {
   useEditorStore.getState().reset();
   useEditorStore.getState().setUser({ id: "u_sc", email: "sc@oth.local", displayName: "Stef Chan" });
@@ -119,6 +141,55 @@ describe("SurveyWorkspace", () => {
     expect(placeCall![1]).toMatchObject({ nameEn: "Kiosk", levelId: "oth-L1" });
     expect(sightingCall![0]).toBe("sighting");
     expect(sightingCall![1]).toMatchObject({ placeId: placeCall![1].id, keyframeId: "kf_3" });
+  });
+
+  it("keeps the frame it opened on in view once you tag it, with its new tag listed", async () => {
+    // The e2e smoke test: with no frame in the address, the opening frame was
+    // worked out afresh after the tag — the first untagged one, now another.
+    const depth = window.history.length;
+    at("", savingApi());
+    expect(screen.getByText(/Frame 3 of 3/)).toBeTruthy();
+    await tagAs("Kiosk");
+    expect(screen.getByText(/Frame 3 of 3/)).toBeTruthy();
+    expect(sidePanel().getByRole("button", { name: "Remove tag Kiosk from this frame" })).toBeTruthy();
+    // The address names the frame on screen, in place of the one `at` pushed:
+    // Back leaves Survey rather than stepping through its opening frame.
+    expect(param("frame")).toBe("kf_3");
+    expect(window.history.length).toBe(depth + 1);
+  });
+
+  it("moves on from the frame just tagged only when you press N", async () => {
+    const more = parseModel({ ...model, keyframes: [...model.keyframes, frame("kf_4", "cap_1", 4000)] });
+    useEditorStore.getState().setModel(more);
+    at("", savingApi(more));
+    expect(screen.getByText(/Frame 3 of 4/)).toBeTruthy();
+    await tagAs("Kiosk");
+    expect(screen.getByText(/Frame 3 of 4/)).toBeTruthy();
+    key("n");
+    expect(param("frame")).toBe("kf_4");
+    expect(screen.getByText(/Frame 4 of 4/)).toBeTruthy();
+  });
+
+  it("keeps the frame in view when Untagged is chosen and it is then tagged", async () => {
+    at("", savingApi());
+    fireEvent.click(within(screen.getByRole("group", { name: "Show frames" })).getByRole("button", { name: /Untagged/ }));
+    await tagAs("Kiosk");
+    expect(screen.getByText(/Frame 3 of 3/)).toBeTruthy();
+    expect(sidePanel().getByRole("button", { name: "Remove tag Kiosk from this frame" })).toBeTruthy();
+  });
+
+  it("keeps the frame in view when a filter it does not match is chosen", () => {
+    at();
+    fireEvent.click(within(screen.getByRole("group", { name: "Show frames" })).getByRole("button", { name: /^Tagged/ }));
+    expect(screen.getByText(/Frame 3 of 3/)).toBeTruthy();
+  });
+
+  it("keeps the frame a chosen place opened on when a filter chip clears the place", () => {
+    at();
+    fireEvent.click(sidePanel().getByRole("button", { name: /^Kopitiam/ }));
+    expect(screen.getByText(/Frame 1 of 3/)).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("group", { name: "Show frames" })).getByRole("button", { name: "All" }));
+    expect(screen.getByText(/Frame 1 of 3/)).toBeTruthy();
   });
 
   it("links a name that exists, whatever its case, rather than making it again", async () => {
@@ -478,7 +549,8 @@ describe("SurveyWorkspace", () => {
     at("?frame=kf_1&place=p_kopi");
     fireEvent.change(screen.getByLabelText("Footage"), { target: { value: "cap_2" } });
     expect(param("capture")).toBe("cap_2");
-    expect(param("frame")).toBeNull();
+    // The new footage's opening frame, written in so tagging it leaves it in view.
+    expect(param("frame")).toBe("kf_w");
     expect(param("place")).toBeNull();
     expect(screen.getByText(/Frame 1 of 1/)).toBeTruthy();
   });
