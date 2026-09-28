@@ -4,6 +4,7 @@ import { followLink, type Route } from "../route";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { AccountMenu } from "./AccountMenu";
+import { ClaudeCodeButton } from "./ClaudeCodeButton";
 import { FloorSwitcher } from "./FloorSwitcher";
 import { FloorTabs } from "./FloorTabs";
 import { PresenceAvatars } from "./PresenceAvatars";
@@ -32,6 +33,7 @@ export function Header({ api, route }: { api: Api; saver: Saver; route: Route })
       {route.name === "team" && <span className="text-stone-500">Team</span>}
       <div className="ml-auto flex items-center gap-3">
         <PresenceAvatars />
+        <ClaudeCodeButton api={api} />
         <PublishButton api={api} />
         <AccountMenu api={api} />
       </div>

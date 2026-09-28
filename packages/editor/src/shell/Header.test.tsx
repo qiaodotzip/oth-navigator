@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as progress from "../flow/floorProgress";
 import { createSaver } from "../state/save";
@@ -74,6 +74,15 @@ describe("Header", () => {
     expect(tabs.getByRole("link", { name: "Survey" }).getAttribute("href")).toBe("/floors/L1/survey");
     fireEvent.click(screen.getByRole("button", { name: /Floor L1/ }));
     expect((await screen.findByRole("link", { name: /^L2/ })).getAttribute("href")).toBe("/floors/L2/build?step=entrances");
+  });
+
+  it("has a Claude Code button just left of Publish, on a floor and on the floors home", () => {
+    for (const path of ["/floors/L1/survey", "/floors"]) {
+      renderHeader(path);
+      const claude = screen.getByRole("button", { name: "Claude Code" });
+      expect(claude.nextElementSibling).toBe(screen.getByRole("button", { name: /Publish/ }));
+      cleanup();
+    }
   });
 
   it("has no floor controls on the floors home", () => {
