@@ -1,4 +1,4 @@
-import { distancePointToSegment, type Doorway, type Pathway, type Vec2 } from "@oth/model";
+import { distancePointToSegment, type Doorway, type Pathway, type Room, type Vec2 } from "@oth/model";
 import { subtractIntervals, type Interval } from "./intervals";
 import type { WallPiece } from "./wallPlan";
 
@@ -14,6 +14,16 @@ const DOORWAY_SLACK_M = 0.3;
  * access rule), so a room the validator calls reachable is never a closed box.
  */
 export const SHOPFRONT_REACH_M = 3;
+/**
+ * How near an area's edge must run alongside a wall for a closed room with no
+ * pathway in reach to get its front door there: the same 0.5 m within which
+ * two rooms' edges are one wall, the drawing's partition between them.
+ */
+export const AREA_FACING_M = 0.5;
+/** Edges within 5° of parallel face each other. A traced line wanders that much. */
+const FACING_ANGLE_SIN = Math.sin((5 * Math.PI) / 180);
+/** A shorter stretch is two corners touching, not a wall facing an area. */
+const MIN_FACING_M = 0.1;
 /** A shorter stand of wall between two openings is dropped. */
 const MIN_RUN_M = 0.05;
 
@@ -176,14 +186,126 @@ export function shopfrontOpening(
 }
 
 /**
+ * Floor people cross, as the model marks it: an `area`, which is open and never
+ * walled, that is also part of the walkable surface. A room marked walkable is
+ * still walled, so it is somewhere you arrive, not somewhere you pass through.
+ */
+export function isWalkableArea(room: Room): boolean {
+  return room.kind === "area" && room.walkable;
+}
+
+type AreaEdge = { a: Vec2; b: Vec2; ux: number; uy: number; minX: number; maxX: number; minY: number; maxY: number };
+
+/** Every edge of the walkable areas among these rooms, holes included: a kiosk can stand in an area's hole. */
+function areaEdges(rooms: readonly Room[]): AreaEdge[] {
+  const edges: AreaEdge[] = [];
+  for (const room of rooms) {
+    if (!isWalkableArea(room)) continue;
+    for (const ring of [room.footprint, ...room.holes]) {
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i]!;
+        const b = ring[(i + 1) % ring.length]!;
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (len < 1e-9) continue;
+        edges.push({
+          a, b, ux: (b[0] - a[0]) / len, uy: (b[1] - a[1]) / len,
+          minX: Math.min(a[0], b[0]), maxX: Math.max(a[0], b[0]),
+          minY: Math.min(a[1], b[1]), maxY: Math.max(a[1], b[1]),
+        });
+      }
+    }
+  }
+  return edges;
+}
+
+/** Overlapping or touching stretches as one, in order along the wall. */
+function joined(stretches: Interval[]): Interval[] {
+  const sorted = [...stretches].sort((p, q) => p[0] - q[0]);
+  const out: Array<[number, number]> = [];
+  for (const [from, to] of sorted) {
+    const last = out[out.length - 1];
+    if (last && from <= last[1] + BOX_SLACK_M) last[1] = Math.max(last[1], to);
+    else out.push([from, to]);
+  }
+  return out;
+}
+
+/** The stretches of the piece that an area's edge runs alongside, near enough to face it. */
+function facingStretches(f: Frame, edges: readonly AreaEdge[]): Interval[] {
+  const m = AREA_FACING_M + BOX_SLACK_M;
+  const stretches: Interval[] = [];
+  for (const e of edges) {
+    if (e.maxX < f.minX - m || e.minX > f.maxX + m || e.maxY < f.minY - m || e.minY > f.maxY + m) continue;
+    if (Math.abs(f.ux * e.uy - f.uy * e.ux) > FACING_ANGLE_SIN) continue;
+    const s0 = along(f, e.a);
+    const s1 = along(f, e.b);
+    const t0 = Math.max(0, Math.min(s0, s1));
+    const t1 = Math.min(f.len, Math.max(s0, s1));
+    if (t1 <= t0) continue;
+    // Measured at both ends of the stretch, as two rooms' edges are for one wall.
+    if (distancePointToSegment(pointAt(f, t0), e.a, e.b) > AREA_FACING_M) continue;
+    if (distancePointToSegment(pointAt(f, t1), e.a, e.b) > AREA_FACING_M) continue;
+    stretches.push([t0, t1]);
+  }
+  return joined(stretches).filter(([from, to]) => to - from >= MIN_FACING_M);
+}
+
+/** The stretches of a piece that a walkable area among `rooms` runs alongside, within AREA_FACING_M. */
+export function areaFacing(piece: WallPiece, rooms: readonly Room[]): Interval[] {
+  const f = frameOf(piece);
+  return f ? facingStretches(f, areaEdges(rooms)) : [];
+}
+
+type Door = { index: number; interval: Interval };
+
+/** A front door facing the nearest pathway within reach, on one of the room's own pieces. */
+function pathwayDoor(pieces: readonly WallPiece[], own: readonly number[], pathways: readonly Pathway[]): Door | null {
+  let best: (Door & { distance: number }) | null = null;
+  for (const index of own) {
+    const door = shopfrontOpening(pieces[index]!, pathways);
+    if (door && (best === null || door.distance < best.distance)) best = { index, ...door };
+  }
+  return best;
+}
+
+/**
+ * A front door onto the floor the room faces, for a room no pathway comes
+ * near: as wide as a pathway's opening at most, centred on the room's
+ * longest stretch of own wall that faces a walkable area.
+ */
+function areaDoor(pieces: readonly WallPiece[], own: readonly number[], edges: readonly AreaEdge[]): Door | null {
+  let best: { index: number; stretch: Interval } | null = null;
+  for (const index of own) {
+    const f = frameOf(pieces[index]!);
+    if (!f) continue;
+    for (const stretch of facingStretches(f, edges)) {
+      if (best === null || stretch[1] - stretch[0] > best.stretch[1] - best.stretch[0]) best = { index, stretch };
+    }
+  }
+  if (best === null) return null;
+  const [from, to] = best.stretch;
+  const middle = (from + to) / 2;
+  const half = Math.min(to - from, MAX_PATH_OPENING_M) / 2;
+  return { index: best.index, interval: [middle - half, middle + half] };
+}
+
+/**
  * The walls that stand, once every opening is cut out of them.
  *
  * Pathways and doorways open the walls they cross. A walled room that
- * nothing opens, but that a pathway passes within 3 m of, gets one front door
- * facing that pathway, on a wall of its own and never one it shares.
+ * nothing opens gets one front door, on a wall of its own and never one it
+ * shares, because a shop front never opens into the shop next door. The door
+ * faces the nearest pathway within 3 m. With none in reach, it opens onto
+ * the walkable area the room faces for longest. A room with neither stays
+ * closed.
+ *
+ * `rooms` are the floor's rooms, and the walkable areas among them are what
+ * a closed room can open onto. Areas are never walled, so their outlines
+ * come in here rather than as pieces.
  */
 export function wallRuns(
   pieces: readonly WallPiece[], pathways: readonly Pathway[], doorways: readonly Doorway[],
+  rooms: readonly Room[] = [],
 ): WallPiece[] {
   const cuts: Interval[][] = pieces.map(p => [...pathwayOpenings(p, pathways), ...doorwayOpenings(p, doorways)]);
 
@@ -197,14 +319,11 @@ export function wallRuns(
     }
   });
 
-  for (const [roomId, indices] of ownPieces) {
+  const edges = areaEdges(rooms);
+  for (const [roomId, own] of ownPieces) {
     if (opened.has(roomId)) continue;
-    let best: { index: number; interval: Interval; distance: number } | null = null;
-    for (const index of indices) {
-      const door = shopfrontOpening(pieces[index]!, pathways);
-      if (door && (best === null || door.distance < best.distance)) best = { index, ...door };
-    }
-    if (best) cuts[best.index]!.push(best.interval);
+    const door = pathwayDoor(pieces, own, pathways) ?? areaDoor(pieces, own, edges);
+    if (door) cuts[door.index]!.push(door.interval);
   }
 
   const runs: WallPiece[] = [];
