@@ -152,6 +152,37 @@ export type SetupCounts = {
 
 export type SetupState = { steps: SetupStepState[]; counts: SetupCounts };
 
+/** Spec §8's groups, in the order the check step shows them. */
+export const CHECK_GROUPS = ["rooms", "drafts", "names", "stops", "places", "objects", "pathways", "entrances"] as const;
+export type CheckGroup = (typeof CHECK_GROUPS)[number];
+/** Also: Claude's survey labels, which Review checks, and anything else. */
+export type ClaudeChangeGroup = CheckGroup | "labels" | "other";
+
+/**
+ * One audit row with a Claude token in `via`, as
+ * `GET /api/levels/:id/claude-changes?since=` lists them, newest first.
+ */
+export type ClaudeChange = {
+  auditId: string;
+  /** When, as ISO. */
+  at: string;
+  group: ClaudeChangeGroup;
+  /** One plain line: "Made Starbucks from a draft". */
+  summary: string;
+  /**
+   * What changed, as the audit log names it. A room made from a draft is one
+   * row, the room's own (`room`, group `rooms`), not a second for its draft.
+   */
+  entityType: string;
+  entityId: string;
+  /** The audit log's action: create, update, delete, restore. */
+  action: string;
+  /** Objects placed only: high with two or more anchors, low for a capture-order guess (spec §5.4). */
+  confidence?: "high" | "low";
+  /** True once undone through `POST /api/changes/:id/undo`. May be left out. */
+  undone?: boolean;
+};
+
 export type ApiOptions = {
   fetchImpl?: typeof fetch;
   baseUrl?: string;
@@ -496,6 +527,12 @@ export function createApi(options: ApiOptions = {}) {
     /** Marks one step, as a person. Answers the whole setup again. */
     setSetupStep: (levelId: string, step: SetupStepId, body: { status: SetupStatus; note?: string }) =>
       request<SetupState>(`/api/levels/${levelId}/setup/${step}`, { method: "PUT", body: json(body) }),
+
+    /** Claude's changes on a floor since `since`, newest first. The epoch asks for every change there is. */
+    listClaudeChanges: async (levelId: string, since: string, limit?: number): Promise<ClaudeChange[]> =>
+      (await request<{ changes: ClaudeChange[] }>(
+        `/api/levels/${levelId}/claude-changes?since=${encodeURIComponent(since)}${limit ? `&limit=${limit}` : ""}`,
+      )).changes,
   };
 }
 

@@ -246,4 +246,15 @@ describe("floor setup (plan 6C)", () => {
       ["/api/levels/oth-L1/setup/rooms", "PUT", { status: "done", note: "Looks right" }],
     ]);
   });
+
+  it("lists Claude's changes on a floor since a moment, the epoch for every change, with a limit", async () => {
+    const fetchImpl = mockFetch(200, { changes: [{ auditId: "audit_1", summary: "Made Starbucks from a draft" }] });
+    const api = createApi({ fetchImpl });
+    expect((await api.listClaudeChanges("oth-L1", "1970-01-01T00:00:00.000Z"))[0]?.summary).toBe("Made Starbucks from a draft");
+    await api.listClaudeChanges("oth-L1", "2026-09-28T06:00:00.000Z", 5);
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+      "/api/levels/oth-L1/claude-changes?since=1970-01-01T00%3A00%3A00.000Z",
+      "/api/levels/oth-L1/claude-changes?since=2026-09-28T06%3A00%3A00.000Z&limit=5",
+    ]);
+  });
 });

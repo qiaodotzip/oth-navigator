@@ -83,6 +83,7 @@ export function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}): Ap
     // --- Floor setup and Claude's changes (plan 6C) ---
     getSetup: vi.fn().mockResolvedValue({ steps: [], counts: null }),
     setSetupStep: vi.fn().mockResolvedValue({ steps: [], counts: null }),
+    listClaudeChanges: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as unknown as Api;
 }

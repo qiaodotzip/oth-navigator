@@ -56,3 +56,16 @@ describe("a floor's setup", () => {
     expect((await send("GET", "/api/levels/oth-L1/setup", undefined, false)).status).toBe(401);
   });
 });
+
+describe("Claude's changes on a floor", () => {
+  it("lists them since a moment, the epoch for all, and refuses what it can't read", async () => {
+    const epoch = encodeURIComponent("1970-01-01T00:00:00.000Z");
+    expect(await json<{ changes: unknown[] }>(await send("GET", `/api/levels/oth-L1/claude-changes?since=${epoch}`))).toEqual({ changes: [] });
+    expect((await send("GET", `/api/levels/oth-L1/claude-changes?since=${epoch}&limit=5`)).status).toBe(200);
+    expect((await send("GET", "/api/levels/oth-L1/claude-changes")).status).toBe(400);
+    expect((await send("GET", "/api/levels/oth-L1/claude-changes?since=yesterday")).status).toBe(400);
+    expect((await send("GET", `/api/levels/oth-L1/claude-changes?since=${epoch}&limit=0`)).status).toBe(400);
+    expect((await send("GET", `/api/levels/oth-L9/claude-changes?since=${epoch}`)).status).toBe(404);
+    expect((await send("GET", `/api/levels/oth-L1/claude-changes?since=${epoch}`, undefined, false)).status).toBe(401);
+  });
+});
