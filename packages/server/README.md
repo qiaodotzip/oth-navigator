@@ -57,8 +57,9 @@ The Dockerfile sets `NODE_ENV=production`, which makes cookies `Secure` and
 keeps error details out of responses (they go to the log).
 
 Never enable Railway's CDN (`railway cdn`) for this service. The built editor
-and published bundles are served `public, immutable`, so the edge would cache
-the gated files and hand them to anyone, code or not.
+and published bundles go out `private` only because the gate rewrites their
+`public, immutable` header; an edge cache that ignored that, or cached by
+rule, would hand the gated files to anyone, code or not.
 
 A restart clears the gate's wrong-code count: `railway restart --service oth-map`.
 

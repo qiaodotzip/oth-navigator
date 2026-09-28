@@ -21,7 +21,7 @@ const command = process.argv[2];
 // Deployed, not only by NODE_ENV: on Railway without it, the fallback below
 // would be a PGlite database on the container's own disk.
 if (isDeployed(config) && !config.DATABASE_URL) {
-  throw new Error("DATABASE_URL is required in production");
+  throw new Error("DATABASE_URL is required when deployed; set it to ${{Postgres.DATABASE_URL}}");
 }
 
 /**
