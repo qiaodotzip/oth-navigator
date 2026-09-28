@@ -58,8 +58,23 @@ describe("DressingTools", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("says so, rather than nothing, when no floor has loaded", async () => {
+    useEditorStore.getState().reset();
+    const create = openModels();
+    fireEvent.click(await screen.findByRole("button", { name: /bench\.glb/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Place in selected room" }));
+    expect(useToasts.getState().toasts.at(-1)?.message).toBe("Select a room or detail first.");
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("offers the level's context for Blender", () => {
     openModels();
     expect(screen.getByRole("button", { name: /Export context for Blender/ })).toBeTruthy();
+  });
+
+  it("does not title the models Dressing again, inside the step that already is", async () => {
+    openModels();
+    await screen.findByRole("button", { name: /bench\.glb/ });
+    expect(screen.queryByRole("heading", { name: "Dressing" })).toBeNull();
   });
 });

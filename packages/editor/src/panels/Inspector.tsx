@@ -22,10 +22,13 @@ export function Inspector({
         <div className="text-xs uppercase tracking-wide text-stone-500">{room.kind}</div>
         <div className="font-mono text-xs">{room.id}</div>
       </div>
+      {/* Keyed by the value shown as well as the room: keyed by the room alone,
+          a field keeps a name or height changed elsewhere (the Layers drawer,
+          a teammate) and the next blur writes the old one back. */}
       <label className="block">
         Name
         <input
-          key={room.id}
+          key={`${room.id}:${room.nameEn}`}
           className="mt-1 w-full rounded border px-2 py-1"
           defaultValue={room.nameEn}
           onBlur={e => onRename(room.id, room.version, e.target.value)}
@@ -34,7 +37,7 @@ export function Inspector({
       <label className="block">
         Height (m)
         <input
-          key={room.id}
+          key={`${room.id}:${room.heightM}`}
           aria-label="Height (m)"
           type="number"
           min={0.1}

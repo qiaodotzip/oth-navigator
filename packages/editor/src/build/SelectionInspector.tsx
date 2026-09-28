@@ -32,21 +32,36 @@ export function SelectionInspector({
 }) {
   const model = useEditorStore(s => s.model);
   const selection = useEditorStore(s => s.selection);
-  const body = model && selection ? inspectorFor(model, selection) : null;
+
+  if (!model) return <p className="p-3 text-xs text-stone-500">Loading the floor…</p>;
+
+  const body = selection ? inspectorFor(model, selection) : null;
+  // On Dressing the detail export stays in view before a detail is chosen,
+  // disabled and saying what it waits for, as it was in the old editor: it
+  // is how a modeller finds out the export exists.
+  const detailExport = step === "dressing" && (
+    <div className="border-t border-stone-200 p-3">
+      <DetailExportButton />
+    </div>
+  );
 
   if (!body) {
     return (
-      <p className="p-3 text-xs text-stone-500">
-        Select something on the plan, or a to-do below, to see it here.
-      </p>
+      <div>
+        <p className="p-3 text-xs text-stone-500">
+          Select something on the plan, or a to-do below, to see it here.
+        </p>
+        {detailExport}
+      </div>
     );
   }
 
   return (
     <div>
       {body}
+      {detailExport}
       <p className="px-3 pb-3 text-xs text-stone-500">
-        <Kbd>Del</Kbd> deletes it, with Undo · <Kbd>Esc</Kbd> lets it go
+        <Kbd>Del</Kbd> or <Kbd>Backspace</Kbd> deletes it, with Undo · <Kbd>Esc</Kbd> lets it go
       </p>
     </div>
   );
@@ -70,11 +85,6 @@ export function SelectionInspector({
                 <BindPlaces api={api} saver={saver} room={room} pendingPlaceId={pendingPlaceId} onBound={onBound} />
               </div>
             )}
-            {step === "dressing" && room.kind === "detail" && (
-              <div className="border-t border-stone-200 p-3">
-                <DetailExportButton />
-              </div>
-            )}
           </>
         );
       }
@@ -91,11 +101,12 @@ export function SelectionInspector({
           />
         ) : null;
       case "doorway":
-        return (
+        // The keys to delete it are named just below, with every selection.
+        return live(m.doorways).some(d => d.id === s.id) ? (
           <p className="p-3 text-xs text-stone-600">
-            A doorway from before pathways. If a pathway now does its job, delete it with <Kbd>Del</Kbd>.
+            A doorway from before pathways. If a pathway now does its job, delete it.
           </p>
-        );
+        ) : null;
     }
   }
 }

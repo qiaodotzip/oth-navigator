@@ -37,9 +37,10 @@ export function DressingTools({ api, saver }: { api: Api; saver: Saver }) {
           <AssetLibrary
             api={api}
             onPlace={assetId => {
-              const s = useEditorStore.getState();
-              if (!s.model || !s.activeLevelId) return;
-              const placed = newPlacement(s.model, s.activeLevelId, s.selection, assetId);
+              const { model, selection } = useEditorStore.getState();
+              // Before a floor has loaded this refuses too, so the click says
+              // what it needs rather than doing nothing.
+              const placed = newPlacement(model, selection, assetId);
               if (!placed.ok) {
                 toast({ message: placed.reason });
                 return;

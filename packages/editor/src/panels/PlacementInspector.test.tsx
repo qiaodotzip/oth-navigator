@@ -97,4 +97,24 @@ describe("PlacementInspector", () => {
     // Uncontrolled fields keep what they first showed unless they are keyed by the entity.
     expect((screen.getByLabelText(/east/i) as HTMLInputElement).value).toBe("9");
   });
+
+  it("shows a move made elsewhere, such as a drag on the plan", () => {
+    selectPlacement();
+    render(<PlacementInspector onChange={vi.fn()} />);
+    act(() => useEditorStore.getState().setModel({
+      ...model,
+      placements: model.placements.map(p => ({ ...p, position: [11, 7, 0] as [number, number, number], rotationDeg: 45, scale: 3, version: 1 })),
+    }));
+    expect((screen.getByLabelText(/east/i) as HTMLInputElement).value).toBe("11");
+    expect((screen.getByLabelText(/rotation/i) as HTMLInputElement).value).toBe("45");
+    expect((screen.getByLabelText(/scale/i) as HTMLInputElement).value).toBe("3");
+  });
+
+  it("writes nothing for a blur with no edit, so it cannot undo a move made elsewhere", () => {
+    const onChange = vi.fn();
+    selectPlacement();
+    render(<PlacementInspector onChange={onChange} />);
+    for (const label of [/east/i, /north/i, /up/i, /rotation/i, /scale/i]) fireEvent.blur(screen.getByLabelText(label));
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

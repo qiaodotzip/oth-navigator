@@ -26,10 +26,10 @@ export function AssetLibrary({ api, onPlace }: { api: Api; onPlace: (assetId: st
     }
   }
 
+  // No heading or frame of its own: wherever it sits — the Dressing step's
+  // "Models…", or the old editor's Dressing section — that already names it.
   return (
-    <div className="space-y-2 border-t p-3 text-sm">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Dressing</h2>
-
+    <div className="space-y-2 text-sm">
       <label className="block cursor-pointer text-xs text-stone-600">
         Upload a .glb
         <input

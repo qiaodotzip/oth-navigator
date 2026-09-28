@@ -15,18 +15,22 @@ export function PlacementInspector({
 
   const asset = model.assets.find(a => a.id === placement.assetId);
 
+  // Each field is keyed by the value it shows as well as the placement. Keyed
+  // by the placement alone, an uncontrolled field keeps showing where it was
+  // before a drag on the plan moved it, and the next blur writes that back.
+  // Writes skip an unchanged value for the same reason.
   const axis = (index: 0 | 1 | 2, label: string) => (
     <label className="block flex-1 text-xs">
       {label}
       <input
-        key={placement.id}
+        key={`${placement.id}:${placement.position[index]}`}
         aria-label={label}
         className="mt-1 w-full rounded border px-2 py-1"
         inputMode="decimal"
         defaultValue={placement.position[index]}
         onBlur={e => {
           const value = Number.parseFloat(e.target.value);
-          if (!Number.isFinite(value)) return;
+          if (!Number.isFinite(value) || value === placement.position[index]) return;
           const position = [...placement.position] as [number, number, number];
           position[index] = value;
           onChange(placement, { position });
@@ -52,14 +56,14 @@ export function PlacementInspector({
         <label className="block flex-1 text-xs">
           Rotation (deg)
           <input
-            key={placement.id}
+            key={`${placement.id}:${placement.rotationDeg}`}
             aria-label="Rotation in degrees"
             className="mt-1 w-full rounded border px-2 py-1"
             inputMode="decimal"
             defaultValue={placement.rotationDeg}
             onBlur={e => {
               const value = Number.parseFloat(e.target.value);
-              if (!Number.isFinite(value)) return;
+              if (!Number.isFinite(value) || value === placement.rotationDeg) return;
               onChange(placement, { rotationDeg: value });
             }}
           />
@@ -67,7 +71,7 @@ export function PlacementInspector({
         <label className="block flex-1 text-xs">
           Scale
           <input
-            key={placement.id}
+            key={`${placement.id}:${placement.scale}`}
             aria-label="Scale"
             className="mt-1 w-full rounded border px-2 py-1"
             inputMode="decimal"
@@ -75,7 +79,7 @@ export function PlacementInspector({
             onBlur={e => {
               const value = Number.parseFloat(e.target.value);
               // The model rejects a non-positive scale; refuse before the round trip.
-              if (!Number.isFinite(value) || value <= 0) return;
+              if (!Number.isFinite(value) || value <= 0 || value === placement.scale) return;
               onChange(placement, { scale: value });
             }}
           />
