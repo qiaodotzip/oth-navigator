@@ -66,6 +66,10 @@ export function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}): Ap
     publish: vi.fn().mockResolvedValue({ version: "v1", warningCount: 0 }),
     latestPublished: vi.fn().mockResolvedValue(null),
     health: vi.fn().mockResolvedValue(true),
+    // --- Claude Code tokens (plan 5C) ---
+    listTokens: vi.fn().mockResolvedValue({ tokens: [], mayPublishByDefault: false }),
+    createToken: vi.fn(),
+    revokeToken: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as Api;
 }

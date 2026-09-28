@@ -1,0 +1,112 @@
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError, type ApiToken } from "../api/client";
+import { fakeApi } from "../testing/fakeApi";
+import { useToasts } from "../ui/toast";
+import { ClaudeCode } from "./ClaudeCode";
+
+const SECRET = `oth_pat_${"s".repeat(43)}`;
+
+const tokens: ApiToken[] = [
+  { id: "tok_1", name: "Wei's laptop", ownerId: "u_wei", ownerName: "Wei Kang", mayPublish: false, createdAt: "2026-10-03T12:00:00Z", lastUsedAt: null, expiresAt: "2027-01-01T12:00:00Z" },
+  { id: "tok_2", name: "Stef's desktop", ownerId: "u_sc", ownerName: "Stef Chan", mayPublish: true, createdAt: "2026-10-04T12:00:00Z", lastUsedAt: new Date(Date.now() - 5 * 60_000).toISOString(), expiresAt: "2027-01-02T12:00:00Z" },
+];
+
+const listed = (list: ApiToken[] = tokens) => vi.fn().mockResolvedValue({ tokens: list, mayPublishByDefault: false });
+
+beforeEach(() => {
+  useToasts.getState().clear();
+});
+
+/** The button waits, disabled, until the list has loaded; a click before that does nothing. */
+async function openDialog() {
+  const button = await screen.findByRole("button", { name: "Create token" });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  return screen.findByRole("dialog");
+}
+
+describe("ClaudeCode", () => {
+  it("lists everyone's tokens: whose, the name, made, last used and expiry", async () => {
+    render(<ClaudeCode api={fakeApi({ listTokens: listed() })} />);
+    const wei = await screen.findByRole("row", { name: "Wei Kang: Wei's laptop" });
+    expect(within(wei).getByText("3 Oct")).toBeTruthy();
+    expect(within(wei).getByText("Never")).toBeTruthy();
+    expect(within(wei).getByText("1 Jan")).toBeTruthy();
+    const stef = screen.getByRole("row", { name: "Stef Chan: Stef's desktop" });
+    expect(within(stef).getByText("5 minutes ago")).toBeTruthy();
+    expect(within(stef).getByText("May publish")).toBeTruthy();
+  });
+
+  it("says so when there are no tokens yet", async () => {
+    render(<ClaudeCode api={fakeApi({ listTokens: listed([]) })} />);
+    expect(await screen.findByText("No tokens yet.")).toBeTruthy();
+  });
+
+  it("makes a token and shows the command to connect once, with this page's address", async () => {
+    const listTokens = listed([]);
+    const createToken = vi.fn().mockResolvedValue({ token: tokens[0], secret: SECRET });
+    render(<ClaudeCode api={fakeApi({ listTokens, createToken })} />);
+    const dialog = await openDialog();
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Wei's laptop" } });
+    expect((within(dialog).getByRole("checkbox", { name: /May publish/ }) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create token" }));
+
+    const command = (await within(dialog).findByLabelText("Command to connect Claude Code")) as HTMLTextAreaElement;
+    expect(command.value).toBe(
+      `claude mcp add --transport http --scope user oth ${window.location.origin}/mcp --header "Authorization: Bearer ${SECRET}"`,
+    );
+    expect(createToken).toHaveBeenCalledWith("Wei's laptop", false);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.body.innerHTML).not.toContain(SECRET);
+    expect(listTokens).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks for publishing only when it is ticked", async () => {
+    const createToken = vi.fn().mockResolvedValue({ token: tokens[1], secret: SECRET });
+    render(<ClaudeCode api={fakeApi({ listTokens: listed([]), createToken })} />);
+    const dialog = await openDialog();
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Nightly" } });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /May publish/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create token" }));
+    await waitFor(() => expect(createToken).toHaveBeenCalledWith("Nightly", true));
+  });
+
+  it("copies the command", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    // jsdom has no clipboard.
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<ClaudeCode api={fakeApi({ listTokens: listed([]), createToken: vi.fn().mockResolvedValue({ token: tokens[0], secret: SECRET }) })} />);
+    const dialog = await openDialog();
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Wei's laptop" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create token" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Copy command" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining(SECRET)));
+    expect(useToasts.getState().toasts[0]?.message).toBe("Copied. Paste it into a terminal.");
+  });
+
+  it("says plainly when you already have five", async () => {
+    const createToken = vi.fn().mockRejectedValue(new ApiError(409, {
+      error: "You already have 5 Claude Code tokens. Revoke one you no longer use, then make this one.",
+    }));
+    render(<ClaudeCode api={fakeApi({ listTokens: listed([]), createToken })} />);
+    const dialog = await openDialog();
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Sixth" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create token" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe(
+      "You already have 5 Claude Code tokens. Revoke one you no longer use, then make this one.",
+    );
+  });
+
+  it("revokes anyone's token and refreshes the list", async () => {
+    const listTokens = listed();
+    const revokeToken = vi.fn().mockResolvedValue(undefined);
+    render(<ClaudeCode api={fakeApi({ listTokens, revokeToken })} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Revoke Stef's desktop" }));
+    await waitFor(() => expect(revokeToken).toHaveBeenCalledWith("tok_2"));
+    await waitFor(() => expect(listTokens).toHaveBeenCalledTimes(2));
+    expect(useToasts.getState().toasts[0]?.message).toBe("Revoked Stef's desktop. Claude Code can no longer reach the map with it.");
+  });
+});

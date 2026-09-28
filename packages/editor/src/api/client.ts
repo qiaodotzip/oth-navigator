@@ -98,6 +98,22 @@ export type LevelImagePatch = {
 /** A tag moved by a merge, and how it stood before: what an unmerge puts back. */
 export type MovedSighting = { id: string; status: "proposed" | "confirmed" };
 
+// --- Claude Code tokens (plan 5C) ---
+
+/** A Claude Code token as the Team page lists it: never the token itself. */
+export type ApiToken = {
+  id: string;
+  name: string;
+  ownerId: string;
+  ownerName: string;
+  mayPublish: boolean;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string;
+};
+
+export type TokenList = { tokens: ApiToken[]; mayPublishByDefault: boolean };
+
 export type ApiOptions = {
   fetchImpl?: typeof fetch;
   baseUrl?: string;
@@ -368,6 +384,18 @@ export function createApi(options: ApiOptions = {}) {
         method: "POST",
         body: json({ notes }),
       }),
+
+    // --- Claude Code tokens (plan 5C) ---
+    listTokens: () => request<TokenList>("/api/tokens"),
+
+    /** The answer holds the token itself, once: the server keeps only its hash. */
+    createToken: (name: string, mayPublish: boolean) =>
+      request<{ token: ApiToken; secret: string }>("/api/tokens", {
+        method: "POST",
+        body: json({ name, mayPublish }),
+      }),
+
+    revokeToken: (id: string) => request<void>(`/api/tokens/${id}`, { method: "DELETE" }),
   };
 }
 

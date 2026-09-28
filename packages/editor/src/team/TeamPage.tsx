@@ -5,6 +5,7 @@ import { useEditorStore } from "../state/store";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
 import { toast } from "../ui/toast";
+import { ClaudeCode } from "./ClaudeCode";
 import { InviteDialog } from "./InviteDialog";
 
 /** The team: who is on it, which floors each owns, and who is online now. */
@@ -64,6 +65,8 @@ export function TeamPage({ api }: { api: Api }) {
           })}
         </tbody>
       </table>
+
+      <ClaudeCode api={api} />
 
       <InviteDialog
         api={api}

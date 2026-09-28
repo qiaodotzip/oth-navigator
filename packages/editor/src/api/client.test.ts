@@ -140,6 +140,19 @@ describe("api client", () => {
     await expect(api.getModel()).rejects.toBeInstanceOf(ApiError);
     expect(onGateClosed).not.toHaveBeenCalled();
   });
+
+  it("lists, makes and revokes Claude Code tokens where the server expects", async () => {
+    const fetchImpl = mockFetch(200, { tokens: [], mayPublishByDefault: false });
+    const api = createApi({ fetchImpl });
+    await api.listTokens();
+    await api.createToken("Wei's laptop", true);
+    await api.revokeToken("tok_1");
+    expect(fetchImpl.mock.calls.map(([url, init]) => [url, init?.method ?? "GET", init?.body ?? null])).toEqual([
+      ["/api/tokens", "GET", null],
+      ["/api/tokens", "POST", JSON.stringify({ name: "Wei's laptop", mayPublish: true })],
+      ["/api/tokens/tok_1", "DELETE", null],
+    ]);
+  });
 });
 
 describe("isUnauthorized", () => {
