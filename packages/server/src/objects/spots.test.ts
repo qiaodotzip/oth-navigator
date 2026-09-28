@@ -1,6 +1,6 @@
-import { parseModel, type Vec2 } from "@oth/model";
+import { parseModel, pointInPolygon, type Vec2 } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { confidenceFor, objectSpotReport, suggestObjectSpots } from "./spots";
+import { confidenceFor, intoArea, objectSpotReport, suggestObjectSpots } from "./spots";
 
 const sq = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
 const frames = (cap: string, n: number) =>
@@ -213,8 +213,38 @@ describe("a spot anchored on an open area (contract v4)", () => {
     });
     const [spot, ...rest] = suggestObjectSpots(model, "oth-L1");
     expect(rest).toEqual([]);
+    expect(pointInPolygon(spot!.position, concourse)).toBe(true);
     expect({ position: at(spot!.position), rotationDeg: spot!.rotationDeg, anchors: spot!.anchors })
       .toEqual({ position: [1.05, -24.45], rotationDeg: 90, anchors: ["L1-west-concourse"] });
+  });
+});
+
+describe("intoArea at a corner (the task review)", () => {
+  /** An open area as the model parses it. */
+  const area = (footprint: [number, number][]) => parseModel({
+    building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+    levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "Level 1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+    rooms: [{ id: "L1-court", levelId: "oth-L1", kind: "area", footprint, heightM: 6, walkable: true }],
+  }).rooms;
+  const from = (p: Vec2, corner: Vec2) => Math.hypot(p[0] - corner[0], p[1] - corner[1]);
+
+  it("steps 0.5 m in from a right angle's corner along the way from the spot, not onto the other edge", () => {
+    // (−1, −2) is off the corner (0, 0), in the wedge outside both edges. Stepping in square to the first edge
+    // found landed on the second, at (0, 0.5).
+    const court = area(sq(0, 0, 10, 10));
+    const { position } = intoArea([-1, -2], 0, court);
+    expect(at(position)).toEqual([0.22, 0.45]);
+    expect(from(position, [0, 0])).toBeCloseTo(0.5);
+  });
+
+  it("steps 0.5 m in from an acute corner, along its bisector when the way from the spot would leave it again", () => {
+    // A 45° corner at (0, 0), the area between the x axis and the line y = x. From (−0.5, −0.87) the way to the
+    // corner runs at 60°, outside the corner; its bisector runs at 22.5°.
+    const wedge = area([[0, 0], [20, 0], [20, 20]]);
+    const { position } = intoArea([-0.5, -0.866], 0, wedge);
+    expect(at(position)).toEqual([0.46, 0.19]);
+    expect(from(position, [0, 0])).toBeCloseTo(0.5);
+    expect(pointInPolygon(position, wedge[0]!.footprint)).toBe(true);
   });
 });
 

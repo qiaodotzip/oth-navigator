@@ -130,9 +130,13 @@ function nearestEdge(p: Vec2, walkable: readonly Room[]): { at: Vec2; inward: Ve
  * belong to another area drawn round or beside it: rehearsal 3's bin by
  * Gate 5 stood 0.2 m outside West Concourse (north), in the Stadium. When
  * the spot is in none of its areas, it moves to the nearest point of their
- * outlines and AREA_INSET_M in, facing into the area.
+ * outlines and AREA_INSET_M on, along the way from the spot to that point,
+ * facing into the area. Off an edge that way is square to it; off a corner
+ * it runs between the two edges and never onto the second (the task review:
+ * square to the first edge found, it landed on the other). Where an acute
+ * corner turns that step out again, it goes along the corner's bisector.
  */
-function intoArea(position: Vec2, rotationDeg: number, areas: readonly Room[]): { position: Vec2; rotationDeg: number } {
+export function intoArea(position: Vec2, rotationDeg: number, areas: readonly Room[]): { position: Vec2; rotationDeg: number } {
   if (areas.length === 0 || areas.some(r => pointInPolygon(position, r.footprint, r.holes))) return { position, rotationDeg };
   let best: { at: Vec2; inward: Vec2; room: Room } | null = null;
   let bestD = Infinity;
@@ -148,11 +152,38 @@ function intoArea(position: Vec2, rotationDeg: number, areas: readonly Room[]): 
     }
   }
   if (!best) return { position, rotationDeg };
-  const inside: Vec2 = [best.at[0] + best.inward[0] * AREA_INSET_M, best.at[1] + best.inward[1] * AREA_INSET_M];
-  // A sliver or a sharp corner can put the step outside again: then the area's own inside point.
-  return pointInPolygon(inside, best.room.footprint, best.room.holes)
-    ? { position: inside, rotationDeg: facingRotation(best.inward) }
-    : { position: insidePoint(best.room.footprint, best.room.holes), rotationDeg };
+  const { at, inward, room } = best;
+  const inRoom = (p: Vec2) => pointInPolygon(p, room.footprint, room.holes);
+  const step = (d: Vec2): Vec2 => [at[0] + d[0] * AREA_INSET_M, at[1] + d[1] * AREA_INSET_M];
+  const away = dist(position, at);
+  const tries = [away > 0 ? step([(at[0] - position[0]) / away, (at[1] - position[1]) / away]) : step(inward)];
+  const bisector = cornerBisector(at, room);
+  if (bisector) tries.push(step(bisector));
+  const inside = tries.find(inRoom);
+  // A sliver can put every step outside again: then the area's own inside point.
+  return inside
+    ? { position: inside, rotationDeg: facingRotation(inward) }
+    : { position: insidePoint(room.footprint, room.holes), rotationDeg };
+}
+
+/** At a corner of the room's outline (or of a hole), the way into the room halfway between its two edges; null elsewhere. */
+function cornerBisector(p: Vec2, room: Room): Vec2 | null {
+  for (const ring of [room.footprint, ...room.holes]) {
+    for (let i = 0; i < ring.length; i++) {
+      const q = ring[i]!;
+      if (dist(p, q) > 1e-9) continue;
+      const [a, c] = [ring[(i + ring.length - 1) % ring.length]!, ring[(i + 1) % ring.length]!];
+      const [la, lc] = [dist(a, q), dist(c, q)];
+      if (la === 0 || lc === 0) return null;
+      const sum: Vec2 = [(a[0] - q[0]) / la + (c[0] - q[0]) / lc, (a[1] - q[1]) / la + (c[1] - q[1]) / lc];
+      const length = Math.hypot(sum[0], sum[1]);
+      if (length < 1e-9) return null;
+      const b: Vec2 = [sum[0] / length, sum[1] / length];
+      // Between the edges on the room's side, or, at a corner that turns in, the other way.
+      return pointInPolygon([q[0] + b[0] * PROBE_M, q[1] + b[1] * PROBE_M], room.footprint, room.holes) ? b : [-b[0], -b[1]];
+    }
+  }
+  return null;
 }
 
 /** This floor's frames, per capture, in filming order: list_frames's order. */
