@@ -437,6 +437,35 @@ describe("placements on the canvas", () => {
     fireEvent.mouseUp(window, { clientX: 140, clientY: 130 });
     expect(onMovePlacement).not.toHaveBeenCalled();
   });
+
+  it("draws an object as a square turned to its rotation, named by its kind, and selects it when pressed", () => {
+    useEditorStore.getState().setModel(parseModel({
+      ...model,
+      objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+      placements: [...model.placements, { id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [3, 3, 0], rotationDeg: 90 }],
+    }));
+    render(<PlanCanvas width={800} height={600} />);
+    const marker = screen.getByTestId("placement-L1-bin-1");
+    expect(marker.querySelector("title")?.textContent).toBe("wastebin");
+    expect(marker.querySelector("rect")?.getAttribute("transform")).toMatch(/^rotate\(-90 /);
+    fireEvent.mouseDown(marker, { clientX: 100, clientY: 100 });
+    expect(useEditorStore.getState().selection).toEqual({ type: "placement", id: "L1-bin-1" });
+  });
+
+  it("drags an object and saves where it was let go, keeping its height", () => {
+    const onMovePlacement = vi.fn();
+    useEditorStore.getState().setModel(parseModel({
+      ...model,
+      objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+      placements: [{ id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [5, 5, 0.4] }],
+    }));
+    render(<PlanCanvas width={800} height={600} onMovePlacement={onMovePlacement} />);
+    act(() => useEditorStore.getState().setViewport({ originX: 0, originY: 600, scale: 10 }));
+    fireEvent.mouseDown(screen.getByTestId("placement-L1-bin-1"), { clientX: 50, clientY: 550 });
+    fireEvent.mouseMove(window, { clientX: 60, clientY: 550 });
+    fireEvent.mouseUp(window, { clientX: 80, clientY: 540 });
+    expect(onMovePlacement.mock.calls[0]![1]).toEqual([8, 6, 0.4]);
+  });
 });
 
 describe("pathways", () => {

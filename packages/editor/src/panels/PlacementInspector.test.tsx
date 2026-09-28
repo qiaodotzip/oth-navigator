@@ -118,3 +118,43 @@ describe("PlacementInspector", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe("an object", () => {
+  const bin = { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } };
+  const withObject = (kind: Record<string, unknown>) => parseModel({
+    ...model,
+    objectKinds: [kind],
+    places: [{ id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "ok_bin" }],
+    sightings: [
+      { id: "sg_1", placeId: "pl_bin", keyframeId: "kf_1" },
+      { id: "sg_2", placeId: "pl_bin", keyframeId: "kf_2" },
+    ],
+    placements: [...model.placements, {
+      id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [3, 3, 0], sightingIds: ["sg_1", "sg_2"],
+    }],
+  });
+  const show = (kind: Record<string, unknown>) => {
+    useEditorStore.getState().setModel(withObject(kind));
+    useEditorStore.getState().select({ type: "placement", id: "L1-bin-1" });
+    render(<PlacementInspector onChange={vi.fn()} />);
+  };
+
+  it("names its kind and size, says it is a box until the kind has a model, and counts the frames it was placed from", () => {
+    show(bin);
+    expect(screen.getByText("Object")).toBeTruthy();
+    expect(screen.getByText("wastebin")).toBeTruthy();
+    expect(screen.getByText("0.5 × 0.5 × 1 m · shows a box until its kind has a model")).toBeTruthy();
+    expect(screen.getByText("From 2 frames")).toBeTruthy();
+  });
+
+  it("says it shows its kind's model once the kind has one", () => {
+    show({ ...bin, assetId: "asset_1" });
+    expect(screen.getByText("0.5 × 0.5 × 1 m · shows its kind's model")).toBeTruthy();
+  });
+
+  it("still moves, turns and scales as any placement does", () => {
+    show(bin);
+    expect((screen.getByLabelText(/rotation/i) as HTMLInputElement).value).toBe("0");
+    expect((screen.getByLabelText(/scale/i) as HTMLInputElement).value).toBe("1");
+  });
+});

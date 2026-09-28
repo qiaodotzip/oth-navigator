@@ -1,4 +1,5 @@
-import type { Placement } from "@oth/model";
+import { live, placementModelAsset, type Placement } from "@oth/model";
+import { sizeText } from "../survey/tagging";
 import { useEditorStore } from "../state/store";
 
 export function PlacementInspector({
@@ -13,7 +14,15 @@ export function PlacementInspector({
   const placement = model.placements.find(p => p.id === selection.id);
   if (!placement) return null;
 
-  const asset = model.assets.find(a => a.id === placement.assetId);
+  const kind = placement.objectKindId ? live(model.objectKinds).find(k => k.id === placement.objectKindId) : undefined;
+  const asset = placement.assetId ? model.assets.find(a => a.id === placement.assetId) : undefined;
+  // What it shows (spec §5.3): its own model, its kind's, or its kind's box.
+  const shows = asset ? `its own model, ${asset.filename}`
+    : placementModelAsset(model, placement) ? "its kind's model"
+    : "a box until its kind has a model";
+  // The frames Claude placed it from: one tag per frame, as a rule, but counted by frame.
+  const tagged = new Set(placement.sightingIds);
+  const frames = new Set(live(model.sightings).filter(s => tagged.has(s.id)).map(s => s.keyframeId)).size;
 
   // Each field is keyed by the value it shows as well as the placement. Keyed
   // by the placement alone, an uncontrolled field keeps showing where it was
@@ -42,8 +51,10 @@ export function PlacementInspector({
   return (
     <div className="space-y-3 border-b p-3 text-sm">
       <div>
-        <div className="text-xs uppercase tracking-wide text-stone-500">Placement</div>
-        <div>{asset?.filename ?? placement.assetId}</div>
+        <div className="text-xs uppercase tracking-wide text-stone-500">{placement.objectKindId ? "Object" : "Placement"}</div>
+        <div>{kind?.nameEn ?? asset?.filename ?? placement.assetId ?? "A kind since deleted"}</div>
+        {kind && <p className="text-xs text-stone-600">{sizeText(kind.size)} · shows {shows}</p>}
+        {frames > 0 && <p className="text-xs text-stone-600">From {frames} frame{frames === 1 ? "" : "s"}</p>}
       </div>
 
       <div className="flex gap-2">

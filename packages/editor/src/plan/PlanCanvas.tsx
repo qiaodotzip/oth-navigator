@@ -12,6 +12,7 @@ import { BELOW_STROKE, SELECTED_FILL, SELECTED_STROKE, SPACE_STROKE } from "./co
 import { contentBBox, hasArea } from "./content";
 import { DrawingHint } from "./DrawingHint";
 import { PathwayShape } from "./PathwayShape";
+import { PlacementMarker } from "./PlacementMarker";
 import { snapPoint } from "./snapping";
 import { Underlay } from "./Underlay";
 import { VertexHandles } from "./VertexHandles";
@@ -578,20 +579,19 @@ export function PlanCanvas({
             const at = draggingPlacement?.id === p.id && placementAt
               ? placementAt
               : ([p.position[0], p.position[1]] as Vec2);
-            const [x, y] = worldToScreen(state.viewport, at);
+            const kind = p.objectKindId ? state.model?.objectKinds.find(k => k.id === p.objectKindId) : undefined;
+            const asset = p.assetId ? state.model?.assets.find(a => a.id === p.assetId) : undefined;
             return (
-              <rect
+              <PlacementMarker
                 key={p.id}
-                data-testid={`placement-${p.id}`}
-                x={x - 5}
-                y={y - 5}
-                width={10}
-                height={10}
-                fill={state.selection?.id === p.id ? SELECTED_FILL : "#8b5cf6"}
-                stroke="#4c1d95"
-                strokeWidth={1}
+                testId={`placement-${p.id}`}
+                at={worldToScreen(state.viewport, at)}
+                rotationDeg={p.rotationDeg}
+                object={Boolean(p.objectKindId)}
+                selected={state.selection?.id === p.id}
+                title={kind?.nameEn ?? asset?.filename ?? "Placement"}
+                movable={state.tool === "select"}
                 pointerEvents={shapeEvents}
-                style={{ cursor: state.tool === "select" ? "move" : "default" }}
                 onMouseDown={event => {
                   if (state.tool !== "select") return;
                   event.stopPropagation();
