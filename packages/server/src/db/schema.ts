@@ -173,6 +173,8 @@ export const auditLog = pgTable("audit_log", {
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   before: jsonb("before"),
   after: jsonb("after"),
+  /** The Claude Code token a change came through; null for one made in the app. */
+  via: text("via"),
 }, t => ({ entityIdx: index("audit_entity_idx").on(t.entityType, t.entityId) }));
 
 export const publishedVersions = pgTable("published_versions", {
@@ -299,3 +301,27 @@ export const sightings = pgTable("sightings", {
   proposedBy: text("proposed_by").notNull().default(""),
   ...auditColumns,
 }, t => ({ placeIdx: index("sightings_place_idx").on(t.placeId) }));
+
+/**
+ * Personal tokens that let a teammate's own Claude Code reach the map over
+ * MCP (spec §6.1). Only a token's SHA-256 is kept, so a copy of this table
+ * cannot be used to connect. Revoked, never deleted, so every audit row's
+ * `via` still names a row here.
+ */
+export const apiTokens = pgTable("api_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  mayPublish: boolean("may_publish").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  revokedBy: text("revoked_by"),
+  /** When its owner was told, at sign-in, that it exists (spec §6.1). */
+  announcedAt: timestamp("announced_at", { withTimezone: true }),
+}, t => ({
+  hashIdx: uniqueIndex("api_tokens_hash_idx").on(t.tokenHash),
+  userIdx: index("api_tokens_user_idx").on(t.userId),
+}));

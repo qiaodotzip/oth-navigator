@@ -16,8 +16,12 @@ export const CARRIED_TABLES = [
   "published_versions", "audit_log",
 ] as const;
 
-/** Left behind on purpose: sign-ins and advisory locks belong to the server they were made on. */
-export const LEFT_BEHIND = ["sessions", "entity_locks"] as const;
+/**
+ * Left behind on purpose: sign-ins, advisory locks and Claude Code tokens
+ * belong to the server they were made on. A token made against a laptop's
+ * server is no key to Railway's.
+ */
+export const LEFT_BEHIND = ["sessions", "entity_locks", "api_tokens"] as const;
 
 /** Tables whose rows name a file under the data folder, in `storage_path`, with its `size_bytes`. */
 export const FILE_TABLES = ["assets", "level_images", "keyframes"] as const;

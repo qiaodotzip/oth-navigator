@@ -5,6 +5,7 @@ import type { Row } from "../db/rows";
 import { stripAuditFields, toModelRow } from "../db/rows";
 import { auditLog } from "../db/schema";
 import { entityRegistry, type EntityType } from "./registry";
+import { currentVia } from "./via";
 
 export class VersionConflictError extends Error {
   constructor(public readonly current: Row | null) {
@@ -37,6 +38,7 @@ export async function recordAudit(
     actorId,
     before: before ? toModelRow(before) : null,
     after: after ? toModelRow(after) : null,
+    via: currentVia(),
   });
 }
 

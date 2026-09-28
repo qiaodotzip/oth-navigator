@@ -1,0 +1,99 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { beforeEach, describe, expect, it } from "vitest";
+import { createApp } from "../app";
+import { createUser } from "../auth/users";
+import type { Database } from "../db/client";
+import { apiTokens, auditLog } from "../db/schema";
+import { createTestDb, json } from "../testing/harness";
+import { hashToken, type TokenListing } from "./service";
+
+let db: Database;
+let app: ReturnType<typeof createApp>;
+let weiCookie: string;
+let amyCookie: string;
+
+async function signIn(userId: string): Promise<string> {
+  const res = await app.request("/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId }),
+  });
+  return res.headers.get("set-cookie") ?? "";
+}
+
+const send = (method: string, path: string, cookie: string, body?: unknown) =>
+  app.request(path, {
+    method,
+    headers: { "content-type": "application/json", cookie },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+type Made = { token: TokenListing; secret: string };
+
+beforeEach(async () => {
+  db = await createTestDb();
+  app = createApp({ db, dataDir: await mkdtemp(join(tmpdir(), "oth-tokens-")) });
+  const wei = await createUser(db, { email: "wei@example.com", password: "unused", displayName: "Wei" });
+  const amy = await createUser(db, { email: "amy@example.com", password: "unused", displayName: "Amy" });
+  weiCookie = await signIn(wei.id);
+  amyCookie = await signIn(amy.id);
+});
+
+describe("the tokens routes", () => {
+  it("make a token in your name and show it once, never to be read again", async () => {
+    const res = await send("POST", "/api/tokens", weiCookie, { name: "Wei's laptop" });
+    expect(res.status).toBe(201);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const made = await json<Made>(res);
+    expect(made.secret).toMatch(/^oth_pat_[A-Za-z0-9_-]{43}$/);
+    expect(made.token).toMatchObject({ name: "Wei's laptop", ownerName: "Wei", mayPublish: false, lastUsedAt: null });
+
+    const listed = await (await send("GET", "/api/tokens", amyCookie)).text();
+    expect(JSON.parse(listed)).toEqual({ tokens: [made.token], mayPublishByDefault: false });
+    expect(listed).not.toContain(made.secret);
+    expect(listed).not.toContain(hashToken(made.secret));
+  });
+
+  it("make one that may publish only when asked", async () => {
+    const made = await json<Made>(await send("POST", "/api/tokens", weiCookie, { name: "Nightly", mayPublish: true }));
+    expect(made.token.mayPublish).toBe(true);
+  });
+
+  it("let anyone revoke anyone's token, on the record", async () => {
+    const made = await json<Made>(await send("POST", "/api/tokens", weiCookie, { name: "Wei's laptop" }));
+    expect((await send("DELETE", `/api/tokens/${made.token.id}`, amyCookie)).status).toBe(204);
+    expect((await json<{ tokens: unknown[] }>(await send("GET", "/api/tokens", weiCookie))).tokens).toEqual([]);
+    const [row] = await db.select().from(apiTokens);
+    expect(row?.revokedAt).toBeInstanceOf(Date);
+    const audit = await db.select().from(auditLog);
+    expect(audit.map(a => a.action).sort()).toEqual(["create", "revoke"]);
+    expect(JSON.stringify(audit)).not.toContain(made.secret);
+  });
+
+  it("404 a token that does not exist", async () => {
+    expect((await send("DELETE", "/api/tokens/tok_nope", weiCookie)).status).toBe(404);
+  });
+
+  it("ask for a name", async () => {
+    const res = await send("POST", "/api/tokens", weiCookie, { name: "  " });
+    expect(res.status).toBe(400);
+    expect((await json<{ error: string }>(res)).error).toBe("Give the token a name, such as the laptop it is for.");
+  });
+
+  it("say plainly when you already have five", async () => {
+    for (let i = 0; i < 5; i++) await send("POST", "/api/tokens", weiCookie, { name: `t${i}` });
+    const res = await send("POST", "/api/tokens", weiCookie, { name: "sixth" });
+    expect(res.status).toBe(409);
+    expect((await json<{ error: string }>(res)).error).toBe(
+      "You already have 5 Claude Code tokens. Revoke one you no longer use, then make this one.",
+    );
+  });
+
+  it("are for a signed-in person only", async () => {
+    expect((await app.request("/api/tokens")).status).toBe(401);
+    expect((await app.request("/api/tokens", { method: "POST", body: "{}" })).status).toBe(401);
+    expect((await app.request("/api/tokens/tok_1", { method: "DELETE" })).status).toBe(401);
+  });
+});
