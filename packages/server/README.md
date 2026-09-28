@@ -52,6 +52,10 @@ a Postgres database and a volume.
 The Dockerfile sets `NODE_ENV=production`, which makes cookies `Secure` and
 keeps error details out of responses (they go to the log).
 
+Never enable Railway's CDN (`railway cdn`) for this service. The built editor
+and published bundles are served `public, immutable`, so the edge would cache
+the gated files and hand them to anyone, code or not.
+
 ## Moving the data
 
 ```bash
@@ -77,11 +81,18 @@ list. A name already on the team, case-insensitively, is refused rather than
 made twice.
 
 On a server with nobody on it yet, make the first account from a shell on
-the service:
+the service. Moving data from another server? Import the data first, then
+invite teammates: once anyone is on the team the database is no longer
+empty, and `data:import` refuses it.
 
 ```bash
-railway ssh --service oth-map -- sh -c 'cd /app && npm run invite -- "Wei"'
+MSYS_NO_PATHCONV=1 railway ssh --service oth-map -- npm --prefix /app run invite -- Wei
 ```
+
+`railway ssh` joins its arguments into one remote shell line, so the command
+names the app folder with `--prefix` rather than a quoted `cd`.
+`MSYS_NO_PATHCONV=1` stops Git Bash on Windows rewriting `/app` into a Windows
+path; anywhere else it does nothing.
 
 To disable someone's access, set `disabled_at` on their `users` row. Their
 existing sessions stop resolving immediately.

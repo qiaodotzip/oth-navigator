@@ -20,5 +20,9 @@ RUN npm run build --workspace @oth/editor
 
 # Secure cookies, error bodies without detail, and TEAM_CODE required.
 ENV NODE_ENV=production
+# The volume's mount path. The Railway variable overrides it; this default
+# means a missing or mangled one still writes to /data rather than to ./data
+# on the container's own disk, which the next deploy wipes.
+ENV DATA_DIR=/data
 EXPOSE 3000
 CMD ["npm", "run", "start", "--workspace", "@oth/server"]
