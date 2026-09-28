@@ -1,5 +1,5 @@
 import { live, type ValidationReport } from "@oth/model";
-import { MapScene, forgetPlacementModels } from "@oth/renderer";
+import { MapScene, SceneRoomLabels, forgetPlacementModels } from "@oth/renderer";
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Api } from "../api/client";
 import { commitPoint } from "../flow/commitPoint";
@@ -7,8 +7,10 @@ import { BUILD_STEPS, buildStepsDone, type BuildStepId } from "../flow/floorProg
 import { levelBelow } from "../flow/floors";
 import { newPathway, newSpace } from "../flow/newSpace";
 import { LockBanner } from "../panels/LockBanner";
+import { roomLabels } from "../places/labels";
 import { contentBBox } from "../plan/content";
 import { PlanCanvas } from "../plan/PlanCanvas";
+import { PlanRoomLabels } from "../plan/RoomLabels";
 import { useElementSize } from "../plan/useElementSize";
 import { fitViewport } from "../plan/viewport";
 import { setParams, type FloorRoute } from "../route";
@@ -116,6 +118,9 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
     () => (model && levelId ? buildStepsDone(model, report, levelImages, levelId, todos) : NOTHING_DONE),
     [model, report, levelImages, levelId, todos],
   );
+  // One set of labels for the plan and the preview, so the two never disagree about a name.
+  const labels = useMemo(() => (model && levelId ? roomLabels(model, levelId) : []), [model, levelId]);
+  const elevationM = model?.levels.find(l => l.id === levelId)?.elevationM ?? 0;
   // No step in the address: the first one not done yet — a new floor starts at its plan.
   const step: BuildStepId = parseStep(route.params.step) ?? BUILD_STEPS.find(s => !done[s.id])?.id ?? "floorplan";
   const counts = useMemo(() => stepCounts(todos), [todos]);
@@ -339,6 +344,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
               imageUrl={api.levelImageFileUrl}
               showHint={false}
               belowRings={belowRings}
+              overlays={<PlanRoomLabels labels={labels} />}
               // The save is handed back, so the canvas holds the plan where it
               // was dropped until the save lands rather than jumping back first.
               onMoveUnderlay={offset => (image ? patchPlan(api, image, offset, { doing: "move the plan" }) : undefined)}
@@ -392,7 +398,9 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
                   assetUrl={api.assetFileUrl}
                   selectedId={selection?.type === "room" ? selection.id : null}
                   onSelect={id => useEditorStore.getState().select({ type: "room", id })}
-                />
+                >
+                  <SceneRoomLabels labels={labels} elevationM={elevationM} />
+                </MapScene>
               </PreviewPanel>
             </PreviewBoundary>
           )}

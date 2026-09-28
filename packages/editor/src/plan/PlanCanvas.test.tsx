@@ -104,6 +104,16 @@ describe("PlanCanvas", () => {
     fireEvent.click(screen.getByTestId("plan-surface"), { clientX: 120, clientY: 140 });
     expect(onCommitPoint).toHaveBeenCalledTimes(1);
   });
+
+  it("draws overlays inside the plan, over the rooms", () => {
+    render(<PlanCanvas width={800} height={600} overlays={<g data-testid="overlay" />} />);
+    const overlay = screen.getByTestId("overlay");
+    expect(screen.getByTestId("plan-canvas").contains(overlay)).toBe(true);
+    // In SVG, what comes later in the document is painted on top.
+    expect(screen.getByTestId("room-L1-a").compareDocumentPosition(overlay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // ...and under the markers, which must stay on top to be picked up.
+    expect(overlay.compareDocumentPosition(screen.getByTestId("placement-pl_1")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
 
 describe("placing a point", () => {

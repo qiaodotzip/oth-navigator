@@ -1,7 +1,8 @@
 import { PlacementSchema, parseModel, type ValidationReport } from "@oth/model";
+import type { RoomLabel } from "@oth/renderer";
 import { useGLTF } from "@react-three/drei";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { StrictMode } from "react";
+import { StrictMode, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { navigate, useCurrentRoute } from "../route";
 import { createSaver } from "../state/save";
@@ -16,11 +17,13 @@ import { BuildWorkspace } from "./BuildWorkspace";
  * it, and a test can make it fail as a placed model that will not load does.
  * The plan still takes its room colours from the real renderer.
  */
-const scene = vi.hoisted(() => ({ fails: false }));
+const scene = vi.hoisted(() => ({ fails: false, children: null as unknown }));
 vi.mock("@oth/renderer", async importOriginal => ({
   ...(await importOriginal<typeof import("@oth/renderer")>()),
-  MapScene: () => {
+  MapScene: (props: { children?: unknown }) => {
     if (scene.fails) throw new Error("Could not load /api/assets/asset_1/file: 404");
+    // What the page hands the scene to draw with the level: its labels.
+    scene.children = props.children;
     return null;
   },
 }));
@@ -72,6 +75,7 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   measureCanvas = null;
   scene.fails = false;
+  scene.children = null;
   localStorage.clear();
   useToasts.getState().clear();
   const s = useEditorStore.getState();
@@ -436,6 +440,32 @@ describe("BuildWorkspace — the 3D preview", () => {
 
   it("says so once under StrictMode, which renders twice as the app does in development", () => {
     failsThenRecovers({ strict: true });
+  });
+});
+
+describe("BuildWorkspace — labels", () => {
+  it("names the rooms on the plan: the drawing's name, and nothing for a room with none", () => {
+    open("/floors/L1/build?step=rooms");
+    measure();
+    expect(screen.getByTestId("room-label-L1-hall").textContent).toBe("Hall");
+    expect(screen.queryByTestId("room-label-L1-a")).toBeNull();
+  });
+
+  it("names a bound room by its place, with ✓ once confirmed", () => {
+    open("/floors/L1/build?step=rooms");
+    measure();
+    act(() => useEditorStore.getState().setModel({ ...model, places: [{ ...model.places[0]!, roomId: "L1-a" }] }));
+    expect(screen.getByTestId("room-label-L1-a").textContent).toBe("✓ Festive Mall");
+  });
+
+  it("hands the 3D preview the same labels, at the floor's own height", () => {
+    localStorage.setItem("oth.build.preview", "on");
+    // L2, 6 m up: on L1 a height of 0 would pass with no height handed over at all.
+    useEditorStore.getState().setActiveLevel("oth-L2");
+    open("/floors/L2/build?step=rooms");
+    const given = scene.children as ReactElement<{ labels: RoomLabel[]; elevationM: number }>;
+    expect(given.props.labels.map(l => l.roomId)).toEqual(["L2-a"]);
+    expect(given.props.elevationM).toBe(6);
   });
 });
 

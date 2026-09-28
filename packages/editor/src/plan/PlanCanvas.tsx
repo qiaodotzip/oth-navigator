@@ -1,6 +1,6 @@
 import type { Placement, Ring, Room, Vec2 } from "@oth/model";
 import { roomColor } from "@oth/renderer";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { levelBelow } from "../flow/floors";
 import type { SpaceKind } from "../flow/newSpace";
 import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore } from "../state/store";
@@ -106,6 +106,13 @@ export type PlanCanvasProps = {
   onMoveUnderlay?: (offset: PlanOffset) => void | Promise<unknown>;
   /** False where the page has its own guide, which then carries the drawing hint. */
   showHint?: boolean;
+  /**
+   * SVG drawn over the spaces, pathways and details, and under the corner
+   * handles and markers: room labels, and the layers later parts add. Each
+   * overlay reads the viewport from the store, as the canvas does, and sets
+   * its own pointer events. A label lets clicks through to the room beneath.
+   */
+  overlays?: ReactNode;
 };
 
 export function PlanCanvas({
@@ -121,6 +128,7 @@ export function PlanCanvas({
   belowRings,
   onMoveUnderlay,
   showHint = true,
+  overlays,
 }: PlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const state = useEditorStore();
@@ -549,6 +557,8 @@ export function PlanCanvas({
 
         {/* A detail stands on the floor and on anything crossing it. */}
         {rooms.filter(r => r.kind === "detail").map(renderRoom)}
+
+        {overlays}
 
         {state.tool === "select" && selectedRoom && (
           <VertexHandles
