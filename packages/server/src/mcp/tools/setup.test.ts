@@ -112,7 +112,7 @@ describe("list_drafts", () => {
       { id: String(drafts[0]!.id), expectedVersion: 0, decision: "set_aside", reason: "Can't make it out" },
     ] });
     const listing = JSON.parse((await call(client, "list_drafts", { floor: "L1", limit: 1 })).text) as Record<string, unknown>;
-    expect(listing.lineUp).toEqual({ dx: -11.5, dy: 4.6, pairs: 5 });
+    expect(listing.lineUp).toEqual({ dx: 11.5, dy: -4.6, pairs: 5 });
     expect(Object.keys(listing).slice(0, 3)).toEqual(["floor", "counts", "lineUp"]);
     const { tools } = await client.listTools();
     expect(tools.find(t => t.name === "list_drafts")?.description).toContain("lineUp");

@@ -109,8 +109,8 @@ function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       "and whether it is named like a lift, escalator or stairs. Drafts set aside for a person are not listed. counts " +
       "says how the floor's drafts stand: waiting, setAside (waiting for a person), accepted and rejected. " +
       "lineUp is there only when the drawing doesn't line up with the rooms already on the floor: at least 5 drafts " +
-      "sit the same way off the rooms named as they are. Its dx and dy are that shift in metres, from the drafts' " +
-      "labels to the rooms' centres, and pairs how many agree. " +
+      "sit the same way off the rooms named as they are. Its dx and dy are how far the drawing sits from those rooms, " +
+      "in metres (a draft's label less its room's centre), and pairs how many agree. " +
       "decide_drafts takes decided drafts off this list, so after deciding some, read again from offset 0 rather " +
       "than carrying on from where you left off.",
     inputSchema: {

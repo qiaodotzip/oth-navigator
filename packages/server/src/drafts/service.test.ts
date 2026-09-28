@@ -203,14 +203,15 @@ describe("lineUpOf (contract v3): does the drawing line up with the rooms alread
   const draftsOff = (names: readonly string[], [ox, oy]: [number, number]) =>
     names.map((nameEn, i) => ({ nameEn, labelPoint: [i * 20 + 3 + ox, 3 + oy] as [number, number] }));
 
-  it("gives the shift from the drafts' labels to their rooms' centres when 5 or more pairs agree on one of over a metre", () => {
+  it("says how far the drawing sits off the rooms (label minus centre) when 5 or more pairs agree on a shift of over a metre", () => {
     const rooms = [...roomsOf(NAMES), { nameEn: "Kitchen", footprint: square(200, 0, 6), holes: [] }];
     const drafts = [
       ...draftsOff(NAMES, [11.5, -4.6]),
       // Capitals and spacing aside, the names are the same: a pair, but one that lines up, so not one of the six.
       { nameEn: "  kitchen ", labelPoint: [203, 3] as [number, number] },
     ];
-    expect(lineUpOf(drafts, rooms)).toEqual({ dx: -11.5, dy: 4.6, pairs: 6 });
+    // The editor says this as "about 11.5 m east and 4.6 m south of the rooms" (LineUpWarning).
+    expect(lineUpOf(drafts, rooms)).toEqual({ dx: 11.5, dy: -4.6, pairs: 6 });
   });
 
   it("pairs a draft only with a name exactly one room on the floor has", () => {

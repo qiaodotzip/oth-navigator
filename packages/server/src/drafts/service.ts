@@ -128,11 +128,11 @@ export async function listDrafts(db: Database, levelId: string): Promise<Row[]> 
 
 /**
  * Contract v3's line-up check: the drawing a search read sits off the rooms
- * already on the floor. dx and dy, in metres, are the shift from the drafts'
- * labels to the centres of the rooms they are named for, which moving the
- * drawing by would line it up; pairs is how many drafts agree on it.
- * Rehearsal 2's L1 plan sat 11.5 m east and 4.6 m south of its rooms, and
- * map_rooms made about 160 rooms twice.
+ * already on the floor. dx and dy, in metres, are how far it sits from them:
+ * a draft's label less the centre of the room it is named for, as the editor
+ * says it ("about 11.5 m east and 4.6 m south of the rooms"). pairs is how
+ * many drafts agree on it. Rehearsal 2's L1 plan sat (+11.5, −4.6) off its
+ * rooms, and map_rooms made about 160 rooms twice.
  */
 export type LineUp = { dx: number; dy: number; pairs: number };
 /** At least this many pairs must agree, */
@@ -152,8 +152,9 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 /**
  * Whether waiting drafts sit off the rooms already on the floor (contract
  * v3). A draft is paired with a room when exactly one room on the floor has
- * its name, capitals and spacing aside, and each pair gives the shift from
- * the draft's label to the room's centre (where get_floor puts its name).
+ * its name, capitals and spacing aside, and each pair gives the offset
+ * between the draft's label and the room's centre (where get_floor puts its
+ * name); the answer is the label's side of it, where the drawing sits.
  * The largest group of shifts within LINE_UP_AGREE_M of one of them decides:
  * at least LINE_UP_PAIRS of them, on a mean shift over LINE_UP_SHIFT_M, is a
  * drawing that doesn't line up. A floor that does line up, or has too few
@@ -176,7 +177,7 @@ export function lineUpOf(
     const room = same[0]!;
     const centre = centres.get(room) ?? labelPoint(room.footprint, room.holes, 0.5).point;
     centres.set(room, centre);
-    shifts.push([centre[0] - d.labelPoint[0], centre[1] - d.labelPoint[1]]);
+    shifts.push([d.labelPoint[0] - centre[0], d.labelPoint[1] - centre[1]]);
   }
   let agreeing: Vec2[] = [];
   for (const s of shifts) {

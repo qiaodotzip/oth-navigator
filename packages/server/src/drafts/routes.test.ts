@@ -124,7 +124,7 @@ describe("a floor's drafts", () => {
     await replace(names.map((n, i) => found(n, { footprint: square(i * 20 + 11.5, -4.6, 6), labelPoint: [i * 20 + 3 + 11.5, 3 - 4.6] })));
     const body = await read();
     expect(body.drafts).toHaveLength(5);
-    expect(body.lineUp).toEqual({ dx: -11.5, dy: 4.6, pairs: 5 });
+    expect(body.lineUp).toEqual({ dx: 11.5, dy: -4.6, pairs: 5 });
   });
 
   it("never puts drafts in the map", async () => {
