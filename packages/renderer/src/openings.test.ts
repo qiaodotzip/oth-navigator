@@ -28,6 +28,9 @@ const slanted = (degrees: number): Room => {
   const drop = 6 * Math.tan((degrees * Math.PI) / 180);
   return space([[0, -0.5], [6, -0.5 - drop], [6, -12], [0, -12]]);
 };
+/** A walled room's outline as wall pieces of its own, one per side. */
+const wallsOf = (id: string, corners: Array<[number, number]>): WallPiece[] =>
+  corners.map((a, k) => ({ a, b: corners[(k + 1) % corners.length]!, thicknessM: 0.15, rooms: [id] }));
 
 /** Rounded, so a crossing computed as 2.9999999999999996 reads as 3. The + 0 turns -0 into 0. */
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6 + 0;
@@ -148,6 +151,10 @@ describe("areaFacing", () => {
     expect(areaFacing(front, [theShop, space(sq(-10, -10, 20, 0), "room")])).toEqual([]);
   });
 
+  it("finds a wall that stands inside an area, traced without a hole round the room", () => {
+    expect(tidy(areaFacing(front, [theShop, space(sq(-10, -10, 20, 20))]))).toEqual([[0, 6]]);
+  });
+
   it("finds nothing for a wall whose room it is not given, since it cannot tell which side is outside", () => {
     expect(areaFacing(front, [space(sq(-10, -10, 20, 0))])).toEqual([]);
   });
@@ -164,19 +171,19 @@ describe("wallRuns", () => {
     runs.filter(r => r.a[1] === 0 && r.b[1] === 0).map(r => [r6(r.a[0]), r6(r.b[0])]);
 
   it("leaves a gap where a pathway goes in, and walls the rest", () => {
-    const runs = wallRuns(shop(), [path([[3, -5], [3, 2]], 2)], []);
+    const runs = wallRuns(shop(), [path([[3, -5], [3, 2]], 2)], [], []);
     expect(onFront(runs)).toEqual([[0, 2], [4, 6]]);
     expect(runs).toHaveLength(5);
   });
 
   it("gives a shop a front door onto a pathway that passes it without going in", () => {
-    const runs = wallRuns(shop(), [path([[-10, -2], [20, -2]], 2)], []);
+    const runs = wallRuns(shop(), [path([[-10, -2], [20, -2]], 2)], [], []);
     expect(onFront(runs)).toEqual([[0, 2], [4, 6]]);
   });
 
   it("never puts the front door on a wall shared with the shop next door", () => {
     // The pathway passes just east of the shared wall, nearer it than the front.
-    const runs = wallRuns(shop(), [path([[7, -10], [7, 10]], 2)], []);
+    const runs = wallRuns(shop(), [path([[7, -10], [7, 10]], 2)], [], []);
     const between = runs.filter(r => r.rooms.length === 2);
     expect(between).toHaveLength(1);
     expect(between[0]!.a).toEqual([6, 0]);
@@ -184,29 +191,36 @@ describe("wallRuns", () => {
     expect(onFront(runs)).toEqual([[0, 4]]);
   });
 
+  it("between pathways equally near, takes the same door whatever order the walls come in", () => {
+    // The pathway 1 m east of the shared wall is as near the front's east end as the back's.
+    for (const pieces of [shop(), [...shop()].reverse()]) {
+      expect(onFront(wallRuns(pieces, [path([[7, -10], [7, 10]], 2)], [], []))).toEqual([[0, 4]]);
+    }
+  });
+
   it("adds no front door to a room a pathway already goes into", () => {
-    const runs = wallRuns(shop(), [path([[3, -5], [3, 2]], 2), path([[-10, 6], [20, 6]], 2)], []);
+    const runs = wallRuns(shop(), [path([[3, -5], [3, 2]], 2), path([[-10, 6], [20, 6]], 2)], [], []);
     // The second pathway passes 2 m behind the shop; the back wall stays whole.
     expect(runs.filter(r => r.a[1] === 4 && r.b[1] === 4)).toHaveLength(1);
   });
 
   it("leaves a room no pathway comes near closed", () => {
-    expect(wallRuns(shop(), [path([[-10, -9], [20, -9]], 2)], [])).toHaveLength(4);
+    expect(wallRuns(shop(), [path([[-10, -9], [20, -9]], 2)], [], [])).toHaveLength(4);
   });
 
   it("opens a wall along a doorway", () => {
-    const runs = wallRuns(shop(), [], [door([[1, 0], [2.5, 0]], 1.5)]);
+    const runs = wallRuns(shop(), [], [door([[1, 0], [2.5, 0]], 1.5)], []);
     expect(onFront(runs)).toEqual([[0, 1], [2.5, 6]]);
   });
 
   it("drops a wall entirely when its opening is wider than it", () => {
     const stub: WallPiece = { a: [0, 0], b: [1, 0], thicknessM: 0.15, rooms: ["L1-kiosk"] };
-    expect(wallRuns([stub], [path([[0.5, -3], [0.5, 3]], 2.4)], [])).toEqual([]);
+    expect(wallRuns([stub], [path([[0.5, -3], [0.5, 3]], 2.4)], [], [])).toEqual([]);
   });
 
   it("clamps an opening near a wall's end", () => {
     const wall: WallPiece = { a: [0, 0], b: [4, 0], thicknessM: 0.15, rooms: ["L1-kiosk"] };
-    const runs = wallRuns([wall], [path([[0.5, -3], [0.5, 3]], 2.4)], []);
+    const runs = wallRuns([wall], [path([[0.5, -3], [0.5, 3]], 2.4)], [], []);
     expect(runs).toHaveLength(1);
     expect(runs[0]!.a[0]).toBeCloseTo(1.7);
     expect(runs[0]!.b[0]).toBeCloseTo(4);
@@ -256,6 +270,70 @@ describe("wallRuns", () => {
 
     it("makes it no wider than the stretch that faces the area", () => {
       expect(onFront(wallRuns(shop(), [], [], [theShop, space(sq(-10, -10, 2, 0))]))).toEqual([[2, 6]]);
+    });
+
+    it("counts areas within 0.1 m of each other as equally near, and takes the longer stretch", () => {
+      // 1 m off 4 m of the west wall, and 1.05 m off the 6 m front.
+      const runs = wallRuns(shop(), [], [], [theShop, space(sq(-10, 0, -1, 4)), space(sq(-10, -10, 20, -1.05))]);
+      expect(onFront(runs)).toEqual([[0, 1.5], [4.5, 6]]);
+      expect(onWest(runs)).toHaveLength(1);
+    });
+
+    it("breaks a tie by the door's centre, west first then south, whatever order the walls come in", () => {
+      // Areas 1 m off the front and 1 m off the back: equally near, and equally long.
+      const areas = [theShop, space(sq(-10, -10, 20, -1)), space(sq(-10, 5, 20, 10))];
+      for (const pieces of [shop(), [...shop()].reverse()]) {
+        const runs = wallRuns(pieces, [], [], areas);
+        expect(onFront(runs)).toEqual([[0, 1.5], [4.5, 6]]);
+        expect(runs.filter(r => r.a[1] === 4 && r.b[1] === 4)).toHaveLength(1);
+      }
+    });
+
+    describe("where tracing leaves the wall hard to read", () => {
+      it("opens a shop standing inside a concourse traced without a hole round it", () => {
+        // Front and back both stand in the concourse and are 6 m long: the more southerly, the front, opens.
+        const runs = wallRuns(shop(), [], [], [theShop, space(sq(-10, -10, 20, 20))]);
+        expect(onFront(runs)).toEqual([[0, 1.5], [4.5, 6]]);
+        expect(runs).toHaveLength(5);
+      });
+
+      it("opens a shop that an area overlaps by 2 m", () => {
+        const runs = wallRuns(shop(), [], [], [theShop, space(sq(-10, -10, 20, 2))]);
+        expect(onFront(runs)).toEqual([[0, 1.5], [4.5, 6]]);
+        expect(onWest(runs)).toHaveLength(1);
+      });
+
+      it("looks at the part of the area in front of the door, not a lobe beside it behind a service room", () => {
+        // The concourse lies 5 m out. A lobe of it comes within 4.5 m of the door's
+        // centre, off to the west, with a service room standing in between.
+        const concourse = space([[-10, -10], [20, -10], [20, -5], [-1.5, -5], [-1.5, -0.5], [-4, -0.5], [-4, -5], [-10, -5]]);
+        const service = sq(-1.3, -2, -0.7, 1);
+        const runs = wallRuns([...shop(), ...wallsOf("L1-service", service)], [], [],
+          [theShop, walled("L1-service", service), concourse]);
+        expect(onFront(runs.filter(r => r.rooms.includes("L1-shop")))).toEqual([[0, 1.5], [4.5, 6]]);
+      });
+
+      it("cuts one door across a front traced as 0.75 m segments", () => {
+        const segmented: WallPiece[] = [
+          ...Array.from({ length: 8 }, (_, k): WallPiece =>
+            ({ a: [0.75 * k, 0], b: [0.75 * (k + 1), 0], thicknessM: 0.15, rooms: ["L1-shop"] })),
+          ...shop().slice(1),
+        ];
+        const runs = wallRuns(segmented, [], [], [theShop, space(sq(-10, -10, 20, 0))]);
+        expect(onFront(runs)).toEqual([[0, 0.75], [0.75, 1.5], [4.5, 5.25], [5.25, 6]]);
+      });
+
+      it("opens one whole side of a round kiosk standing in a concourse", () => {
+        // 16 sides, 3 m to each corner, so each side is 1.17 m. Its sides turn
+        // 22.5° at each corner, too much to run on as one frontage.
+        const corners = Array.from({ length: 16 }, (_, k): [number, number] =>
+          [3 * Math.cos((k * Math.PI) / 8), 3 * Math.sin((k * Math.PI) / 8)]);
+        const kiosk = wallsOf("L1-kiosk", corners);
+        const runs = wallRuns(kiosk, [], [], [walled("L1-kiosk", corners), space(sq(-10, -10, 10, 10))]);
+        // All 16 stand in the concourse and are as long as each other: the west-then-southmost opens.
+        expect(runs).toHaveLength(15);
+        expect(kiosk.filter(p => !runs.some(r => r.a[0] === p.a[0] && r.a[1] === p.a[1]))).toEqual([kiosk[8]]);
+      });
     });
 
     describe("with a neighbour standing between it and the area", () => {
