@@ -5,6 +5,7 @@ import { ConflictError } from "../api/client";
 import { useEditorStore } from "../state/store";
 import { useToasts } from "../ui/toast";
 import { CheckStep } from "./CheckStep";
+import { EPOCH } from "./progress";
 import { change, fakeSetupApi } from "./testing";
 import type { ClaudeChange } from "./types";
 
@@ -61,10 +62,13 @@ beforeEach(() => {
   s.setActiveLevel("oth-L1");
 });
 
-function open(api = fakeSetupApi({ listClaudeChanges: vi.fn().mockResolvedValue(all) })) {
+function open(
+  api = fakeSetupApi({ listClaudeChanges: vi.fn().mockResolvedValue(all) }),
+  since = "2026-09-28T09:00:00.000Z",
+) {
   const saver = { refresh: vi.fn().mockResolvedValue(undefined) };
   const onLooksRight = vi.fn();
-  render(<CheckStep api={api} saver={saver} level={L1} since="2026-09-28T09:00:00.000Z" onLooksRight={onLooksRight} />);
+  render(<CheckStep api={api} saver={saver} level={L1} since={since} onLooksRight={onLooksRight} />);
   act(() => measure?.([{ contentRect: { width: 800, height: 600 } }]));
   return { api, saver, onLooksRight };
 }
@@ -82,6 +86,13 @@ describe("CheckStep", () => {
     ]);
     expect(screen.queryByTestId("change-a_tag")).toBeNull();
     expect(screen.getByText("Claude's 1 survey label isn't listed here: Review is where they're checked.")).toBeTruthy();
+  });
+
+  it("asks for every change there is, and says so, on a floor never set up", async () => {
+    const { api } = open(fakeSetupApi({ listClaudeChanges: vi.fn().mockResolvedValue(all) }), EPOCH);
+    expect(await screen.findByRole("region", { name: "Rooms made from drafts" })).toBeTruthy();
+    expect(api.listClaudeChanges).toHaveBeenCalledWith("oth-L1", EPOCH);
+    expect(screen.getByText("Everything Claude has changed on L1.", { exact: false })).toBeTruthy();
   });
 
   it("puts low-confidence objects first, each with the frames it was placed from", async () => {
