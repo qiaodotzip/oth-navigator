@@ -1,12 +1,15 @@
 import type { Node as GltfNode, Scene } from "@gltf-transform/core";
 import { live, type Level, type MapModel, type Room } from "@oth/model";
+import { blocksGeometry, type Block } from "../blocks";
 import { CATEGORY_TINT, roomTints } from "../categoryTint";
 import { CONTEXT_ORIGIN_NOTE } from "../contextExport";
 import { modelToThree } from "../coords";
 import { roomsToDraw } from "../LevelGroup";
-import { floorColour, roomFloorGeometry } from "../levelParts";
+import { floorColour, railBlock, roomFloorGeometry, wallBlock } from "../levelParts";
 import { massingOf } from "../massing";
 import { levelStructure, type LevelStructure } from "../structure";
+import { wallColor } from "../theme";
+import { BALUSTRADE_COLOUR, BALUSTRADE_OPACITY } from "../voids";
 import { GlbWriter, type Paint } from "./gltfWrite";
 
 /** A placed model's bytes, fetched through the asset URL; null when it can't be had. */
@@ -67,6 +70,43 @@ function floorContext(writer: GlbWriter, scene: Scene, model: MapModel, level: L
   };
 }
 
+const WALL_PAINT: Paint = { name: "wall", colour: wallColor("room"), doubleSided: true };
+const BALUSTRADE_PAINT: Paint = { name: "balustrade", colour: BALUSTRADE_COLOUR, opacity: BALUSTRADE_OPACITY, doubleSided: true };
+
+/**
+ * Walls: Plan 5D's merged walls with their doors cut, always at full height
+ * (spec §6). One mesh per room, and one per pair of rooms sharing a wall, so
+ * a modeller can hide one shop's walls.
+ */
+function addWalls(ctx: FloorContext): void {
+  const byRooms = new Map<string, { rooms: string[]; blocks: Block[] }>();
+  for (const piece of ctx.structure.walls) {
+    const rooms = [...piece.rooms].sort();
+    const key = rooms.join("|");
+    const entry = byRooms.get(key) ?? { rooms, blocks: [] };
+    entry.blocks.push(wallBlock(piece, ctx.structure.heightByRoom, true));
+    byRooms.set(key, entry);
+  }
+  for (const { rooms, blocks } of byRooms.values()) {
+    const name = rooms.map(id => ctx.roomNames.get(id) ?? id).join(" / ");
+    const node = ctx.writer.mesh(name, blocksGeometry(blocks), WALL_PAINT);
+    if (node) ctx.groups.Walls.addChild(node.setExtras({ rooms }));
+  }
+}
+
+/** Voids: each void's balustrade, named after the void. A void that cuts no floor has none (Plan 5D). */
+function addVoids(ctx: FloorContext): void {
+  const byVoid = new Map<string, Block[]>();
+  for (const rail of ctx.structure.balustrades) {
+    const id = rail.rooms[0] ?? "void";
+    byVoid.set(id, [...(byVoid.get(id) ?? []), railBlock(rail)]);
+  }
+  for (const [id, blocks] of byVoid) {
+    const node = ctx.writer.mesh(ctx.roomNames.get(id) ?? id, blocksGeometry(blocks), BALUSTRADE_PAINT);
+    if (node) ctx.groups.Voids.addChild(node.setExtras({ othId: id }));
+  }
+}
+
 /** Floors: one mesh per room the preview draws, with its voids cut, tinted as the preview tints it. */
 function addFloors(ctx: FloorContext): void {
   const placements = live(ctx.model.placements).filter(p => p.levelId === ctx.level.id);
@@ -104,6 +144,8 @@ export async function buildFloorGlb(
   for (const level of levels) {
     const ctx = floorContext(writer, scene, model, level, stacked);
     addFloors(ctx);
+    addWalls(ctx);
+    addVoids(ctx);
   }
   writer.setNote(floorExportNote(stacked), { floors: levels.map(l => l.code) });
   return writer.write();

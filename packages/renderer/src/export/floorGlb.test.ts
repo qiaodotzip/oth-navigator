@@ -1,10 +1,11 @@
 import { WebIO, type Material } from "@gltf-transform/core";
-import { LevelSchema, PlacementSchema, RoomSchema, type MapModel } from "@oth/model";
+import { LevelSchema, parseModel, PlacementSchema, RoomSchema, type MapModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import { CATEGORY_TINT } from "../categoryTint";
 import { CONTEXT_ORIGIN_NOTE } from "../contextExport";
 import { SLAB_HEIGHT_M } from "../geometry";
-import { roomColor } from "../theme";
+import { roomColor, wallColor } from "../theme";
+import { BALUSTRADE_COLOUR, BALUSTRADE_HEIGHT_M, BALUSTRADE_OPACITY, BALUSTRADE_THICKNESS_M } from "../voids";
 import { FLOOR_GROUPS, STACKED_NOTE, buildFloorGlb } from "./floorGlb";
 import {
   bounds, child, floorModel, floorNodes, group, linear, materialOf, names, noModels, readGlb, sq, worldVertices,
@@ -120,5 +121,83 @@ describe("buildFloorGlb — Floors", () => {
     const floors = group(await exported({ ...floorModel, rooms: [...floorModel.rooms, ...toilets, blank] }, ["oth-L1"]), "L1", "Floors");
     expect(floors.listChildren().filter(n => n.getName() === "Toilet").map(n => n.getExtras().othId)).toEqual(["L1-wc1", "L1-wc2"]);
     expect(names(floors)).toContain("L1-blank");
+  });
+});
+
+describe("buildFloorGlb — Walls", () => {
+  it("builds the preview's walls: one mesh per room, and one per pair of rooms that share a wall", async () => {
+    const walls = group(await exported(floorModel, ["oth-L1"]), "L1", "Walls");
+    expect(names(walls).sort()).toEqual(["L1-cafe", "L1-cafe / Starbucks", "Starbucks"]);
+    expect(child(walls, "L1-cafe / Starbucks").getExtras()).toEqual({ rooms: ["L1-cafe", "L1-shop"] });
+  });
+
+  it("stands every wall at full height: its room's, or the taller of the two", async () => {
+    const walls = group(await exported(floorModel, ["oth-L1"]), "L1", "Walls");
+    expect(bounds(child(walls, "Starbucks")).minY).toBeCloseTo(0);
+    expect(bounds(child(walls, "Starbucks")).maxY).toBeCloseTo(3.5);
+    expect(bounds(child(walls, "L1-cafe / Starbucks")).maxY).toBeCloseTo(4);
+  });
+
+  it("cuts the door where the pathway goes in: the shop's front stops at 1 m and starts again at 3 m", async () => {
+    const shop = child(group(await exported(floorModel, ["oth-L1"]), "L1", "Walls"), "Starbucks");
+    // The front runs along y = 0, which is z = 0, and the wall is 0.15 m thick.
+    const front = worldVertices(shop).filter(([, , z]) => Math.abs(z) < 0.1).map(([x]) => x);
+    expect(front.some(x => Math.abs(x - 1) < 1e-3)).toBe(true);
+    expect(front.some(x => Math.abs(x - 3) < 1e-3)).toBe(true);
+    expect(front.filter(x => x > 1.001 && x < 2.999)).toEqual([]);
+  });
+
+  it("raises a floor's walls with it when the floors are stacked", async () => {
+    const upstairs = bounds(child(group(await exported(floorModel, ["oth-L1", "oth-L2"]), "L2", "Walls"), "Upstairs"));
+    expect(upstairs.minY).toBeCloseTo(6);
+    expect(upstairs.maxY).toBeCloseTo(9);
+  });
+
+  it("paints the walls as the preview does, seen from both sides", async () => {
+    const wall = materialOf(child(group(await exported(floorModel, ["oth-L1"]), "L1", "Walls"), "Starbucks"));
+    expect(wall.getName()).toBe("wall");
+    expectColour(wall, wallColor("room"));
+    expect(wall.getDoubleSided()).toBe(true);
+  });
+
+  it("builds a whole floor's worth, 400 shops, into one modest file with one material per paint", async () => {
+    const rooms = [];
+    for (let i = 0; i < 20; i++) {
+      for (let j = 0; j < 20; j++) {
+        rooms.push({ id: `r-${i}-${j}`, levelId: "oth-L1", kind: "room", footprint: sq(i * 5, j * 5, i * 5 + 5, j * 5 + 5), heightM: 3.5, nameEn: `Shop ${i}-${j}` });
+      }
+    }
+    const grid = parseModel({ building: floorModel.building, levels: [floorModel.levels[0]!], rooms });
+    const bytes = await buildFloorGlb(grid, ["oth-L1"], noModels);
+    const doc = await readGlb(bytes);
+    expect(names(group(doc, "L1", "Floors"))).toHaveLength(400);
+    expect(doc.getRoot().listMaterials().map(m => m.getName()).sort()).toEqual(["room", "wall"]);
+    expect(bytes.byteLength).toBeLessThan(3_000_000);
+  });
+});
+
+describe("buildFloorGlb — Voids", () => {
+  it("rails the atrium with a balustrade named after it, 1.1 m high around its edge", async () => {
+    const voids = group(await exported(floorModel, ["oth-L1"]), "L1", "Voids");
+    expect(names(voids)).toEqual(["Atrium"]);
+    const half = BALUSTRADE_THICKNESS_M / 2;
+    const rail = bounds(child(voids, "Atrium"));
+    expect(rail.minX).toBeCloseTo(14 - half);
+    expect(rail.maxX).toBeCloseTo(18 + half);
+    expect(rail.minZ).toBeCloseTo(4 - half);
+    expect(rail.maxZ).toBeCloseTo(8 + half);
+    expect(rail.minY).toBeCloseTo(0);
+    expect(rail.maxY).toBeCloseTo(BALUSTRADE_HEIGHT_M);
+  });
+
+  it("paints it as see-through glass", async () => {
+    const glass = materialOf(child(group(await exported(floorModel, ["oth-L1"]), "L1", "Voids"), "Atrium"));
+    expect(glass.getAlphaMode()).toBe("BLEND");
+    expect(glass.getAlpha()).toBeCloseTo(BALUSTRADE_OPACITY);
+    expectColour(glass, BALUSTRADE_COLOUR);
+  });
+
+  it("rails nothing on a floor with no void", async () => {
+    expect(names(group(await exported(floorModel, ["oth-L2"]), "L2", "Voids"))).toEqual([]);
   });
 });
