@@ -131,6 +131,11 @@ function times(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
+/** The one wording for a publish too soon, whether the request or the tool finds it. */
+export function publishTooSoon(waitS: number): string {
+  return `This token published less than ten minutes ago. Wait ${waitS} seconds, then publish again.`;
+}
+
 export class TokenLimits {
   private readonly reads = new Map<string, number[]>();
   private readonly writes = new Map<string, number[]>();
@@ -166,24 +171,24 @@ export class TokenLimits {
       };
     }
     if (kinds.includes("publish")) {
-      const last = this.lastPublish.get(tokenId);
-      if (last !== undefined && now - last < this.limits.publishEveryMs) {
-        const wait = seconds(last + this.limits.publishEveryMs - now);
-        return {
-          retryAfterS: wait,
-          message: `This token published less than ten minutes ago. Wait ${wait} seconds, then publish again.`,
-        };
-      }
+      const wait = this.publishWaitS(tokenId, now);
+      if (wait > 0) return { retryAfterS: wait, message: publishTooSoon(wait) };
     }
     this.reads.set(tokenId, [...reads, ...new Array<number>(readCount).fill(now)]);
     this.writes.set(tokenId, [...writes, ...new Array<number>(writeCount).fill(now)]);
     return null;
   }
 
+  /** Seconds until this token may publish again, or 0 when it may now. */
+  publishWaitS(tokenId: string, now: number): number {
+    const last = this.lastPublish.get(tokenId);
+    if (last === undefined || now - last >= this.limits.publishEveryMs) return 0;
+    return seconds(last + this.limits.publishEveryMs - now);
+  }
+
   /** Takes the token's publish slot, or false while its last publish is under ten minutes old. */
   claimPublish(tokenId: string, now: number): boolean {
-    const last = this.lastPublish.get(tokenId);
-    if (last !== undefined && now - last < this.limits.publishEveryMs) return false;
+    if (this.publishWaitS(tokenId, now) > 0) return false;
     this.lastPublish.set(tokenId, now);
     return true;
   }

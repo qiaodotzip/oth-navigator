@@ -114,15 +114,32 @@ describe("the tokens routes", () => {
 
   it("tell the owner once about each token made in their name, and no one else", async () => {
     await send("POST", "/api/tokens", weiCookie, { name: "Wei's laptop" });
+    // Amy asks first: were her claim to reach Wei's token, it would come back
+    // here, and Wei would then be told nothing.
+    expect((await json<{ notices: unknown[] }>(await send("POST", "/api/tokens/notices", amyCookie))).notices).toEqual([]);
     const first = await json<{ notices: { name: string }[] }>(await send("POST", "/api/tokens/notices", weiCookie));
     expect(first.notices.map(n => n.name)).toEqual(["Wei's laptop"]);
     expect((await json<{ notices: unknown[] }>(await send("POST", "/api/tokens/notices", weiCookie))).notices).toEqual([]);
-    expect((await json<{ notices: unknown[] }>(await send("POST", "/api/tokens/notices", amyCookie))).notices).toEqual([]);
+  });
+
+  it("tell only a token's id, name and when it was made", async () => {
+    const made = await json<Made>(await send("POST", "/api/tokens", weiCookie, { name: "Wei's laptop" }));
+    const raw = await (await send("POST", "/api/tokens/notices", weiCookie)).text();
+    expect(JSON.parse(raw)).toEqual({
+      notices: [{ id: made.token.id, name: "Wei's laptop", createdAt: made.token.createdAt }],
+    });
+    expect(raw).not.toContain(hashToken(made.secret));
   });
 
   it("never tell anyone about a token already revoked", async () => {
     const made = await json<Made>(await send("POST", "/api/tokens", weiCookie, { name: "Wei's laptop" }));
     await send("DELETE", `/api/tokens/${made.token.id}`, amyCookie);
+    expect((await json<{ notices: unknown[] }>(await send("POST", "/api/tokens/notices", weiCookie))).notices).toEqual([]);
+  });
+
+  it("never tell anyone about a token already expired", async () => {
+    await send("POST", "/api/tokens", weiCookie, { name: "Wei's laptop" });
+    await db.update(apiTokens).set({ expiresAt: new Date(Date.now() - 1000) });
     expect((await json<{ notices: unknown[] }>(await send("POST", "/api/tokens/notices", weiCookie))).notices).toEqual([]);
   });
 });

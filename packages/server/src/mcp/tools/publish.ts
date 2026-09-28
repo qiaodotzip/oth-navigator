@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { PublishBlockedError, publish } from "../../publish/service";
 import type { ToolContext } from "../context";
+import { publishTooSoon } from "../limits";
 import { Refusal, count, reply, runTool } from "../results";
 
 export const NOT_ALLOWED =
@@ -21,13 +22,17 @@ export function registerPublishTools(server: McpServer, ctx: ToolContext): void 
     // Spec §11.1, decided on 2026-09-28: only with the tick. A different answer is this one branch.
     if (!ctx.token.mayPublish) throw new Refusal(NOT_ALLOWED);
     const at = ctx.now().getTime();
+    // The request's own check passed, but another call through this token
+    // may have claimed the slot since: the loser is told how long to wait.
     if (!ctx.limits.claimPublish(ctx.token.id, at)) {
-      throw new Refusal("This token published less than ten minutes ago. Wait, then publish again.");
+      throw new Refusal(publishTooSoon(ctx.limits.publishWaitS(ctx.token.id, at)));
     }
+    // Which of the person's tokens published, by the name the Team page shows.
+    const via = `${VIA_CLAUDE}, ${ctx.token.name}`;
     try {
       const result = await publish(ctx.db, ctx.dataDir, {
         createdBy: ctx.user.id,
-        notes: notes ? `${notes} (${VIA_CLAUDE})` : VIA_CLAUDE,
+        notes: notes ? `${notes} (${via})` : via,
       });
       return reply(`Published version ${result.version}, with ${count(result.warningCount, "warning")}.`);
     } catch (err) {
