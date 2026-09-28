@@ -176,9 +176,9 @@ describe("what the rehearsal and the final review taught each prompt", () => {
   it("map_rooms finds each draft by its labelPoint, judges overlaps by their share, and sets aside with a reason", () => {
     const text = promptText(mapRooms, "L1");
     expect(text).toContain("`view_plan` outlines the rooms already on the map, not the drafts: find each draft by its labelPoint");
-    expect(text).toContain("one box (in metres) per part of the floor they cover");
+    expect(text).toContain("one box (in metres) per part, until the boxes cover all of them");
     expect(text).toContain("Copy each id exactly as `list_drafts` gives it.");
-    expect(text).toContain("a draft that lies over rooms is not by itself a reason to set it aside");
+    expect(text).toContain("a draft over an open area is not by itself a reason to set it aside");
     expect(text).toContain("Give each a reason");
     expect(text).toContain("Find rooms leaves lifts, escalators and stairs out of its drafts, so look for them among the floor's rooms too");
     expect(text).toContain('When a name holds two stops, such as "Escalator - 05 Escalator - 06", or `make_stop` refuses a room, leave it and name it in your report.');
@@ -243,12 +243,9 @@ describe("what the re-review and rehearsal 2 taught each prompt (Task 10)", () =
     expect(text).toContain(
       "share is how much of the draft lies over a room, so it is near 1 both for a copy and for a smaller space inside one; a copy is onMapAs already.",
     );
-    expect(text).toContain(
-      "reject the draft when it is the same space as that room (the room's name, or the same outline on the drawing); " +
-      "accept it when it is a smaller space inside an open area (the room beneath is kind area)",
-    );
+    expect(text).toContain("reject the draft when it is the same space as that room (the room's name, or the same outline on the drawing); ");
+    expect(text).toContain("accept it when it is a smaller space inside an open area (the room beneath is kind area)");
     expect(text).not.toContain("or a share near 1 over it");
-    expect(text).toContain("Before each `decide_drafts`, look at the drafts in it over the drawing with `view_plan`");
   });
 
   it("place_things matches names, looks with view_plan, and opens a place's frames where names don't settle it", () => {
@@ -275,6 +272,38 @@ describe("what the re-review and rehearsal 2 taught each prompt (Task 10)", () =
     expect(text).toContain(
       'Stop when `check_floor` with floor "L1" and codes ["area.unreachable", "room.noAccess"] gives none, or only ones a person must fix: ' +
       "give how many, and name up to 20.",
+    );
+  });
+});
+
+describe("what rehearsal 3 taught map_rooms (Task 12)", () => {
+  it("makes a stop from the room on the map, not from a likeAStop draft that copies it", () => {
+    const text = promptText(mapRooms, "L1");
+    expect(text).toContain(
+      "`list_drafts` marks a draft named like one likeAStop true: accept it first, unless that room is already on the map: " +
+      "then make the stop from the room on the map and reject the draft as a copy.",
+    );
+    expect(text).not.toContain("likeAStop true: accept it first. ");
+  });
+
+  it("never accepts a draft lying mostly inside a room of kind room, but sets it aside with the reason a person reads", () => {
+    const text = promptText(mapRooms, "L1");
+    expect(text).toContain(
+      "otherwise never accept a draft that lies mostly (share 0.6 or more) inside a room of kind room: set it aside, " +
+      'reason "Inside <room name>, which may hold two spaces: a person should decide."',
+    );
+    // In the one overlap bullet, after the copy is rejected and before the space inside an open area is accepted.
+    const copy = text.indexOf("reject the draft when it is the same space as that room");
+    const inside = text.indexOf("otherwise never accept a draft that lies mostly");
+    const open = text.indexOf("accept it when it is a smaller space inside an open area");
+    expect([copy > -1, copy < inside, inside < open]).toEqual([true, true, true]);
+    expect(text).not.toContain("a draft that lies over rooms is not by itself a reason to set it aside");
+  });
+
+  it("looks at every part of the floor each decide_drafts call decides, not only before the first", () => {
+    expect(promptText(mapRooms, "L1")).toContain(
+      "3. Before every `decide_drafts` call, not only the first, look with `view_plan` at every part of the floor its drafts lie in, " +
+      "one box (in metres) per part, until the boxes cover all of them.",
     );
   });
 });
