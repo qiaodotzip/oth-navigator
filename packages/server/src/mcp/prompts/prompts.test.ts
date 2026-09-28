@@ -9,6 +9,8 @@ import { buildMcpServer } from "../server";
 import { drawPaths } from "./drawPaths";
 import { FINAL_LINE, PROMPTS, promptText, toolsNamed } from "./index";
 import { labelSurvey } from "./labelSurvey";
+import { mapRooms } from "./mapRooms";
+import { placeThings } from "./placeThings";
 
 /** No database: listing and reading prompts never reaches one. */
 function stubContext(): ToolContext {
@@ -60,7 +62,30 @@ describe("the four setup prompts", () => {
       expect(text, p.name).toContain("\nStop when ");
       expect(text.endsWith(`\n${FINAL_LINE}`), p.name).toBe(true);
     }
-    expect(FINAL_LINE).toBe("Report what you did in a few lines, then call `finish_step`.");
+    expect(FINAL_LINE).toBe("Report what you did in a few lines. Then call `finish_step`, but only if you reached the stop rule above.");
+  });
+
+  it("never finish when they stop early, whatever stopped them", () => {
+    for (const p of PROMPTS) {
+      expect(promptText(p, "L1"), p.name).toContain(
+        `If you stop before that, for whatever reason, say what is left and don't call \`finish_step\`: running /mcp__oth__${p.name} L1 again carries on from there.`,
+      );
+    }
+  });
+
+  it("read the floor with get_floor's parts, a page at a time", () => {
+    for (const p of PROMPTS) expect(promptText(p, "L1"), p.name).toMatch(/Read `get_floor` part summary, then .*a page at a time/);
+  });
+
+  it("each set a limit that means something for its own tool", () => {
+    expect(promptText(labelSurvey, "L1")).toContain(
+      "A batch is one `list_frames` page of up to 40 frames: look at and decide every frame on it before you call `list_frames` again. At most 3 batches a run, then report what is left and stop.",
+    );
+    expect(promptText(mapRooms, "L1")).toContain("At most 3 `decide_drafts` calls a run, then report what is left and stop.");
+    expect(promptText(placeThings, "L1")).toContain("At most 60 binds and 40 objects a run, then report what is left and stop.");
+    expect(promptText(drawPaths, "L1")).toContain(
+      "Draw the whole first pass in this run. If you do have to stop, running this again carries on: `suggest_paths` marks drawn the lines the floor has pathways along.",
+    );
   });
 
   it("use every tool they list in their instructions, and name no tool they don't list", () => {
@@ -118,13 +143,60 @@ describe("the four setup prompts", () => {
 
   it("review each prompt's changes at its own review step, and never publish for it", () => {
     const labelText = promptText(labelSurvey, "L1");
-    expect(labelText).toContain("A person checks it in step 3, Review Claude's labels, where each change has Undo.");
+    expect(labelText).toContain(
+      "Your tags are proposals: a person accepts or rejects each one in step 3, Review Claude's labels. " +
+      "The frames you bin and the kinds you make are in step 8, Check Claude's work, where each has Undo.",
+    );
     expect(labelText).toContain("Don't publish: a person does, after step 8.");
     for (const p of PROMPTS.filter(p => p.name !== "label_survey")) {
       const text = promptText(p, "L1");
       expect(text, p.name).toContain("A person checks it in step 8, Check Claude's work, where each change has Undo.");
       expect(text, p.name).toContain("Don't publish: a person does, after step 8.");
     }
+  });
+});
+
+describe("what the rehearsal and the final review taught each prompt", () => {
+  it("label_survey stops on a floor with no footage, uses only ids it was given, and doesn't make a second kind", () => {
+    const text = promptText(labelSurvey, "L1");
+    expect(text).toContain("If its label counts are all 0, no footage has been filmed on L1 yet: stop and say so.");
+    expect(text).toContain("Use only ids a tool has given you in this run; never type one from memory.");
+    expect(text).toContain("first look in `get_floor`'s places for one already named for it");
+    expect(text).toContain("A proposal (status proposed) that turns out to be an object is tagged with its placeId and object true, which makes it the kind's place; say which in your report.");
+    // The name match ignores capitals and spacing only (survey/tag.ts sameName), and says so.
+    expect(text).toContain('capitals and spacing aside: "Wastebin" finds "wastebin", but "waste bin" does not');
+    expect(text).not.toContain("whatever its spelling");
+  });
+
+  it("map_rooms finds each draft by its labelPoint, judges overlaps by their share, and sets aside with a reason", () => {
+    const text = promptText(mapRooms, "L1");
+    expect(text).toContain("`view_plan` outlines the rooms already on the map, not the drafts: find each draft by its labelPoint");
+    expect(text).toContain("one box (in metres) per part of the floor they cover");
+    expect(text).toContain("Copy each id exactly as `list_drafts` gives it.");
+    expect(text).toContain("a draft that lies over rooms is not by itself a reason to set it aside");
+    expect(text).toContain("Give each a reason");
+    expect(text).toContain("Find rooms leaves lifts, escalators and stairs out of its drafts, so look for them among the floor's rooms too");
+    expect(text).toContain('When a name holds two stops, such as "Escalator - 05 Escalator - 06", or `make_stop` refuses a room, leave it and name it in your report.');
+    expect(text).toContain("is a stop or named in your report");
+    expect(text).not.toContain("overlaps true, onMapAs null");
+  });
+
+  it("place_things finishes nothing it did no work on, and names what it couldn't place", () => {
+    const text = promptText(placeThings, "L1");
+    expect(text).toContain("If you bound and placed nothing, don't mark the step done: say what stopped you, so a person can fix it and run this again.");
+    expect(text).toContain("its things counts say how many places are left unbound; use its numbers in your report and note");
+    expect(text).toContain("unplaced lists the sightings it couldn't place");
+    expect(text).toContain("if several share one position, don't place them, and name them");
+  });
+
+  it("draw_paths leaves out what is drawn, places each entrance from the drawing, and pages check_floor by code", () => {
+    const text = promptText(drawPaths, "L1");
+    expect(text).toContain("A line with drawn true runs along a pathway the floor already has: leave it out, and draw the rest.");
+    expect(text).not.toContain("if the floor already has pathways, don't draw its lines again");
+    expect(text).toContain("A place has no point of its own: find the gate on the drawing with `view_plan` around the room it is bound to");
+    expect(text).toContain("one box (in metres) for every ten lines or so");
+    expect(text).toContain("`check_floor` lists at most 100 problems and says the total");
+    expect(toolsNamed(text)).not.toContain("drawn");
   });
 });
 
@@ -135,6 +207,8 @@ describe("draw_paths's trimming step names suggest_paths's real fields", () => {
     expect(loopLines).toHaveLength(1);
     expect(loopLines[0]!.ends).toEqual(["loop", "loop"]);
     expect(loopLines[0]!.network).toBe(0);
+    // The prompt's "drawn true" is suggest_paths's own field.
+    expect(loopLines[0]!.drawn).toBe(false);
 
     // A side corridor off a main one forks off it: one line ends at the fork, the through line ends "end" at both ends.
     const tCorridor: [number, number][] = [[0, 0], [24, 0], [24, 4], [13, 4], [13, 9], [11, 9], [11, 4], [0, 4]];

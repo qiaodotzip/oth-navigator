@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { SETUP_STEPS, STEP_NAMES, stepNumber, type ClaudeStepId, type SetupStepId } from "../../setup/steps";
+import { SETUP_STEPS, STEP_NAMES, stepNumber, type ClaudeStepId } from "../../setup/steps";
 import { drawPaths } from "./drawPaths";
 import { labelSurvey } from "./labelSurvey";
 import { mapRooms } from "./mapRooms";
@@ -35,18 +35,22 @@ export const PROMPTS: readonly SetupPrompt[] = [labelSurvey, mapRooms, placeThin
  */
 export const FLOOR_ARG = z.string().trim().regex(/^[A-Za-z0-9_-]{1,40}$/, "a floor's code, such as L1").describe("The floor's code, such as L1.");
 
-export const FINAL_LINE = "Report what you did in a few lines, then call `finish_step`.";
+export const FINAL_LINE = "Report what you did in a few lines. Then call `finish_step`, but only if you reached the stop rule above.";
 
 /**
- * label_survey's proposals are reviewed at step 3, Review Claude's labels;
- * the other three prompts' changes are reviewed at step 8, Check Claude's
- * work, which is also where Publish lives.
+ * label_survey's tags are proposals, accepted or rejected at step 3, Review
+ * Claude's labels; the frames it bins and the kinds it makes have Undo at
+ * step 8, with the other three prompts' changes. Step 8, Check Claude's
+ * work, is also where Publish lives.
  */
 function draftMap(p: SetupPrompt): string {
-  const reviewStep: SetupStepId = p.step === "label" ? "review" : "check";
+  const check = `step ${stepNumber("check")}, ${STEP_NAMES.check}`;
   return [
     "Everything you change goes straight onto the draft map, saved under your person's name and marked as Claude's.",
-    `A person checks it in step ${stepNumber(reviewStep)}, ${STEP_NAMES[reviewStep]}, where each change has Undo.`,
+    p.step === "label"
+      ? `Your tags are proposals: a person accepts or rejects each one in step ${stepNumber("review")}, ${STEP_NAMES.review}. ` +
+        `The frames you bin and the kinds you make are in ${check}, where each has Undo.`
+      : `A person checks it in ${check}, where each change has Undo.`,
     `Don't publish: a person does, after step ${stepNumber("check")}.`,
   ].join(" ");
 }
@@ -65,8 +69,8 @@ export function promptText(p: SetupPrompt, floor: string): string {
     "",
     draftMap(p),
     "",
-    `Stop when ${p.stop(floor)}. If you have to stop before that, say what is left and don't call \`finish_step\`: ` +
-      `running /mcp__oth__${p.name} ${floor} again carries on from there.`,
+    `Stop when ${p.stop(floor)}. If you stop before that, for whatever reason, say what is left and don't call ` +
+      `\`finish_step\`: running /mcp__oth__${p.name} ${floor} again carries on from there.`,
     "",
     `When you call \`finish_step\`, send floor "${floor}", step "${p.step}", and one line for the setup screen, such as "${p.example}".`,
     "",
