@@ -42,13 +42,18 @@ describe("Toaster", () => {
     await waitFor(() => expect(useToasts.getState().toasts).toHaveLength(0));
   });
 
-  it("stacks toasts top right, under the header, clear of Review's Accept, Reject and Skip", () => {
-    // jsdom has no layout, so the position is read from the classes. The
-    // header is h-12 (48 px); top-14 leaves an 8 px gap below it.
+  it("stacks toasts top centre, below the toolbar row, clear of every control", () => {
+    // jsdom has no layout, so the position is read from the classes; the
+    // browser check is plan2-shots/20-toasts-review.png and 21-toasts-survey.png.
+    // The corners hold Review's decision buttons and List, the drawer and
+    // Survey's panel, so neither corner is safe; top-36 clears Survey's toolbar
+    // even when it wraps to two lines at 1366 px and below.
     render(<Toaster />);
     const classes = screen.getByRole("region").querySelector("ol")!.className.split(/\s+/);
-    expect(classes).toEqual(expect.arrayContaining(["fixed", "top-14", "right-4", "w-96", "flex-col", "gap-2"]));
-    expect(classes.some(c => c.startsWith("bottom-"))).toBe(false);
+    expect(classes).toEqual(
+      expect.arrayContaining(["fixed", "top-36", "left-1/2", "-translate-x-1/2", "w-[360px]", "flex-col", "gap-2"]),
+    );
+    expect(classes.some(c => /^(bottom|right)-/.test(c))).toBe(false);
   });
 });
 

@@ -57,12 +57,29 @@ describe("PublishButton", () => {
     expect(screen.queryByRole("link", { name: /Gate 1/ })).toBeNull();
   });
 
-  it("publishes when nothing blocks it, and says so", async () => {
+  it("publishes when nothing blocks it, and says so without the raw version id", async () => {
     useEditorStore.getState().setReport({ ok: true, errorCount: 0, warningCount: 2, issues: [] });
-    const api = fakeApi({ publish: vi.fn().mockResolvedValue({ version: "v13", warningCount: 2 }) });
+    const api = fakeApi({ publish: vi.fn().mockResolvedValue({ version: "2026-09-04T09-07-35-019Z", warningCount: 2 }) });
     render(<PublishButton api={api} />);
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
-    await waitFor(() => expect(useToasts.getState().toasts[0]?.message).toBe("Published v13 with 2 warnings."));
+    await waitFor(() =>
+      expect(useToasts.getState().toasts[0]?.message).toBe("Published with 2 warnings. This is now the latest version of the map."),
+    );
+  });
+
+  it("says a clean publish plainly, and one warning in the singular", async () => {
+    useEditorStore.getState().setReport({ ok: true, errorCount: 0, warningCount: 0, issues: [] });
+    const publish = vi.fn()
+      .mockResolvedValueOnce({ version: "2026-09-04T09-07-35-019Z", warningCount: 0 })
+      .mockResolvedValueOnce({ version: "2026-09-05T09-07-35-019Z", warningCount: 1 });
+    render(<PublishButton api={fakeApi({ publish })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(useToasts.getState().toasts[0]?.message).toBe("Published. This is now the latest version of the map."));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Publish" })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    await waitFor(() =>
+      expect(useToasts.getState().toasts[1]?.message).toBe("Published with 1 warning. This is now the latest version of the map."),
+    );
   });
 });
 

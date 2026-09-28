@@ -77,9 +77,13 @@ export function PublishButton({ api }: { api: Api }) {
         setBusy(true);
         try {
           const result = await api.publish();
+          const n = result.warningCount;
+          // No version id: it is a raw timestamp nobody reads, and the date
+          // of a publish made just now adds nothing. Not "live for visitors"
+          // either: the visitor app that reads published versions isn't built yet.
           toast({
             tone: "success",
-            message: `Published ${result.version}${result.warningCount ? ` with ${result.warningCount} warnings` : ""}.`,
+            message: `Published${n ? ` with ${n} warning${n === 1 ? "" : "s"}` : ""}. This is now the latest version of the map.`,
           });
         } catch (err) {
           // A 401 here means the session expired; the sign-in dialog over the

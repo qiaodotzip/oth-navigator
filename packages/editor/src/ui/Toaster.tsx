@@ -41,10 +41,13 @@ export function Toaster() {
           </T.Close>
         </T.Root>
       ))}
-      {/* Top right, just under the 48 px header (top-14 leaves 8 px), so it
-          clears Publish and the avatar above and Review's Accept, Reject and
-          Skip — and the list's "Accept N ticked" — at the bottom right. */}
-      <T.Viewport className="fixed top-14 right-4 z-50 flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 outline-none" />
+      {/* Top centre, over the top of the frame or canvas. Both corners hold
+          controls: Review's Accept, Reject and Skip and "Accept N ticked" at the
+          bottom right; List, the drawer and Survey's panel at the top right.
+          144 px, not 96: below about 1400 px wide Survey's toolbar wraps to a
+          second line that ends at about 134 px, and 96 sat on Frame, Grid and
+          Find more frames. */}
+      <T.Viewport className="fixed left-1/2 top-36 z-50 flex w-[360px] max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2 outline-none" />
     </T.Provider>
   );
 }
