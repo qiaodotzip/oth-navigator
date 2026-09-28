@@ -1,6 +1,8 @@
-import type { Level, Placement, Room } from "@oth/model";
+import type { Level, ObjectKind, Placement, Room } from "@oth/model";
 import { Suspense, type ReactNode } from "react";
 import { modelToThree } from "./coords";
+import { ObjectBoxMesh } from "./ObjectBoxMesh";
+import { placementLook, type PlacementLook } from "./objectBox";
 import { PlacementBoundary, PlacementMesh } from "./PlacementMesh";
 import { RoomMesh, type RoomExtras } from "./RoomMesh";
 
@@ -19,8 +21,34 @@ export function roomsToDraw(
   return rooms.filter(r => r.kind !== "detail" || !dressed.has(r.id));
 }
 
+const NO_KINDS: readonly ObjectKind[] = [];
+
+/**
+ * One placement, as `placementLook` says: its model, suspended and caught on
+ * its own so one failing file cannot blank the level, or its kind's box. An
+ * object shows its box while its model loads, and in place of one that will
+ * not.
+ */
+function Placed({ placement, look, assetUrl }: {
+  placement: Placement;
+  look: PlacementLook;
+  assetUrl?: (assetId: string) => string;
+}) {
+  const boxed = look.as === "box" ? look : look.as === "model" ? look.box : null;
+  const box = boxed ? <ObjectBoxMesh placement={placement} size={boxed.size} name={boxed.name} /> : null;
+  if (look.as !== "model" || !assetUrl) return box;
+  const url = assetUrl(look.assetId);
+  return (
+    <PlacementBoundary url={url} fallback={box}>
+      <Suspense fallback={box}>
+        <PlacementMesh placement={placement} url={url} />
+      </Suspense>
+    </PlacementBoundary>
+  );
+}
+
 export function LevelGroup({
-  level, rooms, placements = [], assetUrl, ghosted = false, selectedId, onSelect, roomExtras, children,
+  level, rooms, placements = [], assetUrl, ghosted = false, selectedId, onSelect, roomExtras, objectKinds = NO_KINDS, children,
 }: {
   level: Level;
   rooms: Room[];
@@ -31,6 +59,8 @@ export function LevelGroup({
   onSelect?: (roomId: string) => void;
   /** Per-room changes from the level's structure (Part D). */
   roomExtras?: (room: Room) => RoomExtras;
+  /** The model's kinds of object, which say how each object is drawn. */
+  objectKinds?: readonly ObjectKind[];
   /** Drawn inside the level, so it stands at the level's elevation. */
   children?: ReactNode;
 }) {
@@ -49,14 +79,9 @@ export function LevelGroup({
           {...(roomExtras ? roomExtras(room) : {})}
         />
       ))}
-      {!ghosted && assetUrl && placements.map(p => (p.assetId ? (
-        // Suspended and caught per placement: one asset failing to load must not blank the level.
-        <PlacementBoundary key={p.id} url={assetUrl(p.assetId)}>
-          <Suspense fallback={null}>
-            <PlacementMesh placement={p} url={assetUrl(p.assetId)} />
-          </Suspense>
-        </PlacementBoundary>
-      ) : null))}
+      {!ghosted && placements.map(p => (
+        <Placed key={p.id} placement={p} look={placementLook(p, objectKinds)} assetUrl={assetUrl} />
+      ))}
       {children}
     </group>
   );

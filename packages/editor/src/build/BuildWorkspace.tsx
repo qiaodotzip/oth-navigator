@@ -314,7 +314,8 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
   const previewToast = useRef<string | null>(null);
   function previewFailed() {
     if (previewOn) togglePreview();
-    forgetPlacementModels(useEditorStore.getState().model?.placements ?? [], api.assetFileUrl);
+    const now = useEditorStore.getState().model;
+    forgetPlacementModels(now?.placements ?? [], api.assetFileUrl, now?.objectKinds ?? []);
     if (previewToast.current) useToasts.getState().dismiss(previewToast.current);
     previewToast.current = toast({
       tone: "error",

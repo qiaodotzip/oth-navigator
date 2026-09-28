@@ -25,3 +25,6 @@ export * from "./categoryTint";
 export * from "./portals";
 // Plan 6B: the whole-floor 3D export.
 export * from "./export/floorGlb";
+// Plan 6A: objects.
+export * from "./objectBox";
+export * from "./ObjectBoxMesh";

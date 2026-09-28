@@ -47,11 +47,16 @@ export function forgetPlacementModels(
 
 /**
  * One placed model that will not load — its file gone, a broken upload —
- * draws nothing, and the rest of the level draws as usual. Suspense does not
- * catch a failed load, only a pending one. The failure is forgotten as it is
- * caught, so the next time the scene mounts the file is tried again.
+ * draws its fallback, and the rest of the level draws as usual. An object's
+ * fallback is its kind's box, so it never just vanishes; a placed model has
+ * none. Suspense does not catch a failed load, only a pending one. The
+ * failure is forgotten as it is caught, so the next time the scene mounts the
+ * file is tried again.
  */
-export class PlacementBoundary extends Component<{ url: string; children: ReactNode }, { failed: boolean }> {
+export class PlacementBoundary extends Component<
+  { url: string; fallback?: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
   override state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -63,6 +68,6 @@ export class PlacementBoundary extends Component<{ url: string; children: ReactN
   }
 
   override render() {
-    return this.state.failed ? null : this.props.children;
+    return this.state.failed ? this.props.fallback ?? null : this.props.children;
   }
 }

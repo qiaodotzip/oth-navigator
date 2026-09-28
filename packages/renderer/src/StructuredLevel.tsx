@@ -34,6 +34,7 @@ export function StructuredLevel({
     () => (ghosted ? [] : live(model.placements).filter(p => p.levelId === level.id)),
     [model.placements, level.id, ghosted],
   );
+  const objectKinds = useMemo(() => live(model.objectKinds), [model.objectKinds]);
   const structure = useMemo(() => levelStructure(model, level.id), [model, level.id]);
   const tints = useMemo(() => roomTints(model, level.id), [model, level.id]);
   const roomExtras = useCallback(
@@ -50,6 +51,7 @@ export function StructuredLevel({
       level={level}
       rooms={rooms}
       placements={placements}
+      objectKinds={objectKinds}
       assetUrl={assetUrl}
       ghosted={ghosted}
       selectedId={selectedId}

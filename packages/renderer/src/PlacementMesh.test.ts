@@ -66,4 +66,15 @@ describe("PlacementBoundary", () => {
     expect(clear).toHaveBeenCalledWith(url("a_1"));
     expect(clear).not.toHaveBeenCalledWith(url("a_2"));
   });
+
+  it("draws its fallback, an object's box, in place of a model that will not load", () => {
+    vi.spyOn(useGLTF, "clear").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    act(() => root.render(createElement(PlacementBoundary, {
+      url: url("a_1"),
+      fallback: createElement("span", null, "the box"),
+      children: createElement(Unloadable),
+    })));
+    expect(container.textContent).toBe("the box");
+  });
 });
