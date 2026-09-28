@@ -75,12 +75,20 @@ export function PlacesWorkspace({ api, level, params }: { api: Api; level: Level
         <h1 className="text-xl font-semibold">
           {summary.confirmed === 0 ? `No confirmed places on ${level.code} yet` : onMapLine(summary.onMap, summary.confirmed)}
         </h1>
+        {/* Review counts them among its confirmed, so the difference is said rather than left to puzzle over. */}
+        {summary.walkways > 0 && (
+          <p className="text-sm text-stone-600">
+            {summary.walkways === 1
+              ? "1 walkway is drawn as a pathway, so it isn't listed"
+              : `${summary.walkways} walkways are drawn as pathways, so they aren't listed`}
+          </p>
+        )}
         <p className="flex flex-wrap gap-x-4 text-xs text-stone-600">
           {summary.waiting > 0 && (
             <a href={review} onClick={followLink(review)} className="underline">{summary.waiting} waiting in Review →</a>
           )}
-          {summary.unfilmedRooms > 0 && (
-            <a href={bindStep} onClick={followLink(bindStep)} className="underline">Rooms nobody filmed: {summary.unfilmedRooms}</a>
+          {summary.unboundRooms > 0 && (
+            <a href={bindStep} onClick={followLink(bindStep)} className="underline">Rooms with no place bound: {summary.unboundRooms}</a>
           )}
           {bindFloorless && (
             <a href={bindFloorless} onClick={followLink(bindFloorless)} className="underline">

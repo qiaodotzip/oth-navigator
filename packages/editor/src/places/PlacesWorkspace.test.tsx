@@ -67,11 +67,22 @@ beforeEach(() => {
 });
 
 describe("PlacesWorkspace", () => {
-  it("says how many confirmed places are on the map, what waits in Review, and which rooms nobody filmed", () => {
+  it("says how many confirmed places are on the map, what waits in Review, and how many rooms have no place bound", () => {
     at("/floors/L1/places");
     expect(screen.getByRole("heading", { name: "2 of 3 confirmed places are on the map" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "1 waiting in Review →" }).getAttribute("href")).toBe("/floors/L1/review");
-    expect(screen.getByRole("link", { name: "Rooms nobody filmed: 1" }).getAttribute("href")).toBe("/floors/L1/build?step=bind");
+    // Unit 7. Not "nobody filmed": a room with none bound may well have been filmed.
+    expect(screen.getByRole("link", { name: "Rooms with no place bound: 1" }).getAttribute("href")).toBe("/floors/L1/build?step=bind");
+    expect(screen.queryByText(/walkway/)).toBeNull();
+  });
+
+  it("says why the confirmed walkways Review counts are not listed", () => {
+    const walkway = { id: "pl_link", nameEn: "Covered link", category: "facility", levelId: "oth-L1", pathwayKindId: "pk-1" };
+    useEditorStore.getState().setModel(parseModel({ ...model, places: [...model.places, walkway] }));
+    at("/floors/L1/places?filter=all");
+    expect(screen.getByRole("heading", { name: "2 of 3 confirmed places are on the map" })).toBeTruthy();
+    expect(screen.getByText("1 walkway is drawn as a pathway, so it isn't listed")).toBeTruthy();
+    expect(rowIds()).not.toContain("place-row-pl_link");
   });
 
   it("checks the map again as it opens, so photos that disagree are current", async () => {

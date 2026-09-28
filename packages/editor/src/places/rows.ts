@@ -76,20 +76,33 @@ export type PlacesSummary = {
   gaps: number;
   /** Proposals on this floor, waiting in Review. */
   waiting: number;
-  /** The other direction: rooms and areas no surveyed place is bound to. */
-  unfilmedRooms: number;
+  /**
+   * The other direction: rooms and areas with no place bound. Not "rooms
+   * nobody filmed": many were filmed, and their places wait in Review or on
+   * Bind places.
+   */
+  unboundRooms: number;
+  /**
+   * Confirmed walkways on this floor. They are drawn as pathways and never
+   * bound, so they are not listed, though Review counts them among its confirmed.
+   */
+  walkways: number;
 };
 
 export function placesSummary(model: MapModel, rows: readonly PlaceRow[], levelId: string): PlacesSummary {
   // Any live place counts, a proposal too, as validation's room.unsurveyed does.
   const bound = new Set(live(model.places).map(p => p.roomId).filter(Boolean));
+  const floors = placeLevels(model);
   return {
     confirmed: rows.length,
     onMap: rows.filter(r => r.onMap).length,
     gaps: rows.filter(r => r.gaps.length > 0).length,
     waiting: waitingReview(model, levelId),
-    unfilmedRooms: live(model.rooms).filter(
+    unboundRooms: live(model.rooms).filter(
       r => r.levelId === levelId && (r.kind === "room" || r.kind === "area") && !bound.has(r.id),
+    ).length,
+    walkways: live(model.places).filter(
+      p => p.status === "confirmed" && p.pathwayKindId && floors.get(p.id) === levelId,
     ).length,
   };
 }
@@ -143,7 +156,17 @@ export function filterRows(rows: readonly PlaceRow[], filter: PlacesFilter): Pla
   return [...rows];
 }
 
-/** The Places heading, which the Floors home card repeats. */
+/** The Places heading. */
 export function onMapLine(onMap: number, confirmed: number): string {
   return `${onMap} of ${confirmed} confirmed ${confirmed === 1 ? "place is" : "places are"} on the map`;
+}
+
+/**
+ * The Floors home card's line: the Places heading's numbers, in other words.
+ * Review's bar just above it counts confirmed walkways too, which are drawn
+ * as pathways and never bound, so on L1 "of 17 confirmed places" beside its
+ * 27 read as two answers to one question.
+ */
+export function toBindLine(onMap: number, total: number): string {
+  return `${onMap} of ${total} ${total === 1 ? "place to bind is" : "places to bind are"} on the map`;
 }

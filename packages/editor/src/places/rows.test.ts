@@ -2,7 +2,7 @@ import { parseModel, type ValidationReport } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import { floorUnits } from "../flow/buildSteps";
 import {
-  filterRows, onMapLine, placeRows, placesSummary, readPlacesFilter, rowAction, whereText, type PlaceRow,
+  filterRows, onMapLine, placeRows, placesSummary, readPlacesFilter, rowAction, toBindLine, whereText, type PlaceRow,
 } from "./rows";
 
 const iso = "2026-09-20T00:00:00.000Z";
@@ -107,12 +107,18 @@ describe("placeRows", () => {
 });
 
 describe("placesSummary", () => {
-  it("counts the heading, the filters, Review's queue and the rooms nobody filmed", () => {
+  it("counts the heading, the filters, Review's queue, the rooms with no place bound and the walkways left out", () => {
     expect(placesSummary(model, rows, "oth-L1")).toEqual({
       confirmed: 6, onMap: 3, gaps: 5, waiting: 1,
       // Unit 7. A void is not surveyed, and a deleted room is not counted.
-      unfilmedRooms: 1,
+      unboundRooms: 1,
+      // Covered link: confirmed, and counted in Review, but drawn as a pathway.
+      walkways: 1,
     });
+  });
+
+  it("counts only this floor's confirmed walkways", () => {
+    expect(placesSummary(model, placeRows(model, report, "oth-L2"), "oth-L2").walkways).toBe(0);
   });
 });
 
@@ -157,5 +163,12 @@ describe("onMapLine", () => {
   it("says how much of the survey has reached the map", () => {
     expect(onMapLine(28, 30)).toBe("28 of 30 confirmed places are on the map");
     expect(onMapLine(1, 1)).toBe("1 of 1 confirmed place is on the map");
+  });
+});
+
+describe("toBindLine", () => {
+  it("gives the Floors card the heading's numbers, worded apart from Review's confirmed", () => {
+    expect(toBindLine(6, 17)).toBe("6 of 17 places to bind are on the map");
+    expect(toBindLine(0, 1)).toBe("0 of 1 place to bind is on the map");
   });
 });
