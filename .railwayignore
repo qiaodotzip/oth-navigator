@@ -1,6 +1,15 @@
-# What `railway up` need not upload. It already skips what .gitignore does
-# (node_modules, dist, packages/server/data); these are the rest, about 20 MB
-# the build never reads.
+# What `railway up` must never upload, spelled out rather than left to
+# .gitignore: the local database, the survey frames and any .env are named here
+# because the CLI may not read the nested .gitignore that keeps
+# packages/server/data out.
+.git/
+.env*
+!.env.example
+**/node_modules/
+packages/server/data/
+**/survey-out/
+
+# The rest, about 20 MB the build never reads.
 .superpowers/
 .claude/
 docs/

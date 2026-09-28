@@ -37,9 +37,12 @@ a Postgres database and a volume.
 
 1. Add a **Postgres** database, and on the service set
    `DATABASE_URL=${{Postgres.DATABASE_URL}}`.
-2. Add a **volume** mounted at `/data`, and set `DATA_DIR=/data`. Frames,
-   plans, models, thumbnails and published bundles live there; without it
-   they vanish on every deploy.
+2. Add a **volume** mounted at `/data`. Frames, plans, models, thumbnails and
+   published bundles live there; without it they vanish on every deploy. The
+   image already sets `DATA_DIR=/data`, so the service needn't. If you set it
+   anyway, do it in the dashboard, or in Git Bash put `MSYS_NO_PATHCONV=1` in
+   front of the `railway` command, which otherwise turns `/data` into a
+   Windows path.
 3. Set `PORT=3000`, and give the service a domain on port 3000.
 4. Set **`TEAM_CODE`** by hand: at least 8 characters (a few words is best),
    and never committed. Everyone types it once per browser, before the
@@ -56,22 +59,37 @@ Never enable Railway's CDN (`railway cdn`) for this service. The built editor
 and published bundles are served `public, immutable`, so the edge would cache
 the gated files and hand them to anyone, code or not.
 
+A wrong-code lockout clears on a restart: `railway restart --service oth-map`.
+
 ## Moving the data
 
 ```bash
-npm run data:export -- <empty folder>
+DATA_DIR=<copy of a data folder> npm run data:export -- <empty folder>
 npm run data:import -- <that folder> [--file-under L1]
 ```
 
 Export writes every row (sessions and locks aside) and every file the rows
 name, laid out like a data folder: `export.json`, `assets/`, `published/`.
 Run it against a *copy* of a PGlite data folder, never one a running server
-holds. Import reads it into an **empty** database; it refuses one with
-anything in it. It checks every file before it writes a row, writes all the
-rows in one transaction, and compares the counts with the export's.
-`--file-under` files footage that has no floor. If the files are already in
-the data folder, for instance uploaded straight into the volume, import leaves
-them where they are.
+holds; `DATA_DIR` points it at the copy. Import reads it into an **empty**
+database; it refuses one with anything in it. It checks every file before it
+writes a row, writes all the rows in one transaction, and compares the counts
+with the export's. `--file-under` files footage that has no floor. If the
+files are already in the data folder, for instance uploaded straight into the
+volume, import leaves them where they are.
+
+On Railway, upload the export's contents into the volume, so `/data` holds
+`export.json`, `assets/` and `published/`, then import there:
+
+```bash
+MSYS_NO_PATHCONV=1 railway ssh --service oth-map -- npm --prefix /app run data:import -- /data --file-under L1
+```
+
+`railway ssh` may join its arguments into one remote shell line, so its
+commands name the app folder with `--prefix` rather than a quoted `cd`.
+`MSYS_NO_PATHCONV=1` stops Git Bash on Windows rewriting `/app` and `/data`
+into Windows paths, and does nothing in other POSIX shells. Leave it off in
+PowerShell or cmd, where it's a syntax error.
 
 ## Creating accounts
 
@@ -80,19 +98,18 @@ else. There are no passwords: people sign in by picking their name from the
 list. A name already on the team, case-insensitively, is refused rather than
 made twice.
 
+Moving data from another server? Import the data first, then invite
+teammates: once anyone is on the team the database is no longer empty, and
+`data:import` refuses it.
+
 On a server with nobody on it yet, make the first account from a shell on
-the service. Moving data from another server? Import the data first, then
-invite teammates: once anyone is on the team the database is no longer
-empty, and `data:import` refuses it.
+the service. Use a one-word name, since `railway ssh` may split a longer one
+at its spaces, and add everyone else from the app. The prefix and `--prefix`
+are explained under "Moving the data".
 
 ```bash
 MSYS_NO_PATHCONV=1 railway ssh --service oth-map -- npm --prefix /app run invite -- Wei
 ```
-
-`railway ssh` joins its arguments into one remote shell line, so the command
-names the app folder with `--prefix` rather than a quoted `cd`.
-`MSYS_NO_PATHCONV=1` stops Git Bash on Windows rewriting `/app` into a Windows
-path; anywhere else it does nothing.
 
 To disable someone's access, set `disabled_at` on their `users` row. Their
 existing sessions stop resolving immediately.
