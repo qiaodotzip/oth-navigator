@@ -63,7 +63,7 @@ export function ClaudeCode({ api }: { api: Api }) {
             Connect your own Claude Code to the map. It works under your name, and every change it makes says it came through Claude.
           </p>
         </div>
-        <Button className="ml-auto" disabled={list === null} onClick={() => setCreating(true)}>Create token</Button>
+        <Button className="ml-auto shrink-0 whitespace-nowrap" disabled={list === null} onClick={() => setCreating(true)}>Create token</Button>
       </div>
 
       {failed ? (
