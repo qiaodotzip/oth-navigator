@@ -1,7 +1,8 @@
-import { parseModel, type Level } from "@oth/model";
+import { parseModel, RoomDraftSchema, type Level, type RoomDraft } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConflictError } from "../api/client";
+import { useDrafts } from "../build/drafts";
 import { useEditorStore } from "../state/store";
 import { useToasts } from "../ui/toast";
 import { CheckStep } from "./CheckStep";
@@ -43,6 +44,10 @@ const model = parseModel({
   ],
 });
 const L1 = model.levels[0] as Level;
+const columnDraft: RoomDraft = RoomDraftSchema.parse({
+  id: "rd_col", levelId: "oth-L1", nameEn: "Column 12", kind: "detail", footprint: sq(30), labelPoint: [35, 5],
+  areaM2: 1, source: { checksum: "c".repeat(64), page: 1 },
+});
 
 const made = change({ auditId: "a_room", group: "rooms", summary: "Made Starbucks from a draft", entityType: "room", entityId: "L1-star" });
 const rejected = change({ auditId: "a_draft", group: "drafts", summary: "Rejected the draft Column 12", entityType: "roomDraft", entityId: "rd_col", action: "delete" });
@@ -56,6 +61,7 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   measure = null;
   useToasts.getState().clear();
+  useDrafts.getState().reset();
   const s = useEditorStore.getState();
   s.reset();
   s.setModel(model);
@@ -116,6 +122,23 @@ describe("CheckStep", () => {
   });
 
   it("has no Show for what isn't on the map", async () => {
+    open();
+    expect(await screen.findByRole("button", { name: "Show: Rejected the draft Column 12" })).toBeDisabled();
+  });
+
+  it("Show frames a draft row's outline, from the floor's own drafts, without selecting anything", async () => {
+    act(() => useDrafts.getState().setDrafts("oth-L1", [columnDraft]));
+    open();
+    const show = await screen.findByRole("button", { name: "Show: Rejected the draft Column 12" });
+    expect(show).toBeEnabled();
+    const before = useEditorStore.getState().viewport;
+    fireEvent.click(show);
+    expect(useEditorStore.getState().selection).toBeNull();
+    expect(useEditorStore.getState().viewport).not.toEqual(before);
+  });
+
+  it("has no Show for a draft row whose draft has no outline (an open draft)", async () => {
+    act(() => useDrafts.getState().setDrafts("oth-L1", [{ ...columnDraft, footprint: undefined }]));
     open();
     expect(await screen.findByRole("button", { name: "Show: Rejected the draft Column 12" })).toBeDisabled();
   });

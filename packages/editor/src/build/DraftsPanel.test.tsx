@@ -35,7 +35,7 @@ function Keys() {
 function setup(overrides: Parameters<typeof fakeApi>[0] = {}) {
   const api = fakeApi({
     getModel: vi.fn().mockResolvedValue(model),
-    listRoomDrafts: vi.fn().mockResolvedValue(all),
+    listRoomDrafts: vi.fn().mockResolvedValue({ drafts: all }),
     acceptRoomDrafts: vi.fn(async (items: { id: string }[]) =>
       items.map((i, n) => ({ draftId: i.id, draftVersion: 2, roomId: `L2-room-${n}`, roomVersion: 0 }))),
     ...overrides,
@@ -69,14 +69,14 @@ describe("DraftsPanel: drafts Claude set aside for a person", () => {
   });
 
   it("counts them among the drafts to review, and says how many Claude set aside", () => {
-    setup({ listRoomDrafts: vi.fn().mockResolvedValue([shop, store, asideCopy, asidePlaza]) });
+    setup({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop, store, asideCopy, asidePlaza] }) });
     expect(screen.getByText("3 drafts to review")).toBeTruthy();
     expect(screen.getByText(/1 set aside by Claude/)).toBeTruthy();
     expect(screen.queryByText(/already on the map/)).toBeNull();
   });
 
   it("says who set the draft in hand aside, and why", () => {
-    setup({ listRoomDrafts: vi.fn().mockResolvedValue([shop, store, asideCopy, asidePlaza]) });
+    setup({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop, store, asideCopy, asidePlaza] }) });
     hold(asideCopy);
     expect(within(screen.getByRole("group", { name: "Draft: Hall" }))
       .getByText("Set aside by Stef Chan's Claude: It lies over the hall; a person should say which is right.")).toBeTruthy();
@@ -85,12 +85,12 @@ describe("DraftsPanel: drafts Claude set aside for a person", () => {
   });
 
   it("marks an open space Claude set aside, with its reason", () => {
-    setup({ listRoomDrafts: vi.fn().mockResolvedValue([shop, store, asideCopy, asidePlaza]) });
+    setup({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop, store, asideCopy, asidePlaza] }) });
     expect(screen.getByText("Set aside by Stef Chan's Claude: The drawing leaves it open.")).toBeTruthy();
   });
 
   it("leaves them out of Accept all: each is decided knowingly", async () => {
-    const api = setup({ listRoomDrafts: vi.fn().mockResolvedValue([shop, store, asideCopy, asidePlaza]) });
+    const api = setup({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop, store, asideCopy, asidePlaza] }) });
     fireEvent.click(screen.getByRole("button", { name: "Accept all 2 not set aside" }));
     await waitFor(() => expect(api.acceptRoomDrafts).toHaveBeenCalledTimes(1));
     expect((api.acceptRoomDrafts as unknown as Mock).mock.calls[0]![0].map((i: { id: string }) => i.id)).toEqual(["rd_shop", "rd_store"]);
@@ -102,6 +102,20 @@ describe("DraftsPanel", () => {
     setup();
     expect(screen.getByText("2 drafts to review")).toBeTruthy();
     expect(screen.getByText(/1 already on the map/)).toBeTruthy();
+  });
+
+  it("warns above the list when the drawing's drafts show it sits off the rooms already on the floor", () => {
+    act(() => useDrafts.getState().setDrafts("oth-L2", all, { dx: 11.5, dy: -4.6, pairs: 7 }));
+    setup();
+    expect(screen.getByText(
+      "The drawing sits about 11.5 m east and 4.6 m south of the rooms already on L2. "
+      + "Line it up with Align on this step, then run Find rooms again.",
+    )).toBeTruthy();
+  });
+
+  it("warns nothing above the list once no offset is known", () => {
+    setup();
+    expect(screen.queryByText(/The drawing sits about/)).toBeNull();
   });
 
   it("shows the draft in hand: its name to edit, its kind and its area", () => {
@@ -201,7 +215,7 @@ describe("DraftsPanel", () => {
 
   it("takes up no draft when the reload after a decision no longer has the next one", async () => {
     // A teammate searched the drawing again meanwhile: the Store Room draft is gone.
-    setup({ listRoomDrafts: vi.fn().mockResolvedValue([copy, plaza]) });
+    setup({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [copy, plaza] }) });
     hold(shop);
     fireEvent.click(screen.getByRole("button", { name: "Accept A" }));
     await waitFor(() => expect(lastToast()?.message).toBe("Added Shop"));

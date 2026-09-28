@@ -134,6 +134,14 @@ export type DraftSetAside = { by: string; reason: string; at: string };
 /** A draft as the floor's drafts list gives it: a set-aside one carries Claude's mark. */
 export type RoomDraftRow = RoomDraft & { setAside?: DraftSetAside };
 
+/**
+ * How far a fresh plan sits from the rooms already on the floor (contract
+ * v3): `dx`/`dy` in metres, model coordinates (+x east, +y north), and how
+ * many name pairs agreed on the shift. Present on `listRoomDrafts` only when
+ * the server found one worth a warning.
+ */
+export type LineUp = { dx: number; dy: number; pairs: number };
+
 // --- Floor setup and Claude's changes (plan 6C) ---
 // The same shapes as Plan 6E's setup/types.ts, which is the contract; its
 // setupApi.ts holds the methods below to its SetupApi.
@@ -162,8 +170,8 @@ export type SetupCounts = {
   rooms: { waiting: number; setAside: number; accepted: number; rejected: number; stops: number };
   things: { bound: number; unbound: number; objects: { kindId: string; name: string; count: number }[] };
   /**
-   * `unreachable`: rooms with at least one doorway that no route reaches.
-   * Null from the light setup, which doesn't work routes out.
+   * `unreachable`: rooms no route reaches (contract v3). Null from the light
+   * setup, which doesn't work routes out.
    */
   paths: { pathways: number; entrances: number; unreachable: number | null };
 };
@@ -517,9 +525,13 @@ export function createApi(options: ApiOptions = {}) {
       return new Uint8Array(await res.arrayBuffer());
     },
 
-    /** The floor's drafts still waiting for review, those Claude set aside for a person with its mark. */
-    listRoomDrafts: async (levelId: string): Promise<RoomDraftRow[]> =>
-      (await request<{ drafts: RoomDraftRow[] }>(`/api/levels/${levelId}/drafts`)).drafts,
+    /**
+     * The floor's drafts still waiting for review, those Claude set aside for
+     * a person with its mark, and how far a fresh plan sits from the rooms
+     * already there, when the server found a shift worth a warning (contract v3).
+     */
+    listRoomDrafts: (levelId: string): Promise<{ drafts: RoomDraftRow[]; lineUp?: LineUp }> =>
+      request<{ drafts: RoomDraftRow[]; lineUp?: LineUp }>(`/api/levels/${levelId}/drafts`),
 
     /** A new search's drafts in place of the floor's old ones. */
     replaceRoomDrafts: async (levelId: string, body: { source: DraftSource; drafts: RoomDraftInput[] }): Promise<RoomDraft[]> =>

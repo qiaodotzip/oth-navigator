@@ -1,4 +1,4 @@
-import { parseModel } from "@oth/model";
+import { parseModel, RoomDraftSchema, type RoomDraft } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import { ApiError, ConflictError } from "../api/client";
 import { checkSections, showTarget, undoRefusal } from "./check";
@@ -23,22 +23,32 @@ const model = parseModel({
   ],
   places: [{ id: "pl_star", nameEn: "Starbucks", category: "retail", levelId: "oth-L1", roomId: "L1-a" }],
 });
-const on = (entityType: string, entityId: string) => showTarget(model, { entityType, entityId }, "oth-L1");
+const draft = (id: string, over: Partial<RoomDraft> = {}): RoomDraft => RoomDraftSchema.parse({
+  id, levelId: "oth-L1", nameEn: id, kind: "room", footprint: sq(40), labelPoint: [45, 5], areaM2: 100,
+  source: { checksum: "c".repeat(64), page: 1 }, ...over,
+});
+const on = (entityType: string, entityId: string, drafts: RoomDraft[] = []) =>
+  showTarget(model, { entityType, entityId }, "oth-L1", drafts);
 
 describe("showTarget", () => {
   it("selects what a change made, while it is still on this floor", () => {
-    expect(on("room", "L1-a")).toEqual({ type: "room", id: "L1-a" });
+    expect(on("room", "L1-a")).toEqual({ kind: "select", selection: { type: "room", id: "L1-a" } });
     expect(on("room", "L1-gone")).toBeNull();
     expect(on("room", "L2-a")).toBeNull();
   });
 
   it("shows a stop at its end on this floor, and a place at the room it is bound to", () => {
-    expect(on("portal", "lift_1")).toEqual({ type: "portalEndpoint", id: "pe_1" });
-    expect(on("place", "pl_star")).toEqual({ type: "room", id: "L1-a" });
+    expect(on("portal", "lift_1")).toEqual({ kind: "select", selection: { type: "portalEndpoint", id: "pe_1" } });
+    expect(on("place", "pl_star")).toEqual({ kind: "select", selection: { type: "room", id: "L1-a" } });
   });
 
-  it("has nothing to show for a draft, or for anything the map doesn't select", () => {
+  it("frames a draft row's outline from the floor's own drafts, without selecting", () => {
+    expect(on("roomDraft", "rd_1", [draft("rd_1")])).toEqual({ kind: "frame", box: { minX: 36, minY: -4, maxX: 54, maxY: 14 } });
+  });
+
+  it("has nothing to show for a draft not in the floor's drafts, an open draft with no outline, or anything the map doesn't select", () => {
     expect(on("roomDraft", "rd_1")).toBeNull();
+    expect(on("roomDraft", "rd_open", [draft("rd_open", { footprint: undefined })])).toBeNull();
     expect(on("objectKind", "ok_bin")).toBeNull();
   });
 });

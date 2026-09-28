@@ -224,6 +224,21 @@ describe("assets", () => {
     const fetchImpl = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
     expect(await createApi({ fetchImpl }).health()).toBe(false);
   });
+
+  it("reads the floor's drafts and its line-up warning, when the server sends one (contract v3)", async () => {
+    const fetchImpl = mockFetch(200, { drafts: [{ id: "rd_1" }], lineUp: { dx: 11.5, dy: -4.6, pairs: 7 } });
+    const { drafts, lineUp } = await createApi({ fetchImpl }).listRoomDrafts("oth-L1");
+    expect(fetchImpl.mock.calls[0]![0]).toBe("/api/levels/oth-L1/drafts");
+    expect(drafts).toEqual([{ id: "rd_1" }]);
+    expect(lineUp).toEqual({ dx: 11.5, dy: -4.6, pairs: 7 });
+  });
+
+  it("has no line-up warning when the server sends none", async () => {
+    const fetchImpl = mockFetch(200, { drafts: [] });
+    const { drafts, lineUp } = await createApi({ fetchImpl }).listRoomDrafts("oth-L1");
+    expect(drafts).toEqual([]);
+    expect(lineUp).toBeUndefined();
+  });
 });
 
 describe("isGateRefusal", () => {

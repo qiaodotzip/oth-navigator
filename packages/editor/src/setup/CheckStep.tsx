@@ -1,6 +1,7 @@
 import type { Level, MapModel } from "@oth/model";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isUnauthorized, type Api } from "../api/client";
+import { isUnauthorized, type Api, type RoomDraftRow } from "../api/client";
+import { useDrafts } from "../build/drafts";
 import { followLink, href } from "../route";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
@@ -33,6 +34,7 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
   onLooksRight: () => void;
 }) {
   const model = useEditorStore(s => s.model);
+  const drafts = useDrafts(s => s.byLevel[level.id] ?? []);
   const [changes, setChanges] = useState<ClaudeChange[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [undone, setUndone] = useState<ReadonlySet<string>>(new Set());
@@ -59,10 +61,14 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
   const review = href({ name: "setup", code: level.code, step: stepNumber("review"), params: {} });
 
   function show(change: ClaudeChange): void {
-    const target = showTarget(useEditorStore.getState().model, change, level.id);
+    const target = showTarget(useEditorStore.getState().model, change, level.id, useDrafts.getState().byLevel[level.id] ?? []);
     if (!target) return;
-    useEditorStore.getState().select(target);
-    setFocus(f => ({ target, seq: (f?.seq ?? 0) + 1 }));
+    if (target.kind === "select") {
+      useEditorStore.getState().select(target.selection);
+      setFocus(f => ({ target: target.selection, seq: (f?.seq ?? 0) + 1 }));
+    } else {
+      setFocus(f => ({ box: target.box, seq: (f?.seq ?? 0) + 1 }));
+    }
   }
 
   async function undo(change: ClaudeChange): Promise<void> {
@@ -131,6 +137,7 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
                     api={api}
                     model={model}
                     levelId={level.id}
+                    drafts={drafts}
                     change={change}
                     undone={undone.has(change.auditId) || change.undone === true}
                     refusal={refused.get(change.auditId) ?? null}
@@ -163,10 +170,11 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
   );
 }
 
-function ChangeRow({ api, model, levelId, change, undone, refusal, busy, onShow, onUndo }: {
+function ChangeRow({ api, model, levelId, drafts, change, undone, refusal, busy, onShow, onUndo }: {
   api: Pick<Api, "keyframeFileUrl">;
   model: MapModel | null;
   levelId: string;
+  drafts: readonly RoomDraftRow[];
   change: ClaudeChange;
   undone: boolean;
   refusal: string | null;
@@ -174,7 +182,7 @@ function ChangeRow({ api, model, levelId, change, undone, refusal, busy, onShow,
   onShow: () => void;
   onUndo: () => void;
 }) {
-  const target = showTarget(model, change, levelId);
+  const target = showTarget(model, change, levelId, drafts);
   const frames = objectFrames(model, change);
   return (
     <li data-testid={`change-${change.auditId}`} className="flex items-start gap-2 py-2">

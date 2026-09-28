@@ -6,7 +6,7 @@ import { draftNameSpot } from "../plan/DraftLayer";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
-import { draftBox, draftView, loadDrafts, useDraftView, useDrafts, useRoomDrafts } from "./drafts";
+import { draftBox, draftView, loadDrafts, useDraftView, useDrafts, useLineUp, useRoomDrafts } from "./drafts";
 
 const draft = (id: string): RoomDraft => RoomDraftSchema.parse({
   id, levelId: "oth-L2", nameEn: id, kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
@@ -20,9 +20,25 @@ beforeEach(() => {
 
 describe("the drafts store", () => {
   it("loads a floor's drafts", async () => {
-    const api = fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue([draft("rd_a")]) });
+    const api = fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [draft("rd_a")] }) });
     expect(await loadDrafts(api, "oth-L2")).toBe(true);
     expect(useDrafts.getState().byLevel["oth-L2"]!.map(d => d.id)).toEqual(["rd_a"]);
+  });
+
+  it("loads the floor's line-up warning alongside its drafts, when the server sends one", async () => {
+    const api = fakeApi({
+      listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [draft("rd_a")], lineUp: { dx: 11.5, dy: -4.6, pairs: 7 } }),
+    });
+    expect(await loadDrafts(api, "oth-L2")).toBe(true);
+    expect(useDrafts.getState().lineUpByLevel["oth-L2"]).toEqual({ dx: 11.5, dy: -4.6, pairs: 7 });
+    expect(renderHook(() => useLineUp("oth-L2")).result.current).toEqual({ dx: 11.5, dy: -4.6, pairs: 7 });
+  });
+
+  it("clears a floor's line-up warning on a load that finds none, or names none in hand", () => {
+    act(() => useDrafts.getState().setDrafts("oth-L2", [draft("rd_a")], { dx: 11.5, dy: -4.6, pairs: 7 }));
+    expect(useDrafts.getState().lineUpByLevel["oth-L2"]).toBeDefined();
+    act(() => useDrafts.getState().setDrafts("oth-L2", [draft("rd_a")]));
+    expect(useDrafts.getState().lineUpByLevel["oth-L2"]).toBeUndefined();
   });
 
   it("lets go of the draft in hand when a reload no longer has it", () => {
@@ -60,7 +76,7 @@ describe("the drafts store", () => {
   });
 
   it("loads the floor's drafts whenever the floor changes", async () => {
-    const api = fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue([]) });
+    const api = fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [] }) });
     const { rerender } = renderHook(({ levelId }) => useRoomDrafts(api, levelId), { initialProps: { levelId: "oth-L1" as string | null } });
     rerender({ levelId: "oth-L2" });
     await vi.waitFor(() => expect(api.listRoomDrafts).toHaveBeenCalledTimes(2));
@@ -71,10 +87,10 @@ describe("the drafts store", () => {
 describe("a load that answers late", () => {
   /** A listRoomDrafts whose answers are given by hand, in any order. */
   function slowList() {
-    const answers: ((drafts: RoomDraft[]) => void)[] = [];
+    const answers: ((body: { drafts: RoomDraft[] }) => void)[] = [];
     const fails: ((err: unknown) => void)[] = [];
     const api = fakeApi({
-      listRoomDrafts: vi.fn(() => new Promise<RoomDraft[]>((resolve, reject) => {
+      listRoomDrafts: vi.fn(() => new Promise<{ drafts: RoomDraft[] }>((resolve, reject) => {
         answers.push(resolve);
         fails.push(reject);
       })),
@@ -88,7 +104,7 @@ describe("a load that answers late", () => {
     const loading = loadDrafts(api, "oth-L2");
     // The search's PUT answers first, with its new drafts; the GET sent before it answers after.
     act(() => useDrafts.getState().setDrafts("oth-L2", [draft("rd_new")]));
-    answers[0]!([draft("rd_retired")]);
+    answers[0]!({ drafts: [draft("rd_retired")] });
     expect(await loading).toBe(true);
     expect(ids("oth-L2")).toEqual(["rd_new"]);
   });
@@ -97,9 +113,9 @@ describe("a load that answers late", () => {
     const { api, answers } = slowList();
     const first = loadDrafts(api, "oth-L2");
     const second = loadDrafts(api, "oth-L2");
-    answers[1]!([draft("rd_newer")]);
+    answers[1]!({ drafts: [draft("rd_newer")] });
     await second;
-    answers[0]!([draft("rd_older")]);
+    answers[0]!({ drafts: [draft("rd_older")] });
     await first;
     expect(ids("oth-L2")).toEqual(["rd_newer"]);
   });
@@ -108,7 +124,7 @@ describe("a load that answers late", () => {
     const { api, answers } = slowList();
     const loading = loadDrafts(api, "oth-L2");
     act(() => useDrafts.getState().setDrafts("oth-L3", [draft("rd_l3")]));
-    answers[0]!([draft("rd_a")]);
+    answers[0]!({ drafts: [draft("rd_a")] });
     await loading;
     expect(ids("oth-L2")).toEqual(["rd_a"]);
   });

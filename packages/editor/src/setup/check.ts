@@ -1,5 +1,6 @@
-import { live, type Keyframe, type MapModel } from "@oth/model";
-import { ConflictError } from "../api/client";
+import { live, type BBox, type Keyframe, type MapModel } from "@oth/model";
+import { ConflictError, type RoomDraftRow } from "../api/client";
+import { draftBox } from "../build/drafts";
 import { SELECTABLE_TYPES, parseSelectParam, selectParam, type Selectable } from "../build/selection";
 import type { Selection } from "../state/store";
 import { serverWords } from "../ui/failure";
@@ -43,15 +44,30 @@ export function checkSections(changes: readonly ClaudeChange[]): { sections: Che
 }
 
 /**
- * What Show selects for a change, if it is still on this floor. A stop is
- * shown at its end here, and a place at the room it is bound to. A draft is
- * not on the map, and Show has nothing to select.
+ * What Show does for a change: selects it, or, for a draft row (not on the
+ * map, so nothing to select), frames where its outline sits.
+ */
+export type ShowTarget = { kind: "select"; selection: NonNullable<Selection> } | { kind: "frame"; box: BBox };
+
+/**
+ * What Show does for a change, if it can do anything. A stop is shown at its
+ * end here, and a place at the room it is bound to. A draft row (rejected,
+ * set aside, or made into a room) frames its outline from the floor's own
+ * drafts, without selecting: it isn't a thing the map can select, and Claude
+ * or a teammate may hold the room a select would otherwise lock. Only a draft
+ * with an outline can be framed; an open draft (the drawing left it open, no
+ * shape traced) has none.
  */
 export function showTarget(
   model: MapModel | null, change: Pick<ClaudeChange, "entityType" | "entityId">, levelId: string,
-): NonNullable<Selection> | null {
-  if (!model) return null;
+  drafts: readonly RoomDraftRow[] = [],
+): ShowTarget | null {
   const { entityType: type, entityId: id } = change;
+  if (type === "roomDraft") {
+    const draft = drafts.find(d => d.id === id);
+    return draft?.footprint ? { kind: "frame", box: draftBox(draft) } : null;
+  }
+  if (!model) return null;
   let wanted: NonNullable<Selection> | null = null;
   if (type === "place") {
     const roomId = live(model.places).find(p => p.id === id)?.roomId;
@@ -63,7 +79,8 @@ export function showTarget(
     wanted = { type: type as Selectable, id };
   }
   // Only what is still there, on this floor.
-  return wanted ? parseSelectParam(selectParam(wanted), model, levelId) : null;
+  const selection = wanted ? parseSelectParam(selectParam(wanted), model, levelId) : null;
+  return selection ? { kind: "select", selection } : null;
 }
 
 /** Up to three frames an object was placed from, shown beside it (spec §8). */

@@ -1,7 +1,7 @@
 import { bboxOfRing, draftMatch, live, type BBox, type Room, type RoomDraft } from "@oth/model";
 import { useEffect } from "react";
 import { create } from "zustand";
-import type { Api, RoomDraftRow } from "../api/client";
+import type { Api, LineUp, RoomDraftRow } from "../api/client";
 import { draftNameSpot, type DraftShape } from "../plan/DraftLayer";
 import { useEditorStore } from "../state/store";
 import { reportFailure } from "../ui/failure";
@@ -9,6 +9,12 @@ import { reportFailure } from "../ui/failure";
 type DraftsState = {
   /** Each floor's drafts waiting for review, as the server last gave them, Claude's set-aside marks and all. */
   byLevel: Readonly<Record<string, RoomDraftRow[]>>;
+  /**
+   * Each floor's line-up warning, from its drafts' last load (contract v3):
+   * how far the plan sits from the rooms already there. Undefined once none
+   * is known — cleared by every load, since a stale one would be wrong.
+   */
+  lineUpByLevel: Readonly<Record<string, LineUp | undefined>>;
   /** The draft in hand. Part B's own, so the map's selection (state/store.ts) is left alone. */
   selectedId: string | null;
   /** Whether drafts already on the map are drawn too. */
@@ -17,7 +23,7 @@ type DraftsState = {
   finding: string | null;
   /** A request to frame part of the plan. `seq` makes the same box asked twice two requests. */
   frame: { box: BBox; seq: number } | null;
-  setDrafts: (levelId: string, drafts: RoomDraftRow[]) => void;
+  setDrafts: (levelId: string, drafts: RoomDraftRow[], lineUp?: LineUp) => void;
   select: (id: string | null) => void;
   setShowCovered: (on: boolean) => void;
   setFinding: (words: string | null) => void;
@@ -25,7 +31,7 @@ type DraftsState = {
   reset: () => void;
 };
 
-const initial = { byLevel: {}, selectedId: null, showCovered: false, finding: null, frame: null };
+const initial = { byLevel: {}, lineUpByLevel: {}, selectedId: null, showCovered: false, finding: null, frame: null };
 
 /**
  * Each floor's count of what has changed its drafts, a load's start included.
@@ -41,13 +47,17 @@ function change(levelId: string): number {
 
 export const useDrafts = create<DraftsState>(set => ({
   ...initial,
-  setDrafts: (levelId, drafts) => {
+  setDrafts: (levelId, drafts, lineUp) => {
     change(levelId);
     set(s => {
       // A draft in hand that this floor's new list no longer has is let go; one on another floor is not.
       const wasHere = (s.byLevel[levelId] ?? []).some(d => d.id === s.selectedId);
       const stillHere = drafts.some(d => d.id === s.selectedId);
-      return { byLevel: { ...s.byLevel, [levelId]: drafts }, selectedId: wasHere && !stillHere ? null : s.selectedId };
+      return {
+        byLevel: { ...s.byLevel, [levelId]: drafts },
+        lineUpByLevel: { ...s.lineUpByLevel, [levelId]: lineUp },
+        selectedId: wasHere && !stillHere ? null : s.selectedId,
+      };
     });
   },
   select: id => set({ selectedId: id }),
@@ -66,8 +76,8 @@ export async function loadDrafts(api: Pick<Api, "listRoomDrafts">, levelId: stri
   const mine = change(levelId);
   const latest = () => changes.get(levelId) === mine;
   try {
-    const drafts = await api.listRoomDrafts(levelId);
-    if (latest()) useDrafts.getState().setDrafts(levelId, drafts);
+    const { drafts, lineUp } = await api.listRoomDrafts(levelId);
+    if (latest()) useDrafts.getState().setDrafts(levelId, drafts, lineUp);
     return true;
   } catch (err) {
     if (latest()) reportFailure(err, { doing: "load the drafts from the drawing", retry: () => loadDrafts(api, levelId).then(() => {}) });
@@ -80,6 +90,16 @@ export function useRoomDrafts(api: Pick<Api, "listRoomDrafts">, levelId: string 
   useEffect(() => {
     if (levelId) void loadDrafts(api, levelId);
   }, [api, levelId]);
+}
+
+/**
+ * A floor's line-up warning, from its drafts' last load (contract v3):
+ * undefined while it hasn't loaded, or once the server finds nothing worth
+ * one. The Floorplan step, the rooms Claude step and Build's drafts review
+ * all read the same value, so they never disagree.
+ */
+export function useLineUp(levelId: string | null): LineUp | undefined {
+  return useDrafts(s => (levelId ? s.lineUpByLevel[levelId] : undefined));
 }
 
 export type DraftView = {

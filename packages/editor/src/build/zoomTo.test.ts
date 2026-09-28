@@ -1,7 +1,7 @@
 import { parseModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import { worldToScreen } from "../plan/viewport";
-import { selectionBBox, zoomViewportTo } from "./zoomTo";
+import { selectionBBox, zoomViewportTo, zoomViewportToBox } from "./zoomTo";
 
 const model = parseModel({
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
@@ -47,5 +47,14 @@ describe("zoomViewportTo", () => {
 
   it("has no view of nothing", () => {
     expect(zoomViewportTo(model, null, 1000, 700)).toBeNull();
+  });
+});
+
+describe("zoomViewportToBox", () => {
+  it("puts a plain box in the middle of the canvas, with no selection to read it from", () => {
+    const vp = zoomViewportToBox({ minX: 100, minY: 100, maxX: 120, maxY: 110 }, 1000, 700);
+    const [x, y] = worldToScreen(vp, [110, 105]);
+    expect(x).toBeCloseTo(500);
+    expect(y).toBeCloseTo(350);
   });
 });

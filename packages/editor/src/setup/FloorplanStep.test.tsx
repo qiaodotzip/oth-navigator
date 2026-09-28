@@ -114,4 +114,35 @@ describe("FloorplanStep", () => {
     unmount();
     expect(useEditorStore.getState().tool).toBe("select");
   });
+
+  it("warns to line the plan up first, before Find rooms, when the floor already has rooms", () => {
+    useEditorStore.getState().setModel(parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [{ id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 }],
+      rooms: [
+        { id: "L2-a", levelId: "oth-L2", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 3 },
+        { id: "L2-b", levelId: "oth-L2", kind: "room", footprint: [[20, 0], [30, 0], [30, 10], [20, 10]], heightM: 3 },
+      ],
+    }));
+    open([plan()]);
+    expect(guide().getByText(
+      "L2 already has 2 rooms: line the plan up with them first (Align), so Find rooms can match them.",
+    )).toBeTruthy();
+  });
+
+  it("warns with the drawing's own offset once its drafts show one, in place of the generic warning", () => {
+    open([plan()]);
+    act(() => useDrafts.getState().setDrafts("oth-L2", [], { dx: 11.5, dy: -4.6, pairs: 7 }));
+    expect(guide().getByText(
+      "The drawing sits about 11.5 m east and 4.6 m south of the rooms already on L2. "
+      + "Line it up with Align on this step, then run Find rooms again.",
+    )).toBeTruthy();
+    expect(screen.queryByText(/already has/)).toBeNull();
+  });
+
+  it("warns nothing about lining up on a floor with no rooms yet, and no offset known", () => {
+    open([plan()]);
+    expect(screen.queryByText(/already has/)).toBeNull();
+    expect(screen.queryByText(/The drawing sits about/)).toBeNull();
+  });
 });

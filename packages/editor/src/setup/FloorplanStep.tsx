@@ -1,10 +1,11 @@
-import type { Level } from "@oth/model";
+import { live, type Level } from "@oth/model";
 import { useEffect, useMemo } from "react";
 import type { Api } from "../api/client";
-import { loadDrafts } from "../build/drafts";
+import { loadDrafts, useLineUp } from "../build/drafts";
 import { DraftsFind } from "../build/DraftsFind";
 import { DraftsOnPlan } from "../build/DraftsOnPlan";
 import { FloorplanTools, PlanDropZone, patchPlan } from "../build/FloorplanTools";
+import { alreadyHasRoomsWords, LineUpWarning, lineUpWords } from "../build/LineUpWarning";
 import { StepGuide } from "../build/StepGuide";
 import { belowRingsFor, levelBelow } from "../flow/floors";
 import { roomLabels } from "../places/labels";
@@ -29,6 +30,11 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
   const below = levelBelow(model, level.id);
   const belowRings = useMemo(() => belowRingsFor(model, below), [model, below]);
   const labels = useMemo(() => (model ? roomLabels(model, level.id) : []), [model, level.id]);
+  const lineUp = useLineUp(level.id);
+  const existingRooms = useMemo(
+    () => (model ? live(model.rooms).filter(r => r.levelId === level.id).length : 0),
+    [model, level.id],
+  );
 
   // Measure and Align are this step's tools. Moving on puts Select back in hand.
   useEffect(() => () => useEditorStore.getState().setTool("select"), []);
@@ -63,7 +69,12 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
         step="floorplan"
         extras={<>
           <FloorplanTools api={api} />
-          <div className="border-t border-stone-200 pt-2">
+          <div className="space-y-2 border-t border-stone-200 pt-2">
+            {lineUp ? (
+              <LineUpWarning>{lineUpWords(lineUp, level.code)}</LineUpWarning>
+            ) : existingRooms > 0 ? (
+              <LineUpWarning>{alreadyHasRoomsWords(level.code, existingRooms)}</LineUpWarning>
+            ) : null}
             <DraftsFind api={api} inSetup />
           </div>
         </>}

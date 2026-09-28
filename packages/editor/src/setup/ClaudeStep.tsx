@@ -1,6 +1,8 @@
 import type { Level } from "@oth/model";
 import { Fragment, useEffect, useState } from "react";
 import { isUnauthorized, type Api, type TokenList } from "../api/client";
+import { useLineUp } from "../build/drafts";
+import { LineUpWarning, lineUpWords } from "../build/LineUpWarning";
 import { followLink } from "../route";
 import { myLiveTokens } from "../shell/ClaudeCodeButton";
 import { openClaudeCodePanel, useClaudeCodePanel } from "../shell/claudePanel";
@@ -53,6 +55,7 @@ export function ClaudeStep({ api, saver, level, stepId }: {
   const [tokens, setTokens] = useState<TokenList | null>(null);
   const [changes, setChanges] = useState<ClaudeChange[] | null>(null);
   const [changesFailed, setChangesFailed] = useState(false);
+  const lineUp = useLineUp(level.id);
   const step = wizardStep(stepId);
   const command = slashCommand(stepId, level.code);
   const since = sinceParam(setup);
@@ -140,6 +143,8 @@ export function ClaudeStep({ api, saver, level, stepId }: {
             </p>
           )}
         </div>
+
+        {stepId === "rooms" && lineUp && <LineUpWarning>{lineUpWords(lineUp, level.code)}</LineUpWarning>}
 
         {/* In place from the start, so a screen reader hears the line when Claude finishes. */}
         <div role="status">

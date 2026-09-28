@@ -2,6 +2,7 @@ import { parseModel } from "@oth/model";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiToken } from "../api/client";
+import { useDrafts } from "../build/drafts";
 import { useClaudeCodePanel } from "../shell/claudePanel";
 import { useEditorStore } from "../state/store";
 import { sampleModel, sampleTeam } from "../testing/fakeApi";
@@ -39,6 +40,7 @@ beforeEach(() => {
   measure = null;
   useSetupStore.getState().reset();
   useToasts.getState().clear();
+  useDrafts.getState().reset();
   useClaudeCodePanel.getState().setOpen(false);
   const s = useEditorStore.getState();
   s.reset();
@@ -83,12 +85,12 @@ describe("ClaudeStep", () => {
     expect(count("Stops made")).toBe("8");
   });
 
-  it("counts the rooms with a door no route reaches, and shows a dash while that isn't known", () => {
+  it("counts the rooms no route reaches, and shows a dash while that isn't known", () => {
     open({ stepId: "paths", state: setupState({}, { paths: { pathways: 38, entrances: 0, unreachable: 167 } }) });
-    expect(count("Rooms with a door no route reaches")).toBe("167");
+    expect(count("Rooms no route reaches")).toBe("167");
     cleanup();
     open({ stepId: "paths", state: setupState({}, { paths: { pathways: 38, entrances: 0, unreachable: null } }) });
-    expect(count("Rooms with a door no route reaches")).toBe("–");
+    expect(count("Rooms no route reaches")).toBe("–");
   });
 
   it("lists Claude's last five changes for this step, from when this setup began", async () => {
@@ -129,6 +131,26 @@ describe("ClaudeStep", () => {
     cleanup();
     open({ stepId: "rooms" });
     expect(screen.getByText(/watch the rooms fill in on the map/)).toBeTruthy();
+  });
+
+  it("warns of the drawing's own offset on the rooms step, when its drafts show one", () => {
+    act(() => useDrafts.getState().setDrafts("oth-L1", [], { dx: 11.5, dy: -4.6, pairs: 7 }));
+    open({ stepId: "rooms" });
+    expect(screen.getByText(
+      "The drawing sits about 11.5 m east and 4.6 m south of the rooms already on L1. "
+      + "Line it up with Align on this step, then run Find rooms again.",
+    )).toBeTruthy();
+  });
+
+  it("shows no line-up warning off the rooms step, even with one known", () => {
+    act(() => useDrafts.getState().setDrafts("oth-L1", [], { dx: 11.5, dy: -4.6, pairs: 7 }));
+    open({ stepId: "paths" });
+    expect(screen.queryByText(/The drawing sits about/)).toBeNull();
+  });
+
+  it("shows no line-up warning on the rooms step once none is known", () => {
+    open({ stepId: "rooms" });
+    expect(screen.queryByText(/The drawing sits about/)).toBeNull();
   });
 
   it("lets go of anything picked on the map at once, so no lock of yours stops Claude's writes", () => {

@@ -1,15 +1,20 @@
+import type { BBox } from "@oth/model";
 import { useEffect, useMemo } from "react";
 import type { Api } from "../api/client";
 import { parseSelectParam, selectParam } from "../build/selection";
-import { zoomViewportTo } from "../build/zoomTo";
+import { zoomViewportTo, zoomViewportToBox } from "../build/zoomTo";
 import { roomLabels } from "../places/labels";
 import { PlanCanvas } from "../plan/PlanCanvas";
 import { PlanRoomLabels } from "../plan/RoomLabels";
 import { useElementSize } from "../plan/useElementSize";
 import { useEditorStore, type Selection } from "../state/store";
 
-/** A request to frame something on the map. `seq` makes the same thing asked twice two requests. */
-export type MapFocus = { target: NonNullable<Selection>; seq: number };
+/**
+ * A request to frame something on the map: a selectable thing, or (Check's
+ * draft rows) a plain box with nothing to select. `seq` makes the same thing
+ * asked twice two requests.
+ */
+export type MapFocus = ({ target: NonNullable<Selection> } | { box: BBox }) & { seq: number };
 
 /** A stable reference, so passing it does not itself make PlanCanvas re-render. */
 function noSelect(): void {}
@@ -56,7 +61,9 @@ export function SetupMap({ api, focus = null, keepSelection = false }: {
   // Frame what Show asked for, once the map has a size.
   useEffect(() => {
     if (!focus || !size) return;
-    const viewport = zoomViewportTo(useEditorStore.getState().model, focus.target, size.width, size.height);
+    const viewport = "box" in focus
+      ? zoomViewportToBox(focus.box, size.width, size.height)
+      : zoomViewportTo(useEditorStore.getState().model, focus.target, size.width, size.height);
     if (viewport) useEditorStore.getState().setViewport(viewport);
   }, [focus, size]);
 

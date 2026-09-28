@@ -215,11 +215,27 @@ describe("words", () => {
     expect(countRows("paths", counts)).toEqual([
       { label: "Pathways", value: 38 },
       { label: "Entrances", value: 0 },
-      { label: "Rooms with a door no route reaches", value: null },
+      { label: "Rooms no route reaches", value: null },
     ]);
     expect(countRows("things", counts).map(r => r.label)).toEqual(["Places bound", "Places not bound yet", "Objects placed: wastebin"]);
     expect(countRows("things", NO_COUNTS).at(-1)).toEqual({ label: "Objects placed", value: 0 });
     expect(countRows("footage", counts)).toEqual([]);
+  });
+
+  it("shows every kind the server sends, with a count each: the server sends only kinds with a placement (contract v3)", () => {
+    const counts = {
+      ...NO_COUNTS,
+      things: {
+        bound: 6, unbound: 13,
+        objects: [{ kindId: "ok_bin", name: "wastebin", count: 5 }, { kindId: "ok_ext", name: "fire extinguisher", count: 2 }],
+      },
+    };
+    expect(countRows("things", counts)).toEqual([
+      { label: "Places bound", value: 6 },
+      { label: "Places not bound yet", value: 13 },
+      { label: "Objects placed: wastebin", value: 5 },
+      { label: "Objects placed: fire extinguisher", value: 2 },
+    ]);
   });
 
   it("says who finished a step, and when", () => {
@@ -251,7 +267,7 @@ describe("words", () => {
     expect(stoppedLine(byClaude("things", "Bound 0 new places"), counts, now))
       .toBe("Claude stopped with 13 places not bound, 5 minutes ago: Bound 0 new places");
     expect(stoppedLine(byClaude("paths"), counts, now))
-      .toBe("Claude stopped with 167 rooms with a door no route reaches, 5 minutes ago");
+      .toBe("Claude stopped with 167 rooms no route reaches, 5 minutes ago");
     // Nothing left, a person's Mark done, an open step, or a count not known: no such line.
     expect(stoppedLine(byClaude("things"), { ...counts, things: { bound: 19, unbound: 0, objects: [] } }, now)).toBeNull();
     expect(stoppedLine({ ...byClaude("things"), finishedVia: null }, counts, now)).toBeNull();

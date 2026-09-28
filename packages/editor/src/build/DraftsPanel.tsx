@@ -2,11 +2,12 @@ import type { RoomDraft, RoomKind } from "@oth/model";
 import { useEffect, useRef, useState } from "react";
 import type { Api, RoomDraftRow, TeamMember } from "../api/client";
 import type { Saver } from "../state/save";
-import { useEditorStore } from "../state/store";
+import { activeLevel, useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
 import { Kbd } from "../ui/Kbd";
 import { acceptDrafts, nextDraft, rejectDraft, type ReviewContext } from "./draftActions";
-import { draftBox, useDraftView, useDrafts } from "./drafts";
+import { draftBox, useDraftView, useDrafts, useLineUp } from "./drafts";
+import { LineUpWarning, lineUpWords } from "./LineUpWarning";
 import { useDraftKeys } from "./useDraftKeys";
 
 /** The kinds a draft can be made (spec §5.2: the script's word lists, and void). */
@@ -66,10 +67,12 @@ function openSpaceNames(open: readonly RoomDraft[]): Map<string, string> {
  */
 export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
   const levelId = useEditorStore(s => s.activeLevelId);
+  const levelCode = useEditorStore(s => activeLevel(s)?.code ?? "");
   const mapSelection = useEditorStore(s => s.selection);
   const tool = useEditorStore(s => s.tool);
   const team = useEditorStore(s => s.team);
   const view = useDraftView(levelId);
+  const lineUp = useLineUp(levelId);
   const selectedId = useDrafts(s => s.selectedId);
   const showCovered = useDrafts(s => s.showCovered);
   const [name, setName] = useState("");
@@ -182,6 +185,7 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
 
   return (
     <section aria-label="Drafts from the drawing" className="space-y-2">
+      {lineUp && <LineUpWarning>{lineUpWords(lineUp, levelCode)}</LineUpWarning>}
       <p className="text-xs text-stone-700">
         <span className="font-medium">{`${plural(view.review.length, "draft", "drafts")} to review`}</span>
         {setAside > 0 && ` · ${setAside} set aside by Claude`}

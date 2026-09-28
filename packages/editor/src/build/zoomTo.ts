@@ -61,3 +61,8 @@ export function zoomViewportTo(
   const box = selectionBBox(model, selection);
   return box ? fitViewport(box, widthPx, heightPx, PAD_PX) : null;
 }
+
+/** The view that frames a plain box in the middle of the canvas: nothing selected, as Check frames a draft row. */
+export function zoomViewportToBox(box: BBox, widthPx: number, heightPx: number): Viewport {
+  return fitViewport(box, widthPx, heightPx, PAD_PX);
+}

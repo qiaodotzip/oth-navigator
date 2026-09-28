@@ -91,7 +91,7 @@ export function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}): Ap
     // --- PDF plans and room drafts (plan 5B) ---
     uploadPlanSource: vi.fn(),
     fetchPlanSource: vi.fn(),
-    listRoomDrafts: vi.fn().mockResolvedValue([]),
+    listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [] }),
     replaceRoomDrafts: vi.fn().mockResolvedValue([]),
     acceptRoomDrafts: vi.fn().mockResolvedValue([]),
     unacceptRoomDrafts: vi.fn().mockResolvedValue({ drafts: 0 }),

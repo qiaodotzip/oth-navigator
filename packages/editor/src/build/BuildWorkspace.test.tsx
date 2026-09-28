@@ -628,7 +628,7 @@ describe("BuildWorkspace — drafts from the drawing", () => {
   });
 
   it("draws the floor's drafts on Areas & rooms, and only there", async () => {
-    const { api } = open("/floors/L1/build?step=rooms", { listRoomDrafts: vi.fn().mockResolvedValue([found]) });
+    const { api } = open("/floors/L1/build?step=rooms", { listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [found] }) });
     measure();
     expect(await screen.findByTestId("draft-rd_1")).toBeTruthy();
     expect(api.listRoomDrafts).toHaveBeenCalledWith("oth-L1");
@@ -640,7 +640,7 @@ describe("BuildWorkspace — drafts from the drawing", () => {
   });
 
   it("counts the drafts to review on the to-do list, and in the review beside the tools", async () => {
-    open("/floors/L1/build?step=rooms", { listRoomDrafts: vi.fn().mockResolvedValue([found]) });
+    open("/floors/L1/build?step=rooms", { listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [found] }) });
     expect(await within(screen.getByRole("region", { name: "To do" })).findByText("1 draft to review.")).toBeTruthy();
     expect(screen.getByText("1 draft to review")).toBeTruthy();
     // Not done while a draft waits, though nothing there stops Publish.

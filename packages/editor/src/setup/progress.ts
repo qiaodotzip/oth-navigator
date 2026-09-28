@@ -194,7 +194,7 @@ export function countRows(step: SetupStepId, counts: SetupCounts): { label: stri
       return [
         { label: "Pathways", value: counts.paths.pathways },
         { label: "Entrances", value: counts.paths.entrances },
-        { label: "Rooms with a door no route reaches", value: counts.paths.unreachable },
+        { label: "Rooms no route reaches", value: counts.paths.unreachable },
       ];
     default:
       return [];
@@ -227,7 +227,7 @@ export function workLeft(step: SetupStepId, counts: SetupCounts): string | null 
       return counts.things.unbound > 0 ? `${count(counts.things.unbound, "place", "places")} not bound` : null;
     case "paths": {
       const n = counts.paths.unreachable;
-      return n ? count(n, "room with a door no route reaches", "rooms with a door no route reaches") : null;
+      return n ? count(n, "room no route reaches", "rooms no route reaches") : null;
     }
     default:
       return null;
