@@ -1,4 +1,5 @@
 import type { Vec2 } from "@oth/model";
+import { Frustum, Matrix4, PerspectiveCamera, Vector3, type Camera } from "three";
 import { modelToThree } from "./coords";
 
 /** How a room's label reads: its place, confirmed or still proposed, or the drawing's own name. */
@@ -37,16 +38,18 @@ export const LABEL_FONT_PX = 13;
 
 /**
  * The label colours, written once in hex because SVG attributes and the
- * renderer's inline styles cannot use Tailwind's names.
+ * renderer's inline styles cannot use Tailwind's names. Each ratio holds on
+ * solid white only, so a label's halo must be opaque: at 85% white over a
+ * dark room, the ✓, "proposed" and the grey all fall under 4.5:1.
  */
 export const LABEL_COLOURS = {
-  /** A place's name: stone-900. */
+  /** A place's name: stone-900, 17.5:1 on white. */
   name: "#1c1917",
-  /** The ✓ of a confirmed place: the confirmed token. */
+  /** The ✓ of a confirmed place: the confirmed token, 5.5:1 on white. */
   confirmed: "#047857",
-  /** "proposed": sky-700, one step darker than the proposed token, which is under 4.5:1 as 13 px text on white. */
+  /** "proposed": sky-700, 5.9:1 on white, one step darker than the proposed token, which is under 4.5:1 as 13 px text. */
   proposed: "#0369a1",
-  /** The drawing's own name: stone-500, grey, and still 4.8:1 on the white halo. */
+  /** The drawing's own name: stone-500, grey, and still 4.8:1 on white. */
   drawing: "#78716c",
 } as const;
 
@@ -68,7 +71,7 @@ export function labelExtra(tone: LabelTone): number {
  * The name as it fits across a room at this zoom (spec §4): whole, cut short
  * with an ellipsis, or null when it cannot be shown at all — too few letters
  * would fit, or the room is too shallow for a line. This is what keeps L1's
- * 193 rooms from turning into a wall of text.
+ * 252 rooms from turning into a wall of text.
  */
 export function fitLabel(
   name: string, extraChars: number, widthPx: number, heightPx: number, fontPx = LABEL_FONT_PX,
@@ -104,4 +107,41 @@ export function sceneLabelsToShow(labels: readonly RoomLabel[], view: SceneView)
     if (text) shown.push({ roomId: label.roomId, text, tone: label.tone, position });
   }
   return shown;
+}
+
+/**
+ * Everything a shown label draws from, as one string. A change in any of it
+ * must reach the screen: a place confirmed or a label point moved, with the
+ * text unchanged, would otherwise leave a stale pill up.
+ */
+export function shownLabelsKey(labels: readonly ShownLabel[]): string {
+  return labels.map(l => `${l.roomId}:${l.tone}:${l.position.join()}:${l.text}`).join("|");
+}
+
+/** Scratch objects for `cameraView`, made once per component so a frame allocates no matrices. */
+export type ViewProbe = { frustum: Frustum; matrix: Matrix4; point: Vector3 };
+
+export function viewProbe(): ViewProbe {
+  return { frustum: new Frustum(), matrix: new Matrix4(), point: new Vector3() };
+}
+
+/**
+ * A three.js camera as `sceneLabelsToShow` sees it, with `inView` testing
+ * against the camera's frustum. Pure maths, so it runs without WebGL.
+ */
+export function cameraView(
+  camera: Camera, heightPx: number, elevationM: number, probe: ViewProbe = viewProbe(),
+): SceneView {
+  // OrbitControls moves the camera between frames; without this the frustum
+  // would be last frame's, or the identity before the first render.
+  camera.updateMatrixWorld();
+  probe.matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  probe.frustum.setFromProjectionMatrix(probe.matrix);
+  return {
+    camera: [camera.position.x, camera.position.y, camera.position.z],
+    fovDeg: camera instanceof PerspectiveCamera ? camera.fov : 45,
+    heightPx,
+    elevationM,
+    inView: ([x, y, z]) => probe.frustum.containsPoint(probe.point.set(x, y, z)),
+  };
 }

@@ -1,5 +1,9 @@
+import { PerspectiveCamera } from "three";
 import { describe, expect, it } from "vitest";
-import { fitLabel, labelExtra, pixelsPerMetreAt, sceneLabelsToShow, type RoomLabel } from "./labelFit";
+import {
+  cameraView, fitLabel, labelExtra, pixelsPerMetreAt, sceneLabelsToShow, shownLabelsKey,
+  type RoomLabel, type ShownLabel,
+} from "./labelFit";
 
 describe("fitLabel", () => {
   it("shows the whole name where it fits, with room for its ✓", () => {
@@ -62,5 +66,52 @@ describe("sceneLabelsToShow", () => {
 
   it("mounts nothing the camera cannot see", () => {
     expect(sceneLabelsToShow([star], { ...from(23), inView: () => false })).toEqual([]);
+  });
+});
+
+describe("shownLabelsKey", () => {
+  const shown: ShownLabel = { roomId: "L1-shop", text: "Starbucks", tone: "proposed", position: [5, 3, -8] };
+
+  it("stays the same for the same labels, so a still camera sets no state", () => {
+    expect(shownLabelsKey([{ ...shown, position: [5, 3, -8] }])).toBe(shownLabelsKey([shown]));
+  });
+
+  it("changes when a place is confirmed, its label moves, or its text is cut", () => {
+    const key = shownLabelsKey([shown]);
+    expect(shownLabelsKey([{ ...shown, tone: "confirmed" }])).not.toBe(key);
+    expect(shownLabelsKey([{ ...shown, position: [6, 3, -8] }])).not.toBe(key);
+    expect(shownLabelsKey([{ ...shown, text: "Sta…" }])).not.toBe(key);
+  });
+});
+
+describe("cameraView", () => {
+  // A real camera, placed the way MapScene frames a floor: up and off to one
+  // side, looking at the middle. Frustum maths needs no WebGL.
+  const camera = () => {
+    const c = new PerspectiveCamera(45, 1, 0.1, 1000);
+    c.position.set(0, 40, 30);
+    c.lookAt(0, 0, 0);
+    return c;
+  };
+
+  it("reads the camera's position and field of view", () => {
+    const view = cameraView(camera(), 256, 6);
+    expect(view.camera).toEqual([0, 40, 30]);
+    expect(view.fovDeg).toBe(45);
+    expect(view.heightPx).toBe(256);
+    expect(view.elevationM).toBe(6);
+  });
+
+  it("sees what is in front of the camera, and not what is off to the side or behind it", () => {
+    const { inView } = cameraView(camera(), 256, 0);
+    expect(inView?.([0, 3, 0])).toBe(true);
+    expect(inView?.([200, 3, 0])).toBe(false);
+    expect(inView?.([0, 80, 60])).toBe(false);
+  });
+
+  it("mounts only the labels a real camera can see", () => {
+    const near: RoomLabel = { roomId: "L1-near", name: "Starbucks", tone: "confirmed", at: [0, 0], widthM: 10, heightM: 10, liftM: 3 };
+    const aside: RoomLabel = { ...near, roomId: "L1-aside", at: [200, 0] };
+    expect(sceneLabelsToShow([near, aside], cameraView(camera(), 256, 0)).map(l => l.roomId)).toEqual(["L1-near"]);
   });
 });
