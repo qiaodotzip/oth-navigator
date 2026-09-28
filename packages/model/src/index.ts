@@ -27,3 +27,8 @@ export * from "./geometry/rect";
 
 // Plan 6A: objects.
 export * from "./objects";
+
+// Plan 6C: a traced space made a lift or stair stop. The editor's MakeStop and
+// the server's make_stop both plan with these, so the two save the same thing.
+export * from "./stops/placePoint";
+export * from "./stops/portalFromRoom";

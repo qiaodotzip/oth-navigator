@@ -1,4 +1,6 @@
-import { live, parseModel, pointInPolygon, type MapModel } from "@oth/model";
+import { pointInPolygon } from "../geometry/point";
+import { live } from "../primitives";
+import { parseModel, type MapModel } from "../schema/model";
 import { describe, expect, it } from "vitest";
 import { floorAbove, insidePoint, namedLikeAStop, portalFromRoom } from "./portalFromRoom";
 

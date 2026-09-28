@@ -1,7 +1,6 @@
-import type { MapModel, Vec2 } from "@oth/model";
+import { entranceAt, portalEndpointAt, type MapModel, type Vec2 } from "@oth/model";
 import type { EntityType } from "../api/client";
 import type { Tool } from "../state/store";
-import { entranceAt, portalEndpointAt } from "./placePoint";
 
 type Writes = {
   create: (type: EntityType, data: Record<string, unknown>, options?: { retry?: false }) => Promise<boolean>;

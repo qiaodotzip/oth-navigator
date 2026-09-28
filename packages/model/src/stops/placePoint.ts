@@ -1,4 +1,8 @@
-import { live, pointInPolygon, ringArea, type MapModel, type Room, type Vec2 } from "@oth/model";
+import { pointInPolygon } from "../geometry/point";
+import { ringArea } from "../geometry/ring";
+import { live, type Vec2 } from "../primitives";
+import type { MapModel } from "../schema/model";
+import type { Room } from "../schema/structure";
 
 /**
  * A lift is a shaft, so its stop on the next floor is at the same plan position.

@@ -1,8 +1,10 @@
-import {
-  bboxOfRing, live, pointInPolygon, ringCentroid,
-  type MapModel, type PortalKind, type Ring, type Room, type Vec2,
-} from "@oth/model";
-import { portalEndpointAt } from "../flow/placePoint";
+import { bboxOfRing, pointInPolygon } from "../geometry/point";
+import { ringCentroid } from "../geometry/ring";
+import { live, type Ring, type Vec2 } from "../primitives";
+import type { MapModel } from "../schema/model";
+import type { PortalKind } from "../schema/navigation";
+import type { Room } from "../schema/structure";
+import { portalEndpointAt } from "./placePoint";
 
 export type StopKind = "lift" | "escalator" | "stair";
 

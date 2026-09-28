@@ -1,4 +1,4 @@
-import { parseModel } from "@oth/model";
+import { parseModel } from "../schema/model";
 import { describe, expect, it } from "vitest";
 import { entranceAt, portalEndpointAt } from "./placePoint";
 

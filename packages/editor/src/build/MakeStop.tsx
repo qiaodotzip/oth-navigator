@@ -1,4 +1,7 @@
-import { live, type MapModel, type Room } from "@oth/model";
+import {
+  OPENED, floorAbove, isOpen, live, namedLikeAStop, portalFromRoom,
+  type MapModel, type Room, type StopKind, type StopPlan,
+} from "@oth/model";
 import { useState } from "react";
 import type { Api } from "../api/client";
 import type { BuildStepId } from "../flow/floorProgress";
@@ -7,7 +10,6 @@ import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
 import { offerUndo } from "../ui/offerUndo";
 import { toast } from "../ui/toast";
-import { OPENED, floorAbove, isOpen, namedLikeAStop, portalFromRoom, type StopKind, type StopPlan } from "./portalFromRoom";
 
 const WORDS: Record<StopKind, string> = { lift: "Lift", escalator: "Escalator", stair: "Stairs" };
 
