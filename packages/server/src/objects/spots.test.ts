@@ -126,7 +126,10 @@ describe("an anchor bound to a large open area (rehearsal 2: L1's gates bound to
    * walkable. "Gate 5" is bound to the whole concourse, so it says only that
    * a frame was taken somewhere in 1,200 m². A second capture walks it.
    */
-  const withConcourse = (sightings: ReturnType<typeof seen>[], concourse = sq(0, -40, 40, -10)) => corridor([
+  const withConcourse = (
+    sightings: ReturnType<typeof seen>[], concourse = sq(0, -40, 40, -10),
+    { kind = "area", walkable = true, more = [] }: { kind?: string; walkable?: boolean; more?: Record<string, unknown>[] } = {},
+  ) => corridor([
     seen("sg_gate", "pl_gate", "cap_3-2"), ...sightings,
   ], {
     rooms: [
@@ -135,7 +138,8 @@ describe("an anchor bound to a large open area (rehearsal 2: L1's gates bound to
       { id: "L1-b", levelId: "oth-L1", kind: "room", footprint: sq(10, 6, 20, 14), heightM: 6 },
       { id: "L1-c", levelId: "oth-L1", kind: "room", footprint: sq(40, 6, 50, 14), heightM: 6 },
       { id: "L1-s", levelId: "oth-L1", kind: "room", footprint: sq(20, -8, 30, 0), heightM: 6 },
-      { id: "L1-west-concourse", levelId: "oth-L1", kind: "area", footprint: concourse, heightM: 6, walkable: true },
+      { id: "L1-west-concourse", levelId: "oth-L1", kind, footprint: concourse, heightM: 6, walkable },
+      ...more,
     ],
     captures: [
       { id: "cap_1", kind: "video", filename: "L1 walk.mp4", levelId: "oth-L1" },
@@ -169,6 +173,48 @@ describe("an anchor bound to a large open area (rehearsal 2: L1's gates bound to
     const small = objectSpotReport(withConcourse([seen("sg_1", "pl_bin", "cap_3-3")], sq(0, -35, 20, -10)), "oth-L1");
     expect(small.unplaced).toEqual([]);
     expect(small.spots.map(s => s.anchors)).toEqual([["L1-west-concourse"]]);
+  });
+
+  it("holds to open areas (kind area) alone: a large one no one walks is no anchor either, and a large room of kind room is one", () => {
+    const bin = [seen("sg_1", "pl_bin", "cap_3-3")];
+    const closed = objectSpotReport(withConcourse(bin, undefined, { walkable: false }), "oth-L1");
+    expect([closed.spots, closed.unplaced.map(u => u.reason)]).toEqual([[], ["the only places filmed near it are bound to large open areas"]]);
+    const hall = objectSpotReport(withConcourse(bin, undefined, { kind: "room", walkable: false }), "oth-L1");
+    expect(hall.unplaced).toEqual([]);
+    expect(hall.spots.map(s => s.anchors)).toEqual([["L1-west-concourse"]]);
+  });
+});
+
+describe("a spot anchored on an open area (contract v4)", () => {
+  /**
+   * Rehearsal 3's Gate 5, in miniature: bound to West Concourse (north), an
+   * open area of 422 m² drawn inside the Stadium's larger one. Every edge of
+   * the concourse has the Stadium's floor beyond it, so the nearest outer edge
+   * is the Stadium's, 0.55 m west of the concourse's: the bin by the gate stood
+   * 0.2 m outside the concourse it was anchored on, in the Stadium.
+   */
+  const concourse = sq(0.55, -35, 20.55, -13.9);
+  const stadium = { id: "L1-stadium", levelId: "oth-L1", kind: "area", footprint: sq(0, -40, 30, -10), heightM: 6, walkable: true };
+
+  it("stands inside that area, 0.5 m in from its outline, facing into it", () => {
+    const model = corridor([], {
+      rooms: [
+        { id: "L1-corridor", levelId: "oth-L1", kind: "area", footprint: sq(0, 0, 60, 6), heightM: 6, walkable: true },
+        { id: "L1-west-concourse", levelId: "oth-L1", kind: "area", footprint: concourse, heightM: 6, walkable: true, nameEn: "West Concourse (north)" },
+        stadium,
+      ],
+      captures: [{ id: "cap_3", kind: "video", filename: "L1 concourse.mp4", levelId: "oth-L1" }],
+      keyframes: frames("cap_3", 8),
+      places: [
+        { id: "pl_gate", nameEn: "Gate 5", category: "facility", levelId: "oth-L1", roomId: "L1-west-concourse" },
+        { id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "bin" },
+      ],
+      sightings: [seen("sg_gate", "pl_gate", "cap_3-2"), seen("sg_1", "pl_bin", "cap_3-3")],
+    });
+    const [spot, ...rest] = suggestObjectSpots(model, "oth-L1");
+    expect(rest).toEqual([]);
+    expect({ position: at(spot!.position), rotationDeg: spot!.rotationDeg, anchors: spot!.anchors })
+      .toEqual({ position: [1.05, -24.45], rotationDeg: 90, anchors: ["L1-west-concourse"] });
   });
 });
 

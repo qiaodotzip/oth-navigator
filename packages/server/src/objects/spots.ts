@@ -27,9 +27,12 @@ export const ONE_SIDE_FRAMES = 20;
  * A place bound to an open area (kind area) larger than this is no anchor: it
  * says only that the frame was taken somewhere in that area. Rehearsal 2's
  * gates were bound to whole concourses, and every object filmed by them
- * stood on one point of the concourse's edge.
+ * stood on one point of the concourse's edge. Only kind area: a room of kind
+ * room this large is still one room, and says where the frame was.
  */
 export const LARGE_AREA_M2 = 500;
+/** A spot anchored on an open area stands this far inside its outline (contract v4). */
+export const AREA_INSET_M = 0.5;
 /** Why a sighting is left unplaced, in the words suggest_object_spots gives. */
 export const NOTHING_NEAR = "nothing filmed near it is bound to a room on this floor";
 export const ONLY_OPEN_AREAS = "the only places filmed near it are bound to large open areas";
@@ -73,6 +76,12 @@ function edges(room: Room): [Vec2, Vec2][] {
 
 const onFloor = (p: Vec2, walkable: readonly Room[]) => walkable.some(r => pointInPolygon(p, r.footprint, r.holes));
 
+/** The way into `room` from `at`, on its edge a–b (of length `len`). */
+function inwardAt(at: Vec2, a: Vec2, b: Vec2, len: number, room: Room): Vec2 {
+  const n: Vec2 = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
+  return pointInPolygon([at[0] + n[0] * PROBE_M, at[1] + n[1] * PROBE_M], room.footprint, room.holes) ? n : [-n[0], -n[1]];
+}
+
 /** The point itself on walkable floor, or else the nearest point of the walkable floor's outlines. */
 function ontoWalkable(p: Vec2, walkable: readonly Room[]): Vec2 {
   if (onFloor(p, walkable)) return p;
@@ -106,14 +115,44 @@ function nearestEdge(p: Vec2, walkable: readonly Room[]): { at: Vec2; inward: Ve
       const q = nearestOnSegment(p, a, b);
       const d = dist(p, q);
       if (d >= bestD) continue;
-      const n: Vec2 = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
-      const inward: Vec2 = pointInPolygon([q[0] + n[0] * PROBE_M, q[1] + n[1] * PROBE_M], r.footprint, r.holes) ? n : [-n[0], -n[1]];
+      const inward = inwardAt(q, a, b, len, r);
       if (onFloor([q[0] - inward[0] * SHARED_EDGE_M, q[1] - inward[1] * SHARED_EDGE_M], walkable)) continue;
       bestD = d;
       best = { at: q, inward };
     }
   }
   return best;
+}
+
+/**
+ * Contract v4: a spot anchored on a place bound to an open area (kind area)
+ * stands inside that area. The nearest outer edge of the walkable floor can
+ * belong to another area drawn round or beside it: rehearsal 3's bin by
+ * Gate 5 stood 0.2 m outside West Concourse (north), in the Stadium. When
+ * the spot is in none of its areas, it moves to the nearest point of their
+ * outlines and AREA_INSET_M in, facing into the area.
+ */
+function intoArea(position: Vec2, rotationDeg: number, areas: readonly Room[]): { position: Vec2; rotationDeg: number } {
+  if (areas.length === 0 || areas.some(r => pointInPolygon(position, r.footprint, r.holes))) return { position, rotationDeg };
+  let best: { at: Vec2; inward: Vec2; room: Room } | null = null;
+  let bestD = Infinity;
+  for (const r of areas) {
+    for (const [a, b] of edges(r)) {
+      const len = dist(a, b);
+      if (len === 0) continue;
+      const q = nearestOnSegment(position, a, b);
+      const d = dist(position, q);
+      if (d >= bestD) continue;
+      bestD = d;
+      best = { at: q, inward: inwardAt(q, a, b, len, r), room: r };
+    }
+  }
+  if (!best) return { position, rotationDeg };
+  const inside: Vec2 = [best.at[0] + best.inward[0] * AREA_INSET_M, best.at[1] + best.inward[1] * AREA_INSET_M];
+  // A sliver or a sharp corner can put the step outside again: then the area's own inside point.
+  return pointInPolygon(inside, best.room.footprint, best.room.holes)
+    ? { position: inside, rotationDeg: facingRotation(best.inward) }
+    : { position: insidePoint(best.room.footprint, best.room.holes), rotationDeg };
 }
 
 /** This floor's frames, per capture, in filming order: list_frames's order. */
@@ -210,6 +249,7 @@ type Candidate = { sightingId: string; frame: Frame; objectKindId: string; posit
 /** Spec §5.4 steps 1–3 for one floor: where each object filmed there probably stands. Read-only. */
 export function objectSpotReport(model: MapModel, levelId: string): SpotReport {
   const walkable = live(model.rooms).filter(r => r.levelId === levelId && r.walkable);
+  const areas = new Map(live(model.rooms).filter(r => r.levelId === levelId && r.kind === "area").map(r => [r.id, r]));
   const kinds = new Map(live(model.objectKinds).map(k => [k.id, k]));
   const kindOf = new Map<string, string>();
   for (const p of live(model.places)) if (p.objectKindId && kinds.has(p.objectKindId)) kindOf.set(p.id, p.objectKindId);
@@ -232,11 +272,13 @@ export function objectSpotReport(model: MapModel, levelId: string): SpotReport {
     const edge = nearestEdge(fix.point, walkable);
     if (!edge) { refuse("the walkable floor has no outer edge to stand it against"); continue; }
     const inset = kinds.get(objectKindId)!.size.d / 2 + EDGE_GAP_M;
-    candidates.push({
+    const stands = intoArea(
+      [edge.at[0] + edge.inward[0] * inset, edge.at[1] + edge.inward[1] * inset],
       // 6A's rule (@oth/model objects.ts): 0° faces south, turning anticlockwise, as the marker and the export read it.
-      sightingId: s.id, frame, objectKindId, anchors: fix.anchors, rotationDeg: facingRotation(edge.inward),
-      position: [edge.at[0] + edge.inward[0] * inset, edge.at[1] + edge.inward[1] * inset],
-    });
+      facingRotation(edge.inward),
+      fix.anchors.flatMap(id => areas.get(id) ?? []),
+    );
+    candidates.push({ sightingId: s.id, frame, objectKindId, anchors: fix.anchors, ...stands });
   }
   candidates.sort((a, b) =>
     a.frame.captureId.localeCompare(b.frame.captureId) || a.frame.index - b.frame.index || a.sightingId.localeCompare(b.sightingId));
