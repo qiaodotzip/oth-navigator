@@ -71,6 +71,9 @@ export function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}): Ap
     createToken: vi.fn(),
     revokeToken: vi.fn().mockResolvedValue(undefined),
     claimTokenNotices: vi.fn().mockResolvedValue([]),
+    // --- PDF plans and room drafts (plan 5B) ---
+    uploadPlanSource: vi.fn(),
+    fetchPlanSource: vi.fn(),
     ...overrides,
   } as unknown as Api;
 }

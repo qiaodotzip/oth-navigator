@@ -2,6 +2,7 @@ import { parseModel } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { ApiError, ConflictError, type Api, type LevelImage } from "../api/client";
+import { planSheet, syntheticPdf } from "../pdf/testing/syntheticPdf";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
@@ -72,13 +73,13 @@ describe("PlanDropZone", () => {
   });
 
   it.each([
-    ["not a PNG or JPEG", new File(["%PDF"], "L1.pdf", { type: "application/pdf" })],
+    ["not a plan at all", new File(["GIF89a"], "L1.gif", { type: "image/gif" })],
     ["over 20 MB", Object.defineProperty(file("L1.jpg"), "size", { value: 20 * 1024 * 1024 + 1 })],
   ])("refuses a file that is %s before sending it, and says what to do instead", async (_why, refused) => {
     const a = api();
     render(<PlanDropZone api={a} />);
     fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [refused] } });
-    await waitFor(() => expect(lastToast()?.message).toMatch(/Export the sheet as a PNG or JPEG under 20 MB\./));
+    await waitFor(() => expect(lastToast()?.message).toMatch(/Use the sheet's PDF, or a PNG or JPEG under 20 MB\./));
     expect(lastToast()?.tone).toBe("error");
     expect(a.uploadLevelImage).not.toHaveBeenCalled();
   });
@@ -477,5 +478,81 @@ describe("FloorplanTools", () => {
     useEditorStore.getState().setTool("align-plan");
     const { container } = render(<FloorplanTools api={api()} />);
     expect(container.textContent).not.toMatch(/dashed outlines|lowest floor|drag/i);
+  });
+});
+
+describe("a PDF plan", () => {
+  const pdf = (content = planSheet(), name = "L2.pdf") =>
+    new File([syntheticPdf([{ width: 400, height: 300, content }]).slice()], name, { type: "application/pdf" });
+
+  function pdfApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
+    return api({
+      uploadPlanSource: vi.fn(async (id: string, version: number, _pdf: Blob, filename: string, sheet: Record<string, unknown>) =>
+        ({ ...image, id, levelId: "oth-L1", filename: "L2.jpg", version: version + 1, source: { ...sheet, pdfId: "pdf_x", checksum: "b".repeat(64), filename } })),
+      ...overrides,
+    });
+  }
+
+  it("turns a dropped PDF into the floor's plan, scaled from the drawing's own grid", async () => {
+    const a = pdfApi();
+    render(<PlanDropZone api={a} />);
+    fireEvent.drop(screen.getByTestId("plan-drop-zone"), { dataTransfer: { files: [pdf()] } });
+    await waitFor(() => expect(a.uploadPlanSource).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(lastToast()?.message).toMatch(
+      /^Added L2\.pdf\. Scale from the drawing's grid: 0\.5000 m per point, 2 of 2 dimension runs agree\./));
+    expect(patches(a)[0]![2]).toMatchObject({ metresPerPixel: expect.closeTo(0.05, 10) });
+    expect(useEditorStore.getState().levelImages.map(i => i.source?.pdfId)).toEqual(["pdf_x"]);
+  });
+
+  it("says what it is doing while it works on the sheet", async () => {
+    let finish!: (value: LevelImage) => void;
+    const a = pdfApi({ uploadLevelImage: vi.fn(() => new Promise<LevelImage>(resolve => { finish = resolve; })) });
+    render(<PlanDropZone api={a} />);
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [pdf()] } });
+    expect(await screen.findByText("Uploading L2.pdf…")).toBeTruthy();
+    expect(screen.getByLabelText("Choose a file")).toBeDisabled();
+    finish({ ...image, id: "img_2" });
+    await waitFor(() => expect(screen.queryByText(/Uploading/)).toBeNull());
+  });
+
+  it("says a file called .pdf that isn't one is not a PDF", async () => {
+    render(<PlanDropZone api={pdfApi()} />);
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [new File(["%PDF"], "L1.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => expect(lastToast()?.message).toBe("Couldn't add L1.pdf: it isn't a PDF."));
+  });
+
+  it("refuses a PDF over 50 MB before reading it", async () => {
+    const big = Object.defineProperty(pdf(), "size", { value: 50 * 1024 * 1024 + 1 });
+    const a = pdfApi();
+    render(<PlanDropZone api={a} />);
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [big] } });
+    await waitFor(() => expect(lastToast()?.message).toBe("Couldn't add L2.pdf: a PDF must be under 50 MB."));
+    expect(a.uploadLevelImage).not.toHaveBeenCalled();
+  });
+
+  it("says where a plan's scale came from", () => {
+    const fromPdf: LevelImage = {
+      ...image, metresPerPixel: 0.07,
+      source: {
+        page: 1, pageCount: 1, pageSizePt: [792, 612], rotation: 90, clipPt: [0, 0, 1, 1], pointsPerPixel: 0.0933,
+        metresPerPoint: 0.7505, runsAgree: 2, runsFound: 3, pdfId: "pdf_1", checksum: "a".repeat(64), filename: "L1.pdf",
+      },
+    };
+    useEditorStore.getState().setLevelImages([fromPdf]);
+    render(<FloorplanTools api={api()} />);
+    expect(screen.getByText(/0\.0700 m per pixel, from the drawing's grid/)).toBeTruthy();
+  });
+
+  it("stops saying the scale came from the drawing's grid once you replace it by hand", () => {
+    const rescaled: LevelImage = {
+      ...image, metresPerPixel: 0.21,
+      source: {
+        page: 1, pageCount: 1, pageSizePt: [792, 612], rotation: 90, clipPt: [0, 0, 1, 1], pointsPerPixel: 0.0933,
+        metresPerPoint: 0.7505, runsAgree: 2, runsFound: 3, pdfId: "pdf_1", checksum: "a".repeat(64), filename: "L1.pdf",
+      },
+    };
+    useEditorStore.getState().setLevelImages([rescaled]);
+    render(<FloorplanTools api={api()} />);
+    expect(screen.getByText(/0\.2100 m per pixel/).textContent).not.toMatch(/drawing's grid/);
   });
 });

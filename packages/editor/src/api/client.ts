@@ -1,4 +1,5 @@
 import type { MapModel, ValidationReport } from "@oth/model";
+import type { PlanSheet, PlanSource } from "@oth/model";
 import type { LockEntry, PresenceEntry } from "../collab/types";
 
 export class ApiError extends Error {
@@ -86,6 +87,8 @@ export type LevelImage = {
    * test's plan need not invent one. `imageForLevel` picks the newest by it.
    */
   updatedAt?: string;
+  /** Where the plan was drawn from on its PDF; absent or null for a plan that came as an image. */
+  source?: PlanSource | null;
 };
 
 export type LevelImagePatch = {
@@ -402,6 +405,32 @@ export function createApi(options: ApiOptions = {}) {
     /** Tokens made in your name since you were last told. It runs at sign-in, so a 401 here is no session ending. */
     claimTokenNotices: async (): Promise<TokenNotice[]> =>
       (await request<{ notices: TokenNotice[] }>("/api/tokens/notices", { method: "POST" }, { skipUnauthorized: true })).notices,
+
+    // --- PDF plans and room drafts (plan 5B) ---
+
+    /** Keeps the PDF a plan was drawn from beside it, with where on the sheet the plan is. */
+    async uploadPlanSource(
+      imageId: string, expectedVersion: number, pdf: Blob, filename: string, sheet: PlanSheet,
+    ): Promise<LevelImage> {
+      const form = new FormData();
+      form.append("file", pdf, filename);
+      form.append("sheet", JSON.stringify(sheet));
+      form.append("expectedVersion", String(expectedVersion));
+      return (await request<{ image: LevelImage }>(`/api/level-images/${imageId}/source`, { method: "POST", body: form })).image;
+    },
+
+    /** The PDF behind a plan, as bytes: a download, never shown on this origin. */
+    async fetchPlanSource(imageId: string): Promise<Uint8Array> {
+      const path = `/api/level-images/${imageId}/source`;
+      const res = await doFetch(`${base}${path}`, { credentials: "same-origin" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        if (isGateRefusal(res.status, body)) options.onGateClosed?.();
+        else if (res.status === 401) options.onUnauthorized?.({ method: "GET", path });
+        throw new ApiError(res.status, body);
+      }
+      return new Uint8Array(await res.arrayBuffer());
+    },
   };
 }
 

@@ -12,6 +12,8 @@ export const DEFAULT_EDITOR_DIST = resolve(here, "../../editor/dist");
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  // Vite emits pdf.js's worker as .mjs, and a browser refuses a module worker without a JavaScript type.
+  ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",

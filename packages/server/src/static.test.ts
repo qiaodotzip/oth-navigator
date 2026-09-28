@@ -74,6 +74,14 @@ describe("serving the built editor", () => {
     expect(res.status).toBe(404);
     expect(await res.text()).not.toContain("oth-navigation");
   });
+
+  it("serves an .mjs module as JavaScript, which a module worker (pdf.js's) must be", async () => {
+    const dist = await distWithBuild();
+    await writeFile(join(dist, "assets", "pdf.worker.min-abc123.mjs"), "export {};");
+    const app = createApp({ db, editorDist: dist });
+    const res = await app.request("/assets/pdf.worker.min-abc123.mjs");
+    expect(res.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+  });
 });
 
 describe("when the editor has not been built", () => {

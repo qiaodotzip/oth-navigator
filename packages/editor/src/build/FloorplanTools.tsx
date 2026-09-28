@@ -1,6 +1,9 @@
 import { useState, type ChangeEvent, type ReactNode } from "react";
 import { create } from "zustand";
 import type { Api, LevelImage, LevelImagePatch } from "../api/client";
+import { levelBelow } from "../flow/floors";
+import { NotAPdfError, importPdfPlan } from "../pdf/importPlan";
+import { PDF_MAX_BYTES, PdfUnreadableError } from "../pdf/pdfjs";
 import { CalibrationError, calibrationFromMeasurement, worldToImagePoint } from "../plan/calibration";
 import { useEditorStore } from "../state/store";
 import { displayCalibration, imageForLevel } from "../state/underlay";
@@ -8,19 +11,25 @@ import { Button } from "../ui/Button";
 import { reportFailure } from "../ui/failure";
 import { Popover, PopoverClose } from "../ui/Popover";
 import { toast } from "../ui/toast";
+import { PdfPagePicker, askForPage } from "./PdfPagePicker";
 import { PAPER_SIZES, SHAPE_TOLERANCE, parseRatio, sheetScale, type PaperSize } from "./sheetScale";
 
-const ACCEPT = "image/png,image/jpeg";
+const ACCEPT = "application/pdf,.pdf,image/png,image/jpeg";
 
 /** The server's own limit (`IMAGE_MAX_BYTES` in `server/src/images/inspect.ts`). */
 const MAX_PLAN_BYTES = 20 * 1024 * 1024;
 
+function isPdf(file: File): boolean {
+  return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+}
+
 /**
- * Whether a file could be a plan, checked before 20 MB goes up the wire only
- * to be refused. A file with no type (some drops have none) is judged by its
- * name; the server reads the bytes either way.
+ * Whether a file could be a plan, checked before it goes up the wire only to
+ * be refused. A file with no type (some drops have none) is judged by its
+ * name; the bytes decide either way.
  */
 function couldBePlan(file: File): boolean {
+  if (isPdf(file)) return file.size <= PDF_MAX_BYTES;
   const pngOrJpeg = file.type
     ? /^image\/(png|jpeg)$/.test(file.type)
     : /\.(png|jpe?g)$/i.test(file.name);
@@ -49,12 +58,37 @@ function useAddingOn(levelId: string | null): string | null {
   return useAddingPlan(s => (levelId ? s.byLevel[levelId] ?? null : null));
 }
 
+/** Per floor, what a PDF on its way to being the plan is going through: "Drawing the plan…". */
+const useAddingStage = create<{ byLevel: Readonly<Record<string, string>> }>(() => ({ byLevel: {} }));
+
+function setStage(levelId: string, stage: string | null): void {
+  useAddingStage.setState(s => {
+    const byLevel = { ...s.byLevel };
+    if (stage == null) delete byLevel[levelId];
+    else byLevel[levelId] = stage;
+    return { byLevel };
+  });
+}
+
+/** What the floor's plan upload says it is doing: the PDF's stage, else "Adding L2.jpg…". */
+function useAddingWords(levelId: string | null): string | null {
+  const adding = useAddingOn(levelId);
+  const stage = useAddingStage(s => (levelId ? s.byLevel[levelId] ?? null : null));
+  return adding ? stage ?? `Adding ${adding}…` : null;
+}
+
 /** Adds a floor's plan. The server retires the floor's old one as it stores this. */
 export async function uploadPlan(api: Api, levelId: string, file: File): Promise<void> {
   if (!couldBePlan(file)) {
-    toast({ tone: "error", message: `Couldn't add ${file.name}. Export the sheet as a PNG or JPEG under 20 MB.` });
+    toast({
+      tone: "error",
+      message: isPdf(file)
+        ? `Couldn't add ${file.name}: a PDF must be under 50 MB.`
+        : `Couldn't add ${file.name}. Use the sheet's PDF, or a PNG or JPEG under 20 MB.`,
+    });
     return;
   }
+  if (isPdf(file)) return uploadPdfPlan(api, levelId, file);
   setAdding(levelId, file.name);
   let created: LevelImage;
   try {
@@ -68,6 +102,53 @@ export async function uploadPlan(api: Api, levelId: string, file: File): Promise
   s.setLevelImages([...s.levelImages.filter(i => i.levelId !== levelId), created]);
   setAdding(levelId, null);
   toast({ tone: "success", message: `Added ${file.name}. Now set its scale.` });
+}
+
+/** The floor below's plan, with its code, which a new sheet may be placed over. */
+function planBelow(levelId: string): { code: string; image: LevelImage } | null {
+  const s = useEditorStore.getState();
+  const below = levelBelow(s.model, levelId);
+  const image = below ? imageForLevel(s.levelImages, below.id) : null;
+  return below && image ? { code: below.code, image } : null;
+}
+
+/**
+ * A PDF becomes the plan in this tab (spec §5.1: the server never parses it).
+ * What goes wrong locally is said as the PDF's fault; what goes wrong on the
+ * wire is said as the network's, with Retry.
+ */
+async function uploadPdfPlan(api: Api, levelId: string, file: File): Promise<void> {
+  const done = () => {
+    setAdding(levelId, null);
+    setStage(levelId, null);
+  };
+  setAdding(levelId, file.name);
+  setStage(levelId, `Reading ${file.name}…`);
+  let outcome: Awaited<ReturnType<typeof importPdfPlan>>;
+  try {
+    outcome = await importPdfPlan({
+      api, levelId, file,
+      current: imageForLevel(useEditorStore.getState().levelImages, levelId),
+      below: planBelow(levelId),
+      choosePage: askForPage,
+      stage: stage => setStage(levelId, stage),
+    });
+  } catch (err) {
+    done();
+    if (err instanceof NotAPdfError) {
+      toast({ tone: "error", message: `Couldn't add ${file.name}: it isn't a PDF.` });
+    } else if (err instanceof PdfUnreadableError) {
+      toast({ tone: "error", message: `Couldn't add ${file.name}: ${err.message}. Export the sheet as a PNG or JPEG instead.` });
+    } else {
+      reportFailure(err, { doing: `add ${file.name}`, retry: () => uploadPlan(api, levelId, file) });
+    }
+    return;
+  }
+  done();
+  if (!outcome) return;
+  const s = useEditorStore.getState();
+  s.setLevelImages([...s.levelImages.filter(i => i.levelId !== levelId), outcome.image]);
+  toast({ tone: "success", message: `Added ${file.name}. ${outcome.report}` });
 }
 
 /** Per plan, the last save queued for it; forgotten once the queue is empty. */
@@ -186,6 +267,7 @@ function PlanPicker({ label, busy, onFile, className, hover }: {
 export function PlanDropZone({ api }: { api: Api }) {
   const levelId = useEditorStore(s => s.activeLevelId);
   const adding = useAddingOn(levelId);
+  const words = useAddingWords(levelId);
   const [over, setOver] = useState(false);
   const take = (file: File | undefined) => {
     if (file && levelId && !adding) void uploadPlan(api, levelId, file);
@@ -212,9 +294,11 @@ export function PlanDropZone({ api }: { api: Api }) {
       }}
     >
       <p aria-live="polite" className="text-sm font-medium">
-        {adding ? `Adding ${adding}…` : "Drop this floor's plan here"}
+        {words ?? "Drop this floor's plan here"}
       </p>
-      <p className="mt-1 text-xs text-stone-500">A PNG or JPEG of the architect's sheet, up to 20 MB.</p>
+      <p className="mt-1 text-xs text-stone-500">
+        The architect's PDF, or a PNG or JPEG of the sheet. PDFs up to 50 MB, images up to 20 MB.
+      </p>
       <PlanPicker
         label="Choose a file"
         busy={adding != null}
@@ -236,12 +320,18 @@ export function FloorplanTools({ api }: { api: Api }) {
   const images = useEditorStore(s => s.levelImages);
   const tool = useEditorStore(s => s.tool);
   const adding = useAddingOn(levelId);
+  const words = useAddingWords(levelId);
   const image = imageForLevel(images, levelId);
   // A replacement waiting for you to say yes: see `replaceWith`.
   const [replacing, setReplacing] = useState<File | null>(null);
 
   if (!image || !levelId) {
-    return <p className="text-xs text-stone-600">Start with the plan: drop it in the box on the canvas.</p>;
+    return (
+      <>
+        <PdfPagePicker />
+        <p className="text-xs text-stone-600">Start with the plan: drop it in the box on the canvas.</p>
+      </>
+    );
   }
 
   const commitOpacity = (value: string) => {
@@ -259,11 +349,12 @@ export function FloorplanTools({ api }: { api: Api }) {
 
   return (
     <>
+      <PdfPagePicker />
       <p className="text-xs text-stone-700">
         <span className="font-medium">{image.filename}</span> ·{" "}
         {image.metresPerPixel == null
           ? <span className="text-yours">not scaled yet</span>
-          : `${image.metresPerPixel.toFixed(4)} m per pixel`}
+          : `${image.metresPerPixel.toFixed(4)} m per pixel${scaleFromGrid(image) ? ", from the drawing's grid" : ""}`}
       </p>
 
       {tool === "calibrate" && <MeasureScale api={api} image={image} />}
@@ -278,7 +369,7 @@ export function FloorplanTools({ api }: { api: Api }) {
           hover="hover:bg-stone-100"
         />
         <span aria-live="polite" className="text-xs text-stone-600">
-          {adding ? `Adding ${adding}…` : ""}
+          {words ?? ""}
         </span>
       </div>
 
@@ -324,6 +415,19 @@ export function FloorplanTools({ api }: { api: Api }) {
       </label>
     </>
   );
+}
+
+/**
+ * Whether the plan still has the scale its drawing's grid gave it. Sheet scale
+ * and Measure scale can replace that scale, and the PDF stays beside the plan
+ * when they do: from then on the scale is the one you set, not the grid's.
+ * The grid's own runs agree to 0.5%, so that is as close as it can be read.
+ */
+function scaleFromGrid(image: LevelImage): boolean {
+  const src = image.source;
+  if (!src?.metresPerPoint || image.metresPerPixel == null) return false;
+  const grid = src.metresPerPoint * src.pointsPerPixel;
+  return Math.abs(image.metresPerPixel - grid) / grid < 0.005;
 }
 
 /** A warning says so in words and a mark, never by its colour alone. */
