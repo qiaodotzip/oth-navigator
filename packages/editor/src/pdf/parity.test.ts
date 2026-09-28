@@ -57,9 +57,15 @@ describe.skipIf(!sheetPath)("parity with scripts/extract-storey-plan.py on the r
 
       // The script's own placement: its --origin (628.03, 489.39) in unrotated points is
       // (792 − 628.03, 489.39) on the sheet as shown, and its --window runs x −20…280 m, y 300…10 m.
+      // PyMuPDF rounds a clip out to whole pixels (MuPDF's fz_round_rect), so the script's raster
+      // began on the pixel grid, up to a pixel above and left of the window its arithmetic assumed:
+      // on L1, 0.23 px left and 0.86 px up. Its rooms sit that far off, so the port's window is
+      // snapped the same way. The text moves with it here, where the script's did not: under 0.05 m.
       const X0 = reading.width - 628.03;
       const Y0 = 489.39;
-      const sheet = { clipPt: [X0 - 20 / S, Y0 - 300 / S, X0 + 280 / S, Y0 - 10 / S] as const, pointsPerPixel: 0.05 / S };
+      const pxPerPt = S / 0.05;
+      const snap = (v: number) => Math.floor(v * pxPerPt + 0.001) / pxPerPt;
+      const sheet = { clipPt: [snap(X0 - 20 / S), snap(Y0 - 300 / S), X0 + 280 / S, Y0 - 10 / S] as const, pointsPerPixel: 0.05 / S };
       const result = findRooms(await prepareFind(doc, page, sheet, { metresPerPixel: 0.05, offsetX: -20, offsetY: 300 }, 0.05));
 
       // From the worktree root, where the command above runs: under jsdom, import.meta.url is not a file URL.
@@ -67,11 +73,26 @@ describe.skipIf(!sheetPath)("parity with scripts/extract-storey-plan.py on the r
       const reference = JSON.parse(await readFile(file, "utf8")) as { spaces: (Shape & { nameEn: string })[] };
       // Part B leaves escalators out and keeps voids, both on purpose: compare the rest.
       const theirs = reference.spaces.filter(s => !/escalator/i.test(s.nameEn));
-      const ours = result.drafts.filter(d => d.footprint && d.kind !== "void").map(d => ({ footprint: d.footprint!, holes: d.holes ?? [] }));
-      const best = theirs.map(t => Math.max(0, ...ours.filter(o => overlaps(t.footprint, o.footprint)).map(o => iou(t, o))));
-      best.sort((a, b) => a - b);
+      const ours = result.drafts.filter(d => d.footprint && d.kind !== "void")
+        .map(d => ({ nameEn: d.nameEn, footprint: d.footprint!, holes: d.holes ?? [] }));
+      // Each of the script's spaces against the draft that overlaps it most, and whether they share a name.
+      const matches = theirs.map(t => {
+        let score = 0;
+        let named = false;
+        for (const o of ours) {
+          if (!overlaps(t.footprint, o.footprint)) continue;
+          const v = iou(t, o);
+          if (v > score) [score, named] = [v, o.nameEn === t.nameEn];
+        }
+        return { score, named };
+      });
+      const best = matches.map(m => m.score).sort((a, b) => a - b);
       const median = best[Math.floor(best.length / 2)]!;
-      console.log(`parity: ${ours.length} found, ${theirs.length} in l1-spaces.json, median IoU ${median.toFixed(3)}, ${S} m per point`);
+      const agree = matches.filter(m => m.named).length;
+      console.log(
+        `parity: ${ours.length} found, ${theirs.length} in l1-spaces.json, median IoU ${median.toFixed(3)}, ` +
+          `names agree ${agree}/${theirs.length} (${Math.round((agree / theirs.length) * 100)}%), ${S} m per point`,
+      );
       expect(Math.abs(ours.length - theirs.length) / theirs.length).toBeLessThanOrEqual(0.05);
       expect(median).toBeGreaterThanOrEqual(0.95);
     } finally {

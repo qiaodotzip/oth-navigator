@@ -12,6 +12,8 @@ export const MIN_AREA_M2 = 3;
 export const MAX_AREA_M2 = 2500;
 export const SIMPLIFY_M = 0.4;
 export const MIN_HOLE_M2 = 6;
+/** The longest name a draft takes (`RoomDraftSchema`): one label longer would fail the whole save. */
+export const MAX_NAME_CHARS = 200;
 
 /** A raster of the plan as it is placed now, and its text in model metres. */
 export type FindInput = {
@@ -43,6 +45,7 @@ export type FindResult = { drafts: RoomCandidate[]; skippedLabels: SkippedLabel[
 type Row = { labels: string[]; areaM2: number; footprint: Pt[]; holes: Pt[][]; labelPoint: Pt };
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
+const capName = (name: string) => name.slice(0, MAX_NAME_CHARS).trimEnd();
 const clampTo = (v: number, hi: number) => Math.min(Math.max(v, 0), hi);
 
 function boxAreaPx(ring: readonly Pt[]): number {
@@ -164,14 +167,14 @@ export function findRooms(input: FindInput): FindResult {
     const name = bestName(row.labels);
     if (!name || isJunk(name)) continue;
     drafts.push({
-      nameEn: name, kind: kindOf(name), footprint: row.footprint, holes: row.holes,
+      nameEn: capName(name), kind: kindOf(name), footprint: row.footprint, holes: row.holes,
       labelPoint: row.labelPoint, areaM2: Math.round(row.areaM2 * 10) / 10,
     });
   }
   drafts.sort((a, b) => b.areaM2 - a.areaM2);
   for (const o of open) {
     const name = tidy(o.text);
-    if (name) drafts.push({ nameEn: name, kind: kindOf(name), holes: [], labelPoint: o.at, areaM2: 0 });
+    if (name) drafts.push({ nameEn: capName(name), kind: kindOf(name), holes: [], labelPoint: o.at, areaM2: 0 });
   }
   return { drafts, skippedLabels };
 }

@@ -126,6 +126,20 @@ describe("findRooms, on a raster", () => {
     expect(room!.holes).toHaveLength(1);
   });
 
+  it("cuts a name to the 200 characters a draft takes, so one long label can't fail the whole save", () => {
+    const long = Array.from({ length: 60 }, () => "SHOP").join(" ");
+    const r = raster(200, 160);
+    r.box(50, 40, 150, 120);
+    const [room] = findRooms(r.input([r.label(long, 100, 80)])).drafts;
+    expect(room!.nameEn).toHaveLength(199);
+    expect(room!.nameEn.endsWith("Shop")).toBe(true);
+
+    const open = raster(600, 600);
+    const [plaza] = findRooms(open.input([open.label(Array.from({ length: 60 }, () => "PLAZA").join(" "), 400, 400)])).drafts;
+    expect(plaza!.nameEn.length).toBeLessThanOrEqual(200);
+    expect(plaza!.nameEn.startsWith("Plaza Plaza")).toBe(true);
+  });
+
   it("gives the extent of the rooms it found, which Part D's finders stay inside", () => {
     const r = raster(200, 160);
     r.box(50, 40, 150, 120);
