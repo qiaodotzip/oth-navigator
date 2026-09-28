@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type ReactNode } from "react";
+import { create } from "zustand";
 import type { Api, LevelImage, LevelImagePatch } from "../api/client";
-import { levelBelow } from "../flow/floors";
 import { CalibrationError, calibrationFromMeasurement, worldToImagePoint } from "../plan/calibration";
 import { useEditorStore } from "../state/store";
 import { displayCalibration, imageForLevel } from "../state/underlay";
@@ -12,37 +12,94 @@ import { PAPER_SIZES, SHAPE_TOLERANCE, parseRatio, sheetScale, type PaperSize } 
 
 const ACCEPT = "image/png,image/jpeg";
 
+/** The server's own limit (`IMAGE_MAX_BYTES` in `server/src/images/inspect.ts`). */
+const MAX_PLAN_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Whether a file could be a plan, checked before 20 MB goes up the wire only
+ * to be refused. A file with no type (some drops have none) is judged by its
+ * name; the server reads the bytes either way.
+ */
+function couldBePlan(file: File): boolean {
+  const pngOrJpeg = file.type
+    ? /^image\/(png|jpeg)$/.test(file.type)
+    : /\.(png|jpe?g)$/i.test(file.name);
+  return pngOrJpeg && file.size <= MAX_PLAN_BYTES;
+}
+
+/**
+ * The plan on its way up, by name. Shared rather than kept by one picker, so
+ * a Retry from the toast shows it too, and a drop cannot start a second
+ * upload beside it.
+ */
+const useAddingPlan = create<{ name: string | null }>(() => ({ name: null }));
+
 /** Adds a floor's plan. The server retires the floor's old one as it stores this. */
 export async function uploadPlan(api: Api, levelId: string, file: File): Promise<void> {
+  if (!couldBePlan(file)) {
+    toast({ tone: "error", message: `Couldn't add ${file.name}. Export the sheet as a PNG or JPEG under 20 MB.` });
+    return;
+  }
+  useAddingPlan.setState({ name: file.name });
   let created: LevelImage;
   try {
     created = await api.uploadLevelImage(levelId, file);
   } catch (err) {
+    useAddingPlan.setState({ name: null });
     reportFailure(err, { doing: `add ${file.name}`, retry: () => uploadPlan(api, levelId, file) });
     return;
   }
   const s = useEditorStore.getState();
   s.setLevelImages([...s.levelImages.filter(i => i.levelId !== levelId), created]);
+  useAddingPlan.setState({ name: null });
   toast({ tone: "success", message: `Added ${file.name}. Now set its scale.` });
 }
 
 /**
  * Changes a plan's scale, place or opacity. The answer is the whole image, so
  * there is nothing else to reload: none of these changes any validation.
+ * True once the server has it, so a caller can wait for that before moving on.
  */
 export async function patchPlan(
   api: Api, image: LevelImage, patch: LevelImagePatch, words: { doing: string; done?: string },
-): Promise<void> {
+): Promise<boolean> {
   let updated: LevelImage;
   try {
     updated = await api.patchLevelImage(image.id, image.version, patch);
   } catch (err) {
-    reportFailure(err, { doing: words.doing, retry: () => patchPlan(api, image, patch, words) });
-    return;
+    reportFailure(err, { doing: words.doing, retry: () => patchPlan(api, image, patch, words).then(() => {}) });
+    return false;
   }
   const s = useEditorStore.getState();
   s.setLevelImages(s.levelImages.map(i => (i.id === updated.id ? updated : i)));
   if (words.done) toast({ tone: "success", message: words.done });
+  return true;
+}
+
+/** Per plan, the opacity last asked for while a save of it is on its way. */
+const opacityWanted = new Map<string, number>();
+
+/**
+ * Saves a plan's opacity one request at a time. The slider can be let go again
+ * before the last save has answered, and a second save sent with the same
+ * version would be refused as a teammate's change. So the newest value waits,
+ * and goes once the save in flight answers, with the version that answer
+ * brought; values let go of in between are never sent.
+ */
+async function saveOpacity(api: Api, imageId: string, opacity: number): Promise<void> {
+  const inFlight = opacityWanted.has(imageId);
+  opacityWanted.set(imageId, opacity);
+  if (inFlight) return;
+  try {
+    for (;;) {
+      const image = useEditorStore.getState().levelImages.find(i => i.id === imageId);
+      const wanted = opacityWanted.get(imageId)!;
+      if (!image || image.opacity === wanted) return;
+      if (!(await patchPlan(api, image, { opacity: wanted }, { doing: "change the plan's opacity" }))) return;
+    }
+  } finally {
+    opacityWanted.delete(imageId);
+  }
 }
 
 /**
@@ -56,23 +113,55 @@ function chosenFile(e: ChangeEvent<HTMLInputElement>): File | undefined {
   return file;
 }
 
-/** Where a floor's plan goes when it has none: drop it, or choose it. */
+/** A file picker drawn as a button. Its label is its name, so what you see is what a voice command says. */
+function PlanPicker({ label, busy, onFile, className, hover }: {
+  label: string; busy: boolean; onFile: (file: File) => void; className: string; hover: string;
+}) {
+  return (
+    <label
+      className={`inline-flex items-center rounded font-medium focus-within:ring-2 focus-within:ring-accent-ring ${className} ${
+        busy ? "cursor-not-allowed opacity-40" : `cursor-pointer ${hover}`
+      }`}
+    >
+      {label}
+      <input
+        type="file"
+        accept={ACCEPT}
+        disabled={busy}
+        className="sr-only"
+        onChange={e => {
+          const file = chosenFile(e);
+          if (file) onFile(file);
+        }}
+      />
+    </label>
+  );
+}
+
+/**
+ * Where a floor's plan goes when it has none: drop it in the box, or choose it.
+ * Only the box takes a drop, so the floor's canvas around it still pans and zooms.
+ */
 export function PlanDropZone({ api }: { api: Api }) {
   const levelId = useEditorStore(s => s.activeLevelId);
+  const adding = useAddingPlan(s => s.name);
   const [over, setOver] = useState(false);
   const take = (file: File | undefined) => {
-    if (file && levelId) void uploadPlan(api, levelId, file);
+    if (file && levelId && !adding) void uploadPlan(api, levelId, file);
   };
 
   return (
     <div
       data-testid="plan-drop-zone"
+      aria-busy={adding != null}
       className={`absolute left-1/2 top-1/2 z-10 flex w-[28rem] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-lg border-2 border-dashed p-8 text-center ${
         over ? "border-accent bg-accent-soft" : "border-stone-300 bg-white/90"
       }`}
+      // Always taken, even while busy: a drop nobody takes opens the file in
+      // the browser, in place of the editor.
       onDragOver={e => {
         e.preventDefault();
-        setOver(true);
+        if (!adding) setOver(true);
       }}
       onDragLeave={() => setOver(false)}
       onDrop={e => {
@@ -81,39 +170,40 @@ export function PlanDropZone({ api }: { api: Api }) {
         take(e.dataTransfer.files[0]);
       }}
     >
-      <p className="text-sm font-medium">Drop this floor's plan here</p>
-      <p className="mt-1 text-xs text-stone-500">A PNG or JPEG of the architect's sheet, as large as you have it.</p>
-      <label className="mt-4 inline-flex h-9 cursor-pointer items-center rounded bg-accent px-3.5 text-sm font-medium text-white hover:bg-accent-hover focus-within:ring-2 focus-within:ring-accent-ring">
-        Choose a file
-        <input
-          type="file"
-          accept={ACCEPT}
-          aria-label="Choose a floorplan file"
-          className="sr-only"
-          onChange={e => take(chosenFile(e))}
-        />
-      </label>
+      <p aria-live="polite" className="text-sm font-medium">
+        {adding ? `Adding ${adding}…` : "Drop this floor's plan here"}
+      </p>
+      <p className="mt-1 text-xs text-stone-500">A PNG or JPEG of the architect's sheet, up to 20 MB.</p>
+      <PlanPicker
+        label="Choose a file"
+        busy={adding != null}
+        onFile={take}
+        className="mt-4 h-9 bg-accent px-3.5 text-sm text-white"
+        hover="hover:bg-accent-hover"
+      />
     </div>
   );
 }
 
-/** The Floorplan step's tools beyond Measure and Align: the scale, Sheet scale, replacing, opacity. */
+/**
+ * The Floorplan step's tools beyond Measure and Align: the scale, Sheet scale,
+ * replacing, opacity. How to align is the guide's to say, above these, so one
+ * voice says what to do next.
+ */
 export function FloorplanTools({ api }: { api: Api }) {
-  const model = useEditorStore(s => s.model);
   const levelId = useEditorStore(s => s.activeLevelId);
   const images = useEditorStore(s => s.levelImages);
   const tool = useEditorStore(s => s.tool);
+  const adding = useAddingPlan(s => s.name);
   const image = imageForLevel(images, levelId);
 
   if (!image || !levelId) {
-    return <p className="text-xs text-stone-600">Start with the plan: drop it on the canvas.</p>;
+    return <p className="text-xs text-stone-600">Start with the plan: drop it in the box on the canvas.</p>;
   }
-  const below = levelBelow(model, levelId);
 
   const commitOpacity = (value: string) => {
     const opacity = Number(value);
-    if (!Number.isFinite(opacity) || opacity === image.opacity) return;
-    void patchPlan(api, image, { opacity }, { doing: "change the plan's opacity" });
+    if (Number.isFinite(opacity)) void saveOpacity(api, image.id, opacity);
   };
 
   return (
@@ -127,29 +217,18 @@ export function FloorplanTools({ api }: { api: Api }) {
 
       {tool === "calibrate" && <MeasureScale api={api} image={image} />}
 
-      {tool === "align-plan" && (
-        <p className="text-xs text-stone-600">
-          {below
-            ? `The dashed outlines are ${below.code}. Drag until this plan's walls sit on them.`
-            : "This is the lowest floor, so its plan is where every other floor lines up. Move it only if the whole building should move."}
-        </p>
-      )}
-
       <div className="flex flex-wrap items-center gap-2">
         <SheetScale api={api} image={image} />
-        <label className="inline-flex h-7 cursor-pointer items-center rounded border border-stone-300 bg-white px-2.5 text-xs font-medium hover:bg-stone-100 focus-within:ring-2 focus-within:ring-accent-ring">
-          Replace plan…
-          <input
-            type="file"
-            accept={ACCEPT}
-            aria-label="Replace the floorplan"
-            className="sr-only"
-            onChange={e => {
-              const file = chosenFile(e);
-              if (file) void uploadPlan(api, levelId, file);
-            }}
-          />
-        </label>
+        <PlanPicker
+          label="Replace plan…"
+          busy={adding != null}
+          onFile={file => void uploadPlan(api, levelId, file)}
+          className="h-7 border border-stone-300 bg-white px-2.5 text-xs"
+          hover="hover:bg-stone-100"
+        />
+        <span aria-live="polite" className="text-xs text-stone-600">
+          {adding ? `Adding ${adding}…` : ""}
+        </span>
       </div>
 
       <label className="block text-xs text-stone-700">
@@ -163,62 +242,14 @@ export function FloorplanTools({ api }: { api: Api }) {
           step={0.05}
           defaultValue={image.opacity}
           className="mt-1 w-full accent-accent"
+          // A mouse release is a pointer release too; the second of the pair
+          // finds the first already saving the same value and adds nothing.
+          onPointerUp={e => commitOpacity(e.currentTarget.value)}
           onMouseUp={e => commitOpacity(e.currentTarget.value)}
           onKeyUp={e => commitOpacity(e.currentTarget.value)}
         />
       </label>
     </>
-  );
-}
-
-/** The distance field for Measure scale, shown while the tool is in use. */
-function MeasureScale({ api, image }: { api: Api; image: LevelImage }) {
-  const draft = useEditorStore(s => s.calibrationDraft);
-  const setTool = useEditorStore(s => s.setTool);
-  const [metres, setMetres] = useState("");
-  const ready = (draft?.length ?? 0) >= 2;
-
-  function apply() {
-    if (!draft || draft.length < 2) return;
-    // The clicks are world points on the plan as drawn; the scale is about the
-    // plan's own pixels, so convert them back through how it is drawn now.
-    const shown = displayCalibration(image)!;
-    try {
-      const { metresPerPixel } = calibrationFromMeasurement(
-        worldToImagePoint(shown, draft[0]!),
-        worldToImagePoint(shown, draft[draft.length - 1]!),
-        Number.parseFloat(metres),
-      );
-      void patchPlan(api, image, { metresPerPixel }, {
-        doing: "set the scale",
-        done: `Scale set to ${metresPerPixel.toFixed(4)} m per pixel.`,
-      });
-      setTool("select");
-    } catch (err) {
-      if (!(err instanceof CalibrationError)) throw err;
-      toast({ tone: "error", message: `Couldn't set the scale: ${err.message}.` });
-    }
-  }
-
-  return (
-    <div className="space-y-2 rounded bg-stone-100 p-2">
-      <label className="block text-xs text-stone-700">
-        Real distance (metres)
-        <input
-          aria-label="Real distance in metres"
-          inputMode="decimal"
-          value={metres}
-          onChange={e => setMetres(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === "Enter") apply();
-          }}
-          className="mt-1 w-full rounded border border-stone-300 px-2 py-1 text-sm"
-        />
-      </label>
-      <Button size="sm" variant="primary" disabled={!ready} onClick={apply}>
-        Apply scale
-      </Button>
-    </div>
   );
 }
 
@@ -231,16 +262,92 @@ function Warning({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Said wherever a scale can be replaced. A plan can arrive scaled — L1's came
+ * from its own drawing at 0.07 m per pixel — and everything traced on it was
+ * traced at that scale.
+ */
+function AlreadyScaled({ metresPerPixel }: { metresPerPixel: number }) {
+  return (
+    <Warning>
+      {`This plan is already scaled at ${metresPerPixel.toFixed(4)} m per pixel. Replacing it resizes the plan under anything already traced on it.`}
+    </Warning>
+  );
+}
+
+/** "(it was 0.0700)", for the toast that says a scale was replaced; nothing for a first scale. */
+function wasScale(metresPerPixel: number | null): string {
+  return metresPerPixel == null ? "" : ` (it was ${metresPerPixel.toFixed(4)})`;
+}
+
+/** The distance field for Measure scale, shown while the tool is in use. */
+function MeasureScale({ api, image }: { api: Api; image: LevelImage }) {
+  const draft = useEditorStore(s => s.calibrationDraft);
+  const setTool = useEditorStore(s => s.setTool);
+  const [metres, setMetres] = useState("");
+  const [saving, setSaving] = useState(false);
+  const ready = (draft?.length ?? 0) >= 2 && !saving;
+  const current = image.metresPerPixel;
+
+  async function apply() {
+    if (!draft || draft.length < 2 || saving) return;
+    // The clicks are world points on the plan as drawn; the scale is about the
+    // plan's own pixels, so convert them back through how it is drawn now.
+    const shown = displayCalibration(image)!;
+    let metresPerPixel: number;
+    try {
+      ({ metresPerPixel } = calibrationFromMeasurement(
+        worldToImagePoint(shown, draft[0]!),
+        worldToImagePoint(shown, draft[draft.length - 1]!),
+        Number.parseFloat(metres),
+      ));
+    } catch (err) {
+      if (!(err instanceof CalibrationError)) throw err;
+      toast({ tone: "error", message: `Couldn't set the scale: ${err.message}.` });
+      return;
+    }
+    setSaving(true);
+    const saved = await patchPlan(api, image, { metresPerPixel }, {
+      doing: "set the scale",
+      done: `Scale set to ${metresPerPixel.toFixed(4)} m per pixel${wasScale(current)}.`,
+    });
+    setSaving(false);
+    // Put down only once it is saved: a failed save keeps the two points to
+    // try again from. And only if it is still in hand — another tool picked
+    // up meanwhile is not taken away.
+    if (saved && useEditorStore.getState().tool === "calibrate") setTool("select");
+  }
+
+  return (
+    <div className="space-y-2 rounded bg-stone-100 p-2">
+      <label className="block text-xs text-stone-700">
+        Real distance (metres)
+        <input
+          inputMode="decimal"
+          value={metres}
+          onChange={e => setMetres(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter") void apply();
+          }}
+          className="mt-1 w-full rounded border border-stone-300 px-2 py-1 text-sm"
+        />
+      </label>
+      {current != null && <AlreadyScaled metresPerPixel={current} />}
+      <Button size="sm" variant="primary" disabled={!ready} onClick={() => void apply()}>
+        {current == null ? "Apply scale" : "Replace scale"}
+      </Button>
+    </div>
+  );
+}
+
 /** Sheet scale: the paper size and printed ratio from the title block, never a drawn scale bar. */
 function SheetScale({ api, image }: { api: Api; image: LevelImage }) {
   const [paper, setPaper] = useState<PaperSize>("A3");
   const [ratioText, setRatioText] = useState("1:1500");
   const ratio = parseRatio(ratioText);
   const result = ratio ? sheetScale(paper, ratio, image.widthPx, image.heightPx) : null;
-  // A plan can arrive scaled — L1's came from its own drawing at 0.07 m per
-  // pixel, and that raster is not an A3 sheet, so A3 at 1:1500 would be wrong
-  // for it. A scale already set is shown, and replaced only by a button that
-  // says so: everything traced on the plan was traced at that scale.
+  // L1's plan is not an A3 sheet, so A3 at 1:1500 would be wrong for it: a
+  // scale already set is shown, and replaced only by a button that says so.
   const current = image.metresPerPixel;
   const same = result != null && current != null && Math.abs(result.metresPerPixel - current) <= current * 1e-6;
 
@@ -281,13 +388,9 @@ function SheetScale({ api, image }: { api: Api; image: LevelImage }) {
             {`This image is not the shape of an ${paper} sheet, so it may be cropped or a reduction. Measure a known distance instead.`}
           </Warning>
         )}
-        {current != null && (same ? (
-          <p className="text-xs text-stone-700">This plan already has this scale.</p>
-        ) : (
-          <Warning>
-            {`This plan is already scaled at ${current.toFixed(4)} m per pixel. Replacing it resizes the plan under anything already traced on it.`}
-          </Warning>
-        ))}
+        {current != null && (same
+          ? <p className="text-xs text-stone-700">This plan already has this scale.</p>
+          : <AlreadyScaled metresPerPixel={current} />)}
         <PopoverClose asChild>
           <Button
             size="sm"
@@ -295,10 +398,9 @@ function SheetScale({ api, image }: { api: Api; image: LevelImage }) {
             disabled={!result || same}
             onClick={() => {
               if (!result || !ratio) return;
-              const was = current == null ? "" : ` (it was ${current.toFixed(4)})`;
               void patchPlan(api, image, { metresPerPixel: result.metresPerPixel }, {
                 doing: "set the scale",
-                done: `Scale set to ${result.metresPerPixel.toFixed(4)} m per pixel, from ${paper} at 1:${ratio}${was}.`,
+                done: `Scale set to ${result.metresPerPixel.toFixed(4)} m per pixel, from ${paper} at 1:${ratio}${wasScale(current)}.`,
               });
             }}
           >

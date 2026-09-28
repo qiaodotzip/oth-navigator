@@ -1,7 +1,7 @@
 import { parseModel } from "@oth/model";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import { ApiError, type Api, type LevelImage } from "../api/client";
+import { ApiError, ConflictError, type Api, type LevelImage } from "../api/client";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
@@ -51,30 +51,56 @@ describe("PlanDropZone", () => {
   it("uploads a chosen file too", async () => {
     const a = api();
     render(<PlanDropZone api={a} />);
-    fireEvent.change(screen.getByLabelText("Choose a floorplan file"), { target: { files: [file("L1.png")] } });
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [file("L1.png")] } });
     await waitFor(() => expect(a.uploadLevelImage).toHaveBeenCalledTimes(1));
   });
 
   it("gives a refused upload in the server's own words", async () => {
     const a = api({ uploadLevelImage: vi.fn(async () => { throw new ApiError(422, { error: "not a PNG or JPEG file" }); }) });
     render(<PlanDropZone api={a} />);
-    fireEvent.change(screen.getByLabelText("Choose a floorplan file"), { target: { files: [file("notes.txt")] } });
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [file("notes.txt")] } });
     await waitFor(() => expect(lastToast()?.message).toMatch(/not a PNG or JPEG/));
   });
 
   it("offers Retry when the upload never arrived, and Retry sends it again", async () => {
     const uploadLevelImage = vi.fn().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce(image);
     render(<PlanDropZone api={api({ uploadLevelImage })} />);
-    fireEvent.change(screen.getByLabelText("Choose a floorplan file"), { target: { files: [file("L1.jpg")] } });
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [file("L1.jpg")] } });
     await waitFor(() => expect(lastToast()?.action?.label).toBe("Retry"));
     await lastToast()!.action!.run();
     expect(uploadLevelImage).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    ["not a PNG or JPEG", new File(["%PDF"], "L1.pdf", { type: "application/pdf" })],
+    ["over 20 MB", Object.defineProperty(file("L1.jpg"), "size", { value: 20 * 1024 * 1024 + 1 })],
+  ])("refuses a file that is %s before sending it, and says what to do instead", async (_why, refused) => {
+    const a = api();
+    render(<PlanDropZone api={a} />);
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [refused] } });
+    await waitFor(() => expect(lastToast()?.message).toMatch(/Export the sheet as a PNG or JPEG under 20 MB\./));
+    expect(lastToast()?.tone).toBe("error");
+    expect(a.uploadLevelImage).not.toHaveBeenCalled();
+  });
+
+  it("says it is adding the plan, and takes no other until it has", async () => {
+    let finish!: (image: LevelImage) => void;
+    const uploadLevelImage = vi.fn(() => new Promise<LevelImage>(resolve => { finish = resolve; }));
+    render(<PlanDropZone api={api({ uploadLevelImage })} />);
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [file("L1.jpg")] } });
+    expect(await screen.findByText("Adding L1.jpg…")).toBeTruthy();
+    expect(screen.getByLabelText("Choose a file")).toBeDisabled();
+    fireEvent.drop(screen.getByTestId("plan-drop-zone"), { dataTransfer: { files: [file("L2.jpg")] } });
+    expect(uploadLevelImage).toHaveBeenCalledTimes(1);
+    finish(image);
+    await waitFor(() => expect(screen.queryByText(/Adding/)).toBeNull());
+    expect(screen.getByLabelText("Choose a file")).not.toBeDisabled();
+  });
+
   it("says nothing of its own when the session has ended: the sign-in dialog is the message", async () => {
     const a = api({ uploadLevelImage: vi.fn(async () => { throw new ApiError(401, { error: "sign in" }); }) });
     render(<PlanDropZone api={a} />);
-    fireEvent.change(screen.getByLabelText("Choose a floorplan file"), { target: { files: [file("L1.jpg")] } });
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [file("L1.jpg")] } });
     await waitFor(() => expect(a.uploadLevelImage).toHaveBeenCalledTimes(1));
     expect(useToasts.getState().toasts).toEqual([]);
   });
@@ -86,7 +112,7 @@ describe("FloorplanTools", () => {
   it("points at the drop zone when the floor has no plan yet", () => {
     useEditorStore.getState().setLevelImages([]);
     render(<FloorplanTools api={api()} />);
-    expect(screen.getByText(/drop it on the canvas/i)).toBeTruthy();
+    expect(screen.getByText(/drop it in the box/i)).toBeTruthy();
   });
 
   it("says the plan is not scaled yet", () => {
@@ -183,11 +209,25 @@ describe("FloorplanTools", () => {
       useEditorStore.getState().pushCalibrationPoint([100, 0]);
       const a = api();
       render(<FloorplanTools api={a} />);
-      fireEvent.change(screen.getByLabelText("Real distance in metres"), { target: { value: "20" } });
+      fireEvent.change(screen.getByLabelText("Real distance (metres)"), { target: { value: "20" } });
       fireEvent.click(screen.getByRole("button", { name: "Apply scale" }));
       // Unscaled, the plan is drawn at a metre per pixel: 100 m on screen is 100 px.
       await waitFor(() => expect(patches(a)[0]![2]).toMatchObject({ metresPerPixel: 0.2 }));
-      expect(useEditorStore.getState().tool).toBe("select");
+      await waitFor(() => expect(useEditorStore.getState().tool).toBe("select"));
+      expect(lastToast()?.message).toBe("Scale set to 0.2000 m per pixel.");
+    });
+
+    it("keeps the measurement when the scale does not save, to try again from", async () => {
+      useEditorStore.getState().pushCalibrationPoint([0, 0]);
+      useEditorStore.getState().pushCalibrationPoint([100, 0]);
+      const a = api({ patchLevelImage: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) });
+      render(<FloorplanTools api={a} />);
+      fireEvent.change(screen.getByLabelText("Real distance (metres)"), { target: { value: "20" } });
+      fireEvent.click(screen.getByRole("button", { name: "Apply scale" }));
+      await waitFor(() => expect(lastToast()?.action?.label).toBe("Retry"));
+      expect(useEditorStore.getState().tool).toBe("calibrate");
+      expect(useEditorStore.getState().calibrationDraft).toHaveLength(2);
+      expect(screen.getByRole("button", { name: "Apply scale" })).not.toBeDisabled();
     });
 
     it("measures in the plan's own pixels, whatever scale it is drawn at", async () => {
@@ -196,10 +236,23 @@ describe("FloorplanTools", () => {
       useEditorStore.getState().pushCalibrationPoint([10, 0]);
       const a = api();
       render(<FloorplanTools api={a} />);
-      fireEvent.change(screen.getByLabelText("Real distance in metres"), { target: { value: "20" } });
-      fireEvent.click(screen.getByRole("button", { name: "Apply scale" }));
+      fireEvent.change(screen.getByLabelText("Real distance (metres)"), { target: { value: "20" } });
+      fireEvent.click(screen.getByRole("button", { name: "Replace scale" }));
       // 10 m on screen is 100 px of a plan drawn at 0.1 m per pixel.
       await waitFor(() => expect(patches(a)[0]![2].metresPerPixel).toBeCloseTo(0.2, 10));
+    });
+
+    it("warns that it replaces a scale the plan already has, and says what it was", async () => {
+      useEditorStore.getState().setLevelImages([{ ...image, metresPerPixel: 0.07 }]);
+      useEditorStore.getState().pushCalibrationPoint([0, 0]);
+      useEditorStore.getState().pushCalibrationPoint([7, 0]);
+      render(<FloorplanTools api={api()} />);
+      expect(screen.getByText(/already scaled at 0\.0700 m per pixel/).textContent).toMatch(/^! Warning: /);
+      expect(screen.queryByRole("button", { name: "Apply scale" })).toBeNull();
+      fireEvent.change(screen.getByLabelText("Real distance (metres)"), { target: { value: "21" } });
+      fireEvent.click(screen.getByRole("button", { name: "Replace scale" }));
+      // 7 m on screen is 100 px of a plan drawn at 0.07 m per pixel.
+      await waitFor(() => expect(lastToast()?.message).toBe("Scale set to 0.2100 m per pixel (it was 0.0700)."));
     });
 
     it("refuses a measurement with no length rather than dividing by zero", async () => {
@@ -207,7 +260,7 @@ describe("FloorplanTools", () => {
       useEditorStore.getState().pushCalibrationPoint([5, 5]);
       const a = api();
       render(<FloorplanTools api={a} />);
-      fireEvent.change(screen.getByLabelText("Real distance in metres"), { target: { value: "20" } });
+      fireEvent.change(screen.getByLabelText("Real distance (metres)"), { target: { value: "20" } });
       fireEvent.click(screen.getByRole("button", { name: "Apply scale" }));
       await waitFor(() => expect(lastToast()?.message).toMatch(/length/i));
       expect(patches(a)).toHaveLength(0);
@@ -223,17 +276,71 @@ describe("FloorplanTools", () => {
     await waitFor(() => expect(patches(a)[0]![2]).toEqual({ opacity: 0.8 }));
   });
 
-  it("explains aligning on the lowest floor, where there is nothing below", () => {
-    useEditorStore.getState().setTool("align-plan");
-    render(<FloorplanTools api={api()} />);
-    expect(screen.getByText(/lowest floor/i)).toBeTruthy();
+  it("saves the opacity when a touch lets go of the slider too", async () => {
+    const a = api();
+    render(<FloorplanTools api={a} />);
+    const slider = screen.getByLabelText("Plan opacity");
+    fireEvent.change(slider, { target: { value: "0.8" } });
+    fireEvent.pointerUp(slider);
+    await waitFor(() => expect(patches(a)[0]![2]).toEqual({ opacity: 0.8 }));
   });
 
-  it("names the floor below while aligning", () => {
+  it("saves one opacity at a time, so two quick releases meet no conflict and the last one wins", async () => {
+    // A server that, like the real one, refuses a save made against a version
+    // it has since moved past.
+    let serverVersion = 0;
+    let answer!: () => void;
+    const answered = new Promise<void>(resolve => { answer = resolve; });
+    const patchLevelImage = vi.fn(async (_id: string, version: number, patch: Record<string, unknown>) => {
+      await answered;
+      if (version !== serverVersion) throw new ConflictError(null, { error: "stale" });
+      serverVersion += 1;
+      return { ...image, ...patch, version: serverVersion };
+    });
+    render(<FloorplanTools api={api({ patchLevelImage })} />);
+    const slider = screen.getByLabelText("Plan opacity");
+    fireEvent.change(slider, { target: { value: "0.8" } });
+    fireEvent.pointerUp(slider);
+    fireEvent.mouseUp(slider);
+    fireEvent.change(slider, { target: { value: "0.5" } });
+    fireEvent.mouseUp(slider);
+    fireEvent.change(slider, { target: { value: "0.3" } });
+    fireEvent.mouseUp(slider);
+    expect(patchLevelImage).toHaveBeenCalledTimes(1);
+    answer();
+    await waitFor(() => expect(useEditorStore.getState().levelImages[0]!.opacity).toBe(0.3));
+    expect(patchLevelImage.mock.calls.map(c => [c[1], c[2]])).toEqual([[0, { opacity: 0.8 }], [1, { opacity: 0.3 }]]);
+    expect(useToasts.getState().toasts).toEqual([]);
+  });
+
+  it("says it is adding a replacement plan, and offers no other until it has", async () => {
+    let finish!: (image: LevelImage) => void;
+    const uploadLevelImage = vi.fn(() => new Promise<LevelImage>(resolve => { finish = resolve; }));
+    render(<FloorplanTools api={api({ uploadLevelImage })} />);
+    fireEvent.change(screen.getByLabelText("Replace plan…"), { target: { files: [file("L1 v2.jpg")] } });
+    expect(await screen.findByText("Adding L1 v2.jpg…")).toBeTruthy();
+    expect(screen.getByLabelText("Replace plan…")).toBeDisabled();
+    finish({ ...image, id: "img_2", filename: "L1 v2.jpg" });
+    await waitFor(() => expect(screen.getByLabelText("Replace plan…")).not.toBeDisabled());
+    expect(useEditorStore.getState().levelImages.map(i => i.filename)).toEqual(["L1 v2.jpg"]);
+  });
+
+  it("names each control by the words it shows, so a voice command can find it (WCAG 2.5.3)", () => {
+    useEditorStore.getState().setTool("calibrate");
+    render(<FloorplanTools api={api()} />);
+    expect(screen.getByRole("textbox", { name: "Real distance (metres)" })).toBeTruthy();
+    // A file input has no role to look it up by. What would break its name is
+    // an aria-label saying something other than the visible label.
+    expect(screen.getByLabelText("Replace plan…").hasAttribute("aria-label")).toBe(false);
+    render(<PlanDropZone api={api()} />);
+    expect(screen.getByLabelText("Choose a file").hasAttribute("aria-label")).toBe(false);
+  });
+
+  it("leaves how to align to the guide, so only one instruction shows", () => {
     useEditorStore.getState().setActiveLevel("oth-L2");
     useEditorStore.getState().setLevelImages([{ ...image, levelId: "oth-L2" }]);
     useEditorStore.getState().setTool("align-plan");
-    render(<FloorplanTools api={api()} />);
-    expect(screen.getByText(/dashed outlines are L1/)).toBeTruthy();
+    const { container } = render(<FloorplanTools api={api()} />);
+    expect(container.textContent).not.toMatch(/dashed outlines|lowest floor|drag/i);
   });
 });
