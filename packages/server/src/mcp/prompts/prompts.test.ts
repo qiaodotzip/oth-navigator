@@ -274,19 +274,19 @@ describe("what the re-review and rehearsal 2 taught each prompt (Task 10)", () =
 });
 
 describe("what rehearsal 3 taught map_rooms (Task 12)", () => {
-  it("makes a stop from the room on the map, not from a likeAStop draft that copies it", () => {
+  it("makes a stop from the room on the map, not from a likeAStop draft that copies it: its onMapAs names that room", () => {
     const text = promptText(mapRooms, "L1");
     expect(text).toContain(
-      "`list_drafts` marks a draft named like one likeAStop true: accept it first, unless that room is already on the map: " +
-      "then make the stop from the room on the map and reject the draft as a copy.",
+      "`list_drafts` marks a draft named like one likeAStop true: accept it first, unless its onMapAs names a room already on the map: " +
+      "make the stop from that room and reject the draft as a copy.",
     );
     expect(text).not.toContain("likeAStop true: accept it first. ");
   });
 
-  it("never accepts a draft lying mostly inside a room of kind room, but sets it aside with the reason a person reads", () => {
+  it("never accepts a draft lying mostly inside a room of kind room, but a stop, and sets it aside with the reason a person reads", () => {
     const text = promptText(mapRooms, "L1");
     expect(text).toContain(
-      "otherwise never accept a draft that lies mostly (share 0.6 or more) inside a room of kind room: set it aside, " +
+      "otherwise never accept a draft that lies mostly (share 0.6 or more) inside a room of kind room, unless it is likeAStop: set it aside, " +
       'reason "Inside <room name>, which may hold two spaces: a person should decide."',
     );
     // In the one overlap bullet, after the copy is rejected and before the space inside an open area is accepted.
@@ -326,14 +326,23 @@ describe("what rehearsal 3 taught draw_paths (Task 12): the whole first pass", (
     expect(text).not.toContain('keep it only if a link ends on it;');
   });
 
-  it("loops check_floor as its own step, at most 5 rounds, and one check is not a finished run", () => {
+  it("loops check_floor as its own step, at most 5 rounds, and doesn't stop while a room can still be reached", () => {
     expect(text).toContain(
       '7. The loop: call `check_floor` with floor "L1" and codes ["area.unreachable", "room.noAccess"]. ' +
-      "For each room it lists, draw the `suggest_paths` line whose reaches has that room, or a short pathway from the nearest drawn line into it",
+      "For each room it lists, draw a line you left out only when it is on network 0, its crosses is empty and its reaches has that room. ",
     );
     expect(text).toContain(
-      "Then call `check_floor` again: that is one round. Do at most 5 rounds, and stop early when a round reaches no new room. " +
-      "One `check_floor` and stop is not a finished run.",
+      "Then call `check_floor` again: that is one round. Do at most 5 rounds, and stop early only when a round reaches no new room: " +
+      "don't stop while `check_floor` lists a room you can still reach.",
+    );
+    // Rooms only a person can fix meet the stop rule at once: no sentence may say one check is never a finished run.
+    expect(text).not.toContain("One `check_floor` and stop is not a finished run.");
+  });
+
+  it("brings back a line the trim left out only as the trim allows, and bridges to an island only over open floor", () => {
+    expect(text).toContain(
+      "For a room on an island, first draw a short bridge from the nearest drawn line, only where `view_plan` shows open floor between them, " +
+      "then that island's lines. Otherwise draw a short pathway into the room, or name it for a person.",
     );
     // The field names are words, not tools: never backticked, so the tool checks don't take them for tools.
     for (const field of ["entranceGuesses", "reaches", "crosses"]) expect(text).not.toContain(`\`${field}\``);
