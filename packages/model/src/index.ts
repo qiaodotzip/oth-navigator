@@ -32,3 +32,7 @@ export * from "./objects";
 // the server's make_stop both plan with these, so the two save the same thing.
 export * from "./stops/placePoint";
 export * from "./stops/portalFromRoom";
+
+// Plan 6C: Build's "already on the map" rule, so Claude's list_drafts says it
+// the same way Build does.
+export * from "./drafts/match";

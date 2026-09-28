@@ -6,7 +6,7 @@ import { draftNameSpot } from "../plan/DraftLayer";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
-import { coverage, draftBox, draftView, loadDrafts, useDraftView, useDrafts, useRoomDrafts } from "./drafts";
+import { draftBox, draftView, loadDrafts, useDraftView, useDrafts, useRoomDrafts } from "./drafts";
 
 const draft = (id: string): RoomDraft => RoomDraftSchema.parse({
   id, levelId: "oth-L2", nameEn: id, kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
@@ -129,19 +129,6 @@ const room = (id: string, ring: [number, number][], kind: Room["kind"] = "room")
   RoomSchema.parse({ id, levelId: "oth-L2", kind, footprint: ring, heightM: 4 });
 const shaped = (id: string, ring: [number, number][] | undefined, over: Partial<RoomDraft> = {}): RoomDraft =>
   ({ ...draft(id), footprint: ring, ...over });
-
-describe("coverage", () => {
-  it("is how much of a room a draft covers", () => {
-    expect(coverage(shaped("d", square(0, 0, 10)), room("r", square(0, 0, 10)))).toBeCloseTo(1, 1);
-    expect(coverage(shaped("d", square(0, 0, 10)), room("r", square(5, 0, 10)))).toBeCloseTo(0.5, 1);
-    expect(coverage(shaped("d", square(0, 0, 10)), room("r", square(30, 30, 5)))).toBe(0);
-    expect(coverage(shaped("d", undefined), room("r", square(0, 0, 10)))).toBe(0);
-  });
-  it("counts nothing a draft's hole leaves out", () => {
-    const ring = shaped("d", square(0, 0, 10), { holes: [square(2, 2, 6)] });
-    expect(coverage(ring, room("r", square(2, 2, 6)))).toBe(0);
-  });
-});
 
 describe("draftView", () => {
   it("sorts drafts into those to review, those already on the map, and open spaces to draw by hand", () => {

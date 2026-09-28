@@ -1,4 +1,4 @@
-import { bboxOfRing, live, pointInPolygon, type BBox, type Room, type RoomDraft } from "@oth/model";
+import { bboxOfRing, draftMatch, live, type BBox, type Room, type RoomDraft } from "@oth/model";
 import { useEffect } from "react";
 import { create } from "zustand";
 import type { Api } from "../api/client";
@@ -82,29 +82,6 @@ export function useRoomDrafts(api: Pick<Api, "listRoomDrafts">, levelId: string 
   }, [api, levelId]);
 }
 
-/**
- * How much of a room a draft covers, 0 to 1, by sampling the room on a grid
- * of about 400 points. Pairs whose boxes do not meet cost one comparison, so
- * L1's 193 rooms against as many drafts stay quick.
- */
-export function coverage(draft: Pick<RoomDraft, "footprint" | "holes">, room: Pick<Room, "footprint" | "holes">): number {
-  if (!draft.footprint) return 0;
-  const r = bboxOfRing(room.footprint);
-  const d = bboxOfRing(draft.footprint);
-  if (d.maxX <= r.minX || d.minX >= r.maxX || d.maxY <= r.minY || d.minY >= r.maxY) return 0;
-  const step = Math.max(0.05, Math.sqrt(((r.maxX - r.minX) * (r.maxY - r.minY)) / 400));
-  let inRoom = 0;
-  let both = 0;
-  for (let x = r.minX + step / 2; x < r.maxX; x += step) {
-    for (let y = r.minY + step / 2; y < r.maxY; y += step) {
-      if (!pointInPolygon([x, y], room.footprint, room.holes)) continue;
-      inRoom++;
-      if (pointInPolygon([x, y], draft.footprint, draft.holes)) both++;
-    }
-  }
-  return inRoom === 0 ? 0 : both / inRoom;
-}
-
 export type DraftView = {
   review: RoomDraft[];
   covered: { draft: RoomDraft; roomId: string }[];
@@ -130,20 +107,8 @@ export function draftView(drafts: readonly RoomDraft[], rooms: readonly Room[]):
       view.open.push(d);
       continue;
     }
-    const outline = { footprint: d.footprint, holes: d.holes };
-    const detail = d.kind === "detail";
-    let copyOf: Room | undefined;
-    let overRooms = false;
-    for (const r of rooms) {
-      const ofRoom = coverage(d, r);
-      if ((r.kind === "detail") === detail && ofRoom > 0.5 && coverage(r, outline) > 0.5) {
-        copyOf = r;
-        break;
-      }
-      // Asked both ways: a big room's samples can step right over a small draft inside it.
-      overRooms ||= ofRoom > 0 || coverage(r, outline) > 0;
-    }
-    shapes.set(d.id, { ...draftNameSpot(d), overRooms: overRooms || copyOf !== undefined });
+    const { copyOf, overRooms } = draftMatch(d, rooms);
+    shapes.set(d.id, { ...draftNameSpot(d), overRooms });
     if (copyOf) view.covered.push({ draft: d, roomId: copyOf.id });
     else view.review.push(d);
   }
