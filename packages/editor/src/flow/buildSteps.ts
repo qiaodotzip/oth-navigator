@@ -53,8 +53,9 @@ export type FloorUnits = { bound: Place[]; waiting: Place[] };
  * The places Bind places is about on one floor. Its picker, its tick and its
  * to-do list all read this one rule, so they cannot disagree about a place.
  *
- * - A unit is a confirmed place that is not a walkway. A proposal is still
- *   Review's to decide, and a walkway is built as a path, not bound to a room.
+ * - A unit is a confirmed place that is not a walkway or a kind of object. A
+ *   proposal is still Review's to decide, and a walkway is built as a path,
+ *   not bound to a room.
  * - A unit is bound only while its room is on the map. Deleting a room leaves
  *   its place naming it, and the validator asks only that some room be named.
  *   Counting that as bound would drop the place from the picker, tick the
@@ -74,7 +75,8 @@ export function floorUnits(
   const roomFloor = new Map(live(model.rooms).map(r => [r.id, r.levelId]));
   const units: FloorUnits = { bound: [], waiting: [] };
   for (const place of live(model.places)) {
-    if (place.status !== "confirmed" || place.pathwayKindId) continue;
+    // A walkway is built as a path and an object is placed as markers: neither is bound to a room.
+    if (place.status !== "confirmed" || place.pathwayKindId || place.objectKindId) continue;
     const bound = place.roomId ? roomFloor.get(place.roomId) : undefined;
     if (bound !== undefined) {
       if (bound === levelId) units.bound.push(place);

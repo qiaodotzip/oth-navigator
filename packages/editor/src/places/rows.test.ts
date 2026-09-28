@@ -172,3 +172,18 @@ describe("toBindLine", () => {
     expect(toBindLine(0, 1)).toBe("0 of 1 place to bind is on the map");
   });
 });
+
+describe("a kind of object", () => {
+  // Filmed on L1 and confirmed, as the live wastebin is.
+  const withBin = parseModel({
+    ...model,
+    objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+    places: [...model.places, { id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "ok_bin" }],
+    sightings: [...model.sightings, { id: "s_bin", placeId: "pl_bin", keyframeId: "kf_1" }],
+  });
+
+  it("is placed as markers, never bound, so neither the checklist nor Bind places waits on it", () => {
+    expect(placeRows(withBin, report, "oth-L1").map(r => r.place.id)).not.toContain("pl_bin");
+    expect(floorUnits(withBin, "oth-L1").waiting.map(p => p.id)).not.toContain("pl_bin");
+  });
+});

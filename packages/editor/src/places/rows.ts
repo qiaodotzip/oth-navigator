@@ -30,7 +30,8 @@ export type PlaceRow = {
  * One row per confirmed place on a floor: the Places checklist (spec §4).
  *
  * A proposal is a claim until Review decides it, so it is counted, not
- * listed. A walkway is built as a path and never bound, so it is neither.
+ * listed. A walkway is built as a path and never bound, so it is neither. Nor
+ * is a kind of object, which the Objects section lists.
  * *Photos disagree* comes from the report, so the caller should hand over a
  * fresh one (see `recheck`).
  */
@@ -47,7 +48,7 @@ export function placeRows(model: MapModel, report: ValidationReport | null, leve
   );
 
   const rows = live(model.places)
-    .filter(p => p.status === "confirmed" && !p.pathwayKindId && floors.get(p.id) === levelId)
+    .filter(p => p.status === "confirmed" && !p.pathwayKindId && !p.objectKindId && floors.get(p.id) === levelId)
     .map<PlaceRow>(place => {
       const evidence = bestEvidence(model, place.id);
       const room = place.roomId ? rooms.get(place.roomId) ?? null : null;
