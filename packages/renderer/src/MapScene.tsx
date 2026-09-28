@@ -2,7 +2,7 @@ import type { MapModel } from "@oth/model";
 import { OrbitControls } from "@react-three/drei";
 import { bboxOfRings } from "@oth/model";
 import { Canvas } from "@react-three/fiber";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { LevelGroup } from "./LevelGroup";
 
 export type MapSceneProps = {
@@ -14,10 +14,16 @@ export type MapSceneProps = {
   onSelect?: (roomId: string) => void;
   /** Resolves an asset id to a URL the renderer can fetch. */
   assetUrl?: (assetId: string) => string;
+  /**
+   * More of the scene, drawn with the active level: room labels, and the
+   * layers later parts add. Rendered inside the canvas, so three.js elements
+   * and drei's helpers work here.
+   */
+  children?: ReactNode;
 };
 
 export function MapScene({
-  model, activeLevelId, showLevelBelow = true, selectedId, onSelect, assetUrl,
+  model, activeLevelId, showLevelBelow = true, selectedId, onSelect, assetUrl, children,
 }: MapSceneProps) {
   const { active, below } = useMemo(() => {
     const ordered = [...model.levels].sort((a, b) => a.ordinal - b.ordinal);
@@ -77,6 +83,7 @@ export function MapScene({
           onSelect={onSelect}
         />
       )}
+      {children}
       <OrbitControls makeDefault target={[...view.target]} />
     </Canvas>
   );

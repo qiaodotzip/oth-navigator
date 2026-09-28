@@ -9,3 +9,5 @@ export * from "./massing";
 export * from "./shell";
 export * from "./contextExport";
 export * from "./PlacementMesh";
+export * from "./labelFit";
+export * from "./RoomLabels";
