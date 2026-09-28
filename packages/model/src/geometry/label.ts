@@ -28,15 +28,23 @@ const MAX_CELLS_PER_SIDE = 64;
 const COLLINEAR_TOLERANCE = 1e-9;
 
 type Cell = { x: number; y: number; h: number; d: number; max: number };
+/** The shape a cell is measured against, with its rings gathered once: every cell needs all of them. */
+type Shape = { outer: Ring; holes: readonly Ring[]; rings: readonly Ring[] };
+
+function isFinitePoint(p: Vec2): boolean {
+  return Number.isFinite(p[0]) && Number.isFinite(p[1]);
+}
 
 /**
- * True when the ring encloses nothing: fewer than three points, or all of them
- * on one line. Its box cannot tell: a line drawn on the diagonal has a square
- * box, and would be searched cell by cell up to the cap.
+ * True when the ring encloses nothing: fewer than three points, all of them on
+ * one line, or a coordinate that is not a number. Its box cannot tell: a line
+ * drawn on the diagonal has a square box, and would be searched cell by cell
+ * up to the cap. A coordinate that is not a number makes every distance NaN,
+ * which no cell can beat, so it too would run to the cap.
  */
 function enclosesNothing(ring: Ring): boolean {
   const a = ring[0];
-  if (!a || ring.length < 3) return true;
+  if (!a || ring.length < 3 || !ring.every(isFinitePoint)) return true;
   // The line runs from the first point to the one farthest from it.
   let b = a;
   let lengthSq = 0;
@@ -55,20 +63,22 @@ function enclosesNothing(ring: Ring): boolean {
 }
 
 /**
- * The average of a ring's points. The centroid is no answer for a ring that
- * encloses nothing: it divides by the area, and an area that is only rounding
- * error puts it anywhere at all. An empty ring is nowhere, so it gets the
- * origin, which is at least a point.
+ * The average of a ring's finite points. The centroid is no answer for a ring
+ * that encloses nothing: it divides by the area, and an area that is only
+ * rounding error puts it anywhere at all. A ring with no finite point is
+ * nowhere, so it gets the origin, which is at least a point.
  */
 function vertexAverage(ring: Ring): Vec2 {
-  if (ring.length === 0) return [0, 0];
   let x = 0;
   let y = 0;
+  let n = 0;
   for (const p of ring) {
+    if (!isFinitePoint(p)) continue;
     x += p[0];
     y += p[1];
+    n++;
   }
-  return [x / ring.length, y / ring.length];
+  return n === 0 ? [0, 0] : [x / n, y / n];
 }
 
 function edgeDistance(p: Vec2, rings: readonly Ring[]): number {
@@ -82,9 +92,9 @@ function edgeDistance(p: Vec2, rings: readonly Ring[]): number {
 }
 
 /** A square cell of half-width `h`: its centre's signed distance, and the most any point in it could have. */
-function makeCell(x: number, y: number, h: number, outer: Ring, holes: readonly Ring[]): Cell {
+function makeCell(x: number, y: number, h: number, shape: Shape): Cell {
   const p: Vec2 = [x, y];
-  const d = edgeDistance(p, [outer, ...holes]) * (pointInPolygon(p, outer, holes) ? 1 : -1);
+  const d = edgeDistance(p, shape.rings) * (pointInPolygon(p, shape.outer, shape.holes) ? 1 : -1);
   return { x, y, h, d, max: d + h * Math.SQRT2 };
 }
 
@@ -145,9 +155,13 @@ class CellQueue {
  * than `precision` metres.
  */
 export function labelPoint(outer: Ring, holes: readonly Ring[] = [], precision = 0.1): LabelPoint {
-  // A line or a point has no inside: nothing fits, and the middle of its
-  // points is as good as anywhere.
-  if (enclosesNothing(outer)) return { point: vertexAverage(outer), distance: 0 };
+  // A line or a point has no inside, and an outline that cannot be measured
+  // has none to find: nothing fits, and the middle of its points is as good
+  // as anywhere.
+  if (enclosesNothing(outer) || !holes.every(ring => ring.every(isFinitePoint))) {
+    return { point: vertexAverage(outer), distance: 0 };
+  }
+  const shape: Shape = { outer, holes, rings: [outer, ...holes] };
   const box = bboxOfRing(outer);
   const width = box.maxX - box.minX;
   const height = box.maxY - box.minY;
@@ -165,27 +179,30 @@ export function labelPoint(outer: Ring, holes: readonly Ring[] = [], precision =
   const rows = Math.ceil(height / size);
   for (let i = 0; i < columns; i++) {
     for (let j = 0; j < rows; j++) {
-      queue.push(makeCell(box.minX + i * size + h, box.minY + j * size + h, h, outer, holes));
+      queue.push(makeCell(box.minX + i * size + h, box.minY + j * size + h, h, shape));
     }
   }
 
   // The centroid is right for most rooms; the box's middle is a second guess
   // for the ones where it is not.
-  let best = makeCell(centroid[0], centroid[1], 0, outer, holes);
-  const middle = makeCell(box.minX + width / 2, box.minY + height / 2, 0, outer, holes);
+  let best = makeCell(centroid[0], centroid[1], 0, shape);
+  const middle = makeCell(box.minX + width / 2, box.minY + height / 2, 0, shape);
   if (middle.d > best.d) best = middle;
 
   for (let examined = 0; queue.size > 0 && examined < MAX_CELLS; examined++) {
     const cell = queue.pop()!;
     if (cell.d > best.d) best = cell;
     // The heap hands out the most promising cell first, so once it cannot
-    // beat the best by more than the precision, none left can either.
-    if (cell.max - best.d <= precision) break;
+    // beat the best by more than the precision, none left can either. Not
+    // before a centre has landed inside, though: until then the best is only
+    // the least far outside, and a concave sliver narrower than the precision
+    // would be labelled off itself. The cap still bounds the search.
+    if (best.d > 0 && cell.max - best.d <= precision) break;
     const q = cell.h / 2;
-    queue.push(makeCell(cell.x - q, cell.y - q, q, outer, holes));
-    queue.push(makeCell(cell.x + q, cell.y - q, q, outer, holes));
-    queue.push(makeCell(cell.x - q, cell.y + q, q, outer, holes));
-    queue.push(makeCell(cell.x + q, cell.y + q, q, outer, holes));
+    queue.push(makeCell(cell.x - q, cell.y - q, q, shape));
+    queue.push(makeCell(cell.x + q, cell.y - q, q, shape));
+    queue.push(makeCell(cell.x - q, cell.y + q, q, shape));
+    queue.push(makeCell(cell.x + q, cell.y + q, q, shape));
   }
   return { point: [best.x, best.y], distance: Math.max(0, best.d) };
 }
@@ -220,8 +237,12 @@ function centredChord(p: Vec2, rings: readonly Ring[], axis: 0 | 1): number {
  * How much room a label centred on a point has: the widest and the tallest it
  * can be while staying inside the shape. A name is cut to the width, and
  * hidden when the height cannot take a line of text.
+ *
+ * Zero anywhere outside the shape. In a hole, or in the gap of a U, there are
+ * walls on either side, but what lies between them is not the room.
  */
 export function labelSpan(point: Vec2, outer: Ring, holes: readonly Ring[] = []): LabelSpan {
+  if (!pointInPolygon(point, outer, holes)) return { width: 0, height: 0 };
   const rings = [outer, ...holes];
   return { width: centredChord(point, rings, 0), height: centredChord(point, rings, 1) };
 }

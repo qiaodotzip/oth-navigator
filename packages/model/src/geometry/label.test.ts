@@ -8,6 +8,10 @@ const square: Ring = [[0, 0], [10, 0], [10, 10], [0, 10]];
 /** An L one metre wide: its centroid falls in the crook, outside it. */
 const thinL: Ring = [[0, 0], [10, 0], [10, 1], [1, 1], [1, 10], [0, 10]];
 const hole: Ring = [[3, 3], [7, 3], [7, 7], [3, 7]];
+/** An L two centimetres wide, as the extractor leaves a wall's outline: every cell starts far wider than it. */
+const hairL: Ring = [[0, 0], [10, 0], [10, 0.02], [0.02, 0.02], [0.02, 10], [0, 10]];
+/** A U whose gap, 4 m wide and 7 m deep, is outside it. */
+const u: Ring = [[0, 0], [10, 0], [10, 10], [7, 10], [7, 3], [3, 3], [3, 10], [0, 10]];
 
 describe("labelPoint", () => {
   it("finds the middle of a square, as far from every wall as it can be", () => {
@@ -46,6 +50,14 @@ describe("labelPoint", () => {
     expect(distance).toBeCloseTo(0.01, 2);
   });
 
+  it("stays inside an L two centimetres wide, where no cell's centre starts inside it", () => {
+    const { point, distance } = labelPoint(hairL);
+    expect(pointInRing(point, hairL)).toBe(true);
+    // The widest circle that fits is (2 - √2) × 0.02 = 0.0117 m, in the corner.
+    expect(distance).toBeGreaterThan(0);
+    expect(distance).toBeLessThanOrEqual(0.012);
+  });
+
   it("answers a ring with no area without throwing: nothing fits there", () => {
     const { point, distance } = labelPoint([[0, 0], [1, 0], [2, 0]]);
     expect(point.every(Number.isFinite)).toBe(true);
@@ -81,6 +93,13 @@ describe("labelPoint", () => {
     expect(point.every(Number.isFinite)).toBe(true);
     expect(distance).toBeLessThan(1e-12);
   });
+
+  it("answers a ring whose coordinates are not all numbers at once: nothing can be measured", () => {
+    expect(labelPoint([[0, 0], [Number.NaN, 0], [10, 10]])).toEqual({ point: [5, 5], distance: 0 });
+    expect(labelPoint([[0, 0], [Number.POSITIVE_INFINITY, 0], [10, 10]])).toEqual({ point: [5, 5], distance: 0 });
+    expect(labelPoint([[Number.NaN, 0], [0, Number.NaN], [Number.NaN, Number.NaN]])).toEqual({ point: [0, 0], distance: 0 });
+    expect(labelPoint(square, [[[3, 3], [Number.NaN, 3], [7, 7]]])).toEqual({ point: [5, 5], distance: 0 });
+  });
 });
 
 describe("labelSpan", () => {
@@ -104,5 +123,13 @@ describe("labelSpan", () => {
 
   it("is zero outside the shape", () => {
     expect(labelSpan([20, 5], square)).toEqual({ width: 0, height: 0 });
+  });
+
+  it("is zero in a hole, though walls lie on every side of it", () => {
+    expect(labelSpan([5, 5], square, [hole])).toEqual({ width: 0, height: 0 });
+  });
+
+  it("is zero in the gap of a U, though its arms lie either side", () => {
+    expect(labelSpan([5, 6], u)).toEqual({ width: 0, height: 0 });
   });
 });
