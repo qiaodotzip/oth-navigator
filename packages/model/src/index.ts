@@ -12,6 +12,7 @@ export * from "./schema/model";
 export * from "./geometry/ring";
 export * from "./geometry/segment";
 export * from "./geometry/point";
+export * from "./geometry/label";
 
 export * from "./validation/types";
 export * from "./validation/validate";
