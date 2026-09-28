@@ -1,10 +1,16 @@
+import type { Level } from "@oth/model";
 import { useEffect, useState } from "react";
 import type { Api, PublishedVersion } from "../api/client";
 import { floorProgress } from "../flow/floorProgress";
 import { pickTab, sortedLevels, yourFloor } from "../flow/floors";
-import { followLink, href } from "../route";
+import { followLink, href, navigate } from "../route";
+import { cardLink } from "../setup/progress";
+import { asSetupApi } from "../setup/setupApi";
+import { loadSetup, useSetupStore } from "../setup/sync";
+import { SETUP_STEP_IDS } from "../setup/types";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
+import { reportFailure } from "../ui/failure";
 import { relativeTime } from "../ui/relativeTime";
 import { recall } from "../ui/remember";
 import { FloorCard } from "./FloorCard";
@@ -40,7 +46,30 @@ export function FloorsHome({ api, saver }: { api: Api; saver: Pick<Saver, "updat
     api.latestPublished().then(setLatest).catch(() => {});
   }, [api]);
 
+  const setups = useSetupStore(s => s.byLevel);
+  const levelKey = sortedLevels(model).map(l => l.id).join(" ");
+
+  // Each floor's setup, for its card's way in (spec §4.2). One that can't be
+  // had leaves its card offering Set up: the wizard loads its own.
+  useEffect(() => {
+    const setupApi = asSetupApi(api);
+    for (const id of levelKey.split(" ").filter(Boolean)) void loadSetup(setupApi, id);
+  }, [api, levelKey]);
+
   if (!model) return <p className="p-8 text-sm text-stone-500">Loading the floors…</p>;
+
+  /** Set up again: every step open, so the new run's check starts from now; then its step 1. */
+  const restart = async (level: Level): Promise<void> => {
+    const setupApi = asSetupApi(api);
+    try {
+      await Promise.all(SETUP_STEP_IDS.map(step => setupApi.setSetupStep(level.id, step, { status: "open" })));
+    } catch (err) {
+      reportFailure(err, { doing: `start ${level.code}'s setup again`, retry: () => restart(level) });
+      return;
+    }
+    await loadSetup(setupApi, level.id);
+    navigate(href({ name: "setup", code: level.code, step: 1, params: {} }));
+  };
 
   const levels = sortedLevels(model);
   const progress = new Map(levels.map(l => [l.id, floorProgress(model, report, levelImages, l.id)]));
@@ -89,6 +118,12 @@ export function FloorsHome({ api, saver }: { api: Api; saver: Pick<Saver, "updat
               progress={progress.get(level.id)!}
               mine={Boolean(user && level.ownerIds.includes(user.id))}
               saver={saver}
+              setup={cardLink({
+                setup: setups[level.id] ?? null, model, levelImages, levelId: level.id, levelCode: level.code,
+                // Drafts are loaded only for the open floor; the card knows Find rooms ran from the server's counts.
+                draftsWaiting: 0,
+              })}
+              onRestart={() => void restart(level)}
             />
           </li>
         ))}

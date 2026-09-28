@@ -1,8 +1,11 @@
 import { parseModel } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useSetupStore } from "../setup/sync";
+import { fakeSetupApi, setupState } from "../setup/testing";
 import { useEditorStore } from "../state/store";
 import { fakeApi, sampleModel, sampleTeam } from "../testing/fakeApi";
+import { useToasts } from "../ui/toast";
 import { FloorsHome } from "./FloorsHome";
 
 function fakeSaver() {
@@ -140,5 +143,62 @@ describe("FloorsHome", () => {
     await act(async () => release());
 
     for (const box of screen.getAllByRole("checkbox")) expect(box).not.toBeDisabled();
+  });
+});
+
+describe("FloorsHome — setting a floor up", () => {
+  beforeEach(() => {
+    useSetupStore.getState().reset();
+    useToasts.getState().clear();
+  });
+
+  it("offers to set up a floor nobody has started", async () => {
+    const api = fakeSetupApi();
+    render(<FloorsHome api={api} saver={fakeSaver()} />);
+    await waitFor(() => expect(api.getSetup).toHaveBeenCalledTimes(2));
+    const [l1] = screen.getAllByRole("article");
+    expect(within(l1!).getByRole("link", { name: "Set up L1" }).getAttribute("href")).toBe("/floors/L1/setup");
+  });
+
+  it("continues a started setup at its first step not done", async () => {
+    const getSetup = vi.fn(async (levelId: string) => (levelId === "oth-L1"
+      ? setupState({ footage: { status: "done", finishedAt: "2026-09-28T09:00:00.000Z" }, label: { status: "done" } })
+      : setupState()));
+    render(<FloorsHome api={fakeSetupApi({ getSetup })} saver={fakeSaver()} />);
+    const [l1, l2] = screen.getAllByRole("article");
+    // L1's one proposal still waits in Review: step 3.
+    const go = await within(l1!).findByRole("link", { name: "Continue: step 3 of 9" });
+    expect(go.getAttribute("href")).toBe("/floors/L1/setup/3");
+    expect(within(l2!).getByRole("link", { name: "Set up L2" })).toBeTruthy();
+  });
+
+  it("starts a finished floor again: every step open, then step 1", async () => {
+    const setSetupStep = vi.fn().mockResolvedValue({});
+    const getSetup = vi.fn().mockResolvedValue(setupState({ finish: { status: "done" } }));
+    render(<FloorsHome api={fakeSetupApi({ getSetup, setSetupStep })} saver={fakeSaver()} />);
+    const [l1] = screen.getAllByRole("article");
+    fireEvent.click(await within(l1!).findByRole("button", { name: "Set up again" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/floors/L1/setup/1"));
+    expect(setSetupStep).toHaveBeenCalledTimes(9);
+    expect(setSetupStep).toHaveBeenCalledWith("oth-L1", "footage", { status: "open" });
+    expect(setSetupStep).toHaveBeenCalledWith("oth-L1", "finish", { status: "open" });
+  });
+
+  it("stays put, and says so, when the steps can't be opened again", async () => {
+    window.history.pushState({}, "", "/floors");
+    const setSetupStep = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    const getSetup = vi.fn().mockResolvedValue(setupState({ finish: { status: "done" } }));
+    render(<FloorsHome api={fakeSetupApi({ getSetup, setSetupStep })} saver={fakeSaver()} />);
+    fireEvent.click(await within(screen.getAllByRole("article")[0]!).findByRole("button", { name: "Set up again" }));
+    await waitFor(() => expect(useToasts.getState().toasts.at(-1)?.message)
+      .toBe("Couldn't start L1's setup again. Check your connection, then retry."));
+    expect(window.location.pathname).toBe("/floors");
+  });
+
+  it("still offers to set up a floor whose setup can't be loaded", async () => {
+    const getSetup = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<FloorsHome api={fakeSetupApi({ getSetup })} saver={fakeSaver()} />);
+    await waitFor(() => expect(getSetup).toHaveBeenCalledTimes(2));
+    expect(within(screen.getAllByRole("article")[0]!).getByRole("link", { name: "Set up L1" })).toBeTruthy();
   });
 });

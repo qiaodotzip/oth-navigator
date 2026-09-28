@@ -3,6 +3,7 @@ import { nextStepText, type FloorProgress } from "../flow/floorProgress";
 import { pickTab } from "../flow/floors";
 import { toBindLine } from "../places/rows";
 import { followLink, href } from "../route";
+import type { SetupLink } from "../setup/progress";
 import type { Saver } from "../state/save";
 import { Progress } from "../ui/Progress";
 import { recall } from "../ui/remember";
@@ -23,9 +24,17 @@ function Bar({ label, value, max, empty, tone }: {
   );
 }
 
+/** Above the card's stretched link, as the owner picker is, so it is a target of its own. */
+const SETUP_LINK =
+  "relative z-10 self-start rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-900 hover:bg-stone-100";
+
 /** One floor: whose it is, how far along, and what to do next. The whole card opens it. */
-export function FloorCard({ level, progress, mine, saver }: {
+export function FloorCard({ level, progress, mine, saver, setup, onRestart }: {
   level: Level; progress: FloorProgress; mine: boolean; saver: Pick<Saver, "update">;
+  /** The way into the floor's setup wizard (spec §4.2). */
+  setup: SetupLink;
+  /** Set up again: opens every step, then goes to step 1. */
+  onRestart: () => void;
 }) {
   const tab = pickTab(recall(`lastTab.${level.code}`), progress.survey.total > 0);
   const to = href({ name: "floor", code: level.code, tab, params: {} });
@@ -56,6 +65,11 @@ export function FloorCard({ level, progress, mine, saver }: {
         <p className="text-xs text-stone-600">{toBindLine(progress.places.onMap, progress.places.confirmed)}</p>
       )}
       <p className="mt-auto pt-1 text-xs font-medium text-stone-700">{nextStepText(progress)}</p>
+      {setup.restart ? (
+        <button type="button" onClick={onRestart} className={SETUP_LINK}>{setup.label}</button>
+      ) : (
+        <a href={setup.to} onClick={followLink(setup.to)} className={SETUP_LINK}>{setup.label}</a>
+      )}
     </article>
   );
 }
