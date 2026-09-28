@@ -144,7 +144,7 @@ export function ClaudeStep({ api, saver, level, stepId }: {
           )}
         </div>
 
-        {stepId === "rooms" && lineUp && <LineUpWarning>{lineUpWords(lineUp, level.code)}</LineUpWarning>}
+        {stepId === "rooms" && lineUp && <LineUpWarning>{lineUpWords(lineUp, level.code, "the Floorplan step")}</LineUpWarning>}
 
         {/* In place from the start, so a screen reader hears the line when Claude finishes. */}
         <div role="status">
