@@ -96,7 +96,9 @@ function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       "The room drafts Find rooms read from a floor's floorplan PDF and still waiting, largest first, 50 at a time: " +
       "each one's id, version, name, kind, area, where its name is printed, whether the drawing leaves it open " +
       "(no shape), the room already on the map it copies (onMapAs), whether it lies over rooms, and whether it is " +
-      "named like a lift, escalator or stairs. counts says how the floor's drafts stand: waiting, accepted, and rejected or set aside.",
+      "named like a lift, escalator or stairs. counts says how the floor's drafts stand: waiting, accepted, and " +
+      "rejected or set aside. decide_drafts takes decided drafts off this list, so after deciding some, read again " +
+      "from offset 0 rather than carrying on from where you left off.",
     inputSchema: {
       floor: FLOOR,
       limit: z.number().int().min(1).max(100).default(50),

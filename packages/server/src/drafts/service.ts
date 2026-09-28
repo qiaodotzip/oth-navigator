@@ -67,18 +67,33 @@ export function roomIdFor(code: string, name: string, taken: Set<string>): strin
   return id;
 }
 
-/** A floor's drafts still waiting for review, largest first, as the script ordered them. */
+/**
+ * A floor's drafts still waiting for review, largest first, as the script
+ * ordered them, then by id: a tiebreaker, so a page stays stable when two
+ * drafts share an area and decide_drafts has just taken others off the list.
+ */
 export async function listDrafts(db: Database, levelId: string): Promise<Row[]> {
   const rows = await db.select().from(roomDrafts).where(and(
     eq(roomDrafts.levelId, levelId), isNull(roomDrafts.deletedAt), isNull(roomDrafts.acceptedRoomId),
   ));
-  return rows.map(r => toModelRow(r as unknown as Row)).sort((a, b) => Number(b.areaM2) - Number(a.areaM2));
+  return rows.map(r => toModelRow(r as unknown as Row))
+    .sort((a, b) => Number(b.areaM2) - Number(a.areaM2) || String(a.id).localeCompare(String(b.id)));
 }
+
+/**
+ * The audit action a search leaves on its floor's level, one per search, even
+ * an empty one (spec §5.3's Find rooms that finds nothing still retires the
+ * floor's old drafts). floorDrafts and latestSearch need a moment for every
+ * search, and an empty search creates no roomDraft row to read one from.
+ */
+const FIND_ROOMS = "find-rooms";
 
 /**
  * A new search's drafts in place of the floor's old ones, in one transaction.
  * Accepted drafts are rooms now and are not touched. The old live ones are
- * retired together, at one moment, like every batch removal here.
+ * retired together, at one moment, like every batch removal here. The marker
+ * row is written even when `inputs` is empty, so this search's moment can
+ * still be found.
  */
 export async function replaceDrafts(
   db: Database, levelId: string, source: DraftSource, inputs: readonly unknown[], actor: string,
@@ -86,6 +101,7 @@ export async function replaceDrafts(
   return db.transaction(async t => {
     const tx = t as unknown as Database;
     await liveLevel(tx, levelId);
+    await recordAudit(tx, "level", levelId, FIND_ROOMS, actor, null, null);
     const at = new Date();
     const live = await tx.select().from(roomDrafts)
       .where(and(eq(roomDrafts.levelId, levelId), isNull(roomDrafts.deletedAt)));
@@ -117,6 +133,26 @@ export async function acceptDrafts(db: Database, items: readonly AcceptItem[], a
   }
 }
 
+/**
+ * A draft is fit for a decision: not already a room, not already rejected or
+ * set aside, and at the version the caller expects. Shared by acceptInOne and
+ * decideDrafts's reject/set-aside, so accept and the other two decisions
+ * refuse the same way, in the same words.
+ */
+function waitingDraft(draft: typeof roomDrafts.$inferSelect, expectedVersion: number): void {
+  if (draft.acceptedRoomId) throw new DraftRefusedError(`${draft.nameEn} is on the map already.`);
+  if (draft.deletedAt) {
+    throw new DraftRefusedError(`${draft.nameEn} is no longer waiting for review: it was rejected, or the drawing was searched again.`);
+  }
+  // The draft's version is the check that matters, so it comes before anything is written.
+  if (draft.version !== expectedVersion) throw new VersionConflictError(toModelRow(draft as unknown as Row));
+}
+
+/** The room's name: what the caller gives, trimmed, or the draft's own when they give none. */
+function nameFor(given: string | undefined, draftNameEn: string): string {
+  return given?.trim() || draftNameEn;
+}
+
 async function acceptInOne(db: Database, items: readonly AcceptItem[], actor: string): Promise<Accepted[]> {
   return db.transaction(async t => {
     const tx = t as unknown as Database;
@@ -125,17 +161,12 @@ async function acceptInOne(db: Database, items: readonly AcceptItem[], actor: st
     for (const item of items) {
       const [draft] = await tx.select().from(roomDrafts).where(eq(roomDrafts.id, item.id));
       if (!draft) throw new NotFoundError();
-      if (draft.acceptedRoomId) throw new DraftRefusedError(`${draft.nameEn} is on the map already.`);
-      if (draft.deletedAt) {
-        throw new DraftRefusedError(`${draft.nameEn} is no longer waiting for review: it was rejected, or the drawing was searched again.`);
-      }
-      // The draft's version is the check that matters, so it comes before anything is written.
-      if (draft.version !== item.expectedVersion) throw new VersionConflictError(toModelRow(draft as unknown as Row));
+      waitingDraft(draft, item.expectedVersion);
       if (!draft.footprint) {
         throw new DraftRefusedError(`${draft.nameEn} is left open on the drawing, so it has no shape to add. Draw it by hand.`);
       }
       const level = await liveLevel(tx, draft.levelId);
-      const nameEn = item.nameEn?.trim() || draft.nameEn;
+      const nameEn = nameFor(item.nameEn, draft.nameEn);
       const kind = item.kind ?? (draft.kind as RoomKind);
       const roomId = roomIdFor(level.code, nameEn, taken);
       const room = await createEntity(tx, "room", {
@@ -198,10 +229,18 @@ export type DraftTally = { waiting: number; accepted: number; rejectedOrSetAside
  * rows' at, and a draft it retired has its delete row at that same moment.
  * Both are compared in SQL, to the microsecond; a JavaScript Date keeps only
  * the millisecond.
+ *
+ * A search's own moment is the union of its drafts' create rows and its
+ * FIND_ROOMS marker: an empty search creates no drafts, so without the
+ * marker its moment could not be found at all, and the drafts it retired
+ * would come back neither the previous search's nor its own — just wrong.
  */
 const SEARCH_MOMENTS = (levelId: string) => sql`(
   select a.at from audit_log a join room_drafts s on s.id = a.entity_id
   where a.entity_type = 'roomDraft' and a.action = 'create' and s.level_id = ${levelId}
+  union
+  select f.at from audit_log f
+  where f.entity_type = 'level' and f.action = ${FIND_ROOMS} and f.entity_id = ${levelId}
 )`;
 
 /** Every search's drafts on the floor, decided or not (Plan 6E counts them all), each saying whether a later search retired it. */
@@ -220,7 +259,11 @@ export async function floorDrafts(db: Database, levelId: string): Promise<DraftR
   return rows.map(r => ({ ...r, deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null, retired: Boolean(r.retired) }));
 }
 
-/** The drafts of the floor's latest Find rooms alone: those whose create row has the newest search moment. */
+/**
+ * The drafts of the floor's latest Find rooms alone: those whose create row
+ * has the newest search moment (over every search, empty ones included, so
+ * an empty latest search correctly gives none of the search before it).
+ */
 export async function latestSearch(db: Database, levelId: string): Promise<DraftRow[]> {
   const rows = await db.select({
     id: roomDrafts.id, nameEn: roomDrafts.nameEn, acceptedRoomId: roomDrafts.acceptedRoomId, deletedAt: roomDrafts.deletedAt,
@@ -229,10 +272,7 @@ export async function latestSearch(db: Database, levelId: string): Promise<Draft
     .innerJoin(auditLog, and(eq(auditLog.entityType, "roomDraft"), eq(auditLog.action, "create"), eq(auditLog.entityId, roomDrafts.id)))
     .where(and(
       eq(roomDrafts.levelId, levelId),
-      sql`${auditLog.at} = (
-        select max(a.at) from audit_log a join room_drafts d on d.id = a.entity_id
-        where a.entity_type = 'roomDraft' and a.action = 'create' and d.level_id = ${levelId}
-      )`,
+      sql`${auditLog.at} = (select max(m.at) from ${SEARCH_MOMENTS(levelId)} as m)`,
     ));
   // Nothing has searched after the latest search, so none of its drafts is retired.
   return rows.map(r => ({ ...r, deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null, retired: false }));
@@ -297,7 +337,7 @@ export async function decideDrafts(db: Database, levelId: string, items: readonl
     const made = accepts.length === 0 ? [] : await acceptDrafts(tx, accepts.map(({ id, expectedVersion, nameEn, kind }) => ({
       id, expectedVersion, ...(nameEn ? { nameEn } : {}), ...(kind ? { kind } : {}),
     })), actor);
-    const nameOf = new Map(accepts.map(a => [a.id, a.nameEn?.trim() || drafts.get(a.id)!.nameEn]));
+    const nameOf = new Map(accepts.map(a => [a.id, nameFor(a.nameEn, drafts.get(a.id)!.nameEn)]));
 
     const at = new Date();
     const rejected: string[] = [];
@@ -305,11 +345,7 @@ export async function decideDrafts(db: Database, levelId: string, items: readonl
     for (const item of items) {
       if (item.decision === "accept") continue;
       const draft = drafts.get(item.id)!;
-      if (draft.acceptedRoomId) throw new DraftRefusedError(`${draft.nameEn} is on the map already.`);
-      if (draft.deletedAt) {
-        throw new DraftRefusedError(`${draft.nameEn} is no longer waiting for review: it was rejected, or the drawing was searched again.`);
-      }
-      if (draft.version !== item.expectedVersion) throw new VersionConflictError(toModelRow(draft as unknown as Row));
+      waitingDraft(draft, item.expectedVersion);
       await softDeleteEntity(tx, "roomDraft", draft.id, draft.version, actor, at);
       if (item.decision === "set_aside") {
         await recordAudit(tx, "roomDraft", draft.id, SET_ASIDE, actor, null, { id: draft.id, levelId, nameEn: draft.nameEn });

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createUser, type User } from "../auth/users";
 import type { Database } from "../db/client";
@@ -56,6 +56,16 @@ describe("floorDrafts and latestSearch", () => {
     expect(await floorDrafts(db, "oth-L2")).toEqual([]);
     expect(await latestSearch(db, "oth-L2")).toEqual([]);
   });
+
+  it("counts a floor's drafts retired, not rejected, when a later Find rooms finds nothing there", async () => {
+    await search(["Shop", "Store"]);
+    await search([]); // an empty search still retires the floor's old drafts, with no create row of its own
+    const rows = await floorDrafts(db, "oth-L1");
+    expect(rows.every(r => r.retired)).toBe(true);
+    expect(tallyDrafts(rows)).toEqual({ waiting: 0, accepted: 0, rejectedOrSetAside: 0 });
+    // The empty search is the floor's latest, so it correctly gives none of the search before it.
+    expect(await latestSearch(db, "oth-L1")).toEqual([]);
+  });
 });
 
 describe("decideDrafts", () => {
@@ -98,5 +108,19 @@ describe("decideDrafts", () => {
     await expect(decideDrafts(db, "oth-L1", [
       { id, expectedVersion: 1, decision: "reject" }, { id, expectedVersion: 1, decision: "reject" },
     ], wei.id)).rejects.toBeInstanceOf(DraftRefusedError);
+  });
+
+  it("rolls back an earlier reject or set-aside when a later item in the same call fails", async () => {
+    const drafts = await search(["Hall", "Sliver", "Plaza"]);
+    await expect(decideDrafts(db, "oth-L1", [
+      { id: idOf(drafts, "Hall"), expectedVersion: 0, decision: "reject" },
+      { id: idOf(drafts, "Plaza"), expectedVersion: 0, decision: "set_aside" },
+      { id: idOf(drafts, "Sliver"), expectedVersion: 4, decision: "reject" },
+    ], wei.id)).rejects.toBeInstanceOf(VersionConflictError);
+    // Hall and Plaza are still waiting: their earlier reject and set-aside were rolled back too.
+    const rows = await floorDrafts(db, "oth-L1");
+    expect(rows.every(r => r.deletedAt === null)).toBe(true);
+    expect(await db.select().from(auditLog).where(eq(auditLog.action, SET_ASIDE))).toEqual([]);
+    expect(await db.select().from(auditLog).where(and(eq(auditLog.entityType, "roomDraft"), eq(auditLog.action, "delete")))).toEqual([]);
   });
 });

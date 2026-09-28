@@ -12,10 +12,9 @@ export type Decision = { draft: RoomDraft; nameEn: string; kind: RoomKind };
  * Drafts made rooms, all or none, with one Undo for the lot (spec §5.2 step
  * 7). Claude Code's decide_drafts reaches the same service, so its accepts
  * undo the same way; its generic tools still can't write a draft's shape.
- * Through the saver, so a conflict is the
- * banner, a failure is the usual toast, and the map reloads once it lands.
- * The drafts reload either way: after a refusal, the list has usually moved
- * on (a teammate searched again).
+ * Through the saver, so a conflict is the banner, a failure is the usual
+ * toast, and the map reloads once it lands. The drafts reload either way:
+ * after a refusal, the list has usually moved on (a teammate searched again).
  */
 export async function acceptDrafts(ctx: ReviewContext, decisions: readonly Decision[]): Promise<boolean> {
   if (decisions.length === 0) return false;
