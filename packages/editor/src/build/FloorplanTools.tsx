@@ -28,11 +28,26 @@ function couldBePlan(file: File): boolean {
 }
 
 /**
- * The plan on its way up, by name. Shared rather than kept by one picker, so
- * a Retry from the toast shows it too, and a drop cannot start a second
- * upload beside it.
+ * Per floor, the plan on its way up, by name. Shared rather than kept by one
+ * picker, so a Retry from the toast shows it too, and a drop cannot start a
+ * second upload beside it. By floor, so an upload still going on L1 neither
+ * shows nor blocks on L2 once you switch.
  */
-const useAddingPlan = create<{ name: string | null }>(() => ({ name: null }));
+const useAddingPlan = create<{ byLevel: Readonly<Record<string, string>> }>(() => ({ byLevel: {} }));
+
+function setAdding(levelId: string, name: string | null): void {
+  useAddingPlan.setState(s => {
+    const byLevel = { ...s.byLevel };
+    if (name == null) delete byLevel[levelId];
+    else byLevel[levelId] = name;
+    return { byLevel };
+  });
+}
+
+/** The name of the plan going up for this floor, if one is. */
+function useAddingOn(levelId: string | null): string | null {
+  return useAddingPlan(s => (levelId ? s.byLevel[levelId] ?? null : null));
+}
 
 /** Adds a floor's plan. The server retires the floor's old one as it stores this. */
 export async function uploadPlan(api: Api, levelId: string, file: File): Promise<void> {
@@ -40,32 +55,56 @@ export async function uploadPlan(api: Api, levelId: string, file: File): Promise
     toast({ tone: "error", message: `Couldn't add ${file.name}. Export the sheet as a PNG or JPEG under 20 MB.` });
     return;
   }
-  useAddingPlan.setState({ name: file.name });
+  setAdding(levelId, file.name);
   let created: LevelImage;
   try {
     created = await api.uploadLevelImage(levelId, file);
   } catch (err) {
-    useAddingPlan.setState({ name: null });
+    setAdding(levelId, null);
     reportFailure(err, { doing: `add ${file.name}`, retry: () => uploadPlan(api, levelId, file) });
     return;
   }
   const s = useEditorStore.getState();
   s.setLevelImages([...s.levelImages.filter(i => i.levelId !== levelId), created]);
-  useAddingPlan.setState({ name: null });
+  setAdding(levelId, null);
   toast({ tone: "success", message: `Added ${file.name}. Now set its scale.` });
 }
+
+/** Per plan, the last save queued for it; forgotten once the queue is empty. */
+const planSaves = new Map<string, Promise<boolean>>();
 
 /**
  * Changes a plan's scale, place or opacity. The answer is the whole image, so
  * there is nothing else to reload: none of these changes any validation.
  * True once the server has it, so a caller can wait for that before moving on.
+ *
+ * One save per plan at a time. Each carries the version the server gave the
+ * one before it: sent side by side, the second would carry a version the first
+ * had already moved past, and the server would refuse your own nudge as
+ * someone else's change. An Align drop and a scale, or two drops in a row,
+ * overlap easily over Railway's round trip.
  */
-export async function patchPlan(
+export function patchPlan(
   api: Api, image: LevelImage, patch: LevelImagePatch, words: { doing: string; done?: string },
 ): Promise<boolean> {
+  const before = planSaves.get(image.id);
+  // Each save settles to a boolean and never throws, so one that fails still lets the next go.
+  const saving = before ? before.then(() => sendPlanPatch(api, image, patch, words)) : sendPlanPatch(api, image, patch, words);
+  planSaves.set(image.id, saving);
+  void saving.then(() => {
+    if (planSaves.get(image.id) === saving) planSaves.delete(image.id);
+  });
+  return saving;
+}
+
+async function sendPlanPatch(
+  api: Api, image: LevelImage, patch: LevelImagePatch, words: { doing: string; done?: string },
+): Promise<boolean> {
+  // The version as it is now, after the saves queued ahead of this one.
+  const version = useEditorStore.getState().levelImages.find(i => i.id === image.id)?.version ?? image.version;
   let updated: LevelImage;
   try {
-    updated = await api.patchLevelImage(image.id, image.version, patch);
+    updated = await api.patchLevelImage(image.id, version, patch);
   } catch (err) {
     reportFailure(err, { doing: words.doing, retry: () => patchPlan(api, image, patch, words).then(() => {}) });
     return false;
@@ -80,11 +119,10 @@ export async function patchPlan(
 const opacityWanted = new Map<string, number>();
 
 /**
- * Saves a plan's opacity one request at a time. The slider can be let go again
- * before the last save has answered, and a second save sent with the same
- * version would be refused as a teammate's change. So the newest value waits,
- * and goes once the save in flight answers, with the version that answer
- * brought; values let go of in between are never sent.
+ * Saves a plan's opacity. The slider can be let go again and again before the
+ * last save has answered: the newest value waits, and goes once the save in
+ * flight answers; values let go of in between are never sent. `patchPlan`
+ * keeps it in line with the plan's other saves.
  */
 async function saveOpacity(api: Api, imageId: string, opacity: number): Promise<void> {
   const inFlight = opacityWanted.has(imageId);
@@ -144,7 +182,7 @@ function PlanPicker({ label, busy, onFile, className, hover }: {
  */
 export function PlanDropZone({ api }: { api: Api }) {
   const levelId = useEditorStore(s => s.activeLevelId);
-  const adding = useAddingPlan(s => s.name);
+  const adding = useAddingOn(levelId);
   const [over, setOver] = useState(false);
   const take = (file: File | undefined) => {
     if (file && levelId && !adding) void uploadPlan(api, levelId, file);
@@ -194,8 +232,10 @@ export function FloorplanTools({ api }: { api: Api }) {
   const levelId = useEditorStore(s => s.activeLevelId);
   const images = useEditorStore(s => s.levelImages);
   const tool = useEditorStore(s => s.tool);
-  const adding = useAddingPlan(s => s.name);
+  const adding = useAddingOn(levelId);
   const image = imageForLevel(images, levelId);
+  // A replacement waiting for you to say yes: see `replaceWith`.
+  const [replacing, setReplacing] = useState<File | null>(null);
 
   if (!image || !levelId) {
     return <p className="text-xs text-stone-600">Start with the plan: drop it in the box on the canvas.</p>;
@@ -204,6 +244,14 @@ export function FloorplanTools({ api }: { api: Api }) {
   const commitOpacity = (value: string) => {
     const opacity = Number(value);
     if (Number.isFinite(opacity)) void saveOpacity(api, image.id, opacity);
+  };
+
+  // The server retires the old plan as it stores the new one, and with it the
+  // scale and position you gave it; nothing can Undo that. An unscaled plan
+  // has little to lose, so only a scaled one asks first.
+  const replaceWith = (file: File) => {
+    if (image.metresPerPixel == null) void uploadPlan(api, levelId, file);
+    else setReplacing(file);
   };
 
   return (
@@ -222,7 +270,7 @@ export function FloorplanTools({ api }: { api: Api }) {
         <PlanPicker
           label="Replace plan…"
           busy={adding != null}
-          onFile={file => void uploadPlan(api, levelId, file)}
+          onFile={replaceWith}
           className="h-7 border border-stone-300 bg-white px-2.5 text-xs"
           hover="hover:bg-stone-100"
         />
@@ -230,6 +278,28 @@ export function FloorplanTools({ api }: { api: Api }) {
           {adding ? `Adding ${adding}…` : ""}
         </span>
       </div>
+
+      {replacing && image.metresPerPixel != null && (
+        <div className="space-y-2 rounded border border-yours/30 bg-yours-soft p-2">
+          <Warning>
+            {`This plan is scaled at ${image.metresPerPixel.toFixed(4)} m per pixel. Replacing it with ${replacing.name} loses its scale and position, and you can't undo that.`}
+          </Warning>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={adding != null}
+              onClick={() => {
+                setReplacing(null);
+                void uploadPlan(api, levelId, replacing);
+              }}
+            >
+              Replace plan
+            </Button>
+            <Button size="sm" onClick={() => setReplacing(null)}>Keep this plan</Button>
+          </div>
+        </div>
+      )}
 
       <label className="block text-xs text-stone-700">
         Plan opacity

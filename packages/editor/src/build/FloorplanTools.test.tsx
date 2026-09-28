@@ -1,11 +1,11 @@
 import { parseModel } from "@oth/model";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { ApiError, ConflictError, type Api, type LevelImage } from "../api/client";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
-import { FloorplanTools, PlanDropZone } from "./FloorplanTools";
+import { FloorplanTools, PlanDropZone, patchPlan } from "./FloorplanTools";
 
 const model = parseModel({
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
@@ -97,12 +97,97 @@ describe("PlanDropZone", () => {
     expect(screen.getByLabelText("Choose a file")).not.toBeDisabled();
   });
 
+  it("is busy only on the floor whose plan is going up, so another floor's plan can go up beside it", async () => {
+    const finish: ((image: LevelImage) => void)[] = [];
+    const uploadLevelImage = vi.fn(() => new Promise<LevelImage>(resolve => { finish.push(resolve); }));
+    render(<PlanDropZone api={api({ uploadLevelImage })} />);
+    fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [file("L1.jpg")] } });
+    expect(await screen.findByText("Adding L1.jpg…")).toBeTruthy();
+
+    act(() => useEditorStore.getState().setActiveLevel("oth-L2"));
+    expect(screen.getByText("Drop this floor's plan here")).toBeTruthy();
+    expect(screen.getByLabelText("Choose a file")).not.toBeDisabled();
+    const l2 = file("L2.jpg");
+    fireEvent.drop(screen.getByTestId("plan-drop-zone"), { dataTransfer: { files: [l2] } });
+    expect(uploadLevelImage).toHaveBeenLastCalledWith("oth-L2", l2);
+    expect(await screen.findByText("Adding L2.jpg…")).toBeTruthy();
+
+    finish[0]!({ ...image, filename: "L1.jpg" });
+    finish[1]!({ ...image, id: "img_2", levelId: "oth-L2", filename: "L2.jpg" });
+    await waitFor(() => expect(useEditorStore.getState().levelImages.map(i => i.filename).sort()).toEqual(["L1.jpg", "L2.jpg"]));
+  });
+
   it("says nothing of its own when the session has ended: the sign-in dialog is the message", async () => {
     const a = api({ uploadLevelImage: vi.fn(async () => { throw new ApiError(401, { error: "sign in" }); }) });
     render(<PlanDropZone api={a} />);
     fireEvent.change(screen.getByLabelText("Choose a file"), { target: { files: [file("L1.jpg")] } });
     await waitFor(() => expect(a.uploadLevelImage).toHaveBeenCalledTimes(1));
     expect(useToasts.getState().toasts).toEqual([]);
+  });
+});
+
+describe("patchPlan", () => {
+  /**
+   * A server that, like the real one, refuses a save made against a version
+   * it has since moved past. Every save waits for `answer`, so two can be on
+   * their way at once, as they are over Railway's round trip.
+   */
+  function slowServer() {
+    let serverVersion = 0;
+    let answer!: () => void;
+    const answered = new Promise<void>(resolve => { answer = resolve; });
+    const patchLevelImage = vi.fn(async (_id: string, version: number, patch: Record<string, unknown>) => {
+      await answered;
+      if (version !== serverVersion) throw new ConflictError(null, { error: "stale" });
+      serverVersion += 1;
+      return { ...useEditorStore.getState().levelImages[0]!, ...patch, version: serverVersion };
+    });
+    return { patchLevelImage, answer };
+  }
+
+  beforeEach(() => useEditorStore.getState().setLevelImages([image]));
+
+  it("saves one change to a plan at a time, each with the version the last one brought, so your own nudges never conflict", async () => {
+    const { patchLevelImage, answer } = slowServer();
+    const a = api({ patchLevelImage });
+    // An Align drop, then a scale, before the drop has answered.
+    const moved = patchPlan(a, image, { offsetX: 5, offsetY: 2 }, { doing: "move the plan" });
+    const scaled = patchPlan(a, image, { metresPerPixel: 0.21 }, { doing: "set the scale" });
+    expect(patchLevelImage).toHaveBeenCalledTimes(1);
+    answer();
+    expect(await moved).toBe(true);
+    expect(await scaled).toBe(true);
+    expect(patchLevelImage.mock.calls.map(c => c[1])).toEqual([0, 1]);
+    expect(useEditorStore.getState().levelImages[0]).toMatchObject({ offsetX: 5, offsetY: 2, metresPerPixel: 0.21, version: 2 });
+    expect(useToasts.getState().toasts).toEqual([]);
+  });
+
+  it("keeps opacity in the same line as the other changes", async () => {
+    const { patchLevelImage, answer } = slowServer();
+    const a = api({ patchLevelImage });
+    render(<FloorplanTools api={a} />);
+    const moved = patchPlan(a, image, { offsetX: 5, offsetY: 2 }, { doing: "move the plan" });
+    const slider = screen.getByLabelText("Plan opacity");
+    fireEvent.change(slider, { target: { value: "0.8" } });
+    fireEvent.mouseUp(slider);
+    answer();
+    await moved;
+    await waitFor(() => expect(useEditorStore.getState().levelImages[0]!.opacity).toBe(0.8));
+    expect(patchLevelImage.mock.calls.map(c => [c[1], c[2]])).toEqual([[0, { offsetX: 5, offsetY: 2 }], [1, { opacity: 0.8 }]]);
+    expect(useToasts.getState().toasts).toEqual([]);
+  });
+
+  it("sends the next change even when the one before it failed", async () => {
+    const patchLevelImage = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockImplementationOnce(async (_id: string, version: number, patch: Record<string, unknown>) => ({ ...image, ...patch, version: version + 1 }));
+    const a = api({ patchLevelImage });
+    const moved = patchPlan(a, image, { offsetX: 5, offsetY: 2 }, { doing: "move the plan" });
+    const scaled = patchPlan(a, image, { metresPerPixel: 0.21 }, { doing: "set the scale" });
+    expect(await moved).toBe(false);
+    expect(await scaled).toBe(true);
+    expect(patchLevelImage).toHaveBeenCalledTimes(2);
+    expect(lastToast()?.message).toBe("Couldn't move the plan. Check your connection, then retry.");
   });
 });
 
@@ -323,6 +408,36 @@ describe("FloorplanTools", () => {
     finish({ ...image, id: "img_2", filename: "L1 v2.jpg" });
     await waitFor(() => expect(screen.getByLabelText("Replace plan…")).not.toBeDisabled());
     expect(useEditorStore.getState().levelImages.map(i => i.filename)).toEqual(["L1 v2.jpg"]);
+  });
+
+  describe("replacing a plan that has a scale", () => {
+    // The server retires the old plan, and its scale and position with it,
+    // and there is nothing to Undo it with: so it asks first.
+    beforeEach(() => useEditorStore.getState().setLevelImages([{ ...image, metresPerPixel: 0.07 }]));
+
+    it("warns what goes with it, and replaces it only once you say so", async () => {
+      const a = api();
+      render(<FloorplanTools api={a} />);
+      fireEvent.change(screen.getByLabelText("Replace plan…"), { target: { files: [file("L1 v2.jpg")] } });
+      const warning = screen.getByText(/Replacing it with L1 v2\.jpg/);
+      expect(warning.textContent).toBe(
+        "! Warning: This plan is scaled at 0.0700 m per pixel. Replacing it with L1 v2.jpg loses its scale and position, and you can't undo that.",
+      );
+      expect(a.uploadLevelImage).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Replace plan" }));
+      await waitFor(() => expect(a.uploadLevelImage).toHaveBeenCalledWith("oth-L1", expect.objectContaining({ name: "L1 v2.jpg" })));
+      expect(screen.queryByText(/Replacing it with/)).toBeNull();
+      await waitFor(() => expect(useEditorStore.getState().levelImages.map(i => i.filename)).toEqual(["L1 v2.jpg"]));
+    });
+
+    it("keeps the plan when you say so", () => {
+      const a = api();
+      render(<FloorplanTools api={a} />);
+      fireEvent.change(screen.getByLabelText("Replace plan…"), { target: { files: [file("L1 v2.jpg")] } });
+      fireEvent.click(screen.getByRole("button", { name: "Keep this plan" }));
+      expect(screen.queryByText(/Replacing it with/)).toBeNull();
+      expect(a.uploadLevelImage).not.toHaveBeenCalled();
+    });
   });
 
   it("names each control by the words it shows, so a voice command can find it (WCAG 2.5.3)", () => {
