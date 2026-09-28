@@ -28,6 +28,9 @@ const ConfigSchema = z.object({
    * Unset, nothing is gated: right locally, refused in production.
    */
   TEAM_CODE: optionalSetting,
+  /** Set by Railway on every service it runs; see isDeployed. */
+  RAILWAY_ENVIRONMENT_NAME: optionalSetting,
+  RAILWAY_PROJECT_ID: optionalSetting,
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -37,13 +40,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 }
 
 /**
- * Why this server must not start serving, or null when it may. Production
+ * Whether this is the deployed app: production by NODE_ENV, or anywhere
+ * Railway runs it. Railway's own variables count too, so a NODE_ENV left out
+ * or overridden on the service can never serve the app open.
+ */
+export function isDeployed(config: Config): boolean {
+  return config.NODE_ENV === "production" ||
+    config.RAILWAY_ENVIRONMENT_NAME !== undefined ||
+    config.RAILWAY_PROJECT_ID !== undefined;
+}
+
+/**
+ * Why this server must not start serving, or null when it may. Deployed
  * without a team code would be the whole app, open to anyone with its
  * address, so it is refused rather than served (spec §13). Never repeats the
  * code, which would put it in Railway's logs.
  */
 export function teamCodeProblem(config: Config): string | null {
-  if (config.NODE_ENV !== "production") return null;
+  if (!isDeployed(config)) return null;
   if (!config.TEAM_CODE) {
     return "TEAM_CODE is not set, and in production the app is not served without it. " +
       "Set TEAM_CODE on the Railway service, then redeploy.";

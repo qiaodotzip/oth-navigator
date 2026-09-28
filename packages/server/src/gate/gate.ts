@@ -1,4 +1,6 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getCookie, setCookie } from "hono/cookie";
@@ -27,17 +29,68 @@ export const WRONG_CODE_LIMIT = { max: 20, windowMs: 15 * 60_000 };
 
 export const WRONG_CODE = "That isn't the team code. Check it and try again.";
 export const TOO_MANY = "Too many wrong codes. Wait 15 minutes, then try again.";
+export const TOO_LARGE = "That form is too large. Check the code and try again.";
 
 /** What an API call gets without the code. `gate` tells the editor this is not a signed-out session. */
 export const GATE_REFUSAL = { error: "Enter the team code first: reload the page.", gate: true };
 
 /**
- * What the cookie holds: proof of the code, never the code. It is keyed on
- * the code itself, so a new code turns every old cookie away with no list of
- * cookies to revoke.
+ * Every answer that is the team-code page. It needs nothing but its own inline
+ * style and its own form, so it is allowed nothing else, and it is never shown
+ * in another site's frame, where the code could be typed into a disguise.
  */
-export function gateToken(code: string): string {
-  return createHmac("sha256", code).update("oth-team-gate/1").digest("base64url");
+const PAGE_HEADERS = {
+  "cache-control": "no-store",
+  "content-security-policy":
+    "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+  "x-frame-options": "DENY",
+};
+
+/** Where in DATA_DIR the gate's key is kept. On Railway that is the volume, so it outlives a deploy. */
+export const GATE_KEY_FILE = "gate.key";
+const GATE_KEY_BYTES = 32;
+
+/**
+ * The server's own secret for the gate cookie: made on first boot, then read
+ * on every boot after, so a deploy keeps everyone through the gate. The repo
+ * is public, so a pass made from the code alone could be computed for every
+ * guess and tried against the cookie check, which no limit slows. A file that
+ * is not a whole key is replaced, which only asks everyone for the code again.
+ *
+ * Anything else that stops it being read or written is thrown, with what to
+ * do next, and never the key: the server must stop rather than make up a key
+ * that would last only until the next restart and hide a missing volume.
+ */
+export async function loadGateKey(dataDir: string): Promise<Buffer> {
+  const path = join(dataDir, GATE_KEY_FILE);
+  try {
+    const kept = await readFile(path).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return null;
+      throw err;
+    });
+    if (kept?.length === GATE_KEY_BYTES) return kept;
+    const key = randomBytes(GATE_KEY_BYTES);
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(path, key, { mode: 0o600 });
+    // The mode above applies only to a new file; a replaced one keeps its own.
+    await chmod(path, 0o600);
+    return key;
+  } catch (err) {
+    const reason = (err as NodeJS.ErrnoException).code ?? "unknown error";
+    throw new Error(
+      `The team gate's key at ${path} could not be read or written (${reason}). ` +
+      "Check that DATA_DIR points at the mounted volume and that the server can write to it, then redeploy.",
+    );
+  }
+}
+
+/**
+ * What the cookie holds: proof of the code, never the code. It is the
+ * server's key over the code, so no one without the key can make one, and a
+ * new code turns every old cookie away with no list of cookies to revoke.
+ */
+export function gateToken(key: Buffer, code: string): string {
+  return createHmac("sha256", key).update(code).digest("base64url");
 }
 
 /** Constant time whatever the lengths: both sides are hashed to 32 bytes first. */
@@ -95,10 +148,11 @@ export class WrongCodes {
 
 /**
  * The shared team code in front of the app (spec §13): `guard` goes before
- * every route, `routes` answers the form at `/api/gate`.
+ * every route, `routes` answers the form at `/api/gate`. `key` is the one
+ * loadGateKey keeps.
  */
-export function teamGate(code: string, options: { secure: boolean; now?: () => number }) {
-  const token = gateToken(code);
+export function teamGate(code: string, options: { key: Buffer; secure: boolean; now?: () => number }) {
+  const token = gateToken(options.key, code);
   const tokenBytes = Buffer.from(token);
   const wrong = new WrongCodes();
   const now = options.now ?? Date.now;
@@ -109,9 +163,9 @@ export function teamGate(code: string, options: { secure: boolean; now?: () => n
     // Railway's health check, and the form's own answer, come before any code.
     if (path === "/api/health" || path === "/api/gate") return next();
     if (!holdsPass(getCookie(c, GATE_COOKIE), tokenBytes)) {
-      if (path.startsWith("/api/")) return c.json(GATE_REFUSAL, 401);
+      if (path.startsWith("/api/")) return c.json(GATE_REFUSAL, 401, noStore);
       const url = new URL(c.req.url);
-      return c.html(gatePage({ next: safeNext(url.pathname + url.search) }), 401, noStore);
+      return c.html(gatePage({ next: safeNext(url.pathname + url.search) }), 401, PAGE_HEADERS);
     }
     await next();
     // Behind the gate is for the team alone. A cache between here and the
@@ -127,7 +181,7 @@ export function teamGate(code: string, options: { secure: boolean; now?: () => n
 
   const formLimit = bodyLimit({
     maxSize: GATE_FORM_MAX_BYTES,
-    onError: c => c.html(gatePage({ next: "/", error: WRONG_CODE }), 413, noStore),
+    onError: c => c.html(gatePage({ next: "/", error: TOO_LARGE }), 413, PAGE_HEADERS),
   });
 
   routes.post("/", formLimit, async c => {
@@ -137,10 +191,10 @@ export function teamGate(code: string, options: { secure: boolean; now?: () => n
     const at = now();
     // Refused unchecked while blocked, the right code too: otherwise a guess
     // that redirected would still say it was right.
-    if (wrong.blocked(at)) return c.html(gatePage({ next, error: TOO_MANY }), 429, noStore);
+    if (wrong.blocked(at)) return c.html(gatePage({ next, error: TOO_MANY }), 429, PAGE_HEADERS);
     if (!codeMatches(typed, code)) {
       wrong.record(at);
-      return c.html(gatePage({ next, error: WRONG_CODE }), 401, noStore);
+      return c.html(gatePage({ next, error: WRONG_CODE }), 401, PAGE_HEADERS);
     }
     setCookie(c, GATE_COOKIE, token, {
       httpOnly: true,

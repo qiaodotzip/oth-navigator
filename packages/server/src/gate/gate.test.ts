@@ -1,20 +1,36 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { createHmac, randomBytes } from "node:crypto";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
 import { createTestDb, json } from "../testing/harness";
 import {
-  GATE_COOKIE, GATE_FORM_MAX_BYTES, GATE_REFUSAL, TOO_MANY, WRONG_CODE, WRONG_CODE_LIMIT, WrongCodes,
-  codeMatches, gateToken, safeNext, teamGate,
+  GATE_COOKIE, GATE_FORM_MAX_BYTES, GATE_KEY_FILE, GATE_REFUSAL, TOO_LARGE, TOO_MANY, WRONG_CODE,
+  WRONG_CODE_LIMIT, WrongCodes, codeMatches, gateToken, loadGateKey, safeNext, teamGate,
 } from "./gate";
 import { escapeHtml } from "./page";
 
 const CODE = "red kite hill";
 
+/** The server's own key, fixed so a pass made by one app is good on another with the same key. */
+const KEY = Buffer.alloc(32, 7);
+
 async function gatedApp(teamCode: string | null = CODE) {
-  return createApp({ db: await createTestDb(), teamCode });
+  return createApp({ db: await createTestDb(), teamCode, gateKey: KEY });
 }
+
+const madeDirs: string[] = [];
+
+async function tempDir(prefix = "oth-gate-") {
+  const dir = await mkdtemp(join(tmpdir(), prefix));
+  madeDirs.push(dir);
+  return dir;
+}
+
+afterEach(async () => {
+  await Promise.all(madeDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })));
+});
 
 /** What the team-code page's form sends. */
 const form = (fields: Record<string, string>) => ({ method: "POST", body: new URLSearchParams(fields) });
@@ -68,7 +84,7 @@ describe("the team code gate", () => {
   });
 
   it("marks the cookie Secure when asked to, as production does", async () => {
-    const { routes } = teamGate(CODE, { secure: true });
+    const { routes } = teamGate(CODE, { key: KEY, secure: true });
     const res = await routes.request("/", form({ code: CODE, next: "/" }));
     expect(res.headers.get("set-cookie")).toContain("Secure");
   });
@@ -141,9 +157,13 @@ describe("gate pieces", () => {
   });
 
   it("makes a token that is stable for a code, differs between codes, and does not contain it", () => {
-    expect(gateToken(CODE)).toBe(gateToken(CODE));
-    expect(gateToken("amber fox meadow")).not.toBe(gateToken(CODE));
-    expect(gateToken(CODE)).not.toContain("kite");
+    expect(gateToken(KEY, CODE)).toBe(gateToken(KEY, CODE));
+    expect(gateToken(KEY, "amber fox meadow")).not.toBe(gateToken(KEY, CODE));
+    expect(gateToken(KEY, CODE)).not.toContain("kite");
+  });
+
+  it("makes a different token for the same code on a server with another key", () => {
+    expect(gateToken(Buffer.alloc(32, 8), CODE)).not.toBe(gateToken(KEY, CODE));
   });
 
   it("counts wrong codes in a sliding window", () => {
@@ -160,7 +180,7 @@ describe("gate pieces", () => {
 
 /** A built editor, so the static routes would serve these files if the gate let them. */
 async function distWithBuild() {
-  const dir = await mkdtemp(join(tmpdir(), "oth-gate-dist-"));
+  const dir = await tempDir("oth-gate-dist-");
   await writeFile(join(dir, "index.html"), "<!doctype html><title>OTH Map Editor</title>");
   await mkdir(join(dir, "assets"), { recursive: true });
   await writeFile(join(dir, "assets", "index-abc123.js"), "console.log(1)");
@@ -174,7 +194,7 @@ async function passFor(app: ReturnType<typeof createApp>) {
 
 describe("what the gate stands in front of", () => {
   it("serves its own page, not the built app, for the index, a client route and an asset", async () => {
-    const app = createApp({ db: await createTestDb(), teamCode: CODE, editorDist: await distWithBuild() });
+    const app = createApp({ db: await createTestDb(), teamCode: CODE, gateKey: KEY, editorDist: await distWithBuild() });
     for (const path of ["/", "/floors/L1/survey", "/assets/index-abc123.js"]) {
       const res = await app.request(path);
       expect(res.status).toBe(401);
@@ -199,6 +219,7 @@ describe("what the gate stands in front of", () => {
     ] as const) {
       const res = await app.request(path, { method });
       expect(res.status, `${method} ${path}`).toBe(401);
+      expect(res.headers.get("cache-control")).toBe("no-store");
       expect(await json(res)).toEqual(GATE_REFUSAL);
     }
   });
@@ -211,7 +232,7 @@ describe("what the gate stands in front of", () => {
   });
 
   it("serves the app once the code is typed, and tells any cache between to keep it private", async () => {
-    const app = createApp({ db: await createTestDb(), teamCode: CODE, editorDist: await distWithBuild() });
+    const app = createApp({ db: await createTestDb(), teamCode: CODE, gateKey: KEY, editorDist: await distWithBuild() });
     const cookie = await passFor(app);
     const asset = await app.request("/assets/index-abc123.js", { headers: { cookie } });
     expect(asset.status).toBe(200);
@@ -219,23 +240,129 @@ describe("what the gate stands in front of", () => {
     expect(await (await app.request("/", { headers: { cookie } })).text()).toContain("OTH Map Editor");
   });
 
-  it("marks the cookie Secure in production, though TLS ends at Railway's proxy and the request arrives as http", async () => {
-    vi.stubEnv("NODE_ENV", "production");
-    try {
-      const app = await gatedApp();
-      const res = await app.request("http://oth.internal/api/gate", form({ code: CODE, next: "/" }));
-      expect(res.status).toBe(303);
-      expect(res.headers.get("set-cookie")).toContain("Secure");
-    } finally {
-      vi.unstubAllEnvs();
+  it("marks the cookie Secure when deployed, though TLS ends at Railway's proxy and the request arrives as http", async () => {
+    // Production by NODE_ENV, or on Railway with NODE_ENV left as it is here.
+    for (const [name, value] of [["NODE_ENV", "production"], ["RAILWAY_ENVIRONMENT_NAME", "production"]] as const) {
+      vi.stubEnv(name, value);
+      try {
+        const app = await gatedApp();
+        const res = await app.request("http://oth.internal/api/gate", form({ code: CODE, next: "/" }));
+        expect(res.status, name).toBe(303);
+        expect(res.headers.get("set-cookie"), name).toContain("Secure");
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    }
+  });
+
+  it("forbids its page any script, anything fetched, any frame, and any form but its own", async () => {
+    const app = await gatedApp();
+    const pages = [
+      await app.request("/"),
+      await app.request("/api/gate", form({ code: "wrong", next: "/" })),
+      await app.request("/api/gate", form({ code: "x".repeat(GATE_FORM_MAX_BYTES), next: "/" })),
+    ];
+    for (const page of pages) {
+      expect(page.headers.get("content-security-policy")).toBe(
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      );
+      expect(page.headers.get("x-frame-options")).toBe("DENY");
+      expect(page.headers.get("cache-control")).toBe("no-store");
     }
   });
 });
 
+describe("the gate's key", () => {
+  it("is made on first boot, kept in DATA_DIR, and the same on every boot after", async () => {
+    const dataDir = join(await tempDir(), "data");
+    const first = await loadGateKey(dataDir);
+    expect(first.length).toBe(32);
+    expect(await readFile(join(dataDir, GATE_KEY_FILE))).toEqual(first);
+    expect(await loadGateKey(dataDir)).toEqual(first);
+  });
+
+  it("differs from one server to the next", async () => {
+    expect(await loadGateKey(await tempDir())).not.toEqual(await loadGateKey(await tempDir()));
+  });
+
+  it("replaces a key file that does not hold a whole key", async () => {
+    const dataDir = await tempDir();
+    await writeFile(join(dataDir, GATE_KEY_FILE), "short");
+    const key = await loadGateKey(dataDir);
+    expect(key.length).toBe(32);
+    expect(await loadGateKey(dataDir)).toEqual(key);
+  });
+
+  // Windows has no owner-only file mode to check; Railway runs Linux.
+  it.skipIf(process.platform === "win32")("is readable by the server's own user alone", async () => {
+    const dataDir = await tempDir();
+    await loadGateKey(dataDir);
+    expect((await stat(join(dataDir, GATE_KEY_FILE))).mode & 0o777).toBe(0o600);
+
+    const replaced = await tempDir();
+    await writeFile(join(replaced, GATE_KEY_FILE), "short");
+    await chmod(join(replaced, GATE_KEY_FILE), 0o644);
+    await loadGateKey(replaced);
+    expect((await stat(join(replaced, GATE_KEY_FILE))).mode & 0o777).toBe(0o600);
+  });
+
+  it("stops, saying what to check, when DATA_DIR cannot hold it", async () => {
+    // A file where the volume's folder should be: nothing can be made beneath it.
+    const blocker = join(await tempDir(), "not-a-folder");
+    await writeFile(blocker, "");
+    const loading = loadGateKey(join(blocker, "data"));
+    await expect(loading).rejects.toThrow(/could not be read or written/);
+    await expect(loading).rejects.toThrow(/DATA_DIR points at the mounted volume/);
+  });
+
+  it("stops rather than replace a key it cannot read", async () => {
+    const dataDir = await tempDir();
+    await mkdir(join(dataDir, GATE_KEY_FILE));
+    await expect(loadGateKey(dataDir)).rejects.toThrow(/could not be read or written/);
+  });
+
+  it("is never made up when deployed, where it would sign everyone out on each restart", async () => {
+    const db = await createTestDb();
+    for (const [name, value] of [["NODE_ENV", "production"], ["RAILWAY_PROJECT_ID", "a1b2c3"]] as const) {
+      vi.stubEnv(name, value);
+      try {
+        expect(() => createApp({ db, teamCode: CODE }), name).toThrow(/needs its key/);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    }
+  });
+
+  it("without a kept key, makes one for this process alone, so no pass works on another", async () => {
+    const one = createApp({ db: await createTestDb(), teamCode: CODE });
+    const other = createApp({ db: await createTestDb(), teamCode: CODE });
+    const cookie = await passFor(one);
+    expect((await one.request("/api/auth/people", { headers: { cookie } })).status).toBe(200);
+    expect((await other.request("/api/auth/people", { headers: { cookie } })).status).toBe(401);
+  });
+});
+
 describe("the gate under attack", () => {
+  it("turns away a pass computed from the right code without the server's key", async () => {
+    // The repo is public, so anything computed from the code alone could be
+    // made for every guess and tried against the cookie check, which has no limit.
+    const app = await gatedApp();
+    for (const pass of [
+      createHmac("sha256", CODE).update("oth-team-gate/1").digest("base64url"),
+      createHmac("sha256", Buffer.alloc(32)).update(CODE).digest("base64url"),
+      gateToken(randomBytes(32), CODE),
+    ]) {
+      const res = await app.request("/api/auth/people", { headers: { cookie: `${GATE_COOKIE}=${pass}` } });
+      expect(res.status).toBe(401);
+      expect(await json(res)).toEqual(GATE_REFUSAL);
+    }
+    // The pass the form gives out is the key's HMAC of the code, and nothing less.
+    expect(await passFor(app)).toBe(`${GATE_COOKIE}=${gateToken(KEY, CODE)}`);
+  });
+
   it("turns away a forged cookie as long as the pass but different in bytes, rather than failing", async () => {
     // The cookie arrives URL-decoded, so this is one character longer in bytes than in length.
-    const forged = encodeURIComponent(`é${"a".repeat(gateToken(CODE).length - 1)}`);
+    const forged = encodeURIComponent(`é${"a".repeat(gateToken(KEY, CODE).length - 1)}`);
     const res = await (await gatedApp()).request("/api/auth/people", {
       headers: { cookie: `${GATE_COOKIE}=${forged}` },
     });
@@ -256,6 +383,9 @@ describe("the gate under attack", () => {
       "/api/gate", form({ code: "x".repeat(GATE_FORM_MAX_BYTES), next: "/" }),
     );
     expect(res.status).toBe(413);
+    const html = await res.text();
+    expect(html).toContain(escapeHtml(TOO_LARGE));
+    expect(html).not.toContain(escapeHtml(WRONG_CODE));
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 

@@ -8,6 +8,7 @@ import { importProposals } from "./cli/surveyImport";
 import { importL1Plan } from "./cli/planL1";
 import { tidySurvey } from "./cli/surveyTidy";
 import { loadConfig, teamCodeProblem } from "./config";
+import { loadGateKey } from "./gate/gate";
 import { createPostgresDb } from "./db/client";
 import { createDevDb } from "./db/dev";
 import { runMigrations } from "./db/migrate";
@@ -118,15 +119,29 @@ if (command === "seed") {
   process.exit(0);
 }
 
+// Every CLI command's branch (data:import too) goes above this line: below it, the server serves.
 // A command this file does not know falls through to here and serves all the
 // same, so the code is checked again rather than trusted to the check above,
 // which any command at all lets by.
 refuseToServeWithoutTeamCode();
 
+// The gate cookie's key, kept on the volume so a deploy keeps everyone
+// through the gate. If it cannot be kept, stop and say so: a key made up
+// instead would sign everyone out on each restart and hide a missing volume.
+let gateKey: Buffer | undefined;
+if (config.TEAM_CODE) {
+  try {
+    gateKey = await loadGateKey(config.DATA_DIR);
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exit(1);
+  }
+}
+
 // Log from the listen callback, not before it: binding is asynchronous, so
 // logging on the previous line claimed success even when the port was taken.
 const server = serve(
-  { fetch: createApp({ db, teamCode: config.TEAM_CODE ?? null }).fetch, port: config.PORT },
+  { fetch: createApp({ db, teamCode: config.TEAM_CODE ?? null, gateKey }).fetch, port: config.PORT },
   info => console.log(`oth server listening on :${info.port}`),
 );
 

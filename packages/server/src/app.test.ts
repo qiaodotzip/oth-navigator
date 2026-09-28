@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
 import { createTestDb } from "./testing/harness";
 import type { Database } from "./db/client";
@@ -27,6 +27,20 @@ describe("app", () => {
     const body = await res.text();
     expect(body).not.toContain("hunter2");
     expect(JSON.parse(body)).toEqual({ error: "Something went wrong on the server." });
+  });
+
+  it("says only that something went wrong on Railway, even with NODE_ENV overridden there", async () => {
+    vi.stubEnv("RAILWAY_ENVIRONMENT_NAME", "production");
+    try {
+      const broken = {
+        select: () => { throw new Error("connect ECONNREFUSED postgres://oth:hunter2@db.internal:5432/oth"); },
+      } as unknown as Database;
+      const res = await createApp({ db: broken }).request("/api/auth/people");
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({ error: "Something went wrong on the server." });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("keeps the message where it helps, locally", async () => {

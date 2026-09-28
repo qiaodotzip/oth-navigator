@@ -1,8 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { Hono } from "hono";
 import { assetRoutes } from "./assets/routes";
 import { authRoutes } from "./auth/routes";
 import type { User } from "./auth/users";
-import { loadConfig } from "./config";
+import { isDeployed, loadConfig } from "./config";
 import type { Database } from "./db/client";
 import { entityRoutes } from "./entities/routes";
 import { teamGate } from "./gate/gate";
@@ -30,6 +31,11 @@ export type AppDeps = {
    */
   teamCode?: string | null;
   /**
+   * The gate cookie's key, kept in DATA_DIR (gate/gate.ts loadGateKey). Left
+   * out, a key for this process alone, which is never allowed when deployed.
+   */
+  gateKey?: Buffer;
+  /**
    * Whether a 500's body carries the error's message. Off in production,
    * where a raw message can carry a query, a file path or a connection string.
    */
@@ -44,7 +50,10 @@ export function createApp(deps: AppDeps) {
   const config = loadConfig();
   const dataDir = deps.dataDir ?? config.DATA_DIR;
   const teamCode = deps.teamCode !== undefined ? deps.teamCode : (config.TEAM_CODE ?? null);
-  const exposeErrors = deps.exposeErrors ?? config.NODE_ENV !== "production";
+  // Railway's own variables count as deployed too, so a NODE_ENV overridden
+  // there cannot put a raw error in a response or drop the cookie's Secure.
+  const deployed = isDeployed(config);
+  const exposeErrors = deps.exposeErrors ?? !deployed;
 
   app.use("*", async (c, next) => {
     c.set("db", deps.db);
@@ -56,7 +65,12 @@ export function createApp(deps: AppDeps) {
   // gets the team-code page, and its API calls a 401. The guard itself lets
   // the health check and the form's answer through.
   if (teamCode) {
-    const gate = teamGate(teamCode, { secure: config.NODE_ENV === "production" });
+    // A key made up here would last only until the next restart, signing
+    // everyone out and hiding a missing volume, so deployed it must be kept.
+    if (!deps.gateKey && deployed) {
+      throw new Error("The team gate needs its key from DATA_DIR when deployed; index.ts loads it.");
+    }
+    const gate = teamGate(teamCode, { key: deps.gateKey ?? randomBytes(32), secure: deployed });
     app.use("*", gate.guard);
     app.route("/api/gate", gate.routes);
   }
