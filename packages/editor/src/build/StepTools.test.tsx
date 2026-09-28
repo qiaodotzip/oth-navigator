@@ -10,7 +10,11 @@ import { DressingTools, PathwaysTools } from "./StepTools";
 const model = parseModel({
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
   levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
-  rooms: [{ id: "L1-bench", levelId: "oth-L1", kind: "detail", footprint: [[8, 8], [12, 8], [12, 12], [8, 12]], heightM: 1.2 }],
+  rooms: [
+    { id: "L1-bench", levelId: "oth-L1", kind: "detail", footprint: [[8, 8], [12, 8], [12, 12], [8, 12]], heightM: 1.2 },
+    { id: "L1-hall", levelId: "oth-L1", kind: "area", footprint: [[0, 0], [40, 0], [40, 20], [0, 20]], heightM: 5, walkable: true, nameEn: "Hall" },
+  ],
+  objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
 });
 
 const asset = {
@@ -76,5 +80,44 @@ describe("DressingTools", () => {
     openModels();
     await screen.findByRole("button", { name: /bench\.glb/ });
     expect(screen.queryByRole("heading", { name: "Dressing" })).toBeNull();
+  });
+
+  function openObjects(create = vi.fn(async () => true)) {
+    render(<DressingTools api={fakeApi()} saver={{ create } as unknown as Saver} />);
+    fireEvent.click(screen.getByRole("button", { name: "Objects…" }));
+    return create;
+  }
+
+  it("lists each live kind of object, with its size and a Place button", () => {
+    openObjects();
+    expect(screen.getByText("wastebin")).toBeTruthy();
+    expect(screen.getByText("0.5 × 0.5 × 1 m")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Place wastebin" })).toBeTruthy();
+  });
+
+  it("places the chosen kind on the selected room, at its centroid, then selects it", async () => {
+    useEditorStore.getState().select({ type: "room", id: "L1-hall" });
+    const create = openObjects();
+    fireEvent.click(screen.getByRole("button", { name: "Place wastebin" }));
+    await waitFor(() => expect(create).toHaveBeenCalledWith("placement", expect.objectContaining({
+      roomId: "L1-hall", objectKindId: "ok_bin", position: [20, 10, 0], rotationDeg: 0, scale: 1, sightingIds: [],
+    })));
+    await waitFor(() => expect(useEditorStore.getState().selection).toEqual({
+      type: "placement", id: expect.stringContaining("oth-L1-object-"),
+    }));
+  });
+
+  it("says what to select first when nothing is, and creates nothing", () => {
+    const create = openObjects();
+    fireEvent.click(screen.getByRole("button", { name: "Place wastebin" }));
+    expect(useToasts.getState().toasts.at(-1)?.message).toBe("Select a room or area first.");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("says there are none yet when no kind has been tagged", () => {
+    useEditorStore.getState().setModel(parseModel({ ...model, objectKinds: [] }));
+    openObjects();
+    expect(screen.getByText("No objects yet. Tag one in Survey as an Object.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Place/ })).toBeNull();
   });
 });

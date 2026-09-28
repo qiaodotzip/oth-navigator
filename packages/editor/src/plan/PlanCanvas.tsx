@@ -1,4 +1,4 @@
-import type { Placement, Ring, Room, Vec2 } from "@oth/model";
+import { live, type Placement, type Ring, type Room, type Vec2 } from "@oth/model";
 import { roomColor } from "@oth/renderer";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { levelBelow } from "../flow/floors";
@@ -579,7 +579,7 @@ export function PlanCanvas({
             const at = draggingPlacement?.id === p.id && placementAt
               ? placementAt
               : ([p.position[0], p.position[1]] as Vec2);
-            const kind = p.objectKindId ? state.model?.objectKinds.find(k => k.id === p.objectKindId) : undefined;
+            const kind = p.objectKindId && state.model ? live(state.model.objectKinds).find(k => k.id === p.objectKindId) : undefined;
             const asset = p.assetId ? state.model?.assets.find(a => a.id === p.assetId) : undefined;
             return (
               <PlacementMarker

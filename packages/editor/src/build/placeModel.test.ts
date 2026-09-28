@@ -1,6 +1,6 @@
 import { parseModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { newPlacement } from "./placeModel";
+import { newObjectPlacement, newPlacement } from "./placeModel";
 
 const model = parseModel({
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
@@ -13,6 +13,10 @@ const model = parseModel({
     { id: "L1-bench", levelId: "oth-L1", kind: "detail", footprint: [[8, 8], [12, 8], [12, 12], [8, 12]], heightM: 1.2 },
     { id: "L1-gone", levelId: "oth-L1", kind: "detail", footprint: [[20, 8], [22, 8], [22, 10], [20, 10]], heightM: 1, deletedAt: "2026-09-01T00:00:00.000Z" },
     { id: "L2-kiosk", levelId: "oth-L2", kind: "detail", footprint: [[0, 0], [2, 0], [2, 2], [0, 2]], heightM: 2 },
+  ],
+  objectKinds: [
+    { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } },
+    { id: "ok_gone", nameEn: "old bin", size: { w: 0.5, d: 0.5, h: 1 }, deletedAt: "2026-09-01T00:00:00.000Z" },
   ],
 });
 
@@ -50,6 +54,57 @@ describe("newPlacement", () => {
     expect(newPlacement(model, { type: "room", id: "L1-gone" }, "asset_1")).toEqual({
       ok: false,
       reason: "Select a room or detail first.",
+    });
+  });
+});
+
+describe("newObjectPlacement", () => {
+  it("anchors an object at the selected room's centroid, of any room kind", () => {
+    expect(newObjectPlacement(model, { type: "room", id: "L1-hall" }, "ok_bin", 7)).toEqual({
+      ok: true,
+      data: {
+        id: "oth-L1-object-7",
+        levelId: "oth-L1",
+        objectKindId: "ok_bin",
+        roomId: "L1-hall",
+        position: [20, 10, 0],
+        rotationDeg: 0,
+        scale: 1,
+        sightingIds: [],
+      },
+    });
+  });
+
+  it("asks for a room or area first when nothing is selected, or something else is", () => {
+    expect(newObjectPlacement(model, null, "ok_bin")).toEqual({ ok: false, reason: "Select a room or area first." });
+    expect(newObjectPlacement(model, { type: "pathway", id: "p" }, "ok_bin").ok).toBe(false);
+  });
+
+  it("asks the same before a floor has loaded", () => {
+    expect(newObjectPlacement(null, { type: "room", id: "L1-hall" }, "ok_bin")).toEqual({
+      ok: false,
+      reason: "Select a room or area first.",
+    });
+  });
+
+  it("refuses a room that has been deleted", () => {
+    expect(newObjectPlacement(model, { type: "room", id: "L1-gone" }, "ok_bin")).toEqual({
+      ok: false,
+      reason: "Select a room or area first.",
+    });
+  });
+
+  it("refuses a kind that has been deleted, rather than anchoring an object to nothing", () => {
+    expect(newObjectPlacement(model, { type: "room", id: "L1-hall" }, "ok_gone")).toEqual({
+      ok: false,
+      reason: "That kind of object is gone.",
+    });
+  });
+
+  it("refuses a kind that never existed", () => {
+    expect(newObjectPlacement(model, { type: "room", id: "L1-hall" }, "ok_nope")).toEqual({
+      ok: false,
+      reason: "That kind of object is gone.",
     });
   });
 });

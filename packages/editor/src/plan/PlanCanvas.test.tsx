@@ -452,6 +452,18 @@ describe("placements on the canvas", () => {
     expect(useEditorStore.getState().selection).toEqual({ type: "placement", id: "L1-bin-1" });
   });
 
+  it("shows no name for an object whose kind has been deleted, rather than the deleted kind's", () => {
+    useEditorStore.getState().setModel(parseModel({
+      ...model,
+      objectKinds: [{
+        id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 }, deletedAt: "2026-09-01T00:00:00.000Z",
+      }],
+      placements: [...model.placements, { id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [3, 3, 0] }],
+    }));
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("placement-L1-bin-1").querySelector("title")?.textContent).toBe("Placement");
+  });
+
   it("drags an object and saves where it was let go, keeping its height", () => {
     const onMovePlacement = vi.fn();
     useEditorStore.getState().setModel(parseModel({

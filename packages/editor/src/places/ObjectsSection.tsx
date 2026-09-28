@@ -2,7 +2,7 @@ import { OBJECT_SIZE_GUESS, live, type Level, type MapModel } from "@oth/model";
 import { buildObjectKindGlb, objectKindExportName } from "@oth/renderer";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { Api } from "../api/client";
-import { followLink } from "../route";
+import { followLink, href } from "../route";
 import type { Saver } from "../state/save";
 import { kindNamed, sizeText } from "../survey/tagging";
 import { Button } from "../ui/Button";
@@ -80,6 +80,9 @@ export function ObjectsSection({ api, saver, model, level, placeId, onPlaceId }:
         <p className="text-sm text-stone-600">
           Each kind is modelled once. Every one on the map shows its model, or a box of its size until it has one.
         </p>
+        <p className="text-sm text-stone-600">
+          To put one on the map, select a room in Build's Dressing step and use Objects….
+        </p>
       </header>
       {rows.length > 0 ? (
         <ul aria-label="Kinds of object" className="divide-y divide-stone-200 rounded border border-stone-200 bg-white">
@@ -102,6 +105,8 @@ function ObjectRowItem({ api, saver, model, level, row }: {
   const [busy, setBusy] = useState(false);
   const photo = row.best ? surveyLink(model, row.best.frame) : null;
   const frames = framesText(row.frames);
+  // The active floor: Objects… on its Dressing step does the rest of the work.
+  const placeOnMap = href({ name: "floor", code: level.code, tab: "build", params: { step: "dressing" } });
 
   async function saveSize(event: FormEvent) {
     event.preventDefault();
@@ -166,6 +171,9 @@ function ObjectRowItem({ api, saver, model, level, row }: {
           <p className="text-xs text-stone-600">{onMapText(row)}</p>
           <p className="text-xs text-stone-600">
             {photo ? <a href={photo} onClick={followLink(photo)} className="underline">{frames}</a> : frames}
+          </p>
+          <p className="text-xs text-stone-600">
+            <a href={placeOnMap} onClick={followLink(placeOnMap)} className="underline">Place one on the map</a>
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">

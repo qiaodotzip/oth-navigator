@@ -84,6 +84,16 @@ describe("ObjectsSection", () => {
     expect(row().getByRole("link", { name: "5 frames" }).getAttribute("href")).toMatch(/^\/floors\/L1\/survey\?capture=cap_1&frame=kf_/);
   });
 
+  it("hints at Build's Dressing step for putting an object on the map by hand", () => {
+    setup();
+    expect(screen.getByText(/select a room in Build's Dressing step and use Objects…/)).toBeTruthy();
+  });
+
+  it("points Place one on the map at the active floor's Dressing step", () => {
+    setup();
+    expect(row().getByRole("link", { name: "Place one on the map" }).getAttribute("href")).toBe("/floors/L1/build?step=dressing");
+  });
+
   it("changes a kind's size, refusing one typed in centimetres before anything is sent", async () => {
     const api = setup();
     fireEvent.click(row().getByRole("button", { name: "Change the size of wastebin" }));

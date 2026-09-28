@@ -8,6 +8,22 @@ export type NewPlacement =
     }
   | { ok: false; reason: string };
 
+export type NewObjectPlacement =
+  | {
+      ok: true;
+      data: {
+        id: string;
+        levelId: string;
+        objectKindId: string;
+        roomId: string;
+        position: [number, number, number];
+        rotationDeg: number;
+        scale: number;
+        sightingIds: string[];
+      };
+    }
+  | { ok: false; reason: string };
+
 /**
  * Where a model goes when it is placed on the selected room or detail. The
  * position is the offset its export used: zero for a level context mesh,
@@ -26,5 +42,34 @@ export function newPlacement(
   return {
     ok: true,
     data: { id: `${anchor.levelId}-place-${now}`, levelId: anchor.levelId, assetId, roomId: anchor.id, position },
+  };
+}
+
+/**
+ * Where an object goes when placed by hand, from Build's Dressing step: the
+ * centroid of the selected room, of any kind — area, room, detail or service.
+ * Unlike an asset placement, an object always sits there and never at
+ * `[0, 0, 0]`, because it is authored about its own base centre (spec §5.5).
+ */
+export function newObjectPlacement(
+  model: MapModel | null, selection: Selection, objectKindId: string, now = Date.now(),
+): NewObjectPlacement {
+  const anchor = model && selection?.type === "room" ? live(model.rooms).find(r => r.id === selection.id) : undefined;
+  if (!anchor) return { ok: false, reason: "Select a room or area first." };
+  const kind = model ? live(model.objectKinds).find(k => k.id === objectKindId) : undefined;
+  if (!kind) return { ok: false, reason: "That kind of object is gone." };
+  const [cx, cy] = ringCentroid(anchor.footprint);
+  return {
+    ok: true,
+    data: {
+      id: `${anchor.levelId}-object-${now}`,
+      levelId: anchor.levelId,
+      objectKindId,
+      roomId: anchor.id,
+      position: [cx, cy, 0],
+      rotationDeg: 0,
+      scale: 1,
+      sightingIds: [],
+    },
   };
 }
