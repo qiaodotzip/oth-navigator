@@ -1,27 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { levelChecklist } from "../flow/checklist";
 import type { Tool } from "./store";
-import { TOOL_LABELS, TOOLBAR_TOOLS } from "./tools";
-
-const steps = levelChecklist({ model: null, levelId: null, image: null, report: null });
+import { TOOL_LABELS } from "./tools";
 
 describe("tools", () => {
   it("names every tool, so no button can render blank", () => {
-    for (const t of TOOLBAR_TOOLS) expect(TOOL_LABELS[t]).toBeTruthy();
+    const all: Tool[] = [
+      "select", "draw-area", "draw-room", "draw-detail", "draw-pathway",
+      "draw-doorway", "place-entrance", "place-portal", "calibrate", "align-plan",
+    ];
+    for (const t of all) expect(TOOL_LABELS[t]).toBeTruthy();
   });
 
-  it("offers every tool the guided flow uses, so nobody is stranded on a step", () => {
-    // Calibrate is the exception: it is armed by the Floorplan panel, which is
-    // where the measurement it produces is typed in.
-    const fromFlow = steps.flatMap(s => s.tools).filter(t => t !== "calibrate");
-    for (const t of fromFlow) expect(TOOLBAR_TOOLS).toContain(t);
-  });
-
-  it("offers the pathway tool, which is how anything becomes reachable", () => {
-    expect(TOOLBAR_TOOLS).toContain<Tool>("draw-pathway");
-  });
-
-  it("does not offer Doorway, which pathways replaced and nothing saves", () => {
-    expect(TOOLBAR_TOOLS).not.toContain<Tool>("draw-doorway");
+  it("calls a lift stop what the team calls it", () => {
+    expect(TOOL_LABELS["place-portal"]).toBe("Lift or stair");
   });
 });

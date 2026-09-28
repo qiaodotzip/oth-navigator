@@ -13,7 +13,9 @@ export type Tool =
   | "draw-doorway"
   | "place-entrance"
   | "place-portal"
-  | "calibrate";
+  | "calibrate"
+  /** Drag the floorplan into line with the floor below. */
+  | "align-plan";
 
 export type Selection =
   | {

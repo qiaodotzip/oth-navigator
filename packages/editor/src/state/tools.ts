@@ -3,8 +3,8 @@ import type { Tool } from "./store";
 /**
  * What each tool is called, everywhere it is offered.
  *
- * The guided flow and the toolbar both show these, so a teammate who learns
- * "Draw area" in the checklist finds the same word in the toolbar.
+ * The step guide and the keys both use these, so a teammate who learns
+ * "Draw area" in the guide finds the same words wherever the tool appears.
  */
 export const TOOL_LABELS: Record<Tool, string> = {
   select: "Select",
@@ -14,8 +14,10 @@ export const TOOL_LABELS: Record<Tool, string> = {
   "draw-pathway": "Draw pathway",
   "draw-doorway": "Doorway",
   "place-entrance": "Entrance",
-  "place-portal": "Portal",
+  // What the team calls it; "portal" is the model's word for all four kinds.
+  "place-portal": "Lift or stair",
   calibrate: "Measure scale",
+  "align-plan": "Align",
 };
 
 /** The tools the toolbar offers, in the order a level is usually built. */
