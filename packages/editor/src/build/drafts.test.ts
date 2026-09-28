@@ -67,6 +67,62 @@ describe("the drafts store", () => {
   });
 });
 
+describe("a load that answers late", () => {
+  /** A listRoomDrafts whose answers are given by hand, in any order. */
+  function slowList() {
+    const answers: ((drafts: RoomDraft[]) => void)[] = [];
+    const fails: ((err: unknown) => void)[] = [];
+    const api = fakeApi({
+      listRoomDrafts: vi.fn(() => new Promise<RoomDraft[]>((resolve, reject) => {
+        answers.push(resolve);
+        fails.push(reject);
+      })),
+    });
+    return { api, answers, fails };
+  }
+  const ids = (levelId: string) => useDrafts.getState().byLevel[levelId]?.map(d => d.id);
+
+  it("doesn't bring back the drafts a search's save replaced", async () => {
+    const { api, answers } = slowList();
+    const loading = loadDrafts(api, "oth-L2");
+    // The search's PUT answers first, with its new drafts; the GET sent before it answers after.
+    act(() => useDrafts.getState().setDrafts("oth-L2", [draft("rd_new")]));
+    answers[0]!([draft("rd_retired")]);
+    expect(await loading).toBe(true);
+    expect(ids("oth-L2")).toEqual(["rd_new"]);
+  });
+
+  it("keeps the newer of two loads when they answer out of order", async () => {
+    const { api, answers } = slowList();
+    const first = loadDrafts(api, "oth-L2");
+    const second = loadDrafts(api, "oth-L2");
+    answers[1]!([draft("rd_newer")]);
+    await second;
+    answers[0]!([draft("rd_older")]);
+    await first;
+    expect(ids("oth-L2")).toEqual(["rd_newer"]);
+  });
+
+  it("isn't held back by a change to another floor's drafts", async () => {
+    const { api, answers } = slowList();
+    const loading = loadDrafts(api, "oth-L2");
+    act(() => useDrafts.getState().setDrafts("oth-L3", [draft("rd_l3")]));
+    answers[0]!([draft("rd_a")]);
+    await loading;
+    expect(ids("oth-L2")).toEqual(["rd_a"]);
+  });
+
+  it("says nothing when a load fails after newer drafts came, since those stand", async () => {
+    const { api, fails } = slowList();
+    const loading = loadDrafts(api, "oth-L2");
+    act(() => useDrafts.getState().setDrafts("oth-L2", [draft("rd_new")]));
+    fails[0]!(new ApiError(500, {}));
+    expect(await loading).toBe(false);
+    expect(useToasts.getState().toasts).toEqual([]);
+    expect(ids("oth-L2")).toEqual(["rd_new"]);
+  });
+});
+
 const square = (x: number, y: number, s: number): [number, number][] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
 const room = (id: string, ring: [number, number][], kind: Room["kind"] = "room"): Room =>
   RoomSchema.parse({ id, levelId: "oth-L2", kind, footprint: ring, heightM: 4 });

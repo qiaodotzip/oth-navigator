@@ -26,14 +26,29 @@ type DraftsState = {
 
 const initial = { byLevel: {}, selectedId: null, showCovered: false, finding: null, frame: null };
 
+/**
+ * Each floor's count of what has changed its drafts, a load's start included.
+ * A load keeps what it read only if nothing has since: a GET that answers
+ * after a search's save, or after a newer GET, would bring back drafts they replaced.
+ */
+const changes = new Map<string, number>();
+function change(levelId: string): number {
+  const n = (changes.get(levelId) ?? 0) + 1;
+  changes.set(levelId, n);
+  return n;
+}
+
 export const useDrafts = create<DraftsState>(set => ({
   ...initial,
-  setDrafts: (levelId, drafts) => set(s => {
-    // A draft in hand that this floor's new list no longer has is let go; one on another floor is not.
-    const wasHere = (s.byLevel[levelId] ?? []).some(d => d.id === s.selectedId);
-    const stillHere = drafts.some(d => d.id === s.selectedId);
-    return { byLevel: { ...s.byLevel, [levelId]: drafts }, selectedId: wasHere && !stillHere ? null : s.selectedId };
-  }),
+  setDrafts: (levelId, drafts) => {
+    change(levelId);
+    set(s => {
+      // A draft in hand that this floor's new list no longer has is let go; one on another floor is not.
+      const wasHere = (s.byLevel[levelId] ?? []).some(d => d.id === s.selectedId);
+      const stillHere = drafts.some(d => d.id === s.selectedId);
+      return { byLevel: { ...s.byLevel, [levelId]: drafts }, selectedId: wasHere && !stillHere ? null : s.selectedId };
+    });
+  },
   select: id => set({ selectedId: id }),
   setShowCovered: on => set({ showCovered: on }),
   setFinding: words => set({ finding: words }),
@@ -41,13 +56,20 @@ export const useDrafts = create<DraftsState>(set => ({
   reset: () => set(initial),
 }));
 
-/** A floor's drafts from the server. True when they came. */
+/**
+ * A floor's drafts from the server. True when they came. When the floor's
+ * drafts changed while they were on their way, the newer ones stand, and a
+ * failure is not reported: there is nothing to retry for.
+ */
 export async function loadDrafts(api: Pick<Api, "listRoomDrafts">, levelId: string): Promise<boolean> {
+  const mine = change(levelId);
+  const latest = () => changes.get(levelId) === mine;
   try {
-    useDrafts.getState().setDrafts(levelId, await api.listRoomDrafts(levelId));
+    const drafts = await api.listRoomDrafts(levelId);
+    if (latest()) useDrafts.getState().setDrafts(levelId, drafts);
     return true;
   } catch (err) {
-    reportFailure(err, { doing: "load the drafts from the drawing", retry: () => loadDrafts(api, levelId).then(() => {}) });
+    if (latest()) reportFailure(err, { doing: "load the drafts from the drawing", retry: () => loadDrafts(api, levelId).then(() => {}) });
     return false;
   }
 }
