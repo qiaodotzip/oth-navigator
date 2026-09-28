@@ -1,5 +1,5 @@
 import { parseModel, type Level } from "@oth/model";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConflictError, type Api } from "../api/client";
 import { useCurrentRoute } from "../route";
@@ -575,6 +575,7 @@ describe("ReviewWorkspace", () => {
     expect(api.acceptPlace!.mock.calls.map(c => (c as unknown[])[0])).toEqual(["p_small"]);
     await waitFor(() => expect(screen.getByLabelText("Tick Festive Mall")).toBeTruthy());
     expect(errorToast()?.action?.label).toBe("Retry");
+    expect(toastSaying("Festive Mall wasn't accepted and is back in the list.")).toBeTruthy();
   });
 
   it("lists again the ones a batch could not accept, and says so with Retry", async () => {
@@ -592,5 +593,80 @@ describe("ReviewWorkspace", () => {
     expect(errorToast()?.action?.label).toBe("Retry");
     expect(screen.queryByLabelText("Tick Festive Mall")).toBeNull();
     expect(screen.getByText("2 of 3 decided on L1")).toBeTruthy();
+  });
+
+  it("accepts from the list what you typed for it, and the list shows it as you type", async () => {
+    // Ruling 25a.
+    const api = at("?list=open");
+    fireEvent.change(nameField(), { target: { value: "Festive Mall Tampines " } });
+    fireEvent.click(screen.getByLabelText("Tick Festive Mall Tampines"));
+    fireEvent.click(screen.getByRole("button", { name: "Accept 1 ticked" }));
+    await waitFor(() => expect(toastSaying("Accepted Festive Mall Tampines")).toBeTruthy());
+    expect(api.acceptPlace).toHaveBeenCalledWith("p_big", 0, {
+      nameEn: "Festive Mall Tampines", category: "retail", levelId: "oth-L1",
+    });
+  });
+
+  it("keeps a proposal whose name you emptied in the list, not offered for accepting", () => {
+    at();
+    fireEvent.change(nameField(), { target: { value: "  " } });
+    key("l");
+    expect((screen.getByLabelText("Tick Festive Mall") as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText("Needs a name before it can be accepted")).toBeTruthy();
+  });
+
+  it("counts in the list the frames each proposal's own footer counts", () => {
+    // Ruling 25b: a tag whose frame was binned is not a frame to look at.
+    useEditorStore.getState().setModel(parseModel({
+      ...reviewModel,
+      keyframes: reviewModel.keyframes.map(k => (k.id === "kf_2" ? { ...k, deletedAt: "2026-09-27T00:00:00.000Z" } : k)),
+    }));
+    at("?list=open");
+    const drawer = within(screen.getByRole("complementary", { name: "Proposals" }));
+    expect(drawer.getByText("1 frame · retail")).toBeTruthy();
+    expect(screen.getByText(/^Proposed by claude-code · 1 frame$/)).toBeTruthy();
+  });
+
+  it("hides the A, R and S hints while the list holds those keys", () => {
+    // Ruling 25c.
+    at("?list=open");
+    expect(screen.getByRole("button", { name: "Accept" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Skip" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close the list" }));
+    expect(screen.getByRole("button", { name: "Accept A" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reject R" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Skip S" })).toBeTruthy();
+  });
+
+  it("jumps to a proposal from the list", () => {
+    at("?list=open");
+    fireEvent.click(within(screen.getByRole("complementary", { name: "Proposals" })).getByRole("button", { name: /^Gate 1/ }));
+    expect(param("place")).toBe("p_small");
+    expect(nameField().value).toBe("Gate 1");
+  });
+
+  it("takes the focus into the filter when the list opens, and gives it back to List when it closes by Esc, L or ×", () => {
+    at();
+    const listButton = () => screen.getByRole("button", { name: /^List/ });
+    const filter = () => screen.getByLabelText("Filter proposals");
+    key("l");
+    expect(document.activeElement).toBe(filter());
+    key("Escape", filter());
+    expect(param("list")).toBeNull();
+    expect(document.activeElement).toBe(listButton());
+
+    key("l", listButton());
+    expect(document.activeElement).toBe(filter());
+    filter().blur();
+    key("l");
+    expect(param("list")).toBeNull();
+    expect(document.activeElement).toBe(listButton());
+
+    fireEvent.click(listButton());
+    expect(document.activeElement).toBe(filter());
+    fireEvent.click(screen.getByRole("button", { name: "Close the list" }));
+    expect(param("list")).toBeNull();
+    expect(document.activeElement).toBe(listButton());
   });
 });

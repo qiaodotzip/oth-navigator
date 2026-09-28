@@ -4,7 +4,7 @@ import { ApiError, ConflictError } from "../api/client";
 import { useEditorStore } from "../state/store";
 import type { ProposedPlace } from "../survey/review";
 import { useToasts } from "../ui/toast";
-import { acceptProposal, acceptProposals, mergeProposal, rejectProposal, type ReviewDeps } from "./decide";
+import { acceptProposal, acceptProposals, mergeProposal, rejectProposal, type Accepting, type ReviewDeps } from "./decide";
 
 function entry(id: string, extra: Record<string, unknown> = {}): ProposedPlace {
   return {
@@ -203,9 +203,13 @@ describe("mergeProposal", () => {
 });
 
 describe("acceptProposals", () => {
+  /** A proposal accepted as it stands. */
+  const own = (e: ProposedPlace): Accepting => ({ entry: e, fields: { nameEn: e.place.nameEn, category: e.place.category } });
+  const owns = (...ids: string[]) => ids.map(id => own(entry(id)));
+
   it("accepts several as they stand, reloads once, and offers one Undo for all", async () => {
     const { api, saver, both } = deps();
-    expect(await acceptProposals(both, [entry("p1"), entry("p2")], "oth-L1")).toBe(2);
+    expect(await acceptProposals(both, owns("p1", "p2"), "oth-L1")).toBe(2);
     expect(api.acceptPlace.mock.calls.map(c => c[0])).toEqual(["p1", "p2"]);
     expect(saver.refresh).toHaveBeenCalledTimes(1);
     expect(lastToast().message).toBe("Accepted 2 places");
@@ -213,15 +217,58 @@ describe("acceptProposals", () => {
     expect(api.reopenPlace.mock.calls.map(c => (c as unknown[])[0])).toEqual(["p2", "p1"]);
   });
 
+  it("accepts each as typed, names it so, and Undo puts back the fields it was proposed with", async () => {
+    // Ruling 25a: a correction typed before ticking it is what gets accepted.
+    const { api, both } = deps();
+    await acceptProposals(both, [{ entry: entry("p1"), fields: { nameEn: "Festive Mall", category: "lifestyle" } }], "oth-L1");
+    expect(api.acceptPlace).toHaveBeenCalledWith("p1", 3, { nameEn: "Festive Mall", category: "lifestyle", levelId: "oth-L1" });
+    expect(lastToast().message).toBe("Accepted Festive Mall");
+    await undo();
+    expect(api.reopenPlace).toHaveBeenCalledWith("p1", 4, {
+      nameEn: "Name p1", category: "retail", levelId: null, sightingIds: ["s_p1"],
+    });
+    expect(lastToast().message).toBe("Name p1 is back in the queue");
+  });
+
   it("stops at a place a teammate changed, shows the conflict, and Undo covers the ones that went through", async () => {
     const { api, both } = deps();
     api.acceptPlace
       .mockResolvedValueOnce({ sightings: 1, confirmed: ["s_p1"] })
       .mockRejectedValueOnce(new ConflictError({ id: "p2", version: 9 }, null));
-    expect(await acceptProposals(both, [entry("p1"), entry("p2"), entry("p3")], "oth-L1")).toBe(1);
+    expect(await acceptProposals(both, owns("p1", "p2", "p3"), "oth-L1")).toBe(1);
     expect(api.acceptPlace).toHaveBeenCalledTimes(2);
     expect(useEditorStore.getState().conflict?.entityId).toBe("p2");
     expect(lastToast().message).toBe("Accepted Name p1");
+  });
+
+  it("names every one that came back after a conflict part-way, in one message", async () => {
+    // The banner says why the 2nd was refused; the 3rd and 4th were never sent.
+    const { api, both } = deps();
+    api.acceptPlace
+      .mockResolvedValueOnce({ sightings: 1, confirmed: ["s_p1"] })
+      .mockRejectedValueOnce(new ConflictError({ id: "p2", version: 9 }, null));
+    await acceptProposals(both, owns("p1", "p2", "p3", "p4"), "oth-L1");
+    const errors = useToasts.getState().toasts.filter(t => t.tone === "error");
+    expect(errors.map(t => t.message)).toEqual(["Name p2, Name p3 and Name p4 weren't accepted and are back in the list."]);
+  });
+
+  it("names the ones held back for a box that was not saved beside those a conflict sent back", async () => {
+    const { api, both } = deps();
+    api.acceptPlace.mockRejectedValueOnce(new ConflictError({ id: "p1", version: 9 }, null));
+    await acceptProposals(both, owns("p1", "p2", "p3", "p4"), "oth-L1", ["Gate 9"]);
+    const errors = useToasts.getState().toasts.filter(t => t.tone === "error");
+    expect(errors.map(t => t.message)).toEqual(["Gate 9, Name p1 and 3 more weren't accepted and are back in the list."]);
+  });
+
+  it("says which were held back when the rest went through, and sends nothing when all were", async () => {
+    const { api, saver, both } = deps();
+    await acceptProposals(both, owns("p1"), "oth-L1", ["Gate 9"]);
+    expect(failure().message).toBe("Gate 9 wasn't accepted and is back in the list.");
+    useToasts.getState().clear();
+    expect(await acceptProposals(both, [], "oth-L1", ["Gate 8", "Gate 9"])).toBe(0);
+    expect(failure().message).toBe("Gate 8 and Gate 9 weren't accepted and are back in the list.");
+    expect(api.acceptPlace).toHaveBeenCalledTimes(1);
+    expect(saver.refresh).toHaveBeenCalledTimes(1);
   });
 
   it("sends the rest again on Retry after a failure part-way, never the ones that went through", async () => {
@@ -229,9 +276,10 @@ describe("acceptProposals", () => {
     api.acceptPlace
       .mockResolvedValueOnce({ sightings: 1, confirmed: ["s_p1"] })
       .mockRejectedValueOnce(new TypeError("Failed to fetch"));
-    expect(await acceptProposals(both, [entry("p1"), entry("p2"), entry("p3")], "oth-L1")).toBe(1);
+    expect(await acceptProposals(both, owns("p1", "p2", "p3"), "oth-L1")).toBe(1);
+    expect(useToasts.getState().toasts.filter(t => t.tone === "error")).toHaveLength(1);
     expect(failure()).toMatchObject({
-      message: "Couldn't accept Name p2. Check your connection, then retry.",
+      message: "Couldn't accept Name p2 and 1 more. Check your connection, then retry.",
       action: { label: "Retry" },
     });
     await failure().action!.run();
@@ -241,13 +289,20 @@ describe("acceptProposals", () => {
     expect(api.reopenPlace.mock.calls.map(c => (c as unknown[])[0])).toEqual(["p3", "p2"]);
   });
 
+  it("says nothing of its own when the session has ended part-way", async () => {
+    const { api, both } = deps();
+    api.acceptPlace.mockRejectedValueOnce(new ApiError(401, null));
+    expect(await acceptProposals(both, owns("p1", "p2"), "oth-L1", ["Gate 9"])).toBe(0);
+    expect(useToasts.getState().toasts).toHaveLength(0);
+  });
+
   it("names the place whose Undo was refused, not a count, so the sentence reads right", async () => {
     // "Couldn't undo: 2 places was changed since" said neither which one nor good English.
     const { api, both } = deps();
     api.reopenPlace
       .mockResolvedValueOnce({ sightings: 1 })
       .mockRejectedValueOnce(new ConflictError({ id: "p1", version: 9 }, null));
-    await acceptProposals(both, [entry("p1"), entry("p2")], "oth-L1");
+    await acceptProposals(both, owns("p1", "p2"), "oth-L1");
     await undo();
     expect(api.reopenPlace.mock.calls.map(c => (c as unknown[])[0])).toEqual(["p2", "p1"]);
     expect(lastToast().message).toBe("Couldn't undo: Name p1 was changed since. Reload to see the latest.");
@@ -258,7 +313,7 @@ describe("acceptProposals", () => {
     api.reopenPlace
       .mockResolvedValueOnce({ sightings: 1 })
       .mockRejectedValueOnce(new TypeError("Failed to fetch"));
-    await acceptProposals(both, [entry("p1"), entry("p2")], "oth-L1");
+    await acceptProposals(both, owns("p1", "p2"), "oth-L1");
     await undo();
     expect(failure()).toMatchObject({
       message: "Couldn't undo Name p1. Check your connection, then retry.",

@@ -1,5 +1,5 @@
 import type { Box, Level, Place, Sighting } from "@oth/model";
-import { useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import type { Api } from "../api/client";
 import { reviewCounts } from "../flow/floorProgress";
 import { setParams } from "../route";
@@ -70,6 +70,15 @@ export function ReviewWorkspace({ api, saver, level, params }: {
     const d = deciding.current.get(place.id);
     return d && d.version === place.version ? d : null;
   };
+  /** A decision that did not go through: the place is waiting again, in view and in the list. */
+  const release = (place: Place): void => {
+    if (deciding.current.get(place.id)?.version === place.version) deciding.current.delete(place.id);
+  };
+  /** What a proposal is accepted as from the list: what was typed for it, trimmed, or its own. */
+  const fieldsFor = ({ place }: ProposedPlace): Draft => {
+    const draft = drafts.current.get(place.id);
+    return draft ? { nameEn: draft.nameEn.trim(), category: draft.category } : { nameEn: place.nameEn, category: place.category };
+  };
   const decided = new Set(queue.filter(({ place }) => underWay(place)).map(({ place }) => place.id));
   const current = currentProposal(queue, read.place, decided);
   const floorless = floorlessAll.filter(({ place }) => !underWay(place)).length;
@@ -117,7 +126,7 @@ export function ReviewWorkspace({ api, saver, level, params }: {
       return;
     }
 
-    if (deciding.current.get(id)?.version === version) deciding.current.delete(id);
+    release(entry.place);
     redraw();
     // Not back to it when you have left Review, where `place` means something
     // else, or while you are typing on the next one: the banner or the toast,
@@ -127,18 +136,21 @@ export function ReviewWorkspace({ api, saver, level, params }: {
   }
 
   /**
-   * Accepts several ticked in the list, as they stand, with one Undo for all.
-   * They join the decisions under way, as A does, so they leave the list, the
-   * view and the counts at once, and none can be decided twice.
+   * Accepts several ticked in the list, each as typed for it or as it stands,
+   * with one Undo for all. They join the decisions under way, as A does, so
+   * they leave the list, the view and the counts at once, and none can be
+   * decided twice.
    *
    * One whose corrected box could not be saved is not accepted, nor is the
    * first the server refuses or any after it: each comes back to the list
-   * and the queue. The view is not pulled back to it, as A's would be; you
-   * are in the list, and the banner or the toast says which it was.
+   * and the queue, and one message names them. The view is not pulled back,
+   * as A's would be; you are in the list.
    */
   async function acceptMany(entries: readonly ProposedPlace[]): Promise<void> {
     // The same backstop as decide's: one already under way is not sent again.
-    const batch = entries.filter(({ place }) => !underWay(place));
+    // Nor is one whose name was emptied, which the list does not offer: a
+    // place with no name is no place, from the list as from A.
+    const batch = entries.filter(entry => !underWay(entry.place) && fieldsFor(entry).nameEn !== "");
     if (batch.length === 0) return;
     for (const { place } of batch) deciding.current.set(place.id, { version: place.version, becomes: "confirmed" });
     if (current && batch.some(({ place }) => place.id === current.place.id)) {
@@ -149,18 +161,26 @@ export function ReviewWorkspace({ api, saver, level, params }: {
 
     // As in decide: a box corrected just before is saved first, and one that
     // was not saved is not accepted with the agent's box instead.
+    const items = batch.map(entry => ({ entry, fields: fieldsFor(entry) }));
     const saved = await Promise.all(batch.map(({ place }) => correcting.current.get(place.id) ?? true));
-    const ready = batch.filter((_, i) => saved[i]);
-    const accepted = ready.length > 0 ? await acceptProposals(deps, ready, level.id) : 0;
+    const ready = items.filter((_, i) => saved[i]);
+    const held = items.filter((_, i) => !saved[i]);
+    const accepted = await acceptProposals(deps, ready, level.id, held.map(({ fields }) => fields.nameEn));
 
-    for (const { place } of ready.slice(0, accepted)) drafts.current.delete(place.id);
-    const back = [...batch.filter((_, i) => !saved[i]), ...ready.slice(accepted)];
+    for (const { entry } of ready.slice(0, accepted)) drafts.current.delete(entry.place.id);
+    const back = [...held, ...ready.slice(accepted)];
     if (back.length === 0) return;
-    for (const { place } of back) {
-      if (deciding.current.get(place.id)?.version === place.version) deciding.current.delete(place.id);
-    }
+    for (const { entry } of back) release(entry.place);
     redraw();
   }
+
+  /** The List button, which has the focus back when the list closes, however it closed. */
+  const listButton = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(read.listOpen);
+  useEffect(() => {
+    if (wasOpen.current && !read.listOpen) listButton.current?.focus();
+    wasOpen.current = read.listOpen;
+  }, [read.listOpen]);
 
   const toScope = (scope: ReviewScope) => setParams({ scope: scope === "floor" ? null : scope, place: null });
 
@@ -207,6 +227,7 @@ export function ReviewWorkspace({ api, saver, level, params }: {
             </>
           )}
           <Button
+            ref={listButton}
             size="sm"
             className="ml-auto"
             aria-pressed={read.listOpen}
@@ -225,7 +246,11 @@ export function ReviewWorkspace({ api, saver, level, params }: {
             draft={drafts.current.get(current.place.id)}
             decideByKey={!read.listOpen}
             findSame={name => sameAs(model, level.id, current.place, name)}
-            onDraft={draft => drafts.current.set(current.place.id, draft)}
+            onDraft={draft => {
+              drafts.current.set(current.place.id, draft);
+              // The list shows each proposal as it would be accepted, so it follows what you type.
+              if (read.listOpen) redraw();
+            }}
             onAccept={fields => void decide(current, "confirmed", () => acceptProposal(deps, current, fields, level.id))}
             onReject={() => void decide(current, "gone", () => rejectProposal(deps, current))}
             onSkip={() => setParams({ place: nextProposal(queue, current.place.id, decided)?.place.id ?? current.place.id })}
@@ -262,6 +287,8 @@ export function ReviewWorkspace({ api, saver, level, params }: {
           queue={queue}
           decided={decided}
           currentId={current?.place.id ?? null}
+          frames={entry => evidenceFor(model, entry.sightings).length}
+          named={entry => fieldsFor(entry).nameEn}
           onJump={placeId => setParams({ place: placeId })}
           onAcceptMany={acceptMany}
           onClose={() => setParams({ list: null })}

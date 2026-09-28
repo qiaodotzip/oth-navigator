@@ -163,9 +163,10 @@ export function ProposalFocus({
             </select>
           </label>
           <div className="flex items-center gap-2">
-            <Button variant="primary" disabled={!canAccept} onClick={accept}>Accept <Kbd>A</Kbd></Button>
-            <Button onClick={onReject}>Reject <Kbd>R</Kbd></Button>
-            <Button variant="ghost" onClick={onSkip}>Skip <Kbd>S</Kbd></Button>
+            {/* A hint only while the key works: not while the list holds the keys. */}
+            <Button variant="primary" disabled={!canAccept} onClick={accept}>Accept {decideByKey && <Kbd>A</Kbd>}</Button>
+            <Button onClick={onReject}>Reject {decideByKey && <Kbd>R</Kbd>}</Button>
+            <Button variant="ghost" onClick={onSkip}>Skip {decideByKey && <Kbd>S</Kbd>}</Button>
           </div>
         </div>
         {same.length > 0 && (

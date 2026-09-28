@@ -1,20 +1,27 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ProposedPlace } from "../survey/review";
 import { Button } from "../ui/Button";
 
 /**
  * Every proposal on the floor at once (spec §10): filter by name, jump to one,
- * or tick several that need no correction and accept them together. What
- * needs a closer look is still decided one at a time, from its frame.
+ * or tick several that need no more correction and accept them together.
+ * What needs a closer look is still decided one at a time, from its frame.
  *
  * `decided` is what the workspace has decided, or is still deciding, and has
  * not yet seen reloaded. It is left out, so nothing can be ticked and decided
  * a second time.
+ *
+ * Not modal: the proposal in view stays beside it, to look at and correct.
+ * It takes the focus when it opens, so you can type a name straight away.
  */
-export function ProposalDrawer({ queue, decided, currentId, onJump, onAcceptMany, onClose }: {
+export function ProposalDrawer({ queue, decided, currentId, frames, named, onJump, onAcceptMany, onClose }: {
   queue: readonly ProposedPlace[];
   decided: ReadonlySet<string>;
   currentId: string | null;
+  /** How many of its frames can be shown, counted as the proposal's own footer counts them. */
+  frames: (entry: ProposedPlace) => number;
+  /** The name it would be accepted under: what was typed for it, or its own. Blank when its name was emptied. */
+  named: (entry: ProposedPlace) => string;
   onJump: (placeId: string) => void;
   onAcceptMany: (entries: ProposedPlace[]) => Promise<void>;
   onClose: () => void;
@@ -22,15 +29,22 @@ export function ProposalDrawer({ queue, decided, currentId, onJump, onAcceptMany
   const [query, setQuery] = useState("");
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const filter = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { filter.current?.focus(); }, []);
 
   const open = queue.filter(({ place }) => !decided.has(place.id));
+  // A place with no name is no place: one whose name was emptied waits in the list, unticked.
+  const acceptable = (entry: ProposedPlace) => named(entry) !== "";
   const q = query.trim().toLowerCase();
   const shown = q === ""
     ? open
-    : open.filter(({ place }) => place.nameEn.toLowerCase().includes(q) || place.nameZh.toLowerCase().includes(q));
+    : open.filter(entry =>
+      [named(entry), entry.place.nameEn, entry.place.nameZh].some(name => name.toLowerCase().includes(q)));
   // A tick on something decided meanwhile, here or by a teammate, counts for nothing.
-  const chosen = open.filter(({ place }) => ticked.has(place.id));
-  const allShown = shown.length > 0 && shown.every(({ place }) => ticked.has(place.id));
+  const chosen = open.filter(entry => ticked.has(entry.place.id) && acceptable(entry));
+  const tickable = shown.filter(acceptable);
+  const allShown = tickable.length > 0 && tickable.every(({ place }) => ticked.has(place.id));
 
   const toggle = (ids: string[], on: boolean) =>
     setTicked(prev => {
@@ -68,13 +82,21 @@ export function ProposalDrawer({ queue, decided, currentId, onJump, onAcceptMany
       </div>
       <div className="space-y-2 border-b border-stone-200 p-3">
         <input
+          ref={filter}
           type="search"
           aria-label="Filter proposals"
           placeholder="Filter by name…"
           value={query}
           onChange={event => setQuery(event.target.value)}
-          // As in the name field: Esc steps out to the keys, and a second Esc closes the list.
-          onKeyDown={event => { if (event.key === "Escape") event.currentTarget.blur(); }}
+          onKeyDown={event => {
+            if (event.key !== "Escape") return;
+            // Not the browser's own Esc, which would empty the filter. With
+            // nothing typed, Esc closes the list, as it does anywhere else in
+            // it; with a filter typed, it steps out and keeps what you typed.
+            event.preventDefault();
+            if (query === "") onClose();
+            else event.currentTarget.blur();
+          }}
           className="h-8 w-full rounded border border-stone-300 px-2 text-sm"
         />
         <label className="flex items-center gap-2 text-xs text-stone-600">
@@ -82,33 +104,47 @@ export function ProposalDrawer({ queue, decided, currentId, onJump, onAcceptMany
             type="checkbox"
             aria-label="Tick all shown"
             checked={allShown}
-            onChange={event => toggle(shown.map(({ place }) => place.id), event.target.checked)}
+            onChange={event => toggle(tickable.map(({ place }) => place.id), event.target.checked)}
           />
           Tick all shown
         </label>
       </div>
+      {open.length === 0 ? (
+        <p className="px-3 pt-3 text-sm text-stone-500">Nothing left to decide here.</p>
+      ) : shown.length === 0 && (
+        <p className="px-3 pt-3 text-sm text-stone-500">No proposal matches ‘{query.trim()}’.</p>
+      )}
       <ul className="min-h-0 flex-1 overflow-y-auto p-1">
-        {shown.map(({ place, sightings }) => (
-          <li key={place.id} className="flex items-center gap-2 rounded px-2 py-1 hover:bg-stone-50">
-            <input
-              type="checkbox"
-              aria-label={`Tick ${place.nameEn}`}
-              checked={ticked.has(place.id)}
-              onChange={event => toggle([place.id], event.target.checked)}
-            />
-            <button
-              type="button"
-              aria-current={place.id === currentId ? "true" : undefined}
-              className={`min-w-0 flex-1 text-left text-sm ${place.id === currentId ? "font-semibold text-accent" : ""}`}
-              onClick={() => onJump(place.id)}
-            >
-              <span className="block truncate">{place.nameEn}</span>
-              <span className="block text-xs font-normal text-stone-500">
-                {sightings.length} frame{sightings.length === 1 ? "" : "s"} · {place.category}
-              </span>
-            </button>
-          </li>
-        ))}
+        {shown.map(entry => {
+          const { place } = entry;
+          const name = named(entry);
+          const shownAs = name || place.nameEn;
+          const count = frames(entry);
+          return (
+            <li key={place.id} className="flex items-center gap-2 rounded px-2 py-1 hover:bg-stone-50">
+              <input
+                type="checkbox"
+                aria-label={`Tick ${shownAs}`}
+                checked={ticked.has(place.id) && name !== ""}
+                disabled={name === ""}
+                onChange={event => toggle([place.id], event.target.checked)}
+              />
+              <button
+                type="button"
+                aria-current={place.id === currentId ? "true" : undefined}
+                className={`min-w-0 flex-1 text-left text-sm ${place.id === currentId ? "font-semibold text-accent" : ""}`}
+                onClick={() => onJump(place.id)}
+              >
+                <span className="block truncate">{shownAs}</span>
+                <span className="block text-xs font-normal text-stone-500">
+                  {name === ""
+                    ? "Needs a name before it can be accepted"
+                    : `${count} frame${count === 1 ? "" : "s"} · ${place.category}`}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
       <div className="border-t border-stone-200 p-3">
         <Button variant="primary" className="w-full" disabled={chosen.length === 0 || busy} onClick={() => void acceptChosen()}>
