@@ -161,12 +161,14 @@ export function useDraftView(levelId: string | null): DraftView {
   return lastView.view;
 }
 
+/** `b`, grown by `m` metres on every side: the one padding rule, so every framed box reads the same. */
+export function padBox(b: BBox, m: number): BBox {
+  return { minX: b.minX - m, minY: b.minY - m, maxX: b.maxX + m, maxY: b.maxY + m };
+}
+
 /** The part of the plan to show for a draft: its shape with 4 m round it, or 15 m round an open space's name. */
 export function draftBox(d: Pick<RoomDraft, "footprint" | "labelPoint">): BBox {
-  if (d.footprint) {
-    const b = bboxOfRing(d.footprint);
-    return { minX: b.minX - 4, minY: b.minY - 4, maxX: b.maxX + 4, maxY: b.maxY + 4 };
-  }
+  if (d.footprint) return padBox(bboxOfRing(d.footprint), 4);
   const [x, y] = d.labelPoint;
-  return { minX: x - 15, minY: y - 15, maxX: x + 15, maxY: y + 15 };
+  return padBox({ minX: x, minY: y, maxX: x, maxY: y }, 15);
 }

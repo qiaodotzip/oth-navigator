@@ -1,6 +1,6 @@
 import { live, type BBox, type Keyframe, type MapModel } from "@oth/model";
 import { ConflictError, type RoomDraftRow } from "../api/client";
-import { draftBox } from "../build/drafts";
+import { draftBox, padBox } from "../build/drafts";
 import { SELECTABLE_TYPES, parseSelectParam, selectParam, type Selectable } from "../build/selection";
 import type { Selection } from "../state/store";
 import { serverWords } from "../ui/failure";
@@ -55,9 +55,11 @@ export type ShowTarget = { kind: "select"; selection: NonNullable<Selection> } |
  * set aside) frames its outline, without selecting: it isn't a thing the map
  * can select, and Claude or a teammate may hold the room a select would
  * otherwise lock. The outline comes from the row's own box first (it carries
- * one even once the draft is deleted, which a rejected one is), else the
- * floor's own drafts. Only a draft with an outline can be framed; an open
- * draft (the drawing left it open, no shape traced) has none.
+ * one even once the draft is deleted, which a rejected one is), padded the
+ * same 4 m as `draftBox`, so Show frames a draft the same way whichever
+ * source it comes from; else the floor's own drafts. Only a draft with an
+ * outline can be framed; an open draft (the drawing left it open, no shape
+ * traced) has none.
  */
 export function showTarget(
   model: MapModel | null, change: Pick<ClaudeChange, "entityType" | "entityId" | "box">, levelId: string,
@@ -65,7 +67,7 @@ export function showTarget(
 ): ShowTarget | null {
   const { entityType: type, entityId: id } = change;
   if (type === "roomDraft") {
-    if (change.box) return { kind: "frame", box: change.box };
+    if (change.box) return { kind: "frame", box: padBox(change.box, 4) };
     const draft = drafts.find(d => d.id === id);
     return draft?.footprint ? { kind: "frame", box: draftBox(draft) } : null;
   }
