@@ -71,9 +71,56 @@ function lineLength(line: readonly Vec2[]): number {
 }
 
 /**
- * One part's items on one floor, each leaving out what is at its default (a
- * version 0, no name, not walkable, unverified, no room), so L1's 260 rooms
- * fit a page. A room's centre is where its name goes on the plan, in metres.
+ * Every part comes in id order. The database gives rows back in the order it
+ * stores them, and an edit moves a row to the end, so an edit between two
+ * page reads would skip one item and repeat another.
+ */
+function byId<T extends { id: string }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** The frames a place gives: at most this many, so a page of places still fits a reply. */
+export const PLACE_FRAMES = 3;
+
+type PlaceFrame = { id: string; file: string; timeMs?: number; n?: number };
+
+/**
+ * Up to PLACE_FRAMES frames each place was tagged on, for view_frame: the
+ * first, middle and last filmed, so they show it from along the walk. Each
+ * names its footage and its time in it, or its number there when the frame
+ * has no time.
+ */
+function placeFrames(model: MapModel): Map<string, PlaceFrame[]> {
+  const file = new Map(live(model.captures).map(c => [c.id, c.filename]));
+  const frames = live(model.keyframes)
+    .filter(k => file.has(k.captureId))
+    .sort((a, b) => a.captureId.localeCompare(b.captureId) || (a.timeMs ?? 0) - (b.timeMs ?? 0) || a.id.localeCompare(b.id));
+  const order = new Map<string, { at: number; frame: PlaceFrame }>();
+  const counted = new Map<string, number>();
+  frames.forEach((k, at) => {
+    const n = (counted.get(k.captureId) ?? 0) + 1;
+    counted.set(k.captureId, n);
+    order.set(k.id, { at, frame: { id: k.id, file: file.get(k.captureId)!, ...(k.timeMs !== undefined ? { timeMs: k.timeMs } : { n }) } });
+  });
+  const seenOn = new Map<string, Set<string>>();
+  for (const s of live(model.sightings)) {
+    if (!order.has(s.keyframeId)) continue;
+    seenOn.set(s.placeId, (seenOn.get(s.placeId) ?? new Set<string>()).add(s.keyframeId));
+  }
+  const out = new Map<string, PlaceFrame[]>();
+  for (const [placeId, ids] of seenOn) {
+    const all = [...ids].map(id => order.get(id)!).sort((a, b) => a.at - b.at);
+    const picked = all.length <= PLACE_FRAMES ? all : [all[0]!, all[Math.floor((all.length - 1) / 2)]!, all[all.length - 1]!];
+    out.set(placeId, picked.map(p => p.frame));
+  }
+  return out;
+}
+
+/**
+ * One part's items on one floor, in id order, each leaving out what is at its
+ * default (a version 0, no name, not walkable, unverified, no room), so L1's
+ * 260 rooms fit a page. A room's centre is where its name goes on the plan,
+ * in metres.
  */
 function partItems(model: MapModel, level: Level, part: Exclude<FloorPart, "summary" | "objects">): Record<string, unknown>[] {
   const version = (v: number) => (v ? { version: v } : {});
@@ -84,7 +131,7 @@ function partItems(model: MapModel, level: Level, part: Exclude<FloorPart, "summ
       const portalKind = new Map(live(model.portals).map(p => [p.id, p.kind]));
       const stopIn = new Map(live(model.portalEndpoints).filter(e => e.levelId === level.id)
         .map(e => [e.roomId, portalKind.get(e.portalId) ?? "stop"]));
-      return live(model.rooms).filter(r => r.levelId === level.id).map(r => {
+      return byId(live(model.rooms).filter(r => r.levelId === level.id)).map(r => {
         const place = boundTo.get(r.id);
         const stop = stopIn.get(r.id);
         return {
@@ -100,22 +147,24 @@ function partItems(model: MapModel, level: Level, part: Exclude<FloorPart, "summ
     }
     case "places": {
       const floorOf = placeLevels(model);
-      return live(model.places).filter(p => floorOf.get(p.id) === level.id).map(p => ({
+      const frames = placeFrames(model);
+      return byId(live(model.places).filter(p => floorOf.get(p.id) === level.id)).map(p => ({
         id: p.id, name: p.nameEn, category: p.category, status: p.status,
         ...(p.proposedBy ? { proposedBy: p.proposedBy } : {}),
         ...(p.roomId ? { roomId: p.roomId } : {}),
         ...(p.objectKindId ? { objectKindId: p.objectKindId } : {}),
         ...(p.pathwayKindId ? { pathwayKindId: p.pathwayKindId } : {}),
         ...version(p.version),
+        ...(frames.has(p.id) ? { frames: frames.get(p.id)! } : {}),
       }));
     }
     case "pathways":
-      return live(model.pathways).filter(p => p.levelId === level.id).map(p => ({
+      return byId(live(model.pathways).filter(p => p.levelId === level.id)).map(p => ({
         id: p.id, ...named(p.nameEn), ...(p.kindId ? { kindId: p.kindId } : {}), ...version(p.version),
         widthM: p.widthM, lengthM: round1(lineLength(p.polyline)), from: at1(p.polyline[0]!), to: at1(p.polyline[p.polyline.length - 1]!),
       }));
     case "entrances":
-      return live(model.entrances).filter(e => e.levelId === level.id).map(e => ({
+      return byId(live(model.entrances).filter(e => e.levelId === level.id)).map(e => ({
         id: e.id, ...named(e.nameEn), roomId: e.roomId, point: at1(e.point), ...version(e.version),
       }));
   }
@@ -171,11 +220,11 @@ export function floorPart(
   if (part === "objects") {
     const places = live(model.places);
     // Kinds are the same on every floor (Plan 6A), so each is listed with its places, wherever they were filmed.
-    const kinds = live(model.objectKinds).map(k => ({
+    const kinds = byId(live(model.objectKinds)).map(k => ({
       id: k.id, name: k.nameEn, size: k.size, look: k.assetId ? "Model" : "Box",
-      placeIds: places.filter(p => p.objectKindId === k.id).map(p => p.id), ...(k.version ? { version: k.version } : {}),
+      placeIds: byId(places.filter(p => p.objectKindId === k.id)).map(p => p.id), ...(k.version ? { version: k.version } : {}),
     }));
-    const objects = live(model.placements).filter(p => p.levelId === level.id && p.objectKindId).map(p => ({
+    const objects = byId(live(model.placements).filter(p => p.levelId === level.id && p.objectKindId)).map(p => ({
       id: p.id, kindId: p.objectKindId!, position: [round2(p.position[0]), round2(p.position[1])],
       rotationDeg: p.rotationDeg, sightings: p.sightingIds.length, ...(p.version ? { version: p.version } : {}),
     }));

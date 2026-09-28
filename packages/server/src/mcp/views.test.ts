@@ -94,11 +94,15 @@ describe("floorPart", () => {
       floor: "L1", part: "rooms", total: 1, offset: 0,
       rooms: [{ id: "L1-shop-12", name: "Shop 12", kind: "room", centre: [2, 2], place: { id: "pl_sb", name: "Starbucks" }, stop: "lift" }],
     });
+    // Each part comes in id order; a place gives the frames it was filmed on, for view_frame.
     expect(floorPart(survey, L1(), names, "places", 0, 100)).toEqual({
       floor: "L1", part: "places", total: 2, offset: 0,
       places: [
-        { id: "pl_sb", name: "Starbucks", category: "retail", status: "confirmed", roomId: "L1-shop-12" },
-        { id: "pl_gc", name: "Gong Cha", category: "retail", status: "proposed" },
+        { id: "pl_gc", name: "Gong Cha", category: "retail", status: "proposed", frames: [{ id: "kf_2", file: "L1 walk.mp4", timeMs: 2000 }] },
+        {
+          id: "pl_sb", name: "Starbucks", category: "retail", status: "confirmed", roomId: "L1-shop-12",
+          frames: [{ id: "kf_1", file: "L1 walk.mp4", timeMs: 1000 }],
+        },
       ],
     });
     expect(floorPart(survey, L1(), names, "pathways", 0, 100)).toMatchObject({
@@ -107,9 +111,9 @@ describe("floorPart", () => {
     expect(floorPart(survey, L1(), names, "entrances", 0, 100)).toMatchObject({
       entrances: [{ id: "e_1", name: "Main", roomId: "L1-shop-12", point: [1, 1] }],
     });
-    expect(floorPart(survey, L1(), names, "places", 1, 1)).toEqual({
+    expect(floorPart(survey, L1(), names, "places", 1, 1)).toMatchObject({
       floor: "L1", part: "places", total: 2, offset: 1,
-      places: [{ id: "pl_gc", name: "Gong Cha", category: "retail", status: "proposed" }],
+      places: [{ id: "pl_sb", name: "Starbucks" }],
     });
     expect(floorPart(survey, L1(), names, "places", 0, 1)).toMatchObject({ next: 1 });
   });
@@ -128,6 +132,56 @@ describe("floorPart", () => {
         { id: "pl_walk", status: "confirmed", pathwayKindId: "walkway" },
       ],
     });
+  });
+
+  it("gives a place up to 3 of its frames, the first, middle and last filmed, each with its footage and time", () => {
+    const model = parseModel({
+      ...survey,
+      keyframes: [
+        ...survey.keyframes,
+        { id: "kf_5", captureId: "cap_1", timeMs: 5000, imageId: "kf_5", widthPx: 640, heightPx: 480 },
+        { id: "kf_4", captureId: "cap_1", timeMs: 4000, imageId: "kf_4", widthPx: 640, heightPx: 480 },
+      ],
+      sightings: [
+        { id: "sg_5", placeId: "pl_sb", keyframeId: "kf_5" },
+        { id: "sg_3", placeId: "pl_sb", keyframeId: "kf_3" },
+        { id: "sg_1", placeId: "pl_sb", keyframeId: "kf_1" },
+        { id: "sg_4", placeId: "pl_sb", keyframeId: "kf_4" },
+        { id: "sg_2", placeId: "pl_sb", keyframeId: "kf_2" },
+        // A tag deleted since is not a frame the place was seen on.
+        { id: "sg_x", placeId: "pl_gc", keyframeId: "kf_9", deletedAt: "2026-09-28T00:00:00.000Z" },
+      ],
+    });
+    const { places } = floorPart(model, findLevel(model, "L1")!, names, "places", 0, 100) as { places: { id: string; frames?: unknown }[] };
+    expect(places.find(p => p.id === "pl_sb")!.frames).toEqual([
+      { id: "kf_1", file: "L1 walk.mp4", timeMs: 1000 },
+      { id: "kf_3", file: "L1 walk.mp4", timeMs: 3000 },
+      { id: "kf_5", file: "L1 walk.mp4", timeMs: 5000 },
+    ]);
+    expect(places.find(p => p.id === "pl_gc")!.frames).toBeUndefined();
+  });
+
+  it("gives every part in id order, the objects' kinds too, so paging never depends on the order rows are stored in", () => {
+    const at = (x: number): [number, number][] => [[x, 0], [x + 4, 0], [x + 4, 4], [x, 4]];
+    const model = parseModel({
+      ...survey,
+      rooms: ["L1-c", "L1-a", "L1-b"].map((id, i) => ({ id, levelId: "oth-L1", kind: "room", footprint: at(i * 10), heightM: 4 })),
+      places: ["pl_c", "pl_a", "pl_b"].map(id => ({ id, nameEn: id, category: "retail", levelId: "oth-L1" })),
+      sightings: [],
+      pathways: ["pw_c", "pw_a", "pw_b"].map(id => ({ id, levelId: "oth-L1", polyline: [[0, 0], [5, 0]] })),
+      entrances: ["e_c", "e_a", "e_b"].map(id => ({ id, levelId: "oth-L1", roomId: "L1-a", point: [1, 1] })),
+      portalEndpoints: [],
+      objectKinds: ["ok_c", "ok_a", "ok_b"].map(id => ({ id, nameEn: id, size: { w: 0.5, d: 0.5, h: 1 } })),
+      placements: ["L1-o-c", "L1-o-a", "L1-o-b"].map(id => ({ id, levelId: "oth-L1", objectKindId: "ok_a", position: [1, 1, 0] })),
+    });
+    const ids = (part: "rooms" | "places" | "pathways" | "entrances" | "objects", key: string = part) =>
+      ((floorPart(model, findLevel(model, "L1")!, names, part, 0, 100) as Record<string, { id: string }[]>)[key] ?? []).map(i => i.id);
+    expect(ids("rooms")).toEqual(["L1-a", "L1-b", "L1-c"]);
+    expect(ids("places")).toEqual(["pl_a", "pl_b", "pl_c"]);
+    expect(ids("pathways")).toEqual(["pw_a", "pw_b", "pw_c"]);
+    expect(ids("entrances")).toEqual(["e_a", "e_b", "e_c"]);
+    expect(ids("objects")).toEqual(["L1-o-a", "L1-o-b", "L1-o-c"]);
+    expect(ids("objects", "kinds")).toEqual(["ok_a", "ok_b", "ok_c"]);
   });
 
   it("keeps every page of an L1-sized floor under 40,000 characters, and pages through all of it", () => {

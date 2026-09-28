@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { beforeEach, describe, expect, it } from "vitest";
 import { storeAsset } from "../../assets/storage";
 import { keyframes, levelImages } from "../../db/schema";
-import { createEntity, softDeleteEntity } from "../../entities/repository";
+import { createEntity, softDeleteEntity, updateEntity } from "../../entities/repository";
 import { PresenceTracker } from "../../presence/service";
 import { call, mcpFixture, type McpFixture } from "../testing";
 
@@ -46,9 +46,25 @@ describe("get_floor", () => {
     });
     const rooms = JSON.parse((await call(client, "get_floor", { floor: "L1", part: "rooms" })).text);
     expect(rooms.rooms).toEqual([{ id: "L1-shop-12", name: "Shop 12", kind: "room", centre: [15, 35], place: { id: "pl_sb", name: "Starbucks" } }]);
-    const places = JSON.parse((await call(client, "get_floor", { floor: "L1", part: "places", offset: 1, limit: 1 })).text);
-    expect(places).toMatchObject({ total: 2, offset: 1, places: [{ id: "pl_gc", status: "proposed", proposedBy: "claude-code" }] });
+    const places = JSON.parse((await call(client, "get_floor", { floor: "L1", part: "places", offset: 0, limit: 1 })).text);
+    expect(places).toMatchObject({
+      total: 2, offset: 0, next: 1,
+      places: [{ id: "pl_gc", status: "proposed", proposedBy: "claude-code", frames: [{ id: "kf_2", file: "L1 walk.mp4", timeMs: 2000 }] }],
+    });
     expect(presence.list()).toContainEqual(expect.objectContaining({ displayName: "Wei (Claude)", levelId: "oth-L1" }));
+  });
+
+  it("keeps its pages in id order, so an edit between two page reads skips nothing and repeats nothing", async () => {
+    for (const id of ["L1-d", "L1-b", "L1-a", "L1-c"]) {
+      await createEntity(f.db, "room", { id, levelId: "oth-L1", kind: "room", footprint: [[0, 0], [4, 0], [4, 4], [0, 4]], heightM: 4 }, f.wei.id);
+    }
+    const page = async (offset: number) =>
+      JSON.parse((await call(client, "get_floor", { floor: "L1", part: "rooms", offset, limit: 2 })).text) as { rooms: { id: string }[] };
+    const seen = (await page(0)).rooms.map(r => r.id);
+    // Claude names the first room it read, then reads on: the edit must not move the room within the list.
+    await updateEntity(f.db, "room", seen[0]!, 0, { nameEn: "Renamed" }, f.wei.id);
+    seen.push(...(await page(2)).rooms.map(r => r.id), ...(await page(4)).rooms.map(r => r.id));
+    expect(seen).toEqual(["L1-a", "L1-b", "L1-c", "L1-d", "L1-shop-12"]);
   });
 
   it("tells Claude a big floor comes in parts", async () => {

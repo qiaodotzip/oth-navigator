@@ -62,11 +62,12 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
     title: "Get a floor",
     description:
       "One floor, in parts, since a big floor is too much for one reply. part summary, the default, gives the " +
-      "floor's id and code and how many of each thing it has. The other parts come a page at a time, as list_frames " +
-      "does: offset and limit, and next when there is more. rooms: each one's id, name, kind, centre [x, y] in " +
+      "floor's id and code and how many of each thing it has. The other parts come a page at a time, in id order, as " +
+      "list_frames does: offset and limit, and next when there is more. rooms: each one's id, name, kind, centre [x, y] in " +
       "metres (where its name goes on the plan), the surveyed place bound to it, and stop when it is a lift, " +
       "escalator or stair stop. places: those surveyed on the floor, with status, proposedBy for a proposal, the " +
-      "roomId it is bound to, and objectKindId or pathwayKindId when it is an object or a walkway. pathways, " +
+      "roomId it is bound to, objectKindId or pathwayKindId when it is an object or a walkway, and up to 3 frames it " +
+      "was filmed on (each frame's id for view_frame, its footage, and its time there). pathways, " +
       "entrances, and objects (the kinds of object, with the objects on this floor). A field left out has its " +
       "default: version 0, not walkable, unverified, bound to no room. get gives any one thing in full.",
     inputSchema: {
