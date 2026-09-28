@@ -1,8 +1,22 @@
-import type { Api, EntityType } from "../api/client";
+import type { Api, EntityType, LevelImage } from "../api/client";
 import { ApiError, ConflictError, isUnauthorized } from "../api/client";
 import { reportFailure, serverWords, worthRetrying } from "../ui/failure";
 import { toast } from "../ui/toast";
 import { useEditorStore } from "./store";
+
+/**
+ * The plans a reload listed, each kept at the newest version this page has
+ * seen. A list read before a plan save and answered after it still carries the
+ * version that save moved past; put back, it would make the plan's next save
+ * a 409 against your own change.
+ */
+function newestPlans(listed: readonly LevelImage[], held: readonly LevelImage[]): LevelImage[] {
+  const heldById = new Map(held.map(i => [i.id, i]));
+  return listed.map(i => {
+    const mine = heldById.get(i.id);
+    return mine && mine.version > i.version ? mine : i;
+  });
+}
 
 /**
  * Every mutation goes through here so four rules hold everywhere:
@@ -34,7 +48,7 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
     ]);
     store.getState().setModel(model);
     if (validates) store.getState().setReport(report);
-    store.getState().setLevelImages(levelImages);
+    store.getState().setLevelImages(newestPlans(levelImages, store.getState().levelImages));
   }
 
   async function guard(

@@ -138,6 +138,33 @@ describe("saver", () => {
     expect(useEditorStore.getState().levelImages).toEqual([image]);
   });
 
+  describe("the plans a reload brings", () => {
+    const image = {
+      id: "img_1", levelId: "oth-L1", filename: "a.png", widthPx: 1, heightPx: 1,
+      sizeBytes: 1, metresPerPixel: null, offsetX: 0, offsetY: 0, opacity: 0.6, version: 0,
+    };
+
+    it("never roll back a plan saved after the list was read, so its next save does not 409", async () => {
+      useEditorStore.getState().setLevelImages([image]);
+      let answer!: (items: typeof image[]) => void;
+      const listLevelImages = vi.fn(() => new Promise<typeof image[]>(resolve => { answer = resolve; }));
+      const reloading = createSaver(fakeApi({ listLevelImages })).refresh();
+      // A plan save lands while the list, read before it at version 0, is still on its way back.
+      const saved = { ...image, metresPerPixel: 0.21, version: 1 };
+      useEditorStore.getState().setLevelImages([saved]);
+      answer([image]);
+      await reloading;
+      expect(useEditorStore.getState().levelImages).toEqual([saved]);
+    });
+
+    it("still bring a newer version from the server, such as someone else's change", async () => {
+      useEditorStore.getState().setLevelImages([image]);
+      const theirs = { ...image, opacity: 0.3, version: 2 };
+      await createSaver(fakeApi({ listLevelImages: vi.fn(async () => [theirs]) })).refresh();
+      expect(useEditorStore.getState().levelImages).toEqual([theirs]);
+    });
+  });
+
   it("update returns true on success", async () => {
     expect(await createSaver(fakeApi()).update("room", "L1-a", 0, { nameEn: "X" })).toBe(true);
   });
