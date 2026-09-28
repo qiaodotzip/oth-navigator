@@ -19,7 +19,7 @@ export const READ_ONLY = { readOnlyHint: true } as const;
 /** The widest a frame goes to Claude: the size the survey's labelling view uses. */
 const FRAME_WIDTH = 1600;
 
-const FLOOR = z.string().min(1).max(40).describe('A floor\'s code, such as "L1", or its id, such as "oth-L1".');
+export const FLOOR = z.string().min(1).max(40).describe('A floor\'s code, such as "L1", or its id, such as "oth-L1".');
 const ID = z.string().min(1).max(120);
 const GET_TYPES = [...ENTITY_TYPES, "keyframe"] as const;
 
@@ -28,7 +28,7 @@ export async function teamNames(ctx: ToolContext): Promise<Map<string, string>> 
   return new Map(rows.map(r => [r.id, r.name]));
 }
 
-function levelFor(ctx: ToolContext, model: MapModel, floor: string) {
+export function levelFor(ctx: ToolContext, model: MapModel, floor: string) {
   const level = findLevel(model, floor);
   if (!level) throw new Refusal(`There is no floor ${floor}. list_floors gives every floor.`);
   ctx.seenOn(level.id);

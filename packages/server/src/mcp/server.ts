@@ -3,6 +3,7 @@ import type { ToolContext } from "./context";
 import { registerEditTools } from "./tools/edit";
 import { registerPublishTools } from "./tools/publish";
 import { registerReadTools } from "./tools/read";
+import { registerSetupTools } from "./tools/setup";
 import { registerSurveyTools } from "./tools/survey";
 import { wrapTools } from "./wrapTools";
 
@@ -26,5 +27,6 @@ export function buildMcpServer(ctx: ToolContext): McpServer {
   registerSurveyTools(server, ctx);
   registerEditTools(server, ctx);
   registerPublishTools(server, ctx);
+  registerSetupTools(server, ctx);
   return server;
 }
