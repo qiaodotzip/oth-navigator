@@ -2,8 +2,8 @@ import { parseModel, type PlanSource } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import type { LevelImage } from "../api/client";
 import {
-  EPOCH, autoDone, cardLink, countRows, doneLine, firstOpenStep, notDoneLine, setupSince, sinceParam, stepDone,
-  stepsLeft, stoppedLine, type StepContext,
+  EPOCH, autoDone, cardLink, countRows, countsPending, doneLine, firstOpenStep, notDoneLine, setupSince, sinceParam,
+  stepDone, stepsLeft, stoppedLine, type StepContext,
 } from "./progress";
 import { STEP_COUNT, STEP_GROUPS, WIZARD_STEPS, doItMyself, slashCommand, stepAt, stepNumber } from "./steps";
 import { NO_COUNTS, setupState } from "./testing";
@@ -258,5 +258,14 @@ describe("words", () => {
     expect(stoppedLine({ ...byClaude("things"), status: "open" as const }, counts, now)).toBeNull();
     expect(stoppedLine(byClaude("paths"), { ...counts, paths: { pathways: 38, entrances: 0, unreachable: null } }, now)).toBeNull();
     expect(stoppedLine(null, counts, now)).toBeNull();
+  });
+
+  it("says the paths step's counts are still pending only while unreachable is null", () => {
+    // Fix: the light setup (Floors home, Review) leaves it null, and neither
+    // Done nor a warning can be shown truthfully until the full GET lands.
+    expect(countsPending("paths", { ...NO_COUNTS, paths: { pathways: 38, entrances: 0, unreachable: null } })).toBe(true);
+    expect(countsPending("paths", { ...NO_COUNTS, paths: { pathways: 38, entrances: 0, unreachable: 0 } })).toBe(false);
+    expect(countsPending("paths", { ...NO_COUNTS, paths: { pathways: 38, entrances: 0, unreachable: 167 } })).toBe(false);
+    expect(countsPending("rooms", NO_COUNTS)).toBe(false);
   });
 });

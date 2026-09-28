@@ -247,6 +247,17 @@ export function stoppedLine(state: SetupStepState | null, counts: SetupCounts, n
   return `Claude stopped with ${left}${when}${state.note ? `: ${state.note}` : ""}`;
 }
 
+/**
+ * Whether a Claude step's own counts have not finished loading their full
+ * number yet. Only the paths step's `unreachable` has this: the light setup
+ * the Floors home and Review leave in the store gives it as null, where every
+ * other count is at worst a real zero. Neither a green tick nor a warning can
+ * be shown truthfully from a count that isn't there yet.
+ */
+export function countsPending(step: SetupStepId, counts: SetupCounts): boolean {
+  return step === "paths" && counts.paths.unreachable === null;
+}
+
 export type SetupLink = { label: string; to: string; restart: boolean };
 
 /** The Floors home card's way into the wizard (spec §4.2). */

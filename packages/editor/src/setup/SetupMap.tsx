@@ -11,13 +11,19 @@ import { useEditorStore, type Selection } from "../state/store";
 /** A request to frame something on the map. `seq` makes the same thing asked twice two requests. */
 export type MapFocus = { target: NonNullable<Selection>; seq: number };
 
+/** A stable reference, so passing it does not itself make PlanCanvas re-render. */
+function noSelect(): void {}
+
 /**
  * The floor's plan beside a step (spec §4.2, §8): what Claude has put on it so
  * far, with the rooms' names. It draws nothing itself; a click selects, as on
  * Build, but only where `keepSelection` says so (Check, whose Show selects).
  * Elsewhere Claude is at work, and a selection is also the collaboration
- * lock: a room held here would turn Claude's writes to it away. So any
- * selection is let go at once, one brought from Build included.
+ * lock: a room held here would turn Claude's writes to it away. So a click
+ * does not select at all — a select-then-release on the next render still
+ * races Claude's own acquire and release of the lock over the network — and
+ * any selection already held, one brought from Build included, is let go at
+ * once.
  */
 export function SetupMap({ api, focus = null, keepSelection = false }: {
   api: Pick<Api, "levelImageFileUrl">;
@@ -63,6 +69,9 @@ export function SetupMap({ api, focus = null, keepSelection = false }: {
           imageUrl={api.levelImageFileUrl}
           showHint={false}
           overlays={<PlanRoomLabels labels={labels} />}
+          // Undefined keeps Check's own Show selecting normally; elsewhere a
+          // no-op keeps a click from ever taking the collaboration lock.
+          onSelect={keepSelection ? undefined : noSelect}
         />
       )}
     </div>

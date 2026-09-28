@@ -9,7 +9,7 @@ import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
 import { relativeTime } from "../ui/relativeTime";
 import { toast } from "../ui/toast";
-import { countRows, countsKey, doneLine, sinceParam, stoppedLine, storedState } from "./progress";
+import { countRows, countsKey, countsPending, doneLine, sinceParam, stoppedLine, storedState } from "./progress";
 import { SetupMap } from "./SetupMap";
 import { STEP_GROUPS, WATCH, doItMyself, slashCommand, wizardStep, type ClaudeStepId } from "./steps";
 import { useSetupPoll, useSetupStore } from "./sync";
@@ -103,9 +103,12 @@ export function ClaudeStep({ api, saver, level, stepId }: {
   // someone already connected to connect would be wrong.
   const noToken = tokens !== null && myLiveTokens(tokens, user?.id ?? null).length === 0;
   const state = storedState(setup, stepId);
+  // The paths step's unreachable count can still be null (the light setup
+  // left it that way): neither line can be shown truthfully until it lands.
+  const pending = setup ? countsPending(stepId, setup.counts) : false;
   // Claude finished, but the counts still show work: that is a warning, not a tick.
-  const stopped = setup ? stoppedLine(state, setup.counts) : null;
-  const done = stopped ? null : doneLine(state, team);
+  const stopped = pending || !setup ? null : stoppedLine(state, setup.counts);
+  const done = pending || stopped ? null : doneLine(state, team);
   const mine = doItMyself(stepId, level.code);
 
   return (

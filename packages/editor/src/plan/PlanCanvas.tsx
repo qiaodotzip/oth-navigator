@@ -3,7 +3,7 @@ import { roomColor } from "@oth/renderer";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { levelBelow } from "../flow/floors";
 import type { SpaceKind } from "../flow/newSpace";
-import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore } from "../state/store";
+import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore, type Selection } from "../state/store";
 import { displayBBox, displayCalibration, imageForLevel } from "../state/underlay";
 import { Kbd } from "../ui/Kbd";
 import { isTyping } from "../ui/typing";
@@ -114,6 +114,14 @@ export type PlanCanvasProps = {
    * its own pointer events. A label lets clicks through to the room beneath.
    */
   overlays?: ReactNode;
+  /**
+   * Where a click or drag with the Select tool sends its selection: the
+   * store's own `select` by default. A no-op keeps a step's map from ever
+   * selecting anything — a selection is also the collaboration lock, and a
+   * select-then-release still races Claude's own acquire and release of it
+   * over the network.
+   */
+  onSelect?: (selection: NonNullable<Selection>) => void;
 };
 
 export function PlanCanvas({
@@ -130,9 +138,13 @@ export function PlanCanvas({
   onMoveUnderlay,
   showHint = true,
   overlays,
+  onSelect,
 }: PlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const state = useEditorStore();
+  // The store's own select by default; a step that must never take the
+  // collaboration lock passes a no-op instead.
+  const select = onSelect ?? state.select;
   const rooms = roomsOnActiveLevel(state);
   const rings = ringsOnActiveLevel(state);
   const [cursor, setCursor] = useState<Vec2 | null>(null);
@@ -460,7 +472,7 @@ export function PlanCanvas({
         // Drawing tools own the surface; clicking a room must not steal the point.
         if (state.tool !== "select") return;
         event.stopPropagation();
-        state.select({ type: "room", id: room.id });
+        select({ type: "room", id: room.id });
       }}
     />
   );
@@ -551,7 +563,7 @@ export function PlanCanvas({
               onClick={event => {
                 if (state.tool !== "select") return;
                 event.stopPropagation();
-                state.select({ type: "pathway", id: p.id });
+                select({ type: "pathway", id: p.id });
               }}
             />
           ))}
@@ -595,7 +607,7 @@ export function PlanCanvas({
                 onMouseDown={event => {
                   if (state.tool !== "select") return;
                   event.stopPropagation();
-                  state.select({ type: "placement", id: p.id });
+                  select({ type: "placement", id: p.id });
                   setDraggingPlacement({ id: p.id, from: [event.clientX, event.clientY] });
                 }}
               />
@@ -647,7 +659,7 @@ export function PlanCanvas({
               onClick={event => {
                 if (state.tool !== "select") return;
                 event.stopPropagation();
-                state.select({ type: "entrance", id: e.id });
+                select({ type: "entrance", id: e.id });
               }}
             />
           ))}
@@ -670,7 +682,7 @@ export function PlanCanvas({
                 onClick={event => {
                   if (state.tool !== "select") return;
                   event.stopPropagation();
-                  state.select({ type: "portalEndpoint", id: ep.id });
+                  select({ type: "portalEndpoint", id: ep.id });
                 }}
               />
             );

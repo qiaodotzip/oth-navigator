@@ -21,7 +21,22 @@ const liveToken: ApiToken = {
 const tokens = (list: ApiToken[]) => vi.fn().mockResolvedValue({ tokens: list, mayPublishByDefault: false });
 const rooms = (waiting: number, accepted: number) => ({ waiting, setAside: 0, accepted, rejected: 0, stops: 0 });
 
+// The map's box, as CheckStep's own tests measure it: jsdom's ResizeObserver
+// never fires on its own.
+type Measure = (entries: { contentRect: { width: number; height: number } }[]) => void;
+let measure: Measure | null = null;
+class FakeResizeObserver {
+  constructor(cb: Measure) {
+    measure ??= cb;
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+  measure = null;
   useSetupStore.getState().reset();
   useToasts.getState().clear();
   useClaudeCodePanel.getState().setOpen(false);
@@ -39,6 +54,7 @@ function open({ api = fakeSetupApi(), stepId = "rooms", state = setupState() }: 
   useSetupStore.getState().put("oth-L1", state);
   const saver = { refresh: vi.fn().mockResolvedValue(undefined) };
   render(<ClaudeStep api={api} saver={saver} level={L1} stepId={stepId} />);
+  act(() => measure?.([{ contentRect: { width: 800, height: 600 } }]));
   return { api, saver };
 }
 
@@ -127,6 +143,22 @@ describe("ClaudeStep", () => {
     expect(useEditorStore.getState().selection).toBeNull();
   });
 
+  it("never selects on a click at all: select-then-release still races acquireLock and releaseLock over the network", () => {
+    useEditorStore.getState().setModel(parseModel({
+      ...sampleModel,
+      rooms: [{ id: "L1-a", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 4 }],
+    }));
+    open();
+    // Zustand's subscribers fire synchronously on every set, so this catches
+    // even a selection let go again before React's own effects run.
+    const seen: unknown[] = [];
+    const unsubscribe = useEditorStore.subscribe(s => seen.push(s.selection));
+    fireEvent.click(screen.getByTestId("room-L1-a"));
+    unsubscribe();
+    expect(seen).not.toContainEqual({ type: "room", id: "L1-a" });
+    expect(useEditorStore.getState().selection).toBeNull();
+  });
+
   it("leads to the Claude Code panel when you have no live token: an expired one is none", async () => {
     open({ api: fakeSetupApi({ listTokens: tokens([{ ...liveToken, expiresAt: "2020-01-01T00:00:00Z" }]) }) });
     fireEvent.click(await screen.findByRole("button", { name: "Connect Claude Code" }));
@@ -171,6 +203,32 @@ describe("ClaudeStep", () => {
     });
     expect(screen.getByRole("status").textContent).toBe("! Claude stopped with 13 places not bound, just now");
     expect(screen.queryByText(/Done by Claude/)).toBeNull();
+  });
+
+  it("shows neither Done nor a warning on the paths step while unreachable isn't known yet", () => {
+    // Fix: the light setup (Floors home, Review) leaves paths.unreachable
+    // null, and a false green tick showed until the full GET landed.
+    open({
+      stepId: "paths",
+      state: setupState(
+        { paths: { status: "done", finishedBy: "u_sc", finishedVia: "tok_1", finishedAt: new Date().toISOString(), note: "" } },
+        { paths: { pathways: 38, entrances: 0, unreachable: null } },
+      ),
+    });
+    expect(screen.getByRole("status").textContent).toBe("");
+    expect(screen.queryByText(/Done by Claude/)).toBeNull();
+    expect(screen.queryByText(/Claude stopped/)).toBeNull();
+  });
+
+  it("shows Done on the paths step once unreachable is known, even at zero", () => {
+    open({
+      stepId: "paths",
+      state: setupState(
+        { paths: { status: "done", finishedBy: "u_sc", finishedVia: "tok_1", finishedAt: new Date().toISOString(), note: "" } },
+        { paths: { pathways: 38, entrances: 4, unreachable: 0 } },
+      ),
+    });
+    expect(screen.getByRole("status").textContent).toBe("✓ Done by Claude, just now");
   });
 
   it("keeps its status line in place, so a screen reader hears the line when it changes", () => {
