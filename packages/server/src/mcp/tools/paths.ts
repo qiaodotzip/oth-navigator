@@ -21,7 +21,8 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       "(network above 0) usually needs a link to the main one, or should be left out, because an unreachable " +
       "pathway blocks Publish. " +
       "drawn is true when the floor already has a pathway along the line (70% of it within that pathway's half " +
-      "width and a metre): leave those out, so a second run draws only what is still missing. " +
+      "width and a metre, running within 30° of it): leave those out, so a second run draws only what is still " +
+      "missing. A line that only crosses a pathway, or branches off one, is not drawn. " +
       "links join each doorway, lift, escalator or stair stop, and entrance to the nearest point on a line it can " +
       `reach in a straight line, within ${MAX_LINK_M} m. Links have no width. unconnected lists the ones that could ` +
       "not be joined, and why. " +

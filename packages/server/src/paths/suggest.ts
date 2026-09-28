@@ -18,10 +18,13 @@ export const WIDTH_PERCENTILE = 0.25;
 /**
  * A line runs along a pathway already drawn when this much of it lies within
  * the pathway's half width and DRAWN_MARGIN_M more (contract v2), measured at
- * a point every DRAWN_STEP_M along it.
+ * a point every DRAWN_STEP_M along it, and runs there within DRAWN_ANGLE_DEG
+ * of the pathway's nearest segment: a line that only crosses a pathway, or
+ * branches off it, is not drawn.
  */
 export const DRAWN_SHARE = 0.7;
 export const DRAWN_MARGIN_M = 1;
+export const DRAWN_ANGLE_DEG = 30;
 const DRAWN_STEP_M = 1;
 
 /**
@@ -58,22 +61,40 @@ export function lineWidth(points: readonly Vec2[], r: Raster, toEdge: Float32Arr
 const cm = (v: number) => Math.round(v * 100) / 100;
 const at = (p: Vec2): Vec2 => [cm(p[0]), cm(p[1])];
 
-/** A point every `step` metres along a line, both ends included. */
-function samplesAlong(line: readonly Vec2[], step: number): Vec2[] {
-  const out: Vec2[] = line.length > 0 ? [line[0]!] : [];
+/** A point on a line, and the way the line runs there, as a unit vector. */
+type Sample = { at: Vec2; dir: Vec2 };
+
+/** A point every `step` metres along a line, both ends included, each with its segment's direction. */
+function samplesAlong(line: readonly Vec2[], step: number): Sample[] {
+  const out: Sample[] = [];
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1]!;
     const b = line[i]!;
-    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
-    for (let k = 1; k <= n; k++) out.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len === 0) continue;
+    const dir: Vec2 = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+    if (out.length === 0) out.push({ at: a, dir });
+    const n = Math.max(1, Math.ceil(len / step));
+    for (let k = 1; k <= n; k++) out.push({ at: [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n], dir });
   }
   return out;
 }
 
-function distanceToLine(p: Vec2, line: readonly Vec2[]): number {
-  let d = Infinity;
-  for (let i = 1; i < line.length; i++) d = Math.min(d, distancePointToSegment(p, line[i - 1]!, line[i]!));
-  return d;
+/** The segment of these pathways nearest a point: how far it is, the pathway's reach, and the way it runs. */
+function nearestSegment(p: Vec2, pathways: readonly Pathway[], reach: (p: Pathway) => number) {
+  let best: { d: number; reach: number; dir: Vec2 } | null = null;
+  for (const pathway of pathways) {
+    const line = pathway.polyline;
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1]!;
+      const b = line[i]!;
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len === 0) continue;
+      const d = distancePointToSegment(p, a, b);
+      if (!best || d < best.d) best = { d, reach: reach(pathway), dir: [(b[0] - a[0]) / len, (b[1] - a[1]) / len] };
+    }
+  }
+  return best;
 }
 
 type Box = { minX: number; minY: number; maxX: number; maxY: number };
@@ -87,8 +108,9 @@ const meet = (a: Box, b: Box) => a.minX <= b.maxX && b.minX <= a.maxX && a.minY 
 /**
  * Whether a suggested line runs along a pathway already drawn (contract v2):
  * at least DRAWN_SHARE of its points lie within a pathway's half width and a
- * metre. suggest_paths works from the walkable surface alone, so this is how
- * a second run of draw_paths knows what the first one drew.
+ * metre of the nearest pathway segment, and run within DRAWN_ANGLE_DEG of it,
+ * either way along. suggest_paths works from the walkable surface alone, so
+ * this is how a second run of draw_paths knows what the first one drew.
  */
 export function drawnAlready(line: readonly Vec2[], pathways: readonly Pathway[]): boolean {
   if (line.length < 2) return false;
@@ -96,9 +118,15 @@ export function drawnAlready(line: readonly Vec2[], pathways: readonly Pathway[]
   const box = boxOf(line, 0);
   const near = pathways.filter(p => p.polyline.length >= 2 && meet(box, boxOf(p.polyline, reach(p))));
   if (near.length === 0) return false;
-  const points = samplesAlong(line, DRAWN_STEP_M);
-  const along = points.filter(pt => near.some(p => distanceToLine(pt, p.polyline) <= reach(p))).length;
-  return along / points.length >= DRAWN_SHARE;
+  const samples = samplesAlong(line, DRAWN_STEP_M);
+  if (samples.length === 0) return false;
+  // Within the angle either way along: |cos| of the angle between the two directions at least this.
+  const minCos = Math.cos((DRAWN_ANGLE_DEG * Math.PI) / 180);
+  const along = samples.filter(s => {
+    const seg = nearestSegment(s.at, near, reach);
+    return seg !== null && seg.d <= seg.reach && Math.abs(s.dir[0] * seg.dir[0] + s.dir[1] * seg.dir[1]) >= minCos;
+  }).length;
+  return along / samples.length >= DRAWN_SHARE;
 }
 
 /**

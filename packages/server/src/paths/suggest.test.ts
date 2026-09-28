@@ -170,6 +170,16 @@ describe("suggestPaths", () => {
       .toEqual([false]);
   });
 
+  it("doesn't take a line crossing a drawn pathway for one running along it: the directions must agree within 30°", () => {
+    // A plus: a main corridor 8 m wide east–west, crossed by one 6 m wide running 4 m past each side.
+    const plus: Pt[] = [[0, 16], [27, 16], [27, 12], [33, 12], [33, 16], [60, 16], [60, 24], [33, 24], [33, 28], [27, 28], [27, 24], [0, 24]];
+    const { lines } = suggest([{ footprint: plus }], { pathways: [{ id: "pw-main", levelId: LEVEL, widthM: 6, polyline: [[0, 20], [60, 20]] }] });
+    const [main, cross] = lines;
+    expect(span(main!.polyline)[0]).toBeGreaterThan(40);
+    expect(span(cross!.polyline)).toEqual([0, expect.any(Number)]);
+    expect(lines.map(l => l.drawn)).toEqual([true, false]);
+  });
+
   it("does a floor the size of L1 with 36 courtyards in well under 2 s, each aisle one line", () => {
     const holes: Pt[][] = [];
     for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) holes.push(rect(10 + i * 32, 10 + j * 35, 30 + i * 32, 30 + j * 35));

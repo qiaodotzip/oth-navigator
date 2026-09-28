@@ -79,7 +79,7 @@ describe("suggest_paths", () => {
     const description = tools.find(t => t.name === "suggest_paths")?.description ?? "";
     for (const words of [
       "only at a fork", "longest first", "ends", "network", "blocks Publish", "no width", "view_plan", "50 m", "lift, escalator or stair stop", "levelId",
-      "drawn is true", "70%",
+      "drawn is true", "70%", "within 30°", "crosses",
     ]) {
       expect(description).toContain(words);
     }
