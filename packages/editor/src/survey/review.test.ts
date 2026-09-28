@@ -1,6 +1,6 @@
 import { parseModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { proposedPlaces, reviewProgress } from "./review";
+import { proposedPlaces } from "./review";
 
 const base = {
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
@@ -74,18 +74,5 @@ describe("proposedPlaces", () => {
 
   it("copes with no model at all, which is the first render", () => {
     expect(proposedPlaces(null)).toEqual([]);
-  });
-});
-
-describe("reviewProgress", () => {
-  it("counts both sides, so an empty queue reads as done rather than as nothing", () => {
-    const m = model({
-      places: [
-        { id: "p1", nameEn: "A", category: "retail", status: "proposed" },
-        { id: "p2", nameEn: "B", category: "retail", status: "confirmed" },
-        { id: "p3", nameEn: "C", category: "retail", status: "confirmed" },
-      ],
-    });
-    expect(reviewProgress(m)).toEqual({ proposed: 1, confirmed: 2 });
   });
 });

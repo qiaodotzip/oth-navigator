@@ -26,13 +26,3 @@ export function proposedPlaces(model: MapModel | null): ProposedPlace[] {
     // one seen once, because confirming it clears nine frames of the queue.
     .sort((a, b) => b.sightings.length - a.sightings.length);
 }
-
-/** How much of the queue is left, for a panel that would otherwise just look empty. */
-export function reviewProgress(model: MapModel | null): { proposed: number; confirmed: number } {
-  if (!model) return { proposed: 0, confirmed: 0 };
-  const places: Place[] = live(model.places);
-  return {
-    proposed: places.filter(p => p.status === "proposed").length,
-    confirmed: places.filter(p => p.status === "confirmed").length,
-  };
-}

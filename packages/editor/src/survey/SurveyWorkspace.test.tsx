@@ -240,6 +240,32 @@ describe("SurveyWorkspace", () => {
     expect(api.deleteKeyframe).toHaveBeenCalledTimes(1);
   });
 
+  it("bins the frame in view from the Bin frame button, with the same Undo as Del", async () => {
+    // Ruling 24: teammates use the mouse, and a bin on a key alone is hard to find.
+    const api = at();
+    fireEvent.click(screen.getByRole("button", { name: /Bin frame/ }));
+    expect(param("frame")).toBe("kf_2");
+    await waitFor(() => expect(useToasts.getState().toasts.some(t =>
+      t.message === "Binned frame 3" && t.action?.label === "Undo")).toBe(true));
+    expect(api.deleteKeyframe).toHaveBeenCalledWith("kf_3");
+  });
+
+  it("holds Bin frame while a bin is under way, so a double click bins one frame", async () => {
+    let land!: () => void;
+    const deleteKeyframe = vi.fn(() => new Promise<void>(resolve => { land = resolve; }));
+    at("", fakeApi({ getModel: vi.fn().mockResolvedValue(model), deleteKeyframe }));
+    const button = screen.getByRole("button", { name: /Bin frame/ }) as HTMLButtonElement;
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(button.disabled).toBe(true);
+    expect(deleteKeyframe).toHaveBeenCalledTimes(1);
+    expect(param("frame")).toBe("kf_2");
+
+    await act(async () => { land(); });
+    await waitFor(() => expect(button.disabled).toBe(false));
+    expect(deleteKeyframe).toHaveBeenCalledTimes(1);
+  });
+
   it("comes back to a frame whose bin failed, and a bin sent again by Retry still offers Undo", async () => {
     // Ruling 20 (I2): the saver's Retry resent only the delete, so the Undo never came.
     const deleteKeyframe = vi.fn()
@@ -348,6 +374,20 @@ describe("SurveyWorkspace", () => {
     expect(param("place")).toBe("p_kopi");
     expect(screen.getByRole("button", { name: /Seen: Kopitiam/ })).toBeTruthy();
     expect(screen.getByText(/Frame 1 of 3/)).toBeTruthy();
+  });
+
+  it("starts other footage picked from the list afresh, leaving the last one's frame and place behind", () => {
+    useEditorStore.getState().setModel(parseModel({
+      ...model,
+      captures: [...model.captures, { id: "cap_2", kind: "video", filename: "L1 west.mp4", levelId: "oth-L1" }],
+      keyframes: [...model.keyframes, frame("kf_w", "cap_2", 500)],
+    }));
+    at("?frame=kf_1&place=p_kopi");
+    fireEvent.change(screen.getByLabelText("Footage"), { target: { value: "cap_2" } });
+    expect(param("capture")).toBe("cap_2");
+    expect(param("frame")).toBeNull();
+    expect(param("place")).toBeNull();
+    expect(screen.getByText(/Frame 1 of 1/)).toBeTruthy();
   });
 
   it("falls back to this floor's footage and all frames for an address it cannot use", () => {

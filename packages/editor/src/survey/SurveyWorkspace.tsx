@@ -83,16 +83,21 @@ export function SurveyWorkspace({ api, saver, level, params }: {
   // view, and a second Enter would tag while the first is still making its
   // place. A count, not a flag, because a Retry can run beside another write.
   const writing = useRef(0);
+  // The same count, for Bin frame to show itself held. The ref stays the
+  // guard: it is current the moment a write starts, before any render.
+  const [writes, setWrites] = useState(0);
 
   // A drawn box belongs to the frame it was drawn on.
   useEffect(() => setDraft(null), [frame?.id]);
 
   async function holding(work: () => Promise<void>): Promise<void> {
     writing.current += 1;
+    setWrites(n => n + 1);
     try {
       await work();
     } finally {
       writing.current -= 1;
+      setWrites(n => n - 1);
     }
   }
 
@@ -186,7 +191,7 @@ export function SurveyWorkspace({ api, saver, level, params }: {
     });
   }
 
-  /** From Del: dropped, not queued, while a write is under way. */
+  /** From Del or Bin frame: dropped, not queued, while a write is under way. */
   function bin(): void {
     if (!frame || writing.current > 0) return;
     const movedTo = (stepFrame(view, 1) ?? stepFrame(view, -1))?.id ?? null;
@@ -360,6 +365,19 @@ export function SurveyWorkspace({ api, saver, level, params }: {
               Frame {view.index + 1} of {view.frames.length}
               {frame.timeMs !== undefined && <span className="text-stone-500"> · {frameTime(frame.timeMs)}</span>}
             </span>
+          )}
+          {hasFrames && read.view === "frame" && (
+            // Beside the frame's number, for teammates who use the mouse; the
+            // toast's Undo stands in for a confirmation.
+            <Button
+              size="sm"
+              variant="danger"
+              aria-keyshortcuts="Delete"
+              disabled={!frame || writes > 0}
+              onClick={bin}
+            >
+              Bin frame <Kbd>Del</Kbd>
+            </Button>
           )}
           {hasFrames && (
             <div role="group" aria-label="Show frames" className="flex flex-wrap items-center gap-1.5">

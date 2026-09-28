@@ -78,6 +78,12 @@ describe("Workspace", () => {
     expect(screen.getByRole("group", { name: "Show frames" })).toBeTruthy();
   });
 
+  it("opens the frame the address names, so a frame is a link", async () => {
+    // The route's parameters reach the workspace: without them it opens on frame 2.
+    at("/floors/L1/survey?frame=kf_1");
+    expect(await screen.findByText(/Frame 1 of 2/)).toBeTruthy();
+  });
+
   it("shows one proposal at a time on the Review tab", async () => {
     at("/floors/L1/review");
     expect(await screen.findByDisplayValue("Festive Mall")).toBeTruthy();

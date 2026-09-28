@@ -29,9 +29,10 @@ function reader(): () => FrameSource {
   });
 }
 
-function setup({ captureId = null, upload = vi.fn().mockResolvedValue({}) }: {
+function setup({ captureId = null, upload = vi.fn().mockResolvedValue({}), read = reader() }: {
   captureId?: string | null;
   upload?: ReturnType<typeof vi.fn>;
+  read?: () => FrameSource;
 } = {}) {
   const api = { uploadKeyframe: upload } as unknown as Api;
   const saver = {
@@ -44,10 +45,19 @@ function setup({ captureId = null, upload = vi.fn().mockResolvedValue({}) }: {
   const { unmount } = render(
     <AddFootageDialog
       api={api} saver={saver as unknown as Saver} level={L1} captureId={captureId}
-      open onOpenChange={onOpenChange} onCapture={onCapture} reader={reader()}
+      open onOpenChange={onOpenChange} onCapture={onCapture} reader={read}
     />,
   );
   return { upload, saver, onOpenChange, onCapture, unmount };
+}
+
+/** A video this browser cannot draw: the path the real captureFrame takes with no canvas. */
+function unreadable(): FrameSource {
+  return {
+    seek: async () => {},
+    thumbnail: () => new Uint8ClampedArray(16),
+    grab: () => Promise.reject(new Error("this browser cannot read video frames")),
+  };
 }
 
 /** An upload that hangs until the test releases it, so a run can be paused mid-loop. */
@@ -81,6 +91,13 @@ describe("AddFootageDialog", () => {
   it("says the footage is filed under this floor and the video is never uploaded", () => {
     setup();
     expect(screen.getByText(/filed under L1/i).textContent).toMatch(/never uploaded/i);
+  });
+
+  it("plays the chosen video from this computer, never from an upload", () => {
+    setup();
+    openVideo();
+    expect(URL.createObjectURL).toHaveBeenCalledWith(expect.objectContaining({ name: "L1 east.mp4" }));
+    expect(screen.getByTestId("footage-video").getAttribute("src")).toBe("blob:local-video");
   });
 
   it("names the footage after its file unless told otherwise", () => {
@@ -162,6 +179,18 @@ describe("AddFootageDialog", () => {
     await waitFor(() => expect(saver.update).toHaveBeenCalledWith("capture", "cap_1", 0, { filename: "L1 walk, east end" }));
   });
 
+  it("leaves existing footage's name alone when it was not changed", async () => {
+    // Saving the same name again would be a write for nothing, and a 409 if a
+    // teammate had touched the footage since.
+    const { saver, upload, onOpenChange } = setup({ captureId: "cap_1" });
+    openVideo();
+    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("L1 walk.mp4");
+    fireEvent.click(screen.getByRole("button", { name: /find frames automatically/i }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(upload).toHaveBeenCalled();
+    expect(saver.update).not.toHaveBeenCalled();
+  });
+
   it("says where it stopped when a frame will not upload, and stays open to run again", async () => {
     const upload = vi.fn()
       .mockResolvedValueOnce({})
@@ -237,6 +266,25 @@ describe("AddFootageDialog", () => {
     openVideo();
     fireEvent.click(screen.getByRole("button", { name: /grab this frame/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't add that frame/i);
+  });
+
+  it("says why when the browser cannot read the video, as it does for a failed upload", async () => {
+    const { upload } = setup({ read: unreadable });
+    openVideo();
+    fireEvent.click(screen.getByRole("button", { name: /grab this frame/i }));
+    expect(await screen.findByRole("alert"))
+      .toHaveTextContent("Couldn't add that frame: this browser cannot read video frames.");
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("says where it stopped, and why, when the browser cannot read the video it is looking through", async () => {
+    const { upload, onOpenChange } = setup({ read: unreadable });
+    openVideo();
+    fireEvent.click(screen.getByRole("button", { name: /find frames automatically/i }));
+    expect(await screen.findByRole("alert"))
+      .toHaveTextContent(/stopped at 0m00s: this browser cannot read video frames\./i);
+    expect(upload).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it("leaves a hand-grabbed frame's expired session to the sign-in dialog", async () => {
