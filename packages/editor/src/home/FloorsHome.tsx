@@ -64,6 +64,9 @@ export function FloorsHome({ api, saver }: { api: Api; saver: Pick<Saver, "updat
     try {
       await Promise.all(SETUP_STEP_IDS.map(step => setupApi.setSetupStep(level.id, step, { status: "open" })));
     } catch (err) {
+      // Some of the nine may have gone through; reload so the card shows what
+      // the server now has rather than staying on what it had before.
+      await loadSetup(setupApi, level.id);
       reportFailure(err, { doing: `start ${level.code}'s setup again`, retry: () => restart(level) });
       return;
     }
@@ -123,7 +126,7 @@ export function FloorsHome({ api, saver }: { api: Api; saver: Pick<Saver, "updat
                 // Drafts are loaded only for the open floor; the card knows Find rooms ran from the server's counts.
                 draftsWaiting: 0,
               })}
-              onRestart={() => void restart(level)}
+              onRestart={() => restart(level)}
             />
           </li>
         ))}

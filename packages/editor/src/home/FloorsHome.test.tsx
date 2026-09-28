@@ -201,4 +201,43 @@ describe("FloorsHome — setting a floor up", () => {
     await waitFor(() => expect(getSetup).toHaveBeenCalledTimes(2));
     expect(within(screen.getAllByRole("article")[0]!).getByRole("link", { name: "Set up L1" })).toBeTruthy();
   });
+
+  it("guards Set up again against a quick second press: one run, one navigation", async () => {
+    const releases: (() => void)[] = [];
+    const setSetupStep = vi.fn(() => new Promise(resolve => { releases.push(() => resolve({})); }));
+    const getSetup = vi.fn().mockResolvedValue(setupState({ finish: { status: "done" } }));
+    render(<FloorsHome api={fakeSetupApi({ getSetup, setSetupStep })} saver={fakeSaver()} />);
+    const button = await within(screen.getAllByRole("article")[0]!).findByRole("button", { name: "Set up again" });
+
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    fireEvent.click(button); // the second press, while the first is still in flight, does nothing
+
+    await act(async () => releases.forEach(r => r()));
+    await waitFor(() => expect(window.location.pathname).toBe("/floors/L1/setup/1"));
+    expect(setSetupStep).toHaveBeenCalledTimes(9);
+  });
+
+  it("reloads the floor's setup after a restart partly fails, so the card isn't left stale", async () => {
+    window.history.pushState({}, "", "/floors");
+    const setSetupStep = vi.fn(async (_levelId: string, step: string) => {
+      if (step === "check") throw new TypeError("Failed to fetch");
+      return {};
+    });
+    const getSetup = vi.fn()
+      .mockResolvedValue(setupState())
+      .mockResolvedValueOnce(setupState({ finish: { status: "done" } })) // L1, before the restart
+      .mockResolvedValueOnce(setupState()) // L2, before the restart
+      // After the failed restart: Check alone stuck done; everything else reopened.
+      .mockResolvedValueOnce(setupState({ check: { status: "done" } }));
+    render(<FloorsHome api={fakeSetupApi({ getSetup, setSetupStep })} saver={fakeSaver()} />);
+    const [l1] = screen.getAllByRole("article");
+    fireEvent.click(await within(l1!).findByRole("button", { name: "Set up again" }));
+
+    // sampleModel already has L1 footage, so step 1 auto-completes; step 2
+    // (Label) is the first that is neither stored nor auto-done.
+    expect(await within(l1!).findByRole("link", { name: "Continue: step 2 of 9" })).toBeTruthy();
+    expect(getSetup).toHaveBeenCalledTimes(3);
+    expect(window.location.pathname).toBe("/floors");
+  });
 });

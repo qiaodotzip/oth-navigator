@@ -1,4 +1,5 @@
 import type { Level } from "@oth/model";
+import { useState } from "react";
 import { nextStepText, type FloorProgress } from "../flow/floorProgress";
 import { pickTab } from "../flow/floors";
 import { toBindLine } from "../places/rows";
@@ -34,11 +35,24 @@ export function FloorCard({ level, progress, mine, saver, setup, onRestart }: {
   /** The way into the floor's setup wizard (spec §4.2). */
   setup: SetupLink;
   /** Set up again: opens every step, then goes to step 1. */
-  onRestart: () => void;
+  onRestart: () => Promise<void>;
 }) {
   const tab = pickTab(recall(`lastTab.${level.code}`), progress.survey.total > 0);
   const to = href({ name: "floor", code: level.code, tab, params: {} });
   const reviewTotal = progress.review.confirmed + progress.review.proposed;
+
+  // Guards Set up again the way OwnerPicker guards a toggle: a second press
+  // while the nine calls are in flight must not send nine more.
+  const [restarting, setRestarting] = useState(false);
+  const restart = async () => {
+    if (restarting) return;
+    setRestarting(true);
+    try {
+      await onRestart();
+    } finally {
+      setRestarting(false);
+    }
+  };
 
   return (
     <article
@@ -66,7 +80,9 @@ export function FloorCard({ level, progress, mine, saver, setup, onRestart }: {
       )}
       <p className="mt-auto pt-1 text-xs font-medium text-stone-700">{nextStepText(progress)}</p>
       {setup.restart ? (
-        <button type="button" onClick={onRestart} className={SETUP_LINK}>{setup.label}</button>
+        <button type="button" onClick={() => void restart()} disabled={restarting} className={SETUP_LINK}>
+          {setup.label}
+        </button>
       ) : (
         <a href={setup.to} onClick={followLink(setup.to)} className={SETUP_LINK}>{setup.label}</a>
       )}
