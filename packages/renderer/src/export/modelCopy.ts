@@ -66,6 +66,9 @@ export async function copyModelInto(target: Document, bytes: Uint8Array): Promis
     roots = nodes.map(node => resolve(node));
   } catch (error) {
     console.warn("3D export: couldn't copy a model", error);
+    // Whatever got copied before the break is otherwise unused data left
+    // sitting in the target document (M8): dispose it rather than leak it.
+    for (const copy of copies.values()) copy.dispose();
     return null;
   }
   return new ModelTemplate(target, roots);

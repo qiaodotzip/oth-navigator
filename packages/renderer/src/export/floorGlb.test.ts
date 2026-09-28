@@ -1,7 +1,7 @@
 import type { Node as GltfNode } from "@gltf-transform/core";
 import { WebIO, type Material } from "@gltf-transform/core";
 import { AssetSchema, LevelSchema, ObjectKindSchema, parseModel, PlacementSchema, RoomSchema, type MapModel } from "@oth/model";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CATEGORY_TINT } from "../categoryTint";
 import { CONTEXT_ORIGIN_NOTE } from "../contextExport";
 import { SLAB_HEIGHT_M } from "../geometry";
@@ -10,7 +10,7 @@ import { DEFAULT_PATHWAY_COLOUR, STRIP_HEIGHT_M, STRIP_OPACITY } from "../pathwa
 import { PORTAL_COLOUR, SHAFT_OPACITY } from "../portals";
 import { roomColor, wallColor } from "../theme";
 import { BALUSTRADE_COLOUR, BALUSTRADE_HEIGHT_M, BALUSTRADE_OPACITY, BALUSTRADE_THICKNESS_M } from "../voids";
-import { FLOOR_GROUPS, STACKED_NOTE, buildFloorGlb } from "./floorGlb";
+import { FLOOR_GROUPS, STACKED_NOTE, buildFloorGlb, type MissingModel } from "./floorGlb";
 import {
   bounds, child, DELETED, floorModel, floorNodes, group, linear, materialOf, names, noModels, readGlb, sq, triangleGlb, worldVertices,
 } from "./testing";
@@ -32,6 +32,20 @@ describe("buildFloorGlb — the file", () => {
     expect(floorNodes(doc).map(n => n.getName())).toEqual(["L1"]);
     expect(names(floorNodes(doc)[0]!)).toEqual(["Floors", "Walls", "Voids", "Stops", "Objects", "Pathways"]);
     expect([...FLOOR_GROUPS]).toEqual(names(floorNodes(doc)[0]!));
+  });
+
+  it("yields to the browser between floors (M1), so a tab gets to paint while building several", async () => {
+    const timeout = vi.spyOn(globalThis, "setTimeout");
+    await exported(floorModel, ["oth-L1", "oth-L2"]);
+    expect(timeout).toHaveBeenCalledWith(expect.any(Function), 0);
+    timeout.mockRestore();
+  });
+
+  it("never yields for just one floor", async () => {
+    const timeout = vi.spyOn(globalThis, "setTimeout");
+    await exported(floorModel, ["oth-L1"]);
+    expect(timeout).not.toHaveBeenCalled();
+    timeout.mockRestore();
   });
 
   it("stacks every floor at its elevation, lowest first, whatever order they were asked in", async () => {
@@ -68,6 +82,12 @@ describe("buildFloorGlb — the file", () => {
     const all = await buildFloorGlb(floorModel, ["oth-L1", "oth-L2"], noModels);
     expect((await new WebIO().binaryToJSON(all)).json.asset.generator).toBe(`OTH map editor. ${CONTEXT_ORIGIN_NOTE} ${STACKED_NOTE}`);
     expect((await readGlb(all)).getRoot().getExtras()).toMatchObject({ othExport: { floors: ["L1", "L2"] } });
+  });
+
+  it("also sets the note on the scene, not just the document root, so Blender imports it as a custom property (M6)", async () => {
+    const bytes = await buildFloorGlb(floorModel, ["oth-L1"], noModels);
+    const { json } = await new WebIO().binaryToJSON(bytes);
+    expect(json.scenes?.[0]?.extras).toMatchObject({ othExport: { note: CONTEXT_ORIGIN_NOTE, floors: ["L1"] } });
   });
 });
 
@@ -131,19 +151,27 @@ describe("buildFloorGlb — Floors", () => {
 describe("buildFloorGlb — Walls", () => {
   it("builds the preview's walls: one mesh per room, and one per pair of rooms that share a wall", async () => {
     const walls = group(await exported(floorModel, ["oth-L1"]), "L1", "Walls");
-    expect(names(walls).sort()).toEqual(["L1-cafe", "L1-cafe / Starbucks", "Starbucks"]);
-    expect(child(walls, "L1-cafe / Starbucks").getExtras()).toEqual({ rooms: ["L1-cafe", "L1-shop"] });
+    expect(names(walls).sort()).toEqual(["L1-cafe / Starbucks walls", "L1-cafe walls", "Starbucks walls"]);
+    expect(child(walls, "L1-cafe / Starbucks walls").getExtras()).toEqual({ rooms: ["L1-cafe", "L1-shop"] });
+  });
+
+  it("names a wall after its room with \" walls\" (M4), so it never collides with the room's floor node", async () => {
+    const walls = group(await exported(floorModel, ["oth-L1"]), "L1", "Walls");
+    const floors = group(await exported(floorModel, ["oth-L1"]), "L1", "Floors");
+    expect(names(floors)).toContain("Starbucks");
+    expect(names(walls)).not.toContain("Starbucks");
+    expect(names(walls)).toContain("Starbucks walls");
   });
 
   it("stands every wall at full height: its room's, or the taller of the two", async () => {
     const walls = group(await exported(floorModel, ["oth-L1"]), "L1", "Walls");
-    expect(bounds(child(walls, "Starbucks")).minY).toBeCloseTo(0);
-    expect(bounds(child(walls, "Starbucks")).maxY).toBeCloseTo(3.5);
-    expect(bounds(child(walls, "L1-cafe / Starbucks")).maxY).toBeCloseTo(4);
+    expect(bounds(child(walls, "Starbucks walls")).minY).toBeCloseTo(0);
+    expect(bounds(child(walls, "Starbucks walls")).maxY).toBeCloseTo(3.5);
+    expect(bounds(child(walls, "L1-cafe / Starbucks walls")).maxY).toBeCloseTo(4);
   });
 
   it("cuts the door where the pathway goes in: the shop's front stops at 1 m and starts again at 3 m", async () => {
-    const shop = child(group(await exported(floorModel, ["oth-L1"]), "L1", "Walls"), "Starbucks");
+    const shop = child(group(await exported(floorModel, ["oth-L1"]), "L1", "Walls"), "Starbucks walls");
     // The front runs along y = 0, which is z = 0, and the wall is 0.15 m thick.
     const front = worldVertices(shop).filter(([, , z]) => Math.abs(z) < 0.1).map(([x]) => x);
     expect(front.some(x => Math.abs(x - 1) < 1e-3)).toBe(true);
@@ -152,13 +180,13 @@ describe("buildFloorGlb — Walls", () => {
   });
 
   it("raises a floor's walls with it when the floors are stacked", async () => {
-    const upstairs = bounds(child(group(await exported(floorModel, ["oth-L1", "oth-L2"]), "L2", "Walls"), "Upstairs"));
+    const upstairs = bounds(child(group(await exported(floorModel, ["oth-L1", "oth-L2"]), "L2", "Walls"), "Upstairs walls"));
     expect(upstairs.minY).toBeCloseTo(6);
     expect(upstairs.maxY).toBeCloseTo(9);
   });
 
   it("paints the walls as the preview does, seen from both sides", async () => {
-    const wall = materialOf(child(group(await exported(floorModel, ["oth-L1"]), "L1", "Walls"), "Starbucks"));
+    const wall = materialOf(child(group(await exported(floorModel, ["oth-L1"]), "L1", "Walls"), "Starbucks walls"));
     expect(wall.getName()).toBe("wall");
     expectColour(wall, wallColor("room"));
     expect(wall.getDoubleSided()).toBe(true);
@@ -332,6 +360,15 @@ describe("buildFloorGlb — Objects", () => {
       .toEqual({ othId: "pm-cooler", objectKindId: "ok-cooler", assetId: "asset-cooler" });
   });
 
+  it("leaves an absent objectKindId or assetId out of an object's extras (M5), rather than writing null", async () => {
+    const { doc } = await exportWith(withObjects, ["oth-L1"]);
+    const objects = group(doc, "L1", "Objects");
+    // pm-bin-1 has a kind but no model asset of its own.
+    expect(byId(objects, "pm-bin-1").getExtras()).toEqual({ othId: "pm-bin-1", objectKindId: "ok-bin" });
+    // pm-vend has a model asset but no kind.
+    expect(byId(objects, "pm-vend").getExtras()).toEqual({ othId: "pm-vend", assetId: "asset-vend" });
+  });
+
   it("builds a kind with no model as a box of its size, standing where the object is", async () => {
     const { doc } = await exportWith(withObjects, ["oth-L1"]);
     const got = bounds(byId(group(doc, "L1", "Objects"), "pm-bin-1"));
@@ -376,12 +413,47 @@ describe("buildFloorGlb — Objects", () => {
     expect(doc.getRoot().listMeshes().filter(m => m.getName() === "bin")).toHaveLength(3);
   });
 
+  it("fetches every distinct asset on a floor in parallel (M3), not one at a time", async () => {
+    const asked: string[] = [];
+    const releases: Array<() => void> = [];
+    const bytes = buildFloorGlb(withObjects, ["oth-L1"], assetId => {
+      asked.push(assetId);
+      return new Promise(resolve => releases.push(() => resolve(null)));
+    });
+    // Let the pre-fetch's queued microtasks run, without letting any fetch resolve.
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    expect([...asked].sort()).toEqual(["asset-cooler", "asset-fancy", "asset-missing", "asset-vend"]);
+    releases.forEach(release => release());
+    await bytes;
+  });
+
   it("leaves an object whose model won't come empty, and lists it in the file", async () => {
     const { doc } = await exportWith(withObjects, ["oth-L1"]);
     expect(byId(group(doc, "L1", "Objects"), "pm-broken").listChildren()).toEqual([]);
     expect(doc.getRoot().getExtras()).toMatchObject({
       othExport: { missingModels: [{ placementId: "pm-broken", assetId: "asset-missing" }] },
     });
+  });
+
+  it("reports each missing model through the optional callback, as it happens (M2)", async () => {
+    const reported: MissingModel[] = [];
+    await buildFloorGlb(
+      withObjects, ["oth-L1"],
+      async assetId => (assetId === "asset-missing" ? null : await triangleGlb()),
+      m => reported.push(m),
+    );
+    expect(reported).toEqual([{ placementId: "pm-broken", assetId: "asset-missing" }]);
+  });
+
+  it("counts a model that arrived but couldn't be read the same as one that never arrived (M2)", async () => {
+    const reported: MissingModel[] = [];
+    const garbage = new Uint8Array([1, 2, 3, 4]);
+    await buildFloorGlb(
+      withObjects, ["oth-L1"],
+      async assetId => (assetId === "asset-missing" ? garbage : await triangleGlb()),
+      m => reported.push(m),
+    );
+    expect(reported).toEqual([{ placementId: "pm-broken", assetId: "asset-missing" }]);
   });
 
   it("falls back to the kind's box when the kind's model won't come", async () => {

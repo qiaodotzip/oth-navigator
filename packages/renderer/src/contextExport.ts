@@ -1,4 +1,4 @@
-import { Document, NodeIO } from "@gltf-transform/core";
+import { Document, WebIO } from "@gltf-transform/core";
 import { bboxOfRing, ringCentroid, type Level, type Room, type Vec2 } from "@oth/model";
 import type * as THREE from "three";
 import { modelToThree } from "./coords";
@@ -117,5 +117,5 @@ export async function buildDetailGlb(
     }
   }
 
-  return { bytes: await new NodeIO().writeBinary(doc), offset };
+  return { bytes: await new WebIO().writeBinary(doc), offset };
 }

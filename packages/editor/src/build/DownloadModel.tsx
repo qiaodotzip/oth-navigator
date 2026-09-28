@@ -8,10 +8,14 @@ import { downloadBytes } from "../ui/download";
 import { Popover, PopoverClose } from "../ui/Popover";
 import { toast } from "../ui/toast";
 
+/** How long a placed model's fetch may take before it's treated as never arriving (M3). */
+const ASSET_FETCH_TIMEOUT_MS = 30_000;
+
 /**
  * Fetches placed models through the asset URL, with the session. A model that
- * isn't there, or a request that fails, is null to the export and remembered
- * here, so the message after the download can say how many are missing.
+ * isn't there, a request that fails, or one that stalls past the timeout, is
+ * null to the export and remembered here, so the message after the download
+ * can say how many are missing.
  */
 export function assetFetcher(
   assetFileUrl: (assetId: string) => string,
@@ -20,10 +24,13 @@ export function assetFetcher(
   const missing = new Set<string>();
   const bytes: AssetBytes = async assetId => {
     try {
-      const res = await fetchImpl(assetFileUrl(assetId), { credentials: "same-origin" });
+      const res = await fetchImpl(assetFileUrl(assetId), {
+        credentials: "same-origin",
+        signal: AbortSignal.timeout(ASSET_FETCH_TIMEOUT_MS),
+      });
       if (res.ok) return new Uint8Array(await res.arrayBuffer());
     } catch {
-      // Offline, or refused: the same as a model that isn't there.
+      // Offline, refused, or timed out: the same as a model that isn't there.
     }
     missing.add(assetId);
     return null;
@@ -58,11 +65,17 @@ export function DownloadModelButton({ api, levelId }: { api: Api; levelId?: stri
     const levelIds = scope === "all" ? live(current.levels).map(l => l.id) : [level.id];
     const filename = scope === "all" ? "oth-all-floors.glb" : `oth-${level.code}.glb`;
     const fetcher = assetFetcher(api.assetFileUrl);
+    // The export's own accounting (M2): a model that arrived but couldn't be
+    // read is missing too, not just one whose fetch failed outright.
+    const missing = new Set<string>();
     setBusy(true);
+    // Lets the "Building 3D model…" label paint before the heavy, synchronous
+    // build work below runs (M1).
+    await new Promise(resolve => setTimeout(resolve, 0));
     try {
-      const bytes = await buildFloorGlb(current, levelIds, fetcher.bytes);
+      const bytes = await buildFloorGlb(current, levelIds, fetcher.bytes, m => missing.add(m.assetId));
       downloadBytes(bytes, filename, "model/gltf-binary");
-      const note = fetcher.missing.size === 0 ? floorExportNote(levelIds.length > 1) : missingNote(fetcher.missing.size);
+      const note = missing.size === 0 ? floorExportNote(levelIds.length > 1) : missingNote(missing.size);
       toast({ tone: "success", message: `Downloaded ${filename}. ${note}` });
     } catch (err) {
       toast({ tone: "error", message: `The 3D model could not be built: ${err instanceof Error ? err.message : String(err)}` });

@@ -1,8 +1,9 @@
 import {
   ColorUtils, Document, WebIO,
-  type Buffer as GltfBuffer, type Material, type Mesh, type Node as GltfNode,
+  type Buffer as GltfBuffer, type Material, type Mesh, type Node as GltfNode, type Scene,
 } from "@gltf-transform/core";
-import type * as THREE from "three";
+import * as THREE from "three";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /** How a part is painted in the file. */
 export type Paint = {
@@ -63,11 +64,11 @@ export class GlbWriter {
   geometryMesh(name: string, geometry: THREE.BufferGeometry, paint: Paint): Mesh | null {
     const position = geometry.getAttribute("position");
     if (!position || position.count < 3) return null;
+    const indexed = mergedPositions(geometry);
     const primitive = this.doc.createPrimitive()
-      .setAttribute("POSITION", this.accessor(`${name} position`, new Float32Array(position.array as ArrayLike<number>), "VEC3"))
+      .setAttribute("POSITION", this.accessor(`${name} position`, indexed.position, "VEC3"))
+      .setIndices(this.accessor(`${name} indices`, indexed.index, "SCALAR"))
       .setMaterial(this.material(paint));
-    const index = geometry.getIndex();
-    if (index) primitive.setIndices(this.accessor(`${name} indices`, new Uint32Array(index.array as ArrayLike<number>), "SCALAR"));
     return this.doc.createMesh(name).addPrimitive(primitive);
   }
 
@@ -77,12 +78,19 @@ export class GlbWriter {
     return mesh ? this.doc.createNode(name).setMesh(mesh) : null;
   }
 
-  /** What the file says about itself: the note in its generator and copyright, the rest in its extras. */
-  setNote(note: string, extras: Record<string, unknown>): void {
+  /**
+   * What the file says about itself: the note in its generator and copyright,
+   * the rest in its extras — set on the document root and repeated on the
+   * scene, since Blender's importer reads scene extras as custom properties
+   * but never looks at the document root's.
+   */
+  setNote(scene: Scene, note: string, extras: Record<string, unknown>): void {
     const asset = this.doc.getRoot().getAsset();
     asset.generator = `OTH map editor. ${note}`;
     asset.copyright = note;
-    this.doc.getRoot().setExtras({ othExport: { note, ...extras } });
+    const payload = { othExport: { note, ...extras } };
+    this.doc.getRoot().setExtras(payload);
+    scene.setExtras(payload);
   }
 
   write(): Promise<Uint8Array> {
@@ -92,4 +100,23 @@ export class GlbWriter {
   private accessor(name: string, array: Float32Array | Uint32Array, type: "VEC3" | "SCALAR") {
     return this.doc.createAccessor(name).setArray(array).setType(type).setBuffer(this.buffer);
   }
+}
+
+/**
+ * A geometry's positions, merged to unique vertices and indexed (spec M7), so
+ * a loader gets one entry per corner instead of one per triangle and a
+ * modeller can select an edge loop. Only position is merged on — this writer
+ * never sends normals or UVs, so two triangles that only differ in an
+ * attribute we don't write must still merge.
+ */
+function mergedPositions(geometry: THREE.BufferGeometry): { position: Float32Array; index: Uint32Array } {
+  const bare = new THREE.BufferGeometry();
+  bare.setAttribute("position", geometry.getAttribute("position").clone());
+  const sourceIndex = geometry.getIndex();
+  if (sourceIndex) bare.setIndex(sourceIndex.clone());
+  const merged = mergeVertices(bare);
+  return {
+    position: new Float32Array(merged.getAttribute("position").array as ArrayLike<number>),
+    index: new Uint32Array(merged.getIndex()!.array as ArrayLike<number>),
+  };
 }

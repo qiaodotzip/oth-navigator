@@ -9,8 +9,12 @@ import { DownloadModelButton, assetFetcher } from "./DownloadModel";
 
 /** The export itself is the renderer's, tested there; here it answers at once. */
 const build = vi.hoisted(() => ({
-  fn: vi.fn(async (_model: MapModel, _levelIds: string[], _assetBytes: (id: string) => Promise<Uint8Array | null>) =>
-    new Uint8Array([1, 2, 3])),
+  fn: vi.fn(async (
+    _model: MapModel,
+    _levelIds: string[],
+    _assetBytes: (id: string) => Promise<Uint8Array | null>,
+    _onMissing?: (missing: { placementId: string; assetId: string }) => void,
+  ) => new Uint8Array([1, 2, 3])),
 }));
 vi.mock("@oth/renderer", async importOriginal => ({
   ...(await importOriginal<typeof import("@oth/renderer")>()),
@@ -72,13 +76,35 @@ describe("DownloadModelButton", () => {
 
   it("counts the models it couldn't fetch", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404 })));
-    build.fn.mockImplementationOnce(async (_model, _levelIds, assetBytes) => {
-      await assetBytes("asset_1");
+    build.fn.mockImplementationOnce(async (_model, _levelIds, assetBytes, onMissing) => {
+      const bytes = await assetBytes("asset_1");
+      // Mirrors what the real export does: a fetch that came back empty is
+      // reported missing through the callback, exactly as buildFloorGlb does.
+      if (!bytes) onMissing?.({ placementId: "pm-1", assetId: "asset_1" });
       return new Uint8Array([1]);
     });
     await choose("This floor (L1)");
     await waitFor(() => expect(lastToast()?.message)
       .toBe("Downloaded oth-L1.glb. 1 model could not be fetched, so its objects are boxes or left out."));
+  });
+
+  it("counts a model that arrived but couldn't be read (M2), same as one whose fetch failed", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([9]).buffer })));
+    build.fn.mockImplementationOnce(async (_model, _levelIds, assetBytes, onMissing) => {
+      await assetBytes("asset_1"); // arrives fine — not a fetch failure
+      onMissing?.({ placementId: "pm-1", assetId: "asset_1" }); // but the export couldn't read it
+      return new Uint8Array([1]);
+    });
+    await choose("This floor (L1)");
+    await waitFor(() => expect(lastToast()?.message)
+      .toBe("Downloaded oth-L1.glb. 1 model could not be fetched, so its objects are boxes or left out."));
+  });
+
+  it("paints \"Building 3D model…\" before doing the heavy build work (M1)", async () => {
+    const timeout = vi.spyOn(globalThis, "setTimeout");
+    await choose("This floor (L1)");
+    await waitFor(() => expect(timeout).toHaveBeenCalledWith(expect.any(Function), 0));
+    timeout.mockRestore();
   });
 
   it("says so when the model can't be built, and saves nothing", async () => {
@@ -112,7 +138,9 @@ describe("assetFetcher", () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([7, 8]).buffer }));
     const { bytes, missing } = assetFetcher(id => `/api/assets/${id}/file`, fetchImpl as unknown as typeof fetch);
     expect(await bytes("asset_1")).toEqual(new Uint8Array([7, 8]));
-    expect(fetchImpl).toHaveBeenCalledWith("/api/assets/asset_1/file", { credentials: "same-origin" });
+    expect(fetchImpl).toHaveBeenCalledWith("/api/assets/asset_1/file", {
+      credentials: "same-origin", signal: expect.any(AbortSignal),
+    });
     expect(missing.size).toBe(0);
   });
 
@@ -124,5 +152,24 @@ describe("assetFetcher", () => {
     expect(await bytes("gone")).toBeNull();
     expect(await bytes("offline")).toBeNull();
     expect([...missing]).toEqual(["gone", "offline"]);
+  });
+
+  it("gives each fetch a 30 s timeout (M3), so a stalled request can't hang the export", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    const fetchImpl = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([7]).buffer }));
+    const { bytes } = assetFetcher(id => `/api/assets/${id}/file`, fetchImpl as unknown as typeof fetch);
+    await bytes("asset_1");
+    expect(timeout).toHaveBeenCalledWith(30_000);
+    expect(fetchImpl).toHaveBeenCalledWith("/api/assets/asset_1/file", {
+      credentials: "same-origin", signal: expect.any(AbortSignal),
+    });
+    timeout.mockRestore();
+  });
+
+  it("counts a stalled fetch as missing, the same as one that fails outright", async () => {
+    const fetchImpl = vi.fn().mockRejectedValueOnce(new DOMException("The operation timed out.", "TimeoutError"));
+    const { bytes, missing } = assetFetcher(id => `/api/assets/${id}/file`, fetchImpl as unknown as typeof fetch);
+    expect(await bytes("stalled")).toBeNull();
+    expect([...missing]).toEqual(["stalled"]);
   });
 });

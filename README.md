@@ -131,8 +131,9 @@ The modelling teammate never touches load-bearing data and never needs git:
    or of every floor stacked at its elevation: rooms, walls with their doors,
    voids, stops, objects and pathways as named parts, in real metres, with the
    origin convention recorded inside the file so it cannot be guessed wrong
-   later. To model one detail, select it and use its **Export … for Blender**:
-   a block of its size with its surroundings, centred on itself.
+   later. In Blender the file comes in Z up, with north at +Y. To model one
+   detail, select it and use its **Export … for Blender**: a block of its
+   size with its surroundings, centred on itself.
 2. They model against it in Blender or Rhino and export **just their new mesh**.
 3. **Upload** it in the editor. The server checks it is valid glTF 2.0 and within
    budget (5 MB, 150k triangles), content-addresses it by checksum, and registers

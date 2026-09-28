@@ -93,7 +93,10 @@ function addWalls(ctx: FloorContext): void {
     byRooms.set(key, entry);
   }
   for (const { rooms, blocks } of byRooms.values()) {
-    const name = rooms.map(id => ctx.roomNames.get(id) ?? id).join(" / ");
+    // " walls" so a wall never shares its name with its room's floor node (M4):
+    // Blender would otherwise show two objects named "Starbucks" with no way
+    // to tell them apart.
+    const name = `${rooms.map(id => ctx.roomNames.get(id) ?? id).join(" / ")} walls`;
     const node = ctx.writer.mesh(name, blocksGeometry(blocks), WALL_PAINT);
     if (node) ctx.groups.Walls.addChild(node.setExtras({ rooms }));
   }
@@ -178,6 +181,9 @@ const OBJECT_BOX_PAINT: Paint = { name: "object box", colour: OBJECT_BOX_COLOUR 
 /** An object whose model couldn't be fetched or read. The file's extras list them, so a gap explains itself later. */
 export type MissingModel = { placementId: string; assetId: string };
 
+/** Called once for each object whose model couldn't be fetched or read, as it happens. */
+export type OnMissingModel = (missing: MissingModel) => void;
+
 /**
  * Each model fetched and copied into the file once, however many objects use
  * it, and each kind's box built once. A fetch that fails or throws, or bytes
@@ -188,8 +194,13 @@ class ModelShelf {
   private readonly models = new Map<string, Promise<ModelTemplate | null>>();
   private readonly boxes = new Map<string, Mesh | null>();
 
-  constructor(private readonly writer: GlbWriter, private readonly assetBytes: AssetBytes) {}
+  constructor(
+    private readonly writer: GlbWriter,
+    private readonly assetBytes: AssetBytes,
+    private readonly onMissing?: OnMissingModel,
+  ) {}
 
+  /** Starts fetching the asset if nothing has yet, otherwise hands back the fetch already under way (M3: once per asset). */
   model(assetId: string): Promise<ModelTemplate | null> {
     let model = this.models.get(assetId);
     if (!model) {
@@ -209,6 +220,12 @@ class ModelShelf {
     }
     return this.boxes.get(kind.id) ?? null;
   }
+
+  /** Records a placement whose model never came, in the file's own extras and to whoever asked to hear about it live. */
+  note(missing: MissingModel): void {
+    this.missing.push(missing);
+    this.onMissing?.(missing);
+  }
 }
 
 function objectName(kind: ObjectKind | undefined, file: string | undefined, placementId: string): string {
@@ -216,16 +233,32 @@ function objectName(kind: ObjectKind | undefined, file: string | undefined, plac
   return file?.replace(/\.glb$/i, "").trim() || placementId;
 }
 
+/** Extras with any null or undefined value left out (M5), so an absent field is missing rather than the text "None" in Blender. */
+function extras(fields: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== null && v !== undefined));
+}
+
 /**
  * Objects: one node per placement on this floor, at its position, rotation and
  * scale (spec §5.3). Under it is its own model or its kind's, or, while the
  * kind has none, a box of the kind's size.
+ *
+ * Every placement's model is asked for up front, all at once (M3): each is
+ * fetched only the first time (`ModelShelf.model` memoises), but nothing here
+ * makes one placement wait for another's fetch to finish before starting.
  */
 async function addObjects(ctx: FloorContext, shelf: ModelShelf): Promise<void> {
   const kinds = new Map(live(ctx.model.objectKinds).map(k => [k.id, k]));
   const files = new Map(live(ctx.model.assets).map(a => [a.id, a.filename]));
-  for (const placement of live(ctx.model.placements)) {
-    if (placement.levelId !== ctx.level.id) continue;
+  const placements = live(ctx.model.placements).filter(p => p.levelId === ctx.level.id);
+  const assetIds = new Set<string>();
+  for (const placement of placements) {
+    const assetId = placementModelAsset(ctx.model, placement);
+    if (assetId) assetIds.add(assetId);
+  }
+  await Promise.all([...assetIds].map(assetId => shelf.model(assetId)));
+
+  for (const placement of placements) {
     const kind = placement.objectKindId ? kinds.get(placement.objectKindId) : undefined;
     const assetId = placementModelAsset(ctx.model, placement);
     const t = placementTransform(placement);
@@ -233,11 +266,11 @@ async function addObjects(ctx: FloorContext, shelf: ModelShelf): Promise<void> {
       .setTranslation(t.position)
       .setRotation([0, Math.sin(t.rotationY / 2), 0, Math.cos(t.rotationY / 2)])
       .setScale([t.scale, t.scale, t.scale])
-      .setExtras({ othId: placement.id, objectKindId: kind?.id ?? null, assetId: assetId ?? null });
+      .setExtras(extras({ othId: placement.id, objectKindId: kind?.id, assetId }));
     ctx.groups.Objects.addChild(node);
 
     const model = assetId ? await shelf.model(assetId) : null;
-    if (assetId && !model) shelf.missing.push({ placementId: placement.id, assetId });
+    if (assetId && !model) shelf.note({ placementId: placement.id, assetId });
     if (model) {
       for (const root of model.place()) node.addChild(root);
     } else if (kind) {
@@ -247,25 +280,35 @@ async function addObjects(ctx: FloorContext, shelf: ModelShelf): Promise<void> {
   }
 }
 
+/** A tick of the event loop, so a browser tab gets to paint between two heavy synchronous steps (M1). */
+function yieldToBrowser(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
 /**
  * The floors asked for, as one .glb of named parts (spec §6), built from the
  * preview's own geometry. Floors come out lowest first; ids of deleted or
  * unknown floors are skipped. Placed models come through `assetBytes`, once
- * each; one that can't be had never stops the file.
+ * each; one that can't be had never stops the file, but is reported through
+ * `onMissing` as it happens, and again in the file's own extras.
  */
 export async function buildFloorGlb(
   model: MapModel,
   levelIds: string[],
   assetBytes: AssetBytes,
+  onMissing?: OnMissingModel,
 ): Promise<Uint8Array> {
   const wanted = new Set(levelIds);
   const levels = live(model.levels).filter(l => wanted.has(l.id)).sort((a, b) => a.ordinal - b.ordinal);
   const stacked = levels.length > 1;
   const writer = new GlbWriter();
-  const shelf = new ModelShelf(writer, assetBytes);
+  const shelf = new ModelShelf(writer, assetBytes, onMissing);
   const scene = writer.doc.createScene(model.building.id);
   writer.doc.getRoot().setDefaultScene(scene);
+  let first = true;
   for (const level of levels) {
+    if (!first) await yieldToBrowser();
+    first = false;
     const ctx = floorContext(writer, scene, model, level, stacked);
     addFloors(ctx);
     addWalls(ctx);
@@ -274,6 +317,6 @@ export async function buildFloorGlb(
     await addObjects(ctx, shelf);
     addPathways(ctx);
   }
-  writer.setNote(floorExportNote(stacked), { floors: levels.map(l => l.code), missingModels: shelf.missing });
+  writer.setNote(scene, floorExportNote(stacked), { floors: levels.map(l => l.code), missingModels: shelf.missing });
   return writer.write();
 }

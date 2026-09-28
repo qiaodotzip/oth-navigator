@@ -40,12 +40,31 @@ describe("GlbWriter", () => {
     expect(primitive.getAttribute("POSITION")?.getMax([0, 0, 0])).toEqual([0.5, 1, 1.5]);
   });
 
-  it("says in the file what made it and where its origin is", async () => {
+  it("merges a box's duplicate corners into 8 shared, indexed vertices (M7)", () => {
+    const mesh = new GlbWriter().geometryMesh("box", new THREE.BoxGeometry(1, 2, 3), { name: "box", colour: "#ffffff" })!;
+    const primitive = mesh.listPrimitives()[0]!;
+    expect(primitive.getAttribute("POSITION")?.getCount()).toBe(8);
+    expect(primitive.getIndices()?.getCount()).toBe(36);
+  });
+
+  it("merges a wall's loose, unindexed triangles into a shared, indexed mesh (M7)", () => {
+    const loose = blocksGeometry([{ a: [0, 0], b: [4, 0], thicknessM: 0.2, baseM: 0, topM: 3 }]);
+    expect(loose.getIndex()).toBeNull();
+    const before = loose.getAttribute("position").count;
+    const mesh = new GlbWriter().geometryMesh("wall", loose, { name: "wall", colour: "#ffffff" })!;
+    const primitive = mesh.listPrimitives()[0]!;
+    expect(primitive.getIndices()).not.toBeNull();
+    expect(primitive.getAttribute("POSITION")!.getCount()).toBeLessThan(before);
+  });
+
+  it("says in the file what made it and where its origin is, and repeats it as the scene's own custom properties", async () => {
     const writer = new GlbWriter();
-    writer.setNote("Origin here.", { floors: ["L1"] });
+    const scene = writer.doc.createScene("s");
+    writer.setNote(scene, "Origin here.", { floors: ["L1"] });
     const { json } = await new WebIO().binaryToJSON(await writer.write());
     expect(json.asset.generator).toBe("OTH map editor. Origin here.");
     expect(json.asset.copyright).toBe("Origin here.");
     expect(json.extras).toEqual({ othExport: { note: "Origin here.", floors: ["L1"] } });
+    expect(json.scenes?.[0]?.extras).toEqual({ othExport: { note: "Origin here.", floors: ["L1"] } });
   });
 });

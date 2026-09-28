@@ -1,4 +1,4 @@
-import { Document, WebIO } from "@gltf-transform/core";
+import { Document, Material, WebIO } from "@gltf-transform/core";
 import { describe, expect, it, vi } from "vitest";
 import { copyModelInto } from "./modelCopy";
 import { glbFromJson, triangleGlb } from "./testing";
@@ -64,6 +64,25 @@ describe("copyModelInto", () => {
       expect(error).toBeInstanceOf(Error);
     } finally {
       graph.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it("disposes whatever it already copied when a later copy breaks (M8), leaving nothing unused behind", async () => {
+    const doc = exportDoc();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const copy = vi.spyOn(Material.prototype, "copy").mockImplementation(() => {
+      throw new Error("material copy boom");
+    });
+    try {
+      expect(await copyModelInto(doc, await triangleGlb())).toBeNull();
+      expect(doc.getRoot().listNodes()).toEqual([]);
+      expect(doc.getRoot().listMeshes()).toEqual([]);
+      expect(doc.getRoot().listMaterials()).toEqual([]);
+      expect(doc.getRoot().listTextures()).toEqual([]);
+      expect(doc.getRoot().listAccessors()).toEqual([]);
+    } finally {
+      copy.mockRestore();
       warn.mockRestore();
     }
   });
