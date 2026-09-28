@@ -76,6 +76,18 @@ describe("walkableRaster", () => {
     expect(at(r, 26, 8)).toBe(true);
   });
 
+  it("a walkable room inside a service zone keeps its surface", () => {
+    // A walkable hall; in it a service zone; in that a walkable lobby. The smaller room wins.
+    const r = walkableRaster(floor([
+      { footprint: rect(0, 0, 40, 30) },
+      { footprint: rect(10, 5, 30, 25), kind: "service", walkable: false },
+      { footprint: rect(15, 9, 24, 20.5) },
+    ]), LEVEL);
+    expect(at(r, 19.5, 14.75)).toBe(true);
+    expect(areaM2(r)).toBeCloseTo(40 * 30 - 20 * 20 + 9 * 11.5);
+    expect([at(r, 12, 7), at(r, 5, 15)]).toEqual([false, true]);
+  });
+
   it("walks straight over details: furniture is not a hole", () => {
     const r = walkableRaster(floor([
       { footprint: rect(0, 0, 10, 10) },
@@ -111,10 +123,11 @@ describe("walkableRaster", () => {
     expect([r.cols, r.rows, r.cells.length]).toEqual([0, 0, 0]);
   });
 
-  it("refuses a surface over a kilometre square rather than fill the server's memory", () => {
-    const stray = floor([{ footprint: rect(0, 0, 10, 4) }, { footprint: rect(2000, 2000, 2010, 2004) }]);
-    expect(() => walkableRaster(stray, LEVEL)).toThrow(SurfaceTooLarge);
-    expect(() => walkableRaster(stray, LEVEL)).toThrow(/span 2010 by 2004 m/);
+  it("refuses a surface over a 500 m square rather than fill the server's memory", () => {
+    const stray = (at: number) => floor([{ footprint: rect(0, 0, 10, 4) }, { footprint: rect(at, at, at + 10, at + 4) }]);
+    expect(() => walkableRaster(stray(600), LEVEL)).toThrow(SurfaceTooLarge);
+    expect(() => walkableRaster(stray(600), LEVEL)).toThrow(/span 610 by 604 m/);
+    expect(walkableRaster(stray(480), LEVEL).cols).toBeGreaterThan(0);
   });
 
   it("keeps a margin all round, so no walkable cell is on the raster's edge", () => {

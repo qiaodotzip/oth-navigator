@@ -1,4 +1,4 @@
-import { live, type MapModel, type Ring, type Room, type Vec2 } from "@oth/model";
+import { live, ringArea, type MapModel, type Ring, type Room, type Vec2 } from "@oth/model";
 
 /** Spec §7.3: the surface is rasterised at 0.25 m, the nav grid's own cell. */
 export const CELL_M = 0.25;
@@ -7,7 +7,9 @@ export const CELL_M = 0.25;
  * Walkable rooms whose outlines stand apart by less than two cells (0.5 m) are
  * one surface: the gap is the drawing's wall line, traced from both sides.
  * Plan 5D merges walls across 0.4 m for the same reason. A closing by one cell
- * bridges a gap of up to two cells.
+ * bridges a gap of up to two cells. Its pattern is the square of 3 × 3 cells,
+ * which reaches further on the diagonal: a gap running at 45° bridges up to
+ * about 0.7 m (two cells' diagonal).
  */
 export const BRIDGE_CELLS = 1;
 
@@ -15,7 +17,8 @@ export const BRIDGE_CELLS = 1;
  * Once the rooms standing on the surface are cut out, the gaps between
  * neighbouring shops are left as slivers no one walks. An opening by one cell
  * drops every strip under three cells (0.75 m) wide; a pathway is at least
- * 1.2 m.
+ * 1.2 m. The pattern is the same 3 × 3 square, so a passage running at 45°
+ * drops when narrower than about 1.06 m (three cells' diagonal).
  */
 export const SLIVER_CELLS = 1;
 
@@ -23,11 +26,11 @@ export const SLIVER_CELLS = 1;
 const PAD_CELLS = 4;
 
 /**
- * A kilometre square at 0.25 m. L1 is 213 × 229 m. A surface bigger than this
- * is a room drawn at the wrong scale or a stray point far from the rest, and
- * rasterising it would take the server's memory.
+ * A 500 m square at 0.25 m. L1 is 213 × 229 m, 0.79 million cells. A surface
+ * bigger than this is a room drawn at the wrong scale or a stray point far
+ * from the rest, and rasterising it would take the server's memory.
  */
-export const MAX_CELLS = 16_000_000;
+export const MAX_CELLS = 4_000_000;
 
 export class SurfaceTooLarge extends Error {
   constructor(widthM: number, heightM: number) {
@@ -120,7 +123,7 @@ function paint(r: Raster, outline: Ring, holes: readonly Ring[], value: 0 | 1): 
   }
 }
 
-/** Every cell within `radius` cells (a square) of a set one, set. */
+/** Every cell within `radius` cells (a square, so further on the diagonal) of a set one, set. */
 function dilate(cells: Uint8Array, cols: number, rows: number, radius: number): Uint8Array {
   const across = new Uint8Array(cells.length);
   for (let row = 0; row < rows; row++) {
@@ -183,6 +186,11 @@ function blocks(room: Room): boolean {
  * every room standing on it that is not walked on, less the slivers that
  * leaves.
  *
+ * Where rooms overlap, the smaller wins: after the bridging, the walkable and
+ * the blocking rooms are painted again from the largest outline to the
+ * smallest. So a stall stands out of the Hawker Centre, and a lobby drawn
+ * inside a service zone keeps its floor.
+ *
  * There is no polygon union in the codebase and none is needed: each room is
  * painted into the same grid, so rooms that overlap or abut are one surface by
  * construction.
@@ -215,6 +223,10 @@ export function walkableRaster(model: MapModel, levelId: string, cellM = CELL_M)
 
   for (const room of walkable) paint(raster, room.footprint, room.holes, 1);
   const surface = closeGaps(raster, BRIDGE_CELLS);
-  for (const room of rooms) if (blocks(room)) paint(surface, room.footprint, room.holes, 0);
+  const layers = [...walkable.map(room => ({ room, value: 1 as const })), ...rooms.filter(blocks).map(room => ({ room, value: 0 as const }))];
+  // Largest outline first, so the smaller room wins; on a tie, what blocks is painted last.
+  const size = new Map(layers.map(({ room }) => [room, Math.abs(ringArea(room.footprint))]));
+  layers.sort((p, q) => size.get(q.room)! - size.get(p.room)! || q.value - p.value);
+  for (const { room, value } of layers) paint(surface, room.footprint, room.holes, value);
   return openSlivers(surface, SLIVER_CELLS);
 }
