@@ -31,6 +31,8 @@ export type ClaudeChange = {
   entityId: string;
   /** A draft row's own footprint, in metres, deleted or not; entityType "roomDraft" only, and only when it has one. */
   box?: BBox;
+  /** Contract v4: that footprint's ring itself, to the centimetre, beside box. */
+  outline?: Vec2[];
   action: string;
   /** Objects only: worked out again from the placement's sightingIds, since it isn't stored. */
   confidence?: "high" | "low";
@@ -180,17 +182,22 @@ export function labelsFrom(model: MapModel, names: Names, drafts: ReadonlyMap<st
   };
 }
 
+const cm = (v: number) => Math.round(v * 100) / 100;
+
 /**
- * The names and boxes of the drafts these changes touched: drafts aren't in
+ * The names and shapes of the drafts these changes touched: drafts aren't in
  * the model. `box` is the draft's own footprint's bbox, whether or not the
- * draft is deleted (a rejected or set-aside one is); absent without one.
+ * draft is deleted (a rejected or set-aside one is), and `outline` its ring
+ * to the centimetre; both absent without one.
  */
-async function draftInfo(db: Database, touches: readonly Touch[]): Promise<Map<string, { name: string; box?: BBox }>> {
+async function draftInfo(db: Database, touches: readonly Touch[]): Promise<Map<string, { name: string; box?: BBox; outline?: Vec2[] }>> {
   const ids = [...new Set(touches.filter(t => t.type === "roomDraft").map(t => t.id))];
   if (ids.length === 0) return new Map();
   return new Map((await db.select({ id: roomDrafts.id, nameEn: roomDrafts.nameEn, footprint: roomDrafts.footprint })
     .from(roomDrafts).where(inArray(roomDrafts.id, ids)))
-    .map(d => [d.id, { name: d.nameEn, box: d.footprint ? bboxOfRing(d.footprint) : undefined }]));
+    .map(d => [d.id, d.footprint
+      ? { name: d.nameEn, box: bboxOfRing(d.footprint), outline: d.footprint.map((p): Vec2 => [cm(p[0]), cm(p[1])]) }
+      : { name: d.nameEn }]));
 }
 
 export async function userNames(db: Database): Promise<Map<string, string>> {
@@ -307,18 +314,22 @@ export async function listClaudeChanges(db: Database, levelId: string, since: Da
   // confidenceFor walks every frame on the floor; skip it unless the limited
   // list actually has an object row to ask it about.
   const confidence = changes.some(c => c.facts.kind === "object") ? confidenceFor(model, levelId) : null;
-  return changes.map(c => ({
-    auditId: c.id,
-    at: c.at.toISOString(),
-    group: c.group,
-    summary: summarise(c, names),
-    entityType: c.entityType,
-    entityId: c.entityId,
-    ...(c.entityType === "roomDraft" && drafts?.get(c.entityId)?.box ? { box: drafts.get(c.entityId)!.box } : {}),
-    action: c.action,
-    ...(c.facts.kind === "object" ? { confidence: confidence!(c.facts.sightingIds) } : {}),
-    undone: undone.has(c.id),
-  }));
+  return changes.map(c => {
+    const draft = c.entityType === "roomDraft" ? drafts?.get(c.entityId) : undefined;
+    return {
+      auditId: c.id,
+      at: c.at.toISOString(),
+      group: c.group,
+      summary: summarise(c, names),
+      entityType: c.entityType,
+      entityId: c.entityId,
+      ...(draft?.box ? { box: draft.box } : {}),
+      ...(draft?.outline ? { outline: draft.outline } : {}),
+      action: c.action,
+      ...(c.facts.kind === "object" ? { confidence: confidence!(c.facts.sightingIds) } : {}),
+      undone: undone.has(c.id),
+    };
+  });
 }
 
 export class ChangeNotFoundError extends Error {
