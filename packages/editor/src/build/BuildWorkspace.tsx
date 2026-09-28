@@ -23,7 +23,7 @@ import { toast, useToasts } from "../ui/toast";
 import { deleteWithUndo } from "../ui/undo";
 import { BindTools, waitingForRoom } from "./BindPlaces";
 import { selectionRemovals } from "./deleteSelection";
-import { useRoomDrafts } from "./drafts";
+import { useDraftView, useRoomDrafts } from "./drafts";
 import { DraftsOnPlan } from "./DraftsOnPlan";
 import { FloorplanTools, PlanDropZone, patchPlan } from "./FloorplanTools";
 import { LayersDrawer } from "./LayersDrawer";
@@ -91,9 +91,10 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
   const [previewOptions, setPreviewOptions] = usePreviewOptions();
   const [pendingPlaceId, setPendingPlaceId] = useState<string | null>(null);
 
+  const draftsToReview = useDraftView(levelId).review.length;
   const todos = useMemo(
-    () => (model && levelId ? stepTodos(model, report, levelImages, levelId) : EMPTY_TODOS),
-    [model, report, levelImages, levelId],
+    () => (model && levelId ? stepTodos(model, report, levelImages, levelId, draftsToReview) : EMPTY_TODOS),
+    [model, report, levelImages, levelId, draftsToReview],
   );
   // The tick and the numbers are both read off `todos`, so neither can disagree with the list.
   const done = useMemo(

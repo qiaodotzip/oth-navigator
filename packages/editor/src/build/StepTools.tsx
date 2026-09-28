@@ -9,15 +9,19 @@ import { Button } from "../ui/Button";
 import { Popover } from "../ui/Popover";
 import { toast } from "../ui/toast";
 import { DraftsFind } from "./DraftsFind";
+import { DraftsPanel } from "./DraftsPanel";
 import { newPlacement } from "./placeModel";
 
-/** Areas & rooms: find the rooms in the floor's PDF, or bring in a CAD export instead of tracing. */
+/** Areas & rooms: find the rooms in the floor's PDF and review them, or bring in a CAD export instead of tracing. */
 export function RoomsTools({ api, saver }: { api: Api; saver: Saver }) {
   return (
-    <div className="flex flex-wrap items-start gap-2">
-      <DraftsFind api={api} />
-      <DxfImportButton saver={saver} />
-    </div>
+    <>
+      <div className="flex flex-wrap items-start gap-2">
+        <DraftsFind api={api} />
+        <DxfImportButton saver={saver} />
+      </div>
+      <DraftsPanel api={api} saver={saver} />
+    </>
   );
 }
 

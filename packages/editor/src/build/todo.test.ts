@@ -359,3 +359,18 @@ describe("the stepper's ticks and counts, on a floor shaped like L1", () => {
     }
   });
 });
+
+describe("stepTodos — drafts from the drawing", () => {
+  it("says how many drafts wait on Areas & rooms, as one item", () => {
+    const rooms = stepTodos(model, null, [scaled], "oth-L1", 3).rooms;
+    expect(rooms).toContainEqual({
+      key: "rooms.drafts", step: "rooms", severity: "warning", code: "rooms.drafts",
+      message: "3 drafts to review.", target: { kind: "none" },
+    });
+    expect(stepTodos(model, null, [scaled], "oth-L1", 1).rooms.find(t => t.code === "rooms.drafts")?.message).toBe("1 draft to review.");
+  });
+
+  it("says nothing of drafts when none wait", () => {
+    expect(codes(stepTodos(model, null, [scaled], "oth-L1").rooms)).not.toContain("rooms.drafts");
+  });
+});

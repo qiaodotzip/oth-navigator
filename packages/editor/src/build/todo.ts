@@ -93,6 +93,8 @@ export function stepTodos(
   report: ValidationReport | null,
   levelImages: readonly LevelImage[],
   levelId: string,
+  /** Drafts from the floor's drawing still to review (Part B), counted by the caller: they are not in the map. */
+  draftsToReview = 0,
 ): StepTodos {
   const todos: Record<BuildStepId, TodoItem[]> = { floorplan: [], rooms: [], pathways: [], entrances: [], bind: [], dressing: [] };
 
@@ -107,6 +109,12 @@ export function stepTodos(
     todos.floorplan.push({
       key: "floorplan.scale", step: "floorplan", severity: "warning", code: "floorplan.scale",
       message: `Set the scale of ${image.filename}.`, target: NONE,
+    });
+  }
+  if (draftsToReview > 0) {
+    todos.rooms.push({
+      key: "rooms.drafts", step: "rooms", severity: "warning", code: "rooms.drafts",
+      message: `${draftsToReview} ${draftsToReview === 1 ? "draft" : "drafts"} to review.`, target: NONE,
     });
   }
 

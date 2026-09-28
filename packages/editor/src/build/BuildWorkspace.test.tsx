@@ -632,4 +632,10 @@ describe("BuildWorkspace — drafts from the drawing", () => {
     fireEvent.click(stepper().getByRole("button", { name: /^Pathways/ }));
     expect(screen.queryByTestId("draft-rd_1")).toBeNull();
   });
+
+  it("counts the drafts to review on the to-do list, and in the review beside the tools", async () => {
+    open("/floors/L1/build?step=rooms", { listRoomDrafts: vi.fn().mockResolvedValue([found]) });
+    expect(await within(screen.getByRole("region", { name: "To do" })).findByText("1 draft to review.")).toBeTruthy();
+    expect(screen.getByText("1 draft to review")).toBeTruthy();
+  });
 });
