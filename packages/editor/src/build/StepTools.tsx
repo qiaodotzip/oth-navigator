@@ -1,5 +1,5 @@
 import { live } from "@oth/model";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Api } from "../api/client";
 import { AssetLibrary } from "../panels/AssetLibrary";
 import { DxfImportButton } from "../panels/DxfImportButton";
@@ -43,6 +43,10 @@ export function PathwaysTools({ saver }: { saver: Saver }) {
 function ObjectsToPlace({ saver }: { saver: Saver }) {
   const model = useEditorStore(s => s.model);
   const kinds = useMemo(() => (model ? live(model.objectKinds) : []), [model]);
+  // One at a time: a double click would place two, one on top of the other.
+  // The ref is the guard, current before any render; the state shows it.
+  const placing = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   if (kinds.length === 0) {
     return <p className="p-2 text-sm text-stone-600">No objects yet. Tag one in Survey as an Object.</p>;
@@ -59,7 +63,9 @@ function ObjectsToPlace({ saver }: { saver: Saver }) {
           <Button
             size="sm"
             aria-label={`Place ${kind.nameEn}`}
+            disabled={busy}
             onClick={() => {
+              if (placing.current) return;
               const { model: current, selection } = useEditorStore.getState();
               // Before a floor has loaded this refuses too, so the click says
               // what it needs rather than doing nothing.
@@ -68,11 +74,16 @@ function ObjectsToPlace({ saver }: { saver: Saver }) {
                 toast({ message: placed.reason });
                 return;
               }
+              placing.current = true;
+              setBusy(true);
               void saver.create("placement", placed.data).then(saved => {
                 if (!saved) return;
                 useEditorStore.getState().select({ type: "placement", id: placed.data.id });
                 const room = current?.rooms.find(r => r.id === placed.data.roomId);
                 toast({ message: `Placed ${kind.nameEn} in ${room?.nameEn || placed.data.roomId}. Drag it into place.` });
+              }).finally(() => {
+                placing.current = false;
+                setBusy(false);
               });
             }}
           >

@@ -50,6 +50,7 @@ export function newPlacement(
  * centroid of the selected room, of any kind — area, room, detail or service.
  * Unlike an asset placement, an object always sits there and never at
  * `[0, 0, 0]`, because it is authored about its own base centre (spec §5.5).
+ * To the centimetre: the inspector shows the position as typed numbers.
  */
 export function newObjectPlacement(
   model: MapModel | null, selection: Selection, objectKindId: string, now = Date.now(),
@@ -58,7 +59,8 @@ export function newObjectPlacement(
   if (!anchor) return { ok: false, reason: "Select a room or area first." };
   const kind = model ? live(model.objectKinds).find(k => k.id === objectKindId) : undefined;
   if (!kind) return { ok: false, reason: "That kind of object is gone." };
-  const [cx, cy] = ringCentroid(anchor.footprint);
+  const cm = (v: number) => Math.round(v * 100) / 100;
+  const [cx, cy] = ringCentroid(anchor.footprint).map(cm) as [number, number];
   return {
     ok: true,
     data: {

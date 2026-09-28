@@ -13,6 +13,8 @@ const model = parseModel({
     { id: "L1-bench", levelId: "oth-L1", kind: "detail", footprint: [[8, 8], [12, 8], [12, 12], [8, 12]], heightM: 1.2 },
     { id: "L1-gone", levelId: "oth-L1", kind: "detail", footprint: [[20, 8], [22, 8], [22, 10], [20, 10]], heightM: 1, deletedAt: "2026-09-01T00:00:00.000Z" },
     { id: "L2-kiosk", levelId: "oth-L2", kind: "detail", footprint: [[0, 0], [2, 0], [2, 2], [0, 2]], heightM: 2 },
+    // Its middle is at a third of a metre each way.
+    { id: "L1-corner", levelId: "oth-L1", kind: "area", footprint: [[0, 0], [1, 0], [0, 1]], heightM: 5, walkable: true },
   ],
   objectKinds: [
     { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } },
@@ -73,6 +75,11 @@ describe("newObjectPlacement", () => {
         sightingIds: [],
       },
     });
+  });
+
+  it("puts it at the centroid to the centimetre, not to the fifteenth decimal", () => {
+    const placed = newObjectPlacement(model, { type: "room", id: "L1-corner" }, "ok_bin", 7);
+    expect(placed.ok && placed.data.position).toEqual([0.33, 0.33, 0]);
   });
 
   it("asks for a room or area first when nothing is selected, or something else is", () => {

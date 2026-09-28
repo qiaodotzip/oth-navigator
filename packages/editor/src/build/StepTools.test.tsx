@@ -1,5 +1,5 @@
 import { parseModel } from "@oth/model";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
@@ -105,6 +105,23 @@ describe("DressingTools", () => {
     await waitFor(() => expect(useEditorStore.getState().selection).toEqual({
       type: "placement", id: expect.stringContaining("oth-L1-object-"),
     }));
+  });
+
+  it("places one, not two, when Place is clicked again while the first is saving", async () => {
+    useEditorStore.getState().select({ type: "room", id: "L1-hall" });
+    let land!: (saved: boolean) => void;
+    const create = openObjects(vi.fn(() => new Promise<boolean>(resolve => { land = resolve; })));
+    const place = screen.getByRole("button", { name: "Place wastebin" }) as HTMLButtonElement;
+    fireEvent.click(place);
+    fireEvent.click(place);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(place.disabled).toBe(true);
+    await act(async () => land(true));
+    // Once it has landed, another can be placed (the new one is selected now, so the room again).
+    await waitFor(() => expect(place.disabled).toBe(false));
+    act(() => useEditorStore.getState().select({ type: "room", id: "L1-hall" }));
+    fireEvent.click(place);
+    expect(create).toHaveBeenCalledTimes(2);
   });
 
   it("says what to select first when nothing is, and creates nothing", () => {
