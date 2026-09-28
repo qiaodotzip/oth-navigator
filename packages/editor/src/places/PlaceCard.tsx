@@ -56,11 +56,12 @@ export function PlaceCard({ api, room, onBindOne, pickerBelow = false }: {
   const only = bound.length === 1 ? bound[0] : undefined;
 
   if (bound.length === 0) {
-    // Kept short, as the picker below needs the column's height.
+    // One line over the picker, which needs the column's height; its own
+    // question below says the rest.
     return (
       <section aria-label="Surveyed place" className="shrink-0 border-b border-stone-200 px-3 py-2">
         <p className="text-xs text-stone-600">
-          No surveyed place is bound to this room.{pickerBelow ? " Pick it below." : ""}
+          {pickerBelow ? "No place bound yet. Pick it below." : "No surveyed place is bound to this room."}
         </p>
         {onBindOne && (
           <Button size="sm" className="mt-2" onClick={onBindOne}>
@@ -117,7 +118,8 @@ function PlaceRow({ api, model, place, open, onToggle }: {
   const link = best ? surveyLink(model, best.frame) : null;
 
   return (
-    <li aria-labelledby={headingId}>
+    // An open row ends in a rule, so the next row's button does not sit on its Open in Survey.
+    <li aria-labelledby={headingId} className={open ? "border-b border-stone-200 pb-2 last:border-b-0" : undefined}>
       <div className="relative -mx-1 flex items-center gap-2 rounded px-1 py-1 hover:bg-stone-100">
         {!open &&
           (best ? (

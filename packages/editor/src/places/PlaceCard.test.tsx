@@ -208,6 +208,9 @@ describe("PlaceCard", () => {
     expect(photo(kiosk, "Kiosk").getAttribute("src")).toBe("/api/keyframes/kf_loose/file?w=320");
     expect(kiosk.getByText("Seen in 1 frame")).toBeTruthy();
     expect(kiosk.getByText("Confirmed")).toBeTruthy();
+    // Ruled off below, so the next row does not sit on its link.
+    expect(card.getByRole("listitem", { name: "Kiosk" }).classList.contains("pb-2")).toBe(true);
+    expect(card.getByRole("listitem", { name: "iTea" }).classList.contains("pb-2")).toBe(false);
 
     fireEvent.click(card.getByRole("button", { name: "iTea" }));
     expect(card.getAllByRole("button", { expanded: true }).map(b => b.textContent)).toEqual(["iTea"]);
@@ -241,7 +244,7 @@ describe("PlaceCard", () => {
   it("points below instead where the binding list is already on screen", () => {
     const card = show("L1-empty", { pickerBelow: true });
     expect(card.queryByRole("button", { name: "Bind one" })).toBeNull();
-    expect(card.getByText("No surveyed place is bound to this room. Pick it below.")).toBeTruthy();
+    expect(card.getByText("No place bound yet. Pick it below.")).toBeTruthy();
   });
 
   it("does not point below when there is no list there", () => {
