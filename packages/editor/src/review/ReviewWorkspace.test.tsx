@@ -1,0 +1,301 @@
+import { parseModel, type Level } from "@oth/model";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ConflictError, type Api } from "../api/client";
+import { useCurrentRoute } from "../route";
+import { createSaver } from "../state/save";
+import { useEditorStore } from "../state/store";
+import { fakeApi } from "../testing/fakeApi";
+import { useToasts } from "../ui/toast";
+import { ReviewWorkspace } from "./ReviewWorkspace";
+
+const frame = (id: string, captureId: string, timeMs: number) =>
+  ({ id, captureId, timeMs, imageId: id, widthPx: 640, heightPx: 360 });
+
+const reviewModel = parseModel({
+  building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+  levels: [
+    { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "Level 1", nameZh: "一楼", elevationM: 0, heightM: 6 },
+    { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "Level 2", nameZh: "二楼", elevationM: 6, heightM: 4 },
+  ],
+  captures: [
+    { id: "cap_1", kind: "video", filename: "L1.mp4", levelId: "oth-L1" },
+    { id: "cap_2", kind: "video", filename: "L2.mp4", levelId: "oth-L2" },
+  ],
+  keyframes: [frame("kf_1", "cap_1", 1000), frame("kf_2", "cap_1", 2000), frame("kf_9", "cap_2", 0)],
+  places: [
+    { id: "p_big", nameEn: "Festive Mall", category: "retail", status: "proposed", proposedBy: "claude-code", notes: "Fascia reads FESTIVE MALL." },
+    { id: "p_small", nameEn: "Gate 1", category: "facility", status: "proposed", proposedBy: "claude-code" },
+    { id: "p_conf", nameEn: "Gate 1", category: "facility", levelId: "oth-L1" },
+    { id: "p_l2", nameEn: "Up there", category: "retail", status: "proposed" },
+    { id: "p_none", nameEn: "No frames", category: "retail", status: "proposed", notes: "From the directory." },
+  ],
+  sightings: [
+    { id: "s1", placeId: "p_big", keyframeId: "kf_1", status: "proposed", box: { x: 0.1, y: 0.2, w: 0.3, h: 0.2 } },
+    { id: "s2", placeId: "p_big", keyframeId: "kf_2", status: "proposed" },
+    { id: "s3", placeId: "p_small", keyframeId: "kf_1", status: "proposed" },
+    { id: "s9", placeId: "p_l2", keyframeId: "kf_9", status: "proposed" },
+  ],
+});
+const L1 = reviewModel.levels[0] as Level;
+
+function Hosted({ api }: { api: Api }) {
+  const route = useCurrentRoute();
+  const saver = createSaver(api, { validate: false });
+  return <ReviewWorkspace api={api} saver={saver} level={L1} params={route.name === "floor" ? route.params : {}} />;
+}
+
+function at(search = "", overrides: Record<string, unknown> = {}) {
+  const api = fakeApi({ getModel: vi.fn().mockResolvedValue(reviewModel), ...overrides });
+  window.history.pushState({}, "", `/floors/L1/review${search}`);
+  render(<Hosted api={api} />);
+  return api as unknown as Record<string, ReturnType<typeof vi.fn>>;
+}
+
+const param = (name: string) => new URLSearchParams(window.location.search).get(name);
+const key = (k: string, target: Element = document.body) => fireEvent.keyDown(target, { key: k });
+const nameField = () => screen.getByLabelText("Name") as HTMLInputElement;
+const toastSaying = (message: string) => useToasts.getState().toasts.find(t => t.message === message);
+
+beforeEach(() => {
+  useEditorStore.getState().reset();
+  useEditorStore.getState().setUser({ id: "u_sc", email: "sc@oth.local", displayName: "Stef Chan" });
+  useEditorStore.getState().setModel(reviewModel);
+  useToasts.getState().clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("ReviewWorkspace", () => {
+  it("shows one proposal at a time, the most-evidenced first, and how far the floor has got", () => {
+    at();
+    expect(nameField().value).toBe("Festive Mall");
+    expect(screen.getByText("1 of 3 decided on L1")).toBeTruthy();
+    expect(screen.getByText("Fascia reads FESTIVE MALL.")).toBeTruthy();
+    expect(screen.getByText(/Proposed by claude-code · 2 frames/)).toBeTruthy();
+  });
+
+  it("labels the name where you can see it, not only for a screen reader", () => {
+    // Ruling 14.
+    at();
+    const label = screen.getByText("Name", { selector: "label span" });
+    expect(label.closest("label")!.contains(nameField())).toBe(true);
+    expect(label.className).not.toContain("sr-only");
+  });
+
+  it("shows the evidence large, with the agent's box drawn on it", () => {
+    at();
+    expect(screen.getByAltText(/Evidence for Festive Mall: frame 1 of 2/).getAttribute("src")).toBe("/api/keyframes/kf_1/file?w=1600");
+    expect(screen.getByTestId("label-box-s1")).toBeTruthy();
+  });
+
+  it("steps through the proposal's other frames with the arrow keys", () => {
+    at();
+    key("ArrowRight");
+    expect(screen.getByAltText(/frame 2 of 2/).getAttribute("src")).toBe("/api/keyframes/kf_2/file?w=1600");
+  });
+
+  it("A accepts with the corrections typed, files it under this floor, and shows the next at once", async () => {
+    const api = at();
+    fireEvent.change(nameField(), { target: { value: "Festive Mall Tampines" } });
+    key("a");
+    expect(param("place")).toBe("p_small");
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalledWith("p_big", 0, {
+      nameEn: "Festive Mall Tampines", category: "retail", levelId: "oth-L1",
+    }));
+  });
+
+  it("offers Undo on the accept, which puts the proposal back as it was", async () => {
+    const api = at();
+    key("a");
+    await waitFor(() => expect(toastSaying("Accepted Festive Mall")).toBeTruthy());
+    await act(async () => { await toastSaying("Accepted Festive Mall")!.action!.run(); });
+    expect(api.reopenPlace).toHaveBeenCalledWith("p_big", 1, expect.objectContaining({
+      nameEn: "Festive Mall", category: "retail", levelId: null,
+    }));
+  });
+
+  it("takes letters typed into the name as text, not as decisions", () => {
+    // Review Focus 2: the R of "Rice Garden" is not Reject.
+    const api = at();
+    key("r", nameField());
+    key("a", nameField());
+    expect(api.rejectPlace).not.toHaveBeenCalled();
+    expect(api.acceptPlace).not.toHaveBeenCalled();
+    expect(param("place")).toBeNull();
+  });
+
+  it("accepts with Enter from inside the name, as corrected", async () => {
+    const api = at();
+    fireEvent.change(nameField(), { target: { value: "Festive Mall East" } });
+    key("Enter", nameField());
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalledWith("p_big", 0, expect.objectContaining({ nameEn: "Festive Mall East" })));
+  });
+
+  it("R rejects, and Undo brings the place back with its tags", async () => {
+    const api = at();
+    key("r");
+    await waitFor(() => expect(toastSaying("Rejected Festive Mall")).toBeTruthy());
+    expect(api.rejectPlace).toHaveBeenCalledWith("p_big", 0);
+    await act(async () => { await toastSaying("Rejected Festive Mall")!.action!.run(); });
+    expect(api.restoreEntity).toHaveBeenCalledWith("place", "p_big", 1);
+  });
+
+  it("S skips without deciding anything", () => {
+    const api = at();
+    key("s");
+    expect(param("place")).toBe("p_small");
+    expect(api.acceptPlace).not.toHaveBeenCalled();
+    expect(api.rejectPlace).not.toHaveBeenCalled();
+  });
+
+  it("decides two different proposals when A is pressed twice, never the same one twice", async () => {
+    // Review Focus 4.
+    const api = at();
+    key("a");
+    key("a");
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalledTimes(2));
+    // noUncheckedIndexedAccess: `at()` returns a Record, so a known key needs the `!`.
+    expect(api.acceptPlace!.mock.calls.map(c => (c as unknown[])[0])).toEqual(["p_big", "p_small"]);
+  });
+
+  it("decides the last proposal once, however often A is pressed", async () => {
+    // Ruling 1. Nothing is left to move on to, so the address does not change
+    // when it goes; the proposal must leave the screen all the same.
+    const api = at("?scope=floorless");
+    expect(nameField().value).toBe("No frames");
+    key("a");
+    key("a");
+    await waitFor(() => expect(toastSaying("Accepted No frames")).toBeTruthy());
+    key("a");
+    expect(api.acceptPlace).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Every proposal is filed under a floor.")).toBeTruthy();
+  });
+
+  it("keeps a decided proposal out of view when the reload after it fails", async () => {
+    // Ruling 1. The stale model still lists Festive Mall as waiting, at the
+    // version it was accepted at; showing it again would invite a second A.
+    const api = at("", { getModel: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) });
+    key("a");
+    await waitFor(() => expect(toastSaying("Accepted Festive Mall")).toBeTruthy());
+    expect(useToasts.getState().toasts.some(t => t.message.startsWith("Couldn't reload the map after saving"))).toBe(true);
+    expect(nameField().value).toBe("Gate 1");
+    key("s");
+    expect(param("place")).toBe("p_small");
+    expect(api.acceptPlace).toHaveBeenCalledTimes(1);
+  });
+
+  it("comes back to a proposal whose decision did not go through", async () => {
+    const api = at("", { acceptPlace: vi.fn().mockRejectedValue(new ConflictError({ id: "p_big", version: 4 }, null)) });
+    key("a");
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalled());
+    await waitFor(() => expect(param("place")).toBe("p_big"));
+    expect(useEditorStore.getState().conflict?.entityId).toBe("p_big");
+  });
+
+  it("brings back a proposal whose decision failed, with Retry", async () => {
+    // Ruling 1: a failed decision leaves the decided set, so it is in view again.
+    at("", { rejectPlace: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) });
+    key("r");
+    expect(nameField().value).toBe("Gate 1");
+    await waitFor(() => expect(nameField().value).toBe("Festive Mall"));
+    expect(param("place")).toBe("p_big");
+    expect(useToasts.getState().toasts.find(t => t.tone === "error")?.action?.label).toBe("Retry");
+  });
+
+  it("shows a proposal again once its Undo has landed", async () => {
+    // An Undo leaves the place two versions on from where it was decided, so
+    // it is waiting again, not decided.
+    const reopened = parseModel({
+      ...reviewModel,
+      places: reviewModel.places.map(p => (p.id === "p_big" ? { ...p, version: 2 } : p)),
+    });
+    const getModel = vi.fn().mockResolvedValue(reviewModel);
+    at("", { getModel });
+    key("a");
+    await waitFor(() => expect(toastSaying("Accepted Festive Mall")).toBeTruthy());
+    getModel.mockResolvedValue(reopened);
+    await act(async () => { await toastSaying("Accepted Festive Mall")!.action!.run(); });
+    key("s");
+    expect(param("place")).toBe("p_big");
+    expect(nameField().value).toBe("Festive Mall");
+  });
+
+  it("leaves the address alone when a decision fails after you have left Review", async () => {
+    // Survey reads `place` too, as a filter: a late failure must not set it there.
+    let fail!: (err: unknown) => void;
+    at("", { acceptPlace: vi.fn(() => new Promise((_, reject) => { fail = reject; })) });
+    key("a");
+    window.history.pushState({}, "", "/floors/L1/survey?frame=kf_1");
+    await act(async () => { fail(new TypeError("Failed to fetch")); });
+    await waitFor(() => expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(true));
+    expect(window.location.pathname).toBe("/floors/L1/survey");
+    expect(param("place")).toBeNull();
+  });
+
+  it("offers Same as… when the name matches a place already on this floor, and merges into it", async () => {
+    // Review Focus 3.
+    const api = at("?place=p_small");
+    fireEvent.click(screen.getByRole("button", { name: "Same as Gate 1" }));
+    await waitFor(() => expect(api.mergePlace).toHaveBeenCalledWith("p_small", 0, "p_conf"));
+  });
+
+  it("offers Same as… for a name corrected to match, whatever its case", () => {
+    at();
+    fireEvent.change(nameField(), { target: { value: "  gate 1" } });
+    expect(screen.getByRole("button", { name: "Same as Gate 1" })).toBeTruthy();
+  });
+
+  it("corrects the agent's box in place", async () => {
+    // Ruling 9: the frame reports a real size; jsdom gives every element zero.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+    const api = at();
+    fireEvent.mouseDown(screen.getByTitle(/Drag to move/), { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(screen.getByTestId("tag-frame"), { clientX: 140, clientY: 100 });
+    fireEvent.mouseUp(screen.getByTestId("tag-frame"));
+    await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("sighting", "s1", 0, expect.objectContaining({ box: expect.any(Object) })));
+  });
+
+  it("offers the proposals on no floor, and one with no frame can still be decided", async () => {
+    // Review Focus 1 and 5.
+    const api = at();
+    fireEvent.click(screen.getByRole("button", { name: /1 on no floor/ }));
+    expect(param("scope")).toBe("floorless");
+    expect(nameField().value).toBe("No frames");
+    expect(screen.getByText(/No frame shows this proposal/)).toBeTruthy();
+    expect(screen.queryByRole("img")).toBeNull();
+    key("a");
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalledWith("p_none", 0, expect.objectContaining({ levelId: "oth-L1" })));
+  });
+
+  it("falls back to the first proposal for a link to one already decided", () => {
+    at("?place=p_gone");
+    expect(nameField().value).toBe("Festive Mall");
+  });
+
+  it("says the queue is clear rather than showing nothing", () => {
+    useEditorStore.getState().setModel(parseModel({
+      ...reviewModel,
+      places: reviewModel.places.filter(p => p.status === "confirmed"),
+      sightings: [],
+    }));
+    at();
+    expect(screen.getByText("Nothing waiting on L1.")).toBeTruthy();
+    expect(screen.getByText("1 place confirmed here.")).toBeTruthy();
+  });
+
+  it("stays on screen when the session expires", () => {
+    at();
+    act(() => useEditorStore.getState().endSession("expired"));
+    expect(nameField().value).toBe("Festive Mall");
+  });
+
+  it("loads nothing itself: the shell's one load is the only one", () => {
+    const api = at();
+    expect(api.getModel).not.toHaveBeenCalled();
+  });
+});
