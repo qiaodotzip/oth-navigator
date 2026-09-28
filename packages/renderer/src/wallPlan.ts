@@ -2,10 +2,12 @@ import type { Room, Vec2 } from "@oth/model";
 import { subtractIntervals, type Interval } from "./intervals";
 
 /**
- * Spec §7: neighbouring rooms' edges that are parallel and within 0.4 m of
- * each other are one wall, the drawing's own partition traced from both sides.
+ * Neighbouring rooms' edges that are parallel and this close are one wall,
+ * the drawing's own partition traced from both sides. Spec §7 says 0.4 m;
+ * Plan 5D Ruling 6 raised it because 42 m of L1's neighbouring edges sit
+ * 0.4–0.5 m apart, and would otherwise stand as two walls with a slot between.
  */
-export const MERGE_GAP_M = 0.4;
+export const MERGE_GAP_M = 0.5;
 /** A wall's thickness when nothing says otherwise: the old shell's. */
 export const DEFAULT_WALL_M = 0.15;
 /** Edges within 5° of parallel can be one wall. A traced line wanders that much. */
@@ -50,6 +52,14 @@ const pointAt = (e: Edge, t: number): Vec2 => [e.a[0] + e.ux * t, e.a[1] + e.uy 
 const midpoint = (p: Vec2, q: Vec2): Vec2 => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
 const distance = (p: Vec2, q: Vec2) => Math.hypot(p[0] - q[0], p[1] - q[1]);
 
+/** Whether all but a sliver of the stretch from t0 to t1 is already a shared wall. */
+function alreadyShared(shares: readonly Interval[], t0: number, t1: number): boolean {
+  const from = Math.min(t0, t1);
+  const to = Math.max(t0, t1);
+  const free = subtractIntervals(to - from, shares.map(([p, q]): Interval => [p - from, q - from]));
+  return free.reduce((sum, [p, q]) => sum + q - p, 0) < MIN_SHARED_M;
+}
+
 /**
  * Every room's boundary as wall pieces, with one wall wherever two rooms meet.
  *
@@ -57,8 +67,11 @@ const distance = (p: Vec2, q: Vec2) => Math.hypot(p[0] - q[0], p[1] - q[1]);
  * room, and the drawing's partition read twice. Here the stretch two edges
  * share becomes one piece midway between them, owned by both. Whatever is
  * left of each edge stays a wall of its own room.
+ *
+ * `stats.pairsTested` counts the pairs of edges the sweep compares, so a test
+ * can prove it stays a sweep without timing it.
  */
-export function wallPieces(rooms: readonly Room[]): WallPiece[] {
+export function wallPieces(rooms: readonly Room[], stats?: { pairsTested: number }): WallPiece[] {
   // Sorted west to east, so each edge meets only the few that overlap it in x:
   // a whole floor is thousands of edges, and every pair would be millions.
   const edges = rooms.flatMap(edgesOf).sort((p, q) => p.minX - q.minX);
@@ -70,6 +83,7 @@ export function wallPieces(rooms: readonly Room[]): WallPiece[] {
     for (let j = i + 1; j < edges.length; j++) {
       const f = edges[j]!;
       if (f.minX > e.maxX + MERGE_GAP_M) break;
+      if (stats) stats.pairsTested++;
       if (f.roomId === e.roomId) continue;
       if (f.minY > e.maxY + MERGE_GAP_M || f.maxY < e.minY - MERGE_GAP_M) continue;
       if (Math.abs(e.ux * f.uy - e.uy * f.ux) > MERGE_ANGLE_SIN) continue;
@@ -89,6 +103,13 @@ export function wallPieces(rooms: readonly Room[]): WallPiece[] {
       const gap1 = distance(p1, q1);
       if (gap0 > MERGE_GAP_M || gap1 > MERGE_GAP_M) continue;
 
+      // A room thinner than the merge gap puts the rooms either side of it
+      // within reach of each other. Once a stretch is shared it is taken: a
+      // second wall over it would stand across the thin room, stacked on the first.
+      const u0 = along(f, q0);
+      const u1 = along(f, q1);
+      if (alreadyShared(covered[i]!, t0, t1) || alreadyShared(covered[j]!, u0, u1)) continue;
+
       pieces.push({
         a: midpoint(p0, q0),
         b: midpoint(p1, q1),
@@ -97,7 +118,7 @@ export function wallPieces(rooms: readonly Room[]): WallPiece[] {
         rooms: [e.roomId, f.roomId],
       });
       covered[i]!.push([t0, t1]);
-      covered[j]!.push([along(f, q0), along(f, q1)]);
+      covered[j]!.push([u0, u1]);
     }
   }
 

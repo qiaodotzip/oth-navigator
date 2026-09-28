@@ -41,8 +41,16 @@ describe("wallPieces", () => {
     expect(pieces).toHaveLength(7);
   });
 
+  it("merges edges up to half a metre apart, the thickest partition L1 draws", () => {
+    const pieces = wallPieces([box("L1-a", 0, 0, 4, 3), box("L1-b", 4.45, 0, 8, 3)]);
+    const [wall] = shared(pieces);
+    expect(wall!.a[0]).toBeCloseTo(4.225);
+    expect(wall!.thicknessM).toBeCloseTo(0.45);
+    expect(pieces).toHaveLength(7);
+  });
+
   it("keeps two walls when the rooms are further apart than a wall is thick", () => {
-    const pieces = wallPieces([box("L1-a", 0, 0, 4, 3), box("L1-b", 4.6, 0, 8, 3)]);
+    const pieces = wallPieces([box("L1-a", 0, 0, 4, 3), box("L1-b", 4.55, 0, 8, 3)]);
     expect(shared(pieces)).toHaveLength(0);
     expect(pieces).toHaveLength(8);
   });
@@ -57,7 +65,7 @@ describe("wallPieces", () => {
   });
 
   it("does not merge edges more than 5 degrees off parallel", () => {
-    // B's west edge leans about 10 degrees, yet stays within 0.4 m of A's for 2 m.
+    // B's west edge leans about 10 degrees, yet stays within 0.5 m of A's for 2 m.
     const pieces = wallPieces([box("L1-a", 0, 0, 4, 3), room("L1-b", [[4, 0], [8, 0], [8, 2], [4.35, 2]])]);
     expect(shared(pieces)).toHaveLength(0);
   });
@@ -67,6 +75,20 @@ describe("wallPieces", () => {
     const pieces = wallPieces([u]);
     expect(shared(pieces)).toHaveLength(0);
     expect(pieces).toHaveLength(8);
+  });
+
+  it("stands one wall either side of a room thinner than the merge gap, never a third across it", () => {
+    // A 0.3 m sliver between A and B: A's and B's edges are within reach of each other too.
+    const a = box("L1-a", 0, 0, 4, 3);
+    const sliver = box("L1-s", 4, 0, 4.3, 3);
+    const b = box("L1-b", 4.3, 0, 8, 3);
+    for (const rooms of [[a, sliver, b], [sliver, a, b], [b, sliver, a]]) {
+      const pieces = wallPieces(rooms);
+      const walls = shared(pieces).map(p => [...p.rooms].sort().join("|")).sort();
+      expect(walls).toEqual(["L1-a|L1-s", "L1-b|L1-s"]);
+      // The two shared walls, A's other three sides, the sliver's two ends, B's other three.
+      expect(pieces).toHaveLength(2 + 3 + 2 + 3);
+    }
   });
 
   it("merges rooms whichever way round their outlines are drawn", () => {
@@ -88,10 +110,9 @@ describe("wallPieces", () => {
     expect(pieces).toHaveLength(2 * 20 * 19 + 4 * 20);
   });
 
-  it("walls a floor the size of the real L1, 2,500 edges, in under 200 ms", () => {
+  it("shares a long corridor wall with every shop along it, on a floor the size of L1", () => {
     // 24 rows of 25 shops between 25 corridors that run the floor's full width,
-    // every partition drawn 0.2 m thick. A corridor's long edges reach past
-    // hundreds of others in the west-to-east sweep, so this is its worst case.
+    // every partition drawn 0.2 m thick: 2,500 edges, as many as the real L1.
     const rooms: Room[] = [];
     for (let k = 0; k <= 24; k++) {
       const y = k * 10.4;
@@ -101,17 +122,19 @@ describe("wallPieces", () => {
     }
     expect(rooms.flatMap(r => r.footprint)).toHaveLength(2500);
 
-    // The quickest of three, so a machine busy with other work doesn't fail it.
-    let quickestMs = Infinity;
-    let pieces: WallPiece[] = [];
-    for (let run = 0; run < 3; run++) {
-      const started = performance.now();
-      pieces = wallPieces(rooms);
-      quickestMs = Math.min(quickestMs, performance.now() - started);
-    }
-
     // Each shop shares a wall with its neighbours in the row and with the corridor either side.
-    expect(shared(pieces)).toHaveLength(24 * 24 + 2 * 24 * 25);
-    expect(quickestMs).toBeLessThan(200);
+    expect(shared(wallPieces(rooms))).toHaveLength(24 * 24 + 2 * 24 * 25);
+  });
+
+  it("compares each edge only with its neighbours, not with every edge on the floor", () => {
+    // A row of 1,000 boxes is 4,000 edges: about 8 million pairs if every edge
+    // met every other, a few tens of thousands if the west-to-east sweep stops
+    // where it should. Counting pairs, not milliseconds, keeps a busy machine
+    // from failing this.
+    const rooms = Array.from({ length: 1000 }, (_, i) => box(`r-${i}`, i * 5, 0, i * 5 + 5, 5));
+    const stats = { pairsTested: 0 };
+    expect(shared(wallPieces(rooms, stats))).toHaveLength(999);
+    expect(stats.pairsTested).toBeGreaterThan(0);
+    expect(stats.pairsTested).toBeLessThan(100_000);
   });
 });
