@@ -240,8 +240,10 @@ function registerSpotTools(server: McpServer, ctx: ToolContext): void {
       "places seen near its frame, at the edge of the walkable floor, facing into it. Sightings of one object a few " +
       "frames apart are merged. Each suggestion gives its frames, the rooms that fixed it (anchors), a confidence " +
       "(high needs two anchors; low with no anchors is a guess from the nearest frame that has some), and the " +
-      "placement to create with create, type placement. unplaced lists the sightings it could not place, each with " +
-      "why: name them in your report. Sightings already on a placement are skipped. It changes nothing.",
+      "placement to create with create, type placement. A place bound to an open area over 500 m², such as a gate " +
+      "bound to a whole concourse, is no anchor: it doesn't say where in the area a frame was taken. unplaced lists " +
+      "the sightings it could not place, each with why: name them in your report. Sightings already on a placement " +
+      "are skipped. It changes nothing.",
     inputSchema: { floor: FLOOR },
     annotations: READ_ONLY,
   }, ({ floor }) => runTool(ctx, async () => {

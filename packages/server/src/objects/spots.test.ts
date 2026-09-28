@@ -120,6 +120,58 @@ describe("a frame placed from one side only", () => {
   });
 });
 
+describe("an anchor bound to a large open area (rehearsal 2: L1's gates bound to whole concourses)", () => {
+  /**
+   * The corridor, and a concourse south of the shops: 40 m by 30 m, 1,200 m²,
+   * walkable. "Gate 5" is bound to the whole concourse, so it says only that
+   * a frame was taken somewhere in 1,200 m². A second capture walks it.
+   */
+  const withConcourse = (sightings: ReturnType<typeof seen>[], concourse = sq(0, -40, 40, -10)) => corridor([
+    seen("sg_gate", "pl_gate", "cap_3-2"), ...sightings,
+  ], {
+    rooms: [
+      { id: "L1-corridor", levelId: "oth-L1", kind: "area", footprint: sq(0, 0, 60, 6), heightM: 6, walkable: true },
+      { id: "L1-a", levelId: "oth-L1", kind: "room", footprint: sq(0, 6, 10, 14), heightM: 6 },
+      { id: "L1-b", levelId: "oth-L1", kind: "room", footprint: sq(10, 6, 20, 14), heightM: 6 },
+      { id: "L1-c", levelId: "oth-L1", kind: "room", footprint: sq(40, 6, 50, 14), heightM: 6 },
+      { id: "L1-s", levelId: "oth-L1", kind: "room", footprint: sq(20, -8, 30, 0), heightM: 6 },
+      { id: "L1-west-concourse", levelId: "oth-L1", kind: "area", footprint: concourse, heightM: 6, walkable: true },
+    ],
+    captures: [
+      { id: "cap_1", kind: "video", filename: "L1 walk.mp4", levelId: "oth-L1" },
+      { id: "cap_2", kind: "video", filename: "L2 walk.mp4", levelId: "oth-L2" },
+      { id: "cap_3", kind: "video", filename: "L1 concourse.mp4", levelId: "oth-L1" },
+    ],
+    keyframes: [...frames("cap_1", 31), ...frames("cap_2", 3), ...frames("cap_3", 8)],
+    places: [
+      { id: "pl_a", nameEn: "Starbucks", category: "retail", levelId: "oth-L1", roomId: "L1-a" },
+      { id: "pl_b", nameEn: "Gong Cha", category: "retail", levelId: "oth-L1", roomId: "L1-b" },
+      { id: "pl_c", nameEn: "Guardian", category: "retail", levelId: "oth-L1", roomId: "L1-c" },
+      { id: "pl_s", nameEn: "Popular", category: "retail", levelId: "oth-L1", roomId: "L1-s" },
+      { id: "pl_gate", nameEn: "Gate 5", category: "facility", levelId: "oth-L1", roomId: "L1-west-concourse" },
+      { id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "bin" },
+    ],
+  });
+
+  it("doesn't fix a frame's position, so objects filmed by the gate alone are unplaced, with why, not stacked on its edge", () => {
+    const report = objectSpotReport(withConcourse([seen("sg_1", "pl_bin", "cap_3-3"), seen("sg_2", "pl_bin", "cap_3-4")]), "oth-L1");
+    expect(report.spots).toEqual([]);
+    expect(report.unplaced.map(u => [u.sightingId, u.reason])).toEqual([
+      ["sg_1", "the only places filmed near it are bound to large open areas"],
+      ["sg_2", "the only places filmed near it are bound to large open areas"],
+    ]);
+  });
+
+  it("leaves it out beside a shop that does fix the frame, and still counts an open area of 500 m² or less", () => {
+    const beside = objectSpotReport(withConcourse([seen("sg_1", "pl_bin", "cap_1-5"), seen("sg_gate2", "pl_gate", "cap_1-5")]), "oth-L1");
+    expect(beside.spots.map(s => s.anchors)).toEqual([["L1-a", "L1-b"]]);
+    // 20 m by 25 m: 500 m², no larger, so the gate still fixes where it was filmed.
+    const small = objectSpotReport(withConcourse([seen("sg_1", "pl_bin", "cap_3-3")], sq(0, -35, 20, -10)), "oth-L1");
+    expect(small.unplaced).toEqual([]);
+    expect(small.spots.map(s => s.anchors)).toEqual([["L1-west-concourse"]]);
+  });
+});
+
 describe("objectSpotReport", () => {
   it("skips a sighting already on a placement, so a second run gives only what is left", () => {
     const model = corridor([seen("sg_1", "pl_bin", "cap_1-5"), seen("sg_2", "pl_bin", "cap_1-28")], {

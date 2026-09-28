@@ -1,4 +1,4 @@
-import { facingRotation, insidePoint, live, pointInPolygon, type MapModel, type Room, type Vec2 } from "@oth/model";
+import { facingRotation, insidePoint, live, pointInPolygon, ringArea, type MapModel, type Room, type Vec2 } from "@oth/model";
 
 export type ObjectSpot = {
   objectKindId: string;
@@ -23,6 +23,16 @@ export const MERGE_FRAMES = 10;
  * nothing fixes, and every object filmed there would stand on that one point.
  */
 export const ONE_SIDE_FRAMES = 20;
+/**
+ * A place bound to an open area (kind area) larger than this is no anchor: it
+ * says only that the frame was taken somewhere in that area. Rehearsal 2's
+ * gates were bound to whole concourses, and every object filmed by them
+ * stood on one point of the concourse's edge.
+ */
+export const LARGE_AREA_M2 = 500;
+/** Why a sighting is left unplaced, in the words suggest_object_spots gives. */
+export const NOTHING_NEAR = "nothing filmed near it is bound to a room on this floor";
+export const ONLY_OPEN_AREAS = "the only places filmed near it are bound to large open areas";
 /** An object stands this far in from the edge, beyond half its depth. */
 const EDGE_GAP_M = 0.1;
 /** How far to step off an edge to see which side the floor is on. */
@@ -32,6 +42,16 @@ const SHARED_EDGE_M = 0.3;
 
 type Frame = { id: string; captureId: string; index: number };
 type Fix = { point: Vec2; anchors: string[] };
+/** A frame with no fix, and why. */
+type Unfixed = { reason: string };
+const isFix = (f: Fix | Unfixed | null | undefined): f is Fix => !!f && "point" in f;
+
+/** An open area too large to say where in it a frame was taken. */
+function tooLarge(room: Room): boolean {
+  if (room.kind !== "area") return false;
+  const area = Math.abs(ringArea(room.footprint)) - room.holes.reduce((sum, h) => sum + Math.abs(ringArea(h)), 0);
+  return area > LARGE_AREA_M2;
+}
 
 const dist = (p: Vec2, q: Vec2) => Math.hypot(p[0] - q[0], p[1] - q[1]);
 
@@ -115,18 +135,25 @@ function framesOn(model: MapModel, levelId: string): Map<string, Frame[]> {
  * Where each frame was taken (spec §5.4 step 1): among its anchors' fronts,
  * else halfway between the placed frames before and after it, else at the
  * one placed frame on one side when it is within ONE_SIDE_FRAMES; otherwise
- * nowhere.
+ * nowhere, with why. A frame whose only places nearby are bound to large open
+ * areas is nowhere too: they don't say where in the area it was.
  */
-function fixes(model: MapModel, levelId: string, byCapture: Map<string, Frame[]>, walkable: readonly Room[]): Map<string, Fix | null> {
+function fixes(model: MapModel, levelId: string, byCapture: Map<string, Frame[]>, walkable: readonly Room[]): Map<string, Fix | Unfixed> {
   const rooms = new Map(live(model.rooms).filter(r => r.levelId === levelId).map(r => [r.id, r]));
   const anchorOf = new Map<string, string>();
   for (const p of live(model.places)) {
     if (p.roomId && rooms.has(p.roomId) && !p.objectKindId && !p.pathwayKindId) anchorOf.set(p.id, p.roomId);
   }
+  const vague = new Set([...rooms.values()].filter(tooLarge).map(r => r.id));
   const roomsIn = new Map<string, Set<string>>();
+  const vagueIn = new Set<string>();
   for (const s of live(model.sightings)) {
     const room = anchorOf.get(s.placeId);
     if (!room) continue;
+    if (vague.has(room)) {
+      vagueIn.add(s.keyframeId);
+      continue;
+    }
     roomsIn.set(s.keyframeId, (roomsIn.get(s.keyframeId) ?? new Set<string>()).add(room));
   }
   const fronts = new Map<string, Vec2>();
@@ -139,33 +166,40 @@ function fixes(model: MapModel, levelId: string, byCapture: Map<string, Frame[]>
     return found;
   };
 
-  const out = new Map<string, Fix | null>();
+  const out = new Map<string, Fix | Unfixed>();
   for (const frames of byCapture.values()) {
-    const direct = frames.map((_, i): Fix | null => {
+    const direct = frames.map((_, i): Fix | Unfixed | null => {
       const near = new Set<string>();
+      let openAreaNear = false;
       for (let j = Math.max(0, i - NEAR_FRAMES); j <= Math.min(frames.length - 1, i + NEAR_FRAMES); j++) {
         for (const room of roomsIn.get(frames[j]!.id) ?? []) near.add(room);
+        openAreaNear ||= vagueIn.has(frames[j]!.id);
       }
-      if (near.size === 0) return null;
+      if (near.size === 0) return openAreaNear ? { reason: ONLY_OPEN_AREAS } : null;
       const anchors = [...near].sort();
       const points = anchors.map(front);
       const mean: Vec2 = [points.reduce((s, p) => s + p[0], 0) / points.length, points.reduce((s, p) => s + p[1], 0) / points.length];
       return { point: ontoWalkable(mean, walkable), anchors };
     });
+    const placed = (j: number) => {
+      const d = direct[j];
+      return isFix(d) ? { fix: d, at: j } : null;
+    };
     frames.forEach((frame, i) => {
-      if (direct[i]) {
-        out.set(frame.id, direct[i]!);
+      const own = direct[i];
+      if (own) {
+        out.set(frame.id, own);
         return;
       }
       let before: { fix: Fix; at: number } | null = null;
-      for (let j = i - 1; j >= 0 && !before; j--) before = direct[j] ? { fix: direct[j]!, at: j } : null;
+      for (let j = i - 1; j >= 0 && !before; j--) before = placed(j);
       let after: { fix: Fix; at: number } | null = null;
-      for (let j = i + 1; j < frames.length && !after; j++) after = direct[j] ? { fix: direct[j]!, at: j } : null;
+      for (let j = i + 1; j < frames.length && !after; j++) after = placed(j);
       const one = before ?? after;
       const point = before && after
         ? ontoWalkable([(before.fix.point[0] + after.fix.point[0]) / 2, (before.fix.point[1] + after.fix.point[1]) / 2], walkable)
         : one && Math.abs(one.at - i) <= ONE_SIDE_FRAMES ? one.fix.point : null;
-      out.set(frame.id, point ? { point, anchors: [] } : null);
+      out.set(frame.id, point ? { point, anchors: [] } : { reason: NOTHING_NEAR });
     });
   }
   return out;
@@ -193,8 +227,8 @@ export function objectSpotReport(model: MapModel, levelId: string): SpotReport {
     const frame = frameAt.get(s.keyframeId)!;
     const refuse = (reason: string) => unplaced.push({ sightingId: s.id, frameId: frame.id, objectKindId, reason });
     if (walkable.length === 0) { refuse("the floor has no walkable area to stand it in yet"); continue; }
-    const fix = fixAt.get(frame.id) ?? null;
-    if (!fix) { refuse("nothing filmed near it is bound to a room on this floor"); continue; }
+    const fix = fixAt.get(frame.id);
+    if (!isFix(fix)) { refuse(fix?.reason ?? NOTHING_NEAR); continue; }
     const edge = nearestEdge(fix.point, walkable);
     if (!edge) { refuse("the walkable floor has no outer edge to stand it against"); continue; }
     const inset = kinds.get(objectKindId)!.size.d / 2 + EDGE_GAP_M;
@@ -260,5 +294,8 @@ export function confidenceFor(model: MapModel, levelId: string): (sightingIds: r
   const walkable = live(model.rooms).filter(r => r.levelId === levelId && r.walkable);
   const fixAt = fixes(model, levelId, framesOn(model, levelId), walkable);
   const frameOf = new Map(live(model.sightings).map(s => [s.id, s.keyframeId]));
-  return ids => (ids.some(id => (fixAt.get(frameOf.get(id) ?? "")?.anchors.length ?? 0) >= 2) ? "high" : "low");
+  return ids => (ids.some(id => {
+    const fix = fixAt.get(frameOf.get(id) ?? "");
+    return isFix(fix) && fix.anchors.length >= 2;
+  }) ? "high" : "low");
 }
