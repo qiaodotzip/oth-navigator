@@ -61,9 +61,12 @@ export async function copyModelInto(target: Document, bytes: Uint8Array): Promis
     copy.copy(property, resolve);
     return copy;
   };
+  let roots: GltfNode[];
   try {
-    return new ModelTemplate(target, nodes.map(node => resolve(node)));
-  } catch {
+    roots = nodes.map(node => resolve(node));
+  } catch (error) {
+    console.warn("3D export: couldn't copy a model", error);
     return null;
   }
+  return new ModelTemplate(target, roots);
 }

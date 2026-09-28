@@ -1,5 +1,5 @@
 import { Document, WebIO } from "@gltf-transform/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { copyModelInto } from "./modelCopy";
 import { glbFromJson, triangleGlb } from "./testing";
 
@@ -40,8 +40,32 @@ describe("copyModelInto", () => {
     expect(second).not.toBe(first);
     expect(second!.listChildren()[0]).not.toBe(first!.listChildren()[0]);
     expect(second!.getMesh()).toBe(first!.getMesh());
+    const firstMaterial = first!.getMesh()!.listPrimitives()[0]!.getMaterial();
+    const secondMaterial = second!.getMesh()!.listPrimitives()[0]!.getMaterial();
+    expect(secondMaterial).toBe(firstMaterial);
+    expect(secondMaterial!.getBaseColorTexture()).toBe(firstMaterial!.getBaseColorTexture());
     expect(doc.getRoot().listMeshes()).toHaveLength(1);
+    expect(doc.getRoot().listMaterials()).toHaveLength(1);
+    expect(doc.getRoot().listTextures()).toHaveLength(1);
     expect(doc.getRoot().listNodes()).toHaveLength(4);
+  });
+
+  it("logs and returns null, without throwing, when the copy step itself breaks", async () => {
+    const doc = exportDoc();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const graph = vi.spyOn(doc, "getGraph").mockImplementation(() => {
+      throw new Error("boom");
+    });
+    try {
+      expect(await copyModelInto(doc, await triangleGlb())).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      const [message, error] = warn.mock.calls[0]!;
+      expect(message).toBe("3D export: couldn't copy a model");
+      expect(error).toBeInstanceOf(Error);
+    } finally {
+      graph.mockRestore();
+      warn.mockRestore();
+    }
   });
 
   it("turns away bytes that are not a glTF binary", async () => {
