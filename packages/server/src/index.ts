@@ -7,16 +7,30 @@ import { exportCaptureForLabelling } from "./cli/surveyExport";
 import { importProposals } from "./cli/surveyImport";
 import { importL1Plan } from "./cli/planL1";
 import { tidySurvey } from "./cli/surveyTidy";
-import { loadConfig } from "./config";
+import { loadConfig, teamCodeProblem } from "./config";
 import { createPostgresDb } from "./db/client";
 import { createDevDb } from "./db/dev";
 import { runMigrations } from "./db/migrate";
 
 const config = loadConfig();
+const command = process.argv[2];
 
 if (config.NODE_ENV === "production" && !config.DATABASE_URL) {
   throw new Error("DATABASE_URL is required in production");
 }
+
+/** Serving needs the team code in production (spec §13): without it, stop rather than serve the app open. */
+function refuseToServeWithoutTeamCode(): void {
+  const refusal = teamCodeProblem(config);
+  if (refusal) {
+    console.error(refusal);
+    process.exit(1);
+  }
+}
+
+// Refused before anything else happens, the database included. A CLI command,
+// such as data:import over railway ssh, serves nothing, so it runs without one.
+if (!command) refuseToServeWithoutTeamCode();
 
 // Local development falls back to file-backed PGlite so a fresh clone runs with
 // nothing installed. Production always uses the real Postgres.
@@ -25,8 +39,6 @@ const db = config.DATABASE_URL
   : await createDevDb(config.DATA_DIR);
 
 if (config.DATABASE_URL) await runMigrations(db);
-
-const command = process.argv[2];
 
 if (command === "invite") {
   const displayName = process.argv[3];
@@ -106,10 +118,15 @@ if (command === "seed") {
   process.exit(0);
 }
 
+// A command this file does not know falls through to here and serves all the
+// same, so the code is checked again rather than trusted to the check above,
+// which any command at all lets by.
+refuseToServeWithoutTeamCode();
+
 // Log from the listen callback, not before it: binding is asynchronous, so
 // logging on the previous line claimed success even when the port was taken.
 const server = serve(
-  { fetch: createApp({ db }).fetch, port: config.PORT },
+  { fetch: createApp({ db, teamCode: config.TEAM_CODE ?? null }).fetch, port: config.PORT },
   info => console.log(`oth server listening on :${info.port}`),
 );
 
