@@ -3,9 +3,7 @@ import type { LevelImage } from "../api/client";
 import { BUILD_STEPS, buildStepForCode, type BuildStepId } from "../flow/floorProgress";
 import type { Selection } from "../state/store";
 import { imageForLevel } from "../state/underlay";
-import { SELECTABLE_TYPES } from "./selection";
-
-type Selectable = NonNullable<Selection>["type"];
+import { SELECTABLE_TYPES, type Selectable } from "./selection";
 
 /** What choosing a to-do does. */
 export type TodoTarget =
@@ -25,9 +23,14 @@ export type TodoItem = {
   target: TodoTarget;
 };
 
-export type StepTodos = Record<BuildStepId, TodoItem[]>;
+export type StepTodos = Readonly<Record<BuildStepId, readonly TodoItem[]>>;
 
-export const EMPTY_TODOS: StepTodos = { floorplan: [], rooms: [], pathways: [], entrances: [], bind: [], dressing: [] };
+const NOTHING: readonly TodoItem[] = Object.freeze([]);
+
+/** Before a floor loads. Frozen, because every caller shares this one value. */
+export const EMPTY_TODOS: StepTodos = Object.freeze({
+  floorplan: NOTHING, rooms: NOTHING, pathways: NOTHING, entrances: NOTHING, bind: NOTHING, dressing: NOTHING,
+});
 
 const NONE: TodoTarget = { kind: "none" };
 
@@ -42,7 +45,7 @@ export function stepTodos(
   levelImages: readonly LevelImage[],
   levelId: string,
 ): StepTodos {
-  const todos: StepTodos = { floorplan: [], rooms: [], pathways: [], entrances: [], bind: [], dressing: [] };
+  const todos: Record<BuildStepId, TodoItem[]> = { floorplan: [], rooms: [], pathways: [], entrances: [], bind: [], dressing: [] };
 
   // The first two things a floor needs are not validation issues at all.
   const image = imageForLevel(levelImages, levelId);
@@ -59,6 +62,7 @@ export function stepTodos(
   }
 
   const floors = placeLevels(model);
+  const roomLevel = new Map(live(model.rooms).map(r => [r.id, r.levelId]));
   const places = new Map(live(model.places).map(p => [p.id, p]));
   const portals = new Map(live(model.portals).map(p => [p.id, p]));
   const stops = live(model.portalEndpoints);
@@ -66,6 +70,7 @@ export function stepTodos(
 
   for (const issue of report?.issues ?? []) {
     const step = buildStepForCode(issue.code);
+    // No build step fixes it. If it is an error, Publish still lists it, with no step to link to.
     if (!step) continue;
     const target = targetOnThisFloor(issue);
     if (!target) continue;
@@ -90,7 +95,12 @@ export function stepTodos(
   function targetOnThisFloor(issue: ValidationIssue): TodoTarget | null {
     if (issue.entityType === "place") {
       const place = places.get(issue.entityId);
-      if (!place || floors.get(place.id) !== levelId) return null;
+      if (!place) return null;
+      // A bound place's item selects its room, so it is listed where that room
+      // is. Places bound before binding set a floor have no level of their own,
+      // and the footage they were filmed on can be another floor's.
+      const floor = place.roomId ? roomLevel.get(place.roomId) : floors.get(place.id);
+      if (floor !== levelId) return null;
       // Binding is for confirmed units: a proposal is still Review's to decide,
       // and a walkway is built as a path, not bound to a room.
       if (issue.code === "place.unbound" && (place.status !== "confirmed" || place.pathwayKindId)) return null;

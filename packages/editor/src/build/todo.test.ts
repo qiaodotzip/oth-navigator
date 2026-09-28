@@ -1,7 +1,7 @@
 import { parseModel, type ValidationIssue, type ValidationReport } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import type { LevelImage } from "../api/client";
-import { stepTodos } from "./todo";
+import { EMPTY_TODOS, stepTodos } from "./todo";
 
 const square: [number, number][] = [[0, 0], [10, 0], [10, 10], [0, 10]];
 
@@ -28,8 +28,13 @@ const model = parseModel({
     { id: "pl_bound", nameEn: "Library", category: "community", levelId: "oth-L1", roomId: "L1-a" },
     // No floor, and never filmed on footage that has one.
     { id: "pl_lost", nameEn: "Somewhere", category: "retail" },
+    // Bound before binding set a floor: filmed on L1's footage, but its room is on L2.
+    { id: "pl_moved", nameEn: "Clinic", category: "healthcare", roomId: "L2-a" },
   ],
-  sightings: [{ id: "s1", placeId: "pl_seen", keyframeId: "kf_1" }],
+  sightings: [
+    { id: "s1", placeId: "pl_seen", keyframeId: "kf_1" },
+    { id: "s2", placeId: "pl_moved", keyframeId: "kf_1" },
+  ],
 });
 
 function issue(
@@ -54,7 +59,7 @@ const scaled: LevelImage = {
 
 const on = (levelId: string, r: ValidationReport | null, images: LevelImage[] = [scaled]) =>
   stepTodos(model, r, images, levelId);
-const codes = (items: { code: string }[]) => items.map(i => i.code);
+const codes = (items: readonly { code: string }[]) => items.map(i => i.code);
 
 describe("stepTodos — the floorplan", () => {
   it("asks for a plan on a floor with none", () => {
@@ -145,6 +150,12 @@ describe("stepTodos — binding places", () => {
     const [item] = on("oth-L1", report(issue("place.adjacencyBroken", "place", "pl_bound"))).bind;
     expect(item!.target).toEqual({ kind: "select", selection: { type: "room", id: "L1-a" } });
   });
+
+  it("files a bound place under its room's floor, where choosing it selects that room", () => {
+    const r = report(issue("place.adjacencyBroken", "place", "pl_moved"));
+    expect(on("oth-L2", r).bind[0]!.target).toEqual({ kind: "select", selection: { type: "room", id: "L2-a" } });
+    expect(on("oth-L1", r).bind).toEqual([]);
+  });
 });
 
 describe("stepTodos — lifts and stairs", () => {
@@ -180,5 +191,15 @@ describe("stepTodos — what choosing an item does", () => {
     const r = report(issue("place.adjacencyBroken", "place", "pl_bound"), issue("place.adjacencyBroken", "place", "pl_bound"));
     const keys = on("oth-L1", r).bind.map(i => i.key);
     expect(new Set(keys).size).toBe(2);
+  });
+});
+
+describe("EMPTY_TODOS", () => {
+  it("cannot be filled by accident, since every floor still loading shares it", () => {
+    expect(Object.isFrozen(EMPTY_TODOS)).toBe(true);
+    for (const items of Object.values(EMPTY_TODOS)) {
+      expect(items).toEqual([]);
+      expect(Object.isFrozen(items)).toBe(true);
+    }
   });
 });

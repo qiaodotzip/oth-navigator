@@ -1,7 +1,7 @@
 import { live, type MapModel } from "@oth/model";
 import type { Selection } from "../state/store";
 
-type Selectable = NonNullable<Selection>["type"];
+export type Selectable = NonNullable<Selection>["type"];
 
 /**
  * The kinds of thing the canvas can select, written out once. Held as strings
