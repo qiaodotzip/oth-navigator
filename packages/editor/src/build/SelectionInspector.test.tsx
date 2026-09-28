@@ -155,6 +155,30 @@ describe("SelectionInspector", () => {
     expect(screen.getByText(/select something on the plan/i)).toBeTruthy();
   });
 
+  it("puts the surveyed place card above a room's own details", () => {
+    setup({ type: "room", id: "L1-a" });
+    const card = screen.getByRole("region", { name: "Surveyed place" });
+    expect(card.textContent).toContain("No surveyed place is bound to this room.");
+    expect(card.compareDocumentPosition(screen.getByLabelText("Name")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("sends Bind one to the Bind places step", () => {
+    window.history.replaceState({}, "", "/floors/L1/build?step=rooms");
+    setup({ type: "room", id: "L1-a" }, "rooms");
+    fireEvent.click(screen.getByRole("button", { name: "Bind one" }));
+    expect(new URLSearchParams(window.location.search).get("step")).toBe("bind");
+  });
+
+  it("does not offer Bind one on Bind places, where the list is just below", () => {
+    setup({ type: "room", id: "L1-a" }, "bind");
+    expect(screen.queryByRole("button", { name: "Bind one" })).toBeNull();
+  });
+
+  it("shows no place card for a detail", () => {
+    setup({ type: "room", id: "L1-d" }, "dressing");
+    expect(screen.queryByRole("region", { name: "Surveyed place" })).toBeNull();
+  });
+
   it("says the floor is loading, rather than asking for a selection it cannot show yet", () => {
     useEditorStore.getState().reset();
     setup(null);

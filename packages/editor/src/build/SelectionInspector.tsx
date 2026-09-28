@@ -7,6 +7,8 @@ import { Inspector } from "../panels/Inspector";
 import { PathwayInspector } from "../panels/PathwayInspector";
 import { PlacementInspector } from "../panels/PlacementInspector";
 import { EntranceInspector, PortalInspector } from "../panels/PointInspectors";
+import { PlaceCard } from "../places/PlaceCard";
+import { setParams } from "../route";
 import type { Saver } from "../state/save";
 import { useEditorStore, type Selection } from "../state/store";
 import { Kbd } from "../ui/Kbd";
@@ -18,7 +20,8 @@ const bindable = (kind: string) => kind === "room" || kind === "area";
 /**
  * The right column's top half: whatever is selected, on every step (spec §11),
  * with what the step adds to it — binding on Bind places, the Blender export
- * on Dressing.
+ * on Dressing. A room or area opens on the place card, what the survey says
+ * is there, on every step.
  *
  * While a room's place picker is open, the picker has the column (the rail
  * gives this section most of its height for it): the room's own fields take at
@@ -87,6 +90,15 @@ export function SelectionInspector({
         if (!room) return null;
         return (
           <>
+            {bindable(room.kind) && (
+              <PlaceCard
+                key={room.id}
+                api={api}
+                room={room}
+                // On Bind places the picker is just below; elsewhere this is the way there.
+                onBindOne={step === "bind" ? undefined : () => setParams({ step: "bind" })}
+              />
+            )}
             <div className={picking ? "max-h-[30%] min-h-0 overflow-y-auto" : undefined}>
               <Inspector
                 onRename={(id, version, nameEn) => {
