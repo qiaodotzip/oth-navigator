@@ -68,6 +68,20 @@ describe("connect", () => {
     expect(unconnected).toEqual([{ type: "entrance", id: "gate-2", reason: REASONS.blocked }]);
   });
 
+  it("tries only the nearest 200 points on the lines, nearest first", () => {
+    // Three corridors side by side, 1 m apart. The two beyond the wall have 270 points within 35 m of
+    // the gate; the one line the gate can reach starts 35 m along its own corridor.
+    const three = walkableRaster(floor([
+      { footprint: rect(0, 0, 100, 4) }, { footprint: rect(0, 5, 100, 9) }, { footprint: rect(0, 10, 100, 14) },
+    ]), LEVEL);
+    const beyond: Vec2[][] = [[[2, 7], [98, 7]], [[2, 12], [98, 12]]];
+    const reachable: Vec2[] = [[75, 2], [98, 2]];
+    expect(connect(three, [reachable], [entrance("gate-5", [40, 3.9])]).links).toHaveLength(1);
+    expect(connect(three, [...beyond, reachable], [entrance("gate-5", [40, 3.9])])).toEqual({
+      links: [], unconnected: [{ type: "entrance", id: "gate-5", reason: REASONS.blocked }],
+    });
+  });
+
   it("joins nothing to a line more than 50 m away", () => {
     const long = walkableRaster(floor([{ footprint: rect(0, 0, 100, 4) }]), LEVEL);
     const { unconnected } = connect(long, [[[80, 2], [98, 2]]], [entrance("gate-3", [10, 2])]);

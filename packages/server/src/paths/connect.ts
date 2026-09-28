@@ -17,6 +17,13 @@ export const SLACK_M = 0.6;
 export const MAX_LINK_M = 50;
 /** How closely a line is sampled for the nearest point a link can reach. */
 const SAMPLE_M = 0.5;
+/**
+ * How many of those points, nearest first, are tried before a target is
+ * listed as blocked. Each try walks the straight line to its point, so this
+ * bounds the work for a target walled off from a busy network; 200 points is
+ * 100 m of line.
+ */
+export const MAX_TRIES = 200;
 
 export const REASONS = {
   noSurface: "This floor has no walkable area yet.",
@@ -109,8 +116,8 @@ function pointsNear(p: Vec2, lines: readonly (readonly Vec2[])[]): Vec2[] {
 
 /**
  * Spec §7.3 step 4: each target joined to the nearest point on a line that a
- * straight segment can reach without leaving the walkable surface, or listed
- * as unconnected with the reason.
+ * straight segment can reach without leaving the walkable surface, of the
+ * MAX_TRIES nearest within MAX_LINK_M, or listed as unconnected with the reason.
  */
 export function connect(
   r: Raster, lines: readonly (readonly Vec2[])[], targets: readonly Target[],
@@ -127,7 +134,7 @@ export function connect(
       continue;
     }
     const near = pointsNear(t.point, lines);
-    const to = near.find(q => clearLine(r, t.point, q, SLACK_M));
+    const to = near.slice(0, MAX_TRIES).find(q => clearLine(r, t.point, q, SLACK_M));
     if (to) links.push({ from, segment: [t.point, to] });
     else unconnected.push({ ...from, reason: near.length === 0 ? REASONS.noLine : REASONS.blocked });
   }
