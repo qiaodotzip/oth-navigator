@@ -1,11 +1,12 @@
 import type { Level } from "@oth/model";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { nextStepText, type FloorProgress } from "../flow/floorProgress";
 import { pickTab } from "../flow/floors";
 import { toBindLine } from "../places/rows";
 import { followLink, href } from "../route";
 import type { SetupLink } from "../setup/progress";
 import type { Saver } from "../state/save";
+import { Button } from "../ui/Button";
 import { Progress } from "../ui/Progress";
 import { recall } from "../ui/remember";
 import { YoursTag } from "../ui/YoursTag";
@@ -40,6 +41,19 @@ export function FloorCard({ level, progress, mine, saver, setup, onRestart }: {
   const tab = pickTab(recall(`lastTab.${level.code}`), progress.survey.total > 0);
   const to = href({ name: "floor", code: level.code, tab, params: {} });
   const reviewTotal = progress.review.confirmed + progress.review.proposed;
+
+  // Set up again asks first: it opens all nine steps, and a stray press
+  // shouldn't. The question takes the focus as it opens, and Cancel gives it
+  // back to Set up again.
+  const [asking, setAsking] = useState(false);
+  const question = useRef<HTMLParagraphElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const wasAsking = useRef(false);
+  useEffect(() => {
+    if (asking) question.current?.focus();
+    else if (wasAsking.current) trigger.current?.focus();
+    wasAsking.current = asking;
+  }, [asking]);
 
   // Guards Set up again the way OwnerPicker guards a toggle: a second press
   // while the nine calls are in flight must not send nine more.
@@ -79,8 +93,18 @@ export function FloorCard({ level, progress, mine, saver, setup, onRestart }: {
         <p className="text-xs text-stone-600">{toBindLine(progress.places.onMap, progress.places.confirmed)}</p>
       )}
       <p className="mt-auto pt-1 text-xs font-medium text-stone-700">{nextStepText(progress)}</p>
-      {setup.restart ? (
-        <button type="button" onClick={() => void restart()} disabled={restarting} className={SETUP_LINK}>
+      {setup.restart && asking ? (
+        <div className="relative z-10 space-y-2 rounded border border-yours/30 bg-yours-soft p-2">
+          <p ref={question} tabIndex={-1} className="text-xs text-yours outline-none">
+            Set up {level.code} again? All nine steps open again; the map keeps everything.
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="primary" disabled={restarting} onClick={() => void restart()}>Set up again</Button>
+            <Button size="sm" disabled={restarting} onClick={() => setAsking(false)}>Cancel</Button>
+          </div>
+        </div>
+      ) : setup.restart ? (
+        <button ref={trigger} type="button" onClick={() => setAsking(true)} className={SETUP_LINK}>
           {setup.label}
         </button>
       ) : (

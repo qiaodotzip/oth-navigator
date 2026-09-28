@@ -156,6 +156,9 @@ describe("FloorsHome — setting a floor up", () => {
     const api = fakeSetupApi();
     render(<FloorsHome api={api} saver={fakeSaver()} />);
     await waitFor(() => expect(api.getSetup).toHaveBeenCalledTimes(2));
+    // The cheap setup: a card needs no route counted.
+    expect(api.getSetup).toHaveBeenCalledWith("oth-L1", { light: true });
+    expect(api.getSetup).toHaveBeenCalledWith("oth-L2", { light: true });
     const [l1] = screen.getAllByRole("article");
     expect(within(l1!).getByRole("link", { name: "Set up L1" }).getAttribute("href")).toBe("/floors/L1/setup");
   });
@@ -172,16 +175,35 @@ describe("FloorsHome — setting a floor up", () => {
     expect(within(l2!).getByRole("link", { name: "Set up L2" })).toBeTruthy();
   });
 
-  it("starts a finished floor again: every step open, then step 1", async () => {
-    const setSetupStep = vi.fn().mockResolvedValue({});
+  it("starts a finished floor again, once you say so: every step open, then step 1", async () => {
+    const setSetupStep = vi.fn().mockResolvedValue(setupState());
     const getSetup = vi.fn().mockResolvedValue(setupState({ finish: { status: "done" } }));
     render(<FloorsHome api={fakeSetupApi({ getSetup, setSetupStep })} saver={fakeSaver()} />);
     const [l1] = screen.getAllByRole("article");
     fireEvent.click(await within(l1!).findByRole("button", { name: "Set up again" }));
+    expect(within(l1!).getByText("Set up L1 again? All nine steps open again; the map keeps everything.")).toBeTruthy();
+    expect(setSetupStep).not.toHaveBeenCalled();
+    fireEvent.click(within(l1!).getByRole("button", { name: "Set up again" }));
     await waitFor(() => expect(window.location.pathname).toBe("/floors/L1/setup/1"));
     expect(setSetupStep).toHaveBeenCalledTimes(9);
     expect(setSetupStep).toHaveBeenCalledWith("oth-L1", "footage", { status: "open" });
     expect(setSetupStep).toHaveBeenCalledWith("oth-L1", "finish", { status: "open" });
+    // The setup the PUTs answered with is the card's: no load after them.
+    expect(getSetup).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves a finished floor as it is when you cancel Set up again", async () => {
+    window.history.pushState({}, "", "/floors");
+    const setSetupStep = vi.fn().mockResolvedValue(setupState());
+    const getSetup = vi.fn().mockResolvedValue(setupState({ finish: { status: "done" } }));
+    render(<FloorsHome api={fakeSetupApi({ getSetup, setSetupStep })} saver={fakeSaver()} />);
+    const [l1] = screen.getAllByRole("article");
+    fireEvent.click(await within(l1!).findByRole("button", { name: "Set up again" }));
+    fireEvent.click(within(l1!).getByRole("button", { name: "Cancel" }));
+    expect(within(l1!).queryByText(/Set up L1 again\?/)).toBeNull();
+    expect(within(l1!).getByRole("button", { name: "Set up again" })).toBeTruthy();
+    expect(setSetupStep).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe("/floors");
   });
 
   it("stays put, and says so, when the steps can't be opened again", async () => {
@@ -189,7 +211,9 @@ describe("FloorsHome — setting a floor up", () => {
     const setSetupStep = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
     const getSetup = vi.fn().mockResolvedValue(setupState({ finish: { status: "done" } }));
     render(<FloorsHome api={fakeSetupApi({ getSetup, setSetupStep })} saver={fakeSaver()} />);
-    fireEvent.click(await within(screen.getAllByRole("article")[0]!).findByRole("button", { name: "Set up again" }));
+    const l1 = within(screen.getAllByRole("article")[0]!);
+    fireEvent.click(await l1.findByRole("button", { name: "Set up again" }));
+    fireEvent.click(l1.getByRole("button", { name: "Set up again" }));
     await waitFor(() => expect(useToasts.getState().toasts.at(-1)?.message)
       .toBe("Couldn't start L1's setup again. Check your connection, then retry."));
     expect(window.location.pathname).toBe("/floors");
@@ -204,10 +228,12 @@ describe("FloorsHome — setting a floor up", () => {
 
   it("guards Set up again against a quick second press: one run, one navigation", async () => {
     const releases: (() => void)[] = [];
-    const setSetupStep = vi.fn(() => new Promise(resolve => { releases.push(() => resolve({})); }));
+    const setSetupStep = vi.fn(() => new Promise(resolve => { releases.push(() => resolve(setupState())); }));
     const getSetup = vi.fn().mockResolvedValue(setupState({ finish: { status: "done" } }));
     render(<FloorsHome api={fakeSetupApi({ getSetup, setSetupStep })} saver={fakeSaver()} />);
-    const button = await within(screen.getAllByRole("article")[0]!).findByRole("button", { name: "Set up again" });
+    const l1 = within(screen.getAllByRole("article")[0]!);
+    fireEvent.click(await l1.findByRole("button", { name: "Set up again" }));
+    const button = l1.getByRole("button", { name: "Set up again" });
 
     fireEvent.click(button);
     expect(button).toBeDisabled();
@@ -222,7 +248,7 @@ describe("FloorsHome — setting a floor up", () => {
     window.history.pushState({}, "", "/floors");
     const setSetupStep = vi.fn(async (_levelId: string, step: string) => {
       if (step === "check") throw new TypeError("Failed to fetch");
-      return {};
+      return setupState();
     });
     const getSetup = vi.fn()
       .mockResolvedValue(setupState())
@@ -233,6 +259,7 @@ describe("FloorsHome — setting a floor up", () => {
     render(<FloorsHome api={fakeSetupApi({ getSetup, setSetupStep })} saver={fakeSaver()} />);
     const [l1] = screen.getAllByRole("article");
     fireEvent.click(await within(l1!).findByRole("button", { name: "Set up again" }));
+    fireEvent.click(within(l1!).getByRole("button", { name: "Set up again" }));
 
     // sampleModel already has L1 footage, so step 1 auto-completes; step 2
     // (Label) is the first that is neither stored nor auto-done.

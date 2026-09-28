@@ -6,8 +6,8 @@ import { pickTab, sortedLevels, yourFloor } from "../flow/floors";
 import { followLink, href, navigate } from "../route";
 import { cardLink } from "../setup/progress";
 import { asSetupApi } from "../setup/setupApi";
-import { loadSetup, useSetupStore } from "../setup/sync";
-import { SETUP_STEP_IDS } from "../setup/types";
+import { loadSetup, putSetup, useSetupStore } from "../setup/sync";
+import { SETUP_STEP_IDS, type SetupState } from "../setup/types";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { reportFailure } from "../ui/failure";
@@ -49,28 +49,39 @@ export function FloorsHome({ api, saver }: { api: Api; saver: Pick<Saver, "updat
   const setups = useSetupStore(s => s.byLevel);
   const levelKey = sortedLevels(model).map(l => l.id).join(" ");
 
-  // Each floor's setup, for its card's way in (spec §4.2). One that can't be
-  // had leaves its card offering Set up: the wizard loads its own.
+  // Each floor's setup, for its card's way in (spec §4.2): the cheap one,
+  // since a card counts no routes. One that can't be had leaves its card
+  // offering Set up: the wizard loads its own.
   useEffect(() => {
     const setupApi = asSetupApi(api);
-    for (const id of levelKey.split(" ").filter(Boolean)) void loadSetup(setupApi, id);
+    for (const id of levelKey.split(" ").filter(Boolean)) void loadSetup(setupApi, id, { light: true });
   }, [api, levelKey]);
 
   if (!model) return <p className="p-8 text-sm text-stone-500">Loading the floors…</p>;
 
-  /** Set up again: every step open, so the new run's check starts from now; then its step 1. */
+  /**
+   * Set up again: every step open, so the new run's check starts from now;
+   * then its step 1. Each PUT answers with the whole setup; the card keeps
+   * the last to come back, the likeliest to have seen the others land, with
+   * no load after. Step 1 loads the setup afresh as it opens either way.
+   */
   const restart = async (level: Level): Promise<void> => {
     const setupApi = asSetupApi(api);
+    // In the order they come back.
+    const answers: SetupState[] = [];
     try {
-      await Promise.all(SETUP_STEP_IDS.map(step => setupApi.setSetupStep(level.id, step, { status: "open" })));
+      await Promise.all(SETUP_STEP_IDS.map(step => setupApi.setSetupStep(level.id, step, { status: "open" }).then(state => {
+        answers.push(state);
+      })));
     } catch (err) {
       // Some of the nine may have gone through; reload so the card shows what
       // the server now has rather than staying on what it had before.
-      await loadSetup(setupApi, level.id);
+      await loadSetup(setupApi, level.id, { light: true });
       reportFailure(err, { doing: `start ${level.code}'s setup again`, retry: () => restart(level) });
       return;
     }
-    await loadSetup(setupApi, level.id);
+    const last = answers.at(-1);
+    if (last) putSetup(level.id, last);
     navigate(href({ name: "setup", code: level.code, step: 1, params: {} }));
   };
 
