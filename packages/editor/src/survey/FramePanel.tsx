@@ -41,7 +41,8 @@ export function FramePanel({ labels, places, counts, levelCode, placeFilter, onR
                 </span>
                 <button
                   type="button"
-                  aria-label={`Remove ${label.place.nameEn} from this frame`}
+                  // The same name as the × on the frame: one action, one name.
+                  aria-label={`Remove tag ${label.place.nameEn} from this frame`}
                   className="rounded px-1.5 text-stone-500 hover:bg-stone-100 hover:text-danger"
                   onClick={() => onRemove(label)}
                 >
@@ -77,7 +78,11 @@ export function FramePanel({ labels, places, counts, levelCode, placeFilter, onR
                 onClick={() => onPickPlace(placeFilter === p.id ? null : p.id)}
               >
                 <span className="min-w-0 flex-1 truncate">{p.nameEn}</span>
-                {p.status === "proposed" && <span className="text-xs text-proposed">proposed</span>}
+                {p.status === "proposed" && (
+                  // Ruling 13: the proposed blue as 13 px text on white is only
+                  // 4.1:1, so the word sits on the soft fill in dark text.
+                  <span className="rounded border border-proposed bg-proposed-soft px-1 text-xs text-stone-900">proposed</span>
+                )}
                 <span className="text-xs text-stone-500">×{counts.get(p.id) ?? 0}</span>
               </button>
             </li>

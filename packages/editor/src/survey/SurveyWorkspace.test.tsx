@@ -1,7 +1,7 @@
 import { parseModel, type Level } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Api } from "../api/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError, type Api } from "../api/client";
 import { useCurrentRoute } from "../route";
 import { createSaver } from "../state/save";
 import { useEditorStore } from "../state/store";
@@ -56,6 +56,10 @@ beforeEach(() => {
   useToasts.getState().clear();
   URL.createObjectURL = vi.fn(() => "blob:local-video");
   URL.revokeObjectURL = vi.fn();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("SurveyWorkspace", () => {
@@ -125,6 +129,91 @@ describe("SurveyWorkspace", () => {
     expect(api.createEntity).toHaveBeenCalledWith("sighting", expect.objectContaining({ placeId: "p_kopi", keyframeId: "kf_3" }));
   });
 
+  it("keeps a name sent while the last tag still saves, and says to send it again", async () => {
+    // Ruling 20 (I1): "NTUC", Enter, "Ko", Enter used to lose Ko without a word.
+    let land!: () => void;
+    const createEntity = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { land = () => resolve({}); }))
+      .mockResolvedValue({});
+    at("", fakeApi({ getModel: vi.fn().mockResolvedValue(model), createEntity }));
+    const name = screen.getByLabelText("Place name") as HTMLInputElement;
+    fireEvent.change(name, { target: { value: "NTUC" } });
+    key("Enter", name);
+    fireEvent.change(name, { target: { value: "Ko" } });
+    key("Enter", name);
+    expect(name.value).toBe("Ko");
+    expect(useToasts.getState().toasts.some(t =>
+      t.tone === "info" && t.message === "Still saving the last change — press Enter again in a moment.")).toBe(true);
+
+    await act(async () => { land(); });
+    key("Enter", name);
+    await waitFor(() =>
+      expect(createEntity).toHaveBeenCalledWith("place", expect.objectContaining({ nameEn: "Ko" })));
+    expect(name.value).toBe("");
+  });
+
+  it("sends a tag whose sighting failed again on Retry, making one place and one sighting", async () => {
+    // Ruling 20 (I2): the place landed, the sighting did not. Retrying only
+    // the sighting's write orphaned the place; retrying the whole tag must
+    // find it by name rather than make it twice.
+    const saved = { places: [...model.places] as unknown[], sightings: [...model.sightings] as unknown[] };
+    let refuse = true;
+    const createEntity = vi.fn(async (type: string, data: Record<string, unknown>) => {
+      if (type === "sighting" && refuse) {
+        refuse = false;
+        throw new TypeError("Failed to fetch");
+      }
+      (type === "place" ? saved.places : saved.sightings).push(data);
+      return data;
+    });
+    const getModel = vi.fn(async () => parseModel({ ...model, ...saved }));
+    at("", fakeApi({ getModel, createEntity }));
+    const name = screen.getByLabelText("Place name");
+    fireEvent.change(name, { target: { value: "Kiosk" } });
+    key("Enter", name);
+    await waitFor(() => expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(true));
+    const failed = useToasts.getState().toasts.find(t => t.tone === "error")!;
+    expect(failed).toMatchObject({
+      message: "Couldn't save the tag Kiosk. Check your connection, then retry.",
+      action: { label: "Retry" },
+    });
+
+    await act(async () => { await failed.action!.run(); });
+    const kiosks = (saved.places as { id: string; nameEn: string }[]).filter(p => p.nameEn === "Kiosk");
+    expect(kiosks).toHaveLength(1);
+    const tags = (saved.sightings as { placeId: string; keyframeId: string }[])
+      .filter(s => s.placeId === kiosks[0]!.id && s.keyframeId === "kf_3");
+    expect(tags).toHaveLength(1);
+    expect(useToasts.getState().toasts.filter(t => t.tone === "error")).toHaveLength(1);
+  });
+
+  it("keeps the drawn box when a tag fails, and lets it go once Retry saves it", async () => {
+    // Ruling 9: the frame reports a real size; jsdom gives every element zero.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+    const createEntity = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue({});
+    at("?frame=kf_1", fakeApi({ getModel: vi.fn().mockResolvedValue(model), createEntity }));
+    const drawOn = screen.getByTestId("tag-frame");
+    fireEvent.mouseDown(drawOn, { clientX: 100, clientY: 60 });
+    fireEvent.mouseMove(drawOn, { clientX: 300, clientY: 240 });
+    fireEvent.mouseUp(drawOn);
+    const name = screen.getByLabelText("Place name");
+    fireEvent.change(name, { target: { value: "Kopitiam" } });
+    key("Enter", name);
+    await waitFor(() => expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(true));
+    expect(screen.getByTestId("tag-box")).toBeTruthy();
+
+    const failed = useToasts.getState().toasts.find(t => t.tone === "error")!;
+    await act(async () => { await failed.action!.run(); });
+    expect(createEntity).toHaveBeenLastCalledWith("sighting", expect.objectContaining({
+      placeId: "p_kopi", keyframeId: "kf_1", box: expect.objectContaining({ x: 0.25, w: 0.5 }),
+    }));
+    expect(screen.queryByTestId("tag-box")).toBeNull();
+  });
+
   it("puts the cursor in the name on T", () => {
     at();
     key("t");
@@ -151,9 +240,71 @@ describe("SurveyWorkspace", () => {
     expect(api.deleteKeyframe).toHaveBeenCalledTimes(1);
   });
 
+  it("comes back to a frame whose bin failed, and a bin sent again by Retry still offers Undo", async () => {
+    // Ruling 20 (I2): the saver's Retry resent only the delete, so the Undo never came.
+    const deleteKeyframe = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue(undefined);
+    at("", fakeApi({ getModel: vi.fn().mockResolvedValue(model), deleteKeyframe }));
+    key("Delete");
+    await waitFor(() => expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(true));
+    const failed = useToasts.getState().toasts.find(t => t.tone === "error")!;
+    expect(failed).toMatchObject({
+      message: "Couldn't bin frame 3. Check your connection, then retry.",
+      action: { label: "Retry" },
+    });
+    expect(param("frame")).toBe("kf_3");
+
+    await act(async () => { await failed.action!.run(); });
+    expect(deleteKeyframe).toHaveBeenCalledTimes(2);
+    expect(deleteKeyframe).toHaveBeenLastCalledWith("kf_3");
+    expect(param("frame")).toBe("kf_2");
+    expect(useToasts.getState().toasts.some(t => t.message === "Binned frame 3" && t.action?.label === "Undo")).toBe(true);
+  });
+
+  it("stays where you went when a bin fails after you have moved on", async () => {
+    let refuse!: () => void;
+    const deleteKeyframe = vi.fn(() => new Promise((_, reject) => { refuse = () => reject(new TypeError("Failed to fetch")); }));
+    at("", fakeApi({ getModel: vi.fn().mockResolvedValue(model), deleteKeyframe }));
+    key("Delete");
+    expect(param("frame")).toBe("kf_2");
+    key("ArrowLeft");
+    expect(param("frame")).toBe("kf_1");
+    await act(async () => { refuse(); });
+    await waitFor(() => expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(true));
+    expect(param("frame")).toBe("kf_1");
+  });
+
+  it("says nothing of its own when a bin meets an ended session", async () => {
+    // The sign-in dialog over the page is the message.
+    const deleteKeyframe = vi.fn().mockRejectedValue(new ApiError(401, null));
+    const api = at("", fakeApi({ getModel: vi.fn().mockResolvedValue(model), deleteKeyframe }));
+    key("Delete");
+    await waitFor(() => expect(api.listLevelImages).toHaveBeenCalled());
+    expect(useToasts.getState().toasts).toHaveLength(0);
+    expect(param("frame")).toBe("kf_3");
+  });
+
+  it("bins again on Del once a bin has failed", async () => {
+    // The drop guard is for a bin under way, not one that has already failed.
+    const deleteKeyframe = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue(undefined);
+    const api = at("", fakeApi({ getModel: vi.fn().mockResolvedValue(model), deleteKeyframe }));
+    key("Delete");
+    await waitFor(() => expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(true));
+    // The reload after it, whatever the outcome, is the last of that bin.
+    await waitFor(() => expect(api.listLevelImages).toHaveBeenCalled());
+    key("Delete");
+    await waitFor(() => expect(deleteKeyframe).toHaveBeenCalledTimes(2));
+  });
+
   it("removes a tag from the side panel, with Undo", async () => {
     const api = at("?frame=kf_1");
-    fireEvent.click(screen.getByRole("button", { name: "Remove Kopitiam from this frame" }));
+    // One name for the × on the frame and the one in the panel.
+    expect(screen.getAllByRole("button", { name: "Remove tag Kopitiam from this frame" })).toHaveLength(2);
+    const panel = within(screen.getByRole("complementary", { name: "This frame and the floor's places" }));
+    fireEvent.click(panel.getByRole("button", { name: "Remove tag Kopitiam from this frame" }));
     await waitFor(() =>
       expect(useToasts.getState().toasts.some(t => t.message === "Deleted the tag Kopitiam" && t.action)).toBe(true));
     expect(api.deleteEntity).toHaveBeenCalledWith("sighting", "s1", 0);
@@ -165,6 +316,20 @@ describe("SurveyWorkspace", () => {
     expect(screen.getByRole("status").textContent).toMatch(/level 1.*1 frame.*isn't filed under a floor/);
     fireEvent.click(screen.getByRole("button", { name: "File under L1" }));
     await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("capture", "cap_u", 0, { levelId: "oth-L1" }));
+  });
+
+  it("holds File under L1 while it saves, so a double click can't send it twice", async () => {
+    // A second update at the old version would be a 409 blamed on a teammate.
+    let land!: () => void;
+    const updateEntity = vi.fn(() => new Promise(resolve => { land = () => resolve({}); }));
+    at("", fakeApi({ getModel: vi.fn().mockResolvedValue(model), updateEntity }));
+    const file = screen.getByRole("button", { name: "File under L1" }) as HTMLButtonElement;
+    fireEvent.click(file);
+    expect(file.disabled).toBe(true);
+    fireEvent.click(file);
+    expect(updateEntity).toHaveBeenCalledTimes(1);
+    await act(async () => { land(); });
+    expect((screen.getByRole("button", { name: "File under L1" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("shows the contact sheet on G, and a frame chosen there opens in Frame view", () => {

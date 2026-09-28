@@ -1,4 +1,4 @@
-import { live, placeLevels, type Box, type Level } from "@oth/model";
+import { live, placeLevels, type Box, type Capture, type Level } from "@oth/model";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Api } from "../api/client";
 import { setParams } from "../route";
@@ -7,6 +7,7 @@ import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
 import { Chip } from "../ui/Chip";
 import { Kbd } from "../ui/Kbd";
+import { reportFailure } from "../ui/failure";
 import { useKeys } from "../ui/keys";
 import { toast } from "../ui/toast";
 import { offerUndo } from "../ui/offerUndo";
@@ -19,7 +20,7 @@ import { GridView } from "./GridView";
 import { surveyCommand } from "./keys";
 import { labelsForFrame, type FrameLabel } from "./labelled";
 import { sightingCounts } from "./places";
-import { linkablePlaces } from "./suggest";
+import { exactPlace, linkablePlaces } from "./suggest";
 import { frameTime, nextUntagged, readSurveyParams, stepFrame, surveyView } from "./surveyView";
 import type { TagBarHandle } from "./TagBar";
 import { newId, tagWrites, walkwayColour, type Tag } from "./tagging";
@@ -27,6 +28,15 @@ import { newId, tagWrites, walkwayColour, type Tag } from "./tagging";
 const FILTER_LABEL: Record<SurveyFilter, string> = {
   all: "All", untagged: "Untagged", proposed: "Proposed", tagged: "Tagged",
 };
+
+/**
+ * Whether the address names this frame, on the page a bin was made from: a
+ * bin's late answer moves you only if you are still where it left you.
+ */
+function addressShows(page: string, frameId: string | null): boolean {
+  return window.location.pathname === page
+    && new URLSearchParams(window.location.search).get("frame") === frameId;
+}
 
 function Empty({ children }: { children: ReactNode }) {
   return (
@@ -64,50 +74,136 @@ export function SurveyWorkspace({ api, saver, level, params }: {
   const labels = useMemo(() => (frame ? labelsForFrame(model, frame.id) : []), [model, frame]);
   const [draft, setDraft] = useState<Box | null>(null);
   const [footage, setFootage] = useState<{ captureId: string | null } | null>(null);
+  // Footage whose "File under" is on its way: a second click would send the
+  // same version again, and its 409 would blame a teammate.
+  const [filing, setFiling] = useState<ReadonlySet<string>>(new Set());
   const tagBar = useRef<TagBarHandle>(null);
-  // One write at a time: a second Enter or Del before the first has landed
-  // would tag twice, or bin the frame that has just come into view.
-  const busy = useRef(false);
+  // Tags and bins under way. The keys start one at a time: a second Del
+  // before the first bin lands would bin the frame that has just come into
+  // view, and a second Enter would tag while the first is still making its
+  // place. A count, not a flag, because a Retry can run beside another write.
+  const writing = useRef(0);
 
   // A drawn box belongs to the frame it was drawn on.
   useEffect(() => setDraft(null), [frame?.id]);
 
-  async function once(work: () => Promise<void>) {
-    if (busy.current) return;
-    busy.current = true;
+  async function holding(work: () => Promise<void>): Promise<void> {
+    writing.current += 1;
     try {
       await work();
     } finally {
-      busy.current = false;
+      writing.current -= 1;
     }
   }
 
-  const tag = (t: Tag) => once(async () => {
-    if (!frame) return;
-    setDraft(null);
-    const writes = tagWrites(t, frame.id, level.id);
-    if (writes.place && !(await saver.create("place", writes.place))) return;
-    await saver.create("sighting", writes.sighting);
-  });
+  /** The place a name means in what the server has now. */
+  function placeNamed(nameEn: string): string | null {
+    const now = useEditorStore.getState().model;
+    if (!now) return null;
+    const on = placeLevels(now);
+    return exactPlace(linkablePlaces(live(now.places), on, level.id), on, level.id, nameEn)?.id ?? null;
+  }
 
-  const bin = () => once(async () => {
-    if (!frame) return;
-    const number = view.index + 1;
-    const next = stepFrame(view, 1) ?? stepFrame(view, -1);
-    // On to the next frame at once; back to this one if the bin did not go through.
-    setParams({ frame: next?.id ?? null });
-    if (!(await saver.apply("keyframe", frame.id, () => api.deleteKeyframe(frame.id)))) {
-      setParams({ frame: frame.id });
-      return;
-    }
-    offerUndo({
-      message: `Binned frame ${number}`,
-      undone: `Frame ${number} is back`,
-      what: `frame ${number}`,
-      run: () => api.restoreKeyframe(frame.id),
-      refresh: saver.refresh,
+  /**
+   * Makes the place when the name is new, ties it to the frame, and reloads
+   * whatever the outcome. The writes go straight to the API so a failure is
+   * said once, with a Retry that sends the whole tag again, after a reload:
+   * a place the first try made before its sighting failed is then found by
+   * name and linked, never made twice. The saver's own Retry resent just the
+   * one write, which left that place orphaned and the frame untagged.
+   *
+   * `drawn` is the box on screen when the tag was sent. It goes once the tag
+   * is saved, so a tag that fails keeps it; one drawn since is left alone.
+   */
+  function sendTag(t: Tag, frameId: string, drawn: Box | null, again = false): Promise<void> {
+    return holding(async () => {
+      try {
+        let placeId = t.placeId;
+        if (again) {
+          await saver.refresh();
+          placeId = placeId ?? placeNamed(t.nameEn);
+        }
+        const writes = tagWrites({ ...t, placeId }, frameId, level.id);
+        if (writes.place) await api.createEntity("place", writes.place);
+        await api.createEntity("sighting", writes.sighting);
+        setDraft(d => (d === drawn ? null : d));
+      } catch (err) {
+        reportFailure(err, {
+          doing: `save the tag ${t.nameEn}`,
+          retry: () => sendTag(t, frameId, drawn, true),
+        });
+      } finally {
+        await saver.refresh().catch(() => {});
+      }
     });
-  });
+  }
+
+  /**
+   * From the tag bar. While a write is under way the tag is refused out loud
+   * rather than dropped, and the bar keeps its name to send again.
+   */
+  function tag(t: Tag): boolean {
+    if (!frame) return false;
+    if (writing.current > 0) {
+      toast({ message: "Still saving the last change — press Enter again in a moment." });
+      return false;
+    }
+    void sendTag(t, frame.id, draft);
+    return true;
+  }
+
+  /**
+   * Bins a frame and offers Undo, reloading whatever the outcome. A bin that
+   * fails comes back to its frame, unless you have moved on from the one it
+   * took you to. Its Retry bins it all over again, so a bin that lands on the
+   * second try still offers its Undo; the saver's Retry never did.
+   */
+  function sendBin(target: { id: string; number: number }, movedTo: string | null, page: string): Promise<void> {
+    return holding(async () => {
+      try {
+        await api.deleteKeyframe(target.id);
+      } catch (err) {
+        if (addressShows(page, movedTo)) setParams({ frame: target.id });
+        reportFailure(err, {
+          doing: `bin frame ${target.number}`,
+          retry: () => {
+            // On again from the frame it came back to, as Del did the first time.
+            if (addressShows(page, target.id)) setParams({ frame: movedTo });
+            return sendBin(target, movedTo, page);
+          },
+        });
+        return;
+      } finally {
+        await saver.refresh().catch(() => {});
+      }
+      offerUndo({
+        message: `Binned frame ${target.number}`,
+        undone: `Frame ${target.number} is back`,
+        what: `frame ${target.number}`,
+        run: () => api.restoreKeyframe(target.id),
+        refresh: saver.refresh,
+      });
+    });
+  }
+
+  /** From Del: dropped, not queued, while a write is under way. */
+  function bin(): void {
+    if (!frame || writing.current > 0) return;
+    const movedTo = (stepFrame(view, 1) ?? stepFrame(view, -1))?.id ?? null;
+    // On to the next frame at once.
+    setParams({ frame: movedTo });
+    void sendBin({ id: frame.id, number: view.index + 1 }, movedTo, window.location.pathname);
+  }
+
+  async function fileUnder(capture: Capture): Promise<void> {
+    setFiling(s => new Set(s).add(capture.id));
+    await saver.update("capture", capture.id, capture.version, { levelId: level.id });
+    setFiling(s => {
+      const left = new Set(s);
+      left.delete(capture.id);
+      return left;
+    });
+  }
 
   const removeLabel = (label: FrameLabel) => void deleteWithUndo({
     api, saver,
@@ -155,7 +251,7 @@ export function SurveyWorkspace({ api, saver, level, params }: {
         setDraft(null);
         break;
       case "bin":
-        void bin();
+        bin();
         break;
       case "toggleGrid":
         setParams({ view: grid ? null : "grid" });
@@ -177,7 +273,7 @@ export function SurveyWorkspace({ api, saver, level, params }: {
         <span className="min-w-0 flex-1">
           <strong>{c.filename}</strong> ({n} frame{n === 1 ? "" : "s"}) isn't filed under a floor, so nothing in it counts toward one yet.
         </span>
-        <Button size="sm" onClick={() => void saver.update("capture", c.id, c.version, { levelId: level.id })}>
+        <Button size="sm" disabled={filing.has(c.id)} onClick={() => void fileUnder(c)}>
           File under {level.code}
         </Button>
       </div>
@@ -237,7 +333,7 @@ export function SurveyWorkspace({ api, saver, level, params }: {
         levelId={level.id}
         counts={counts}
         walkwayKinds={live(model.pathwayKinds)}
-        onTag={t => void tag(t)}
+        onTag={tag}
         onAddWalkwayKind={addWalkwayKind}
         strip={{ frames: view.shown, statuses: view.statuses, onPick: id => setParams({ frame: id }) }}
       />

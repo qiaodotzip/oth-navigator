@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TagBar, type TagBarHandle } from "./TagBar";
+import type { Tag } from "./tagging";
 
 const L1 = "oth-L1";
 const places = [
@@ -15,7 +16,8 @@ const counts = new Map([["p1", 7], ["p3", 1]]);
 const kinds = [PathwayKindSchema.parse({ id: "pk-1", nameEn: "Covered link", colorHex: "#38bdf8" })];
 
 function setup(box: Box | null = null) {
-  const onTag = vi.fn();
+  // Every tag is taken, unless a test says otherwise.
+  const onTag = vi.fn<[Tag], boolean>(() => true);
   const onAddWalkwayKind = vi.fn(async () => "pk-2");
   const ref = createRef<TagBarHandle>();
   render(
@@ -94,6 +96,16 @@ describe("TagBar", () => {
     fireEvent.change(name, { target: { value: "Kopitiam" } });
     fireEvent.click(screen.getByRole("button", { name: /^Tag/ }));
     expect(name.value).toBe("");
+  });
+
+  it("keeps the name when the tag is not taken, so it can be sent again", () => {
+    // A tag refused while the last change saves must not be lost with its text.
+    const { onTag, name } = setup();
+    onTag.mockReturnValue(false);
+    fireEvent.change(name, { target: { value: "Kopitiam" } });
+    fireEvent.keyDown(name, { key: "Enter" });
+    expect(onTag).toHaveBeenCalledTimes(1);
+    expect(name.value).toBe("Kopitiam");
   });
 
   it("suggests this floor's places first, with how often each was seen", () => {

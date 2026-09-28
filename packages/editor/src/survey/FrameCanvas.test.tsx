@@ -171,7 +171,7 @@ describe("what has already been identified", () => {
     const onRemoveLabel = vi.fn();
     const onMoveLabel = vi.fn();
     render(<Drawing onRemoveLabel={onRemoveLabel} onMoveLabel={onMoveLabel} labels={[label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.2, h: 0.2 })]} />);
-    const x = screen.getByLabelText("Remove tag NTUC FairPrice from this frame");
+    const x = screen.getByRole("button", { name: "Remove tag NTUC FairPrice from this frame" });
     fireEvent.mouseDown(x, { clientX: 100, clientY: 100 });
     fireEvent.click(x);
     expect(onRemoveLabel).toHaveBeenCalled();
@@ -188,7 +188,7 @@ describe("what has already been identified", () => {
     // image, for a tag with no box, had none.
     const onRemoveLabel = vi.fn();
     render(<Drawing onRemoveLabel={onRemoveLabel} labels={[label("s2", places[1]!)]} />);
-    fireEvent.click(screen.getByLabelText("Remove tag Public Library from this frame"));
+    fireEvent.click(screen.getByRole("button", { name: "Remove tag Public Library from this frame" }));
     expect(onRemoveLabel.mock.calls[0]![0].sighting.id).toBe("s2");
   });
 

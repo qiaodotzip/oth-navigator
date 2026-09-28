@@ -14,13 +14,13 @@ const label = (id: string, place: Place, box?: Box): FrameLabel => ({
   place,
 });
 
-function setup(labels: readonly FrameLabel[] = []) {
+function setup(labels: readonly FrameLabel[] = [], onFloor: readonly Place[] = places) {
   const onRemove = vi.fn();
   const onPickPlace = vi.fn();
   render(
     <FramePanel
       labels={labels}
-      places={places}
+      places={onFloor}
       counts={new Map()}
       levelCode="L1"
       placeFilter={null}
@@ -42,14 +42,14 @@ describe("On this frame", () => {
       label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.3, h: 0.1 }),
       label("s2", places[1]!),
     ]);
-    fireEvent.click(screen.getByRole("button", { name: "Remove Public Library from this frame" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove tag Public Library from this frame" }));
     expect(onRemove).toHaveBeenCalledTimes(1);
     expect(onRemove.mock.calls[0]![0].sighting.id).toBe("s2");
   });
 
   it("removes a boxed tag", () => {
     const { onRemove } = setup([label("s1", places[0]!, { x: 0.1, y: 0.2, w: 0.3, h: 0.1 })]);
-    fireEvent.click(screen.getByRole("button", { name: "Remove NTUC FairPrice from this frame" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove tag NTUC FairPrice from this frame" }));
     expect(onRemove.mock.calls[0]![0].sighting.id).toBe("s1");
   });
 
@@ -66,6 +66,18 @@ describe("On this frame", () => {
   it("shows no tag list when the frame has none", () => {
     setup();
     expect(screen.getByText("Nothing tagged here yet.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^Remove .* from this frame$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Remove tag .* from this frame$/ })).toBeNull();
+  });
+});
+
+describe("Places on the floor", () => {
+  it("marks a proposed place with a pill that is readable at 13 px", () => {
+    // Ruling 13: the proposed blue as 13 px text on white is 4.1:1, under AA.
+    setup([], [...places, PlaceSchema.parse({ id: "p3", nameEn: "Festive Mall", category: "retail", status: "proposed" })]);
+    const pill = screen.getByText("proposed");
+    expect(pill.closest("button")!.textContent).toContain("Festive Mall");
+    expect(pill.className).toContain("bg-proposed-soft");
+    expect(pill.className).toContain("text-stone-900");
+    expect(pill.className).not.toContain("text-proposed");
   });
 });

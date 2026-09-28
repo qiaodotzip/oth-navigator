@@ -28,7 +28,11 @@ export const TagBar = forwardRef<TagBarHandle, {
   counts: ReadonlyMap<string, number>;
   walkwayKinds: readonly PathwayKind[];
   box: Box | null;
-  onTag: (tag: Tag) => void;
+  /**
+   * Whether the tag was taken. One refused — the last change is still
+   * saving — keeps its name, to send again rather than lose.
+   */
+  onTag: (tag: Tag) => boolean;
   /** Makes a walkway type and says its id, or null if it could not. */
   onAddWalkwayKind: (nameEn: string) => Promise<string | null>;
 }>(function TagBar({ candidates, levels, levelId, counts, walkwayKinds, box, onTag, onAddWalkwayKind }, ref) {
@@ -50,7 +54,7 @@ export const TagBar = forwardRef<TagBarHandle, {
       return;
     }
     const drawn = drawnBox(box);
-    onTag({
+    const taken = onTag({
       placeId: exact?.id ?? null,
       nameEn: trimmed,
       // A walkway is a piece of the building, not a tenant.
@@ -58,7 +62,7 @@ export const TagBar = forwardRef<TagBarHandle, {
       ...(what === "walkway" && kindId ? { pathwayKindId: kindId } : {}),
       ...(drawn ? { box: drawn } : {}),
     });
-    setName("");
+    if (taken) setName("");
   }
 
   useImperativeHandle(ref, () => ({ focus: () => input.current?.focus(), submit }));

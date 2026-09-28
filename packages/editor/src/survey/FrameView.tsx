@@ -36,7 +36,7 @@ export function FrameView({
   levelId: string;
   counts: ReadonlyMap<string, number>;
   walkwayKinds: readonly PathwayKind[];
-  onTag: (tag: Tag) => void;
+  onTag: (tag: Tag) => boolean;
   onAddWalkwayKind: (nameEn: string) => Promise<string | null>;
   strip: { frames: readonly Keyframe[]; statuses: ReadonlyMap<string, FrameStatus>; onPick: (id: string) => void };
 }) {
