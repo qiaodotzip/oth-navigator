@@ -1,7 +1,7 @@
 import {
   TenantCategorySchema, type Box, type Place, type Sighting, type TenantCategory,
 } from "@oth/model";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Api } from "../api/client";
 import { FrameCanvas } from "../survey/FrameCanvas";
 import type { ProposedPlace } from "../survey/review";
@@ -13,6 +13,9 @@ import type { Evidence } from "./queue";
 
 const CATEGORIES = TenantCategorySchema.options;
 
+/** The corrections typed for one proposal, before it is decided. */
+export type Draft = { nameEn: string; category: TenantCategory };
+
 /**
  * One proposal: the evidence as large as the space allows, the claim under
  * it, and the decision (spec §10). The agent reads a sign and is sometimes
@@ -20,31 +23,43 @@ const CATEGORIES = TenantCategorySchema.options;
  * it to correct.
  *
  * Mounted per proposal (keyed by its id), so a correction typed for one never
- * carries over to the next.
+ * carries over to the next. What was typed is reported as `onDraft` and comes
+ * back as `draft`, so a proposal whose decision failed returns as you left it.
  */
-export function ProposalFocus({ api, entry, evidence, findSame, onAccept, onReject, onSkip, onMerge, onMoveBox }: {
+export function ProposalFocus({
+  api, entry, evidence, draft, findSame, onDraft, onAccept, onReject, onSkip, onMerge, onMoveBox,
+}: {
   api: Pick<Api, "keyframeFileUrl">;
   entry: ProposedPlace;
   evidence: readonly Evidence[];
+  /** What was typed for this proposal before, if anything. */
+  draft?: Draft;
   /** Places already on this floor with the name as typed now. */
   findSame: (name: string) => Place[];
-  onAccept: (fields: { nameEn: string; category: TenantCategory }) => void;
+  onDraft: (draft: Draft) => void;
+  onAccept: (fields: Draft) => void;
   onReject: () => void;
   onSkip: () => void;
   onMerge: (into: Place) => void;
   onMoveBox: (sighting: Sighting, box: Box) => void;
 }) {
   const { place } = entry;
-  const [name, setName] = useState(place.nameEn);
-  const [category, setCategory] = useState<TenantCategory>(place.category);
+  const [fields, setFields] = useState<Draft>(() => draft ?? { nameEn: place.nameEn, category: place.category });
   const [shown, setShown] = useState(0);
+  // Whether a key is down on the category select; see its onChange.
+  const keyed = useRef(false);
   const index = Math.min(shown, evidence.length - 1);
   const at = index >= 0 ? evidence[index]! : null;
-  const same = findSame(name);
-  const canAccept = name.trim() !== "";
+  const same = findSame(fields.nameEn);
+  const canAccept = fields.nameEn.trim() !== "";
 
+  const edit = (patch: Partial<Draft>) => {
+    const next = { ...fields, ...patch };
+    setFields(next);
+    onDraft(next);
+  };
   const accept = () => {
-    if (canAccept) onAccept({ nameEn: name.trim(), category });
+    if (canAccept) onAccept({ nameEn: fields.nameEn.trim(), category: fields.category });
   };
   const step = (by: 1 | -1) => setShown(i => Math.max(0, Math.min(evidence.length - 1, i + by)));
 
@@ -75,7 +90,9 @@ export function ProposalFocus({ api, entry, evidence, findSame, onAccept, onReje
           // Some real proposals have no frame at all. They can still be
           // decided, so say so rather than show a broken image.
           <p className="m-auto max-w-sm text-center text-sm text-stone-300">
-            No frame shows this proposal. Decide from its name and the note below.
+            No frame shows this proposal. {place.notes
+              ? "Decide from its name and the note below."
+              : "Decide from its name and category below."}
           </p>
         )}
         {evidence.length > 1 && (
@@ -93,8 +110,8 @@ export function ProposalFocus({ api, entry, evidence, findSame, onAccept, onReje
           <label className="flex min-w-56 flex-1 flex-col gap-1">
             <span className="text-xs font-medium text-stone-600">Name</span>
             <input
-              value={name}
-              onChange={event => setName(event.target.value)}
+              value={fields.nameEn}
+              onChange={event => edit({ nameEn: event.target.value })}
               onKeyDown={event => {
                 // Letters here are text, so A cannot accept from inside the
                 // field; Enter does, as corrected. Esc steps out to the keys.
@@ -110,8 +127,25 @@ export function ProposalFocus({ api, entry, evidence, findSame, onAccept, onReje
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-stone-600">Category</span>
             <select
-              value={category}
-              onChange={event => setCategory(event.target.value as TenantCategory)}
+              value={fields.category}
+              onKeyDown={event => {
+                keyed.current = true;
+                // As in the name: Enter accepts, Esc steps out to the keys.
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  accept();
+                }
+                if (event.key === "Escape") event.currentTarget.blur();
+              }}
+              onKeyUp={() => { keyed.current = false; }}
+              onChange={event => {
+                edit({ category: event.target.value as TenantCategory });
+                // A pick from the list is the end of it: let go of the focus,
+                // or A, R and S would go to the select as type-ahead. A change
+                // made with the arrow keys keeps it, so the next arrow still
+                // moves.
+                if (!keyed.current) event.currentTarget.blur();
+              }}
               className="h-9 rounded border border-stone-300 px-2 text-sm"
             >
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -134,7 +168,7 @@ export function ProposalFocus({ api, entry, evidence, findSame, onAccept, onReje
         )}
         {place.notes && <p className="mt-2 text-sm text-stone-700">{place.notes}</p>}
         <p className="mt-1 text-xs text-stone-500">
-          {place.proposedBy ? `Proposed by ${place.proposedBy}` : "Proposed"} · {entry.sightings.length} frame{entry.sightings.length === 1 ? "" : "s"}
+          {place.proposedBy ? `Proposed by ${place.proposedBy}` : "Proposed"} · {evidence.length} frame{evidence.length === 1 ? "" : "s"}
         </p>
       </div>
     </div>

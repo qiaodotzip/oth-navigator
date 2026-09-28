@@ -56,6 +56,29 @@ const param = (name: string) => new URLSearchParams(window.location.search).get(
 const key = (k: string, target: Element = document.body) => fireEvent.keyDown(target, { key: k });
 const nameField = () => screen.getByLabelText("Name") as HTMLInputElement;
 const toastSaying = (message: string) => useToasts.getState().toasts.find(t => t.message === message);
+const errorToast = () => useToasts.getState().toasts.find(t => t.tone === "error");
+
+/** A request that answers when the test says so. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (err: unknown) => void;
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+/** Lets every pending answer from the fake API arrive: they are all microtasks. */
+const settle = () => act(async () => { await new Promise(r => setTimeout(r, 0)); });
+
+/** Drags the agent's box on Festive Mall's first frame 40 px to the right. */
+function dragBox() {
+  // Ruling 9: the frame reports a real size; jsdom gives every element zero.
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+    left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}),
+  } as DOMRect);
+  fireEvent.mouseDown(screen.getByTitle(/Drag to move/), { clientX: 100, clientY: 100 });
+  fireEvent.mouseMove(screen.getByTestId("tag-frame"), { clientX: 140, clientY: 100 });
+  fireEvent.mouseUp(screen.getByTestId("tag-frame"));
+}
 
 beforeEach(() => {
   useEditorStore.getState().reset();
@@ -205,6 +228,99 @@ describe("ReviewWorkspace", () => {
     expect(useToasts.getState().toasts.find(t => t.tone === "error")?.action?.label).toBe("Retry");
   });
 
+  it("keeps what you typed when the accept does not go through", async () => {
+    // Fix 2.
+    at("", { acceptPlace: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) });
+    fireEvent.change(nameField(), { target: { value: "Festive Mall Tampines" } });
+    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "lifestyle" } });
+    key("a");
+    expect(nameField().value).toBe("Gate 1");
+    await settle();
+    expect(param("place")).toBe("p_big");
+    expect(nameField().value).toBe("Festive Mall Tampines");
+    expect((screen.getByLabelText("Category") as HTMLSelectElement).value).toBe("lifestyle");
+  });
+
+  it("leaves you typing on the next proposal when a decision fails, and says so with Retry", async () => {
+    // Fix 2: the failed one waits in the queue; the toast says what failed.
+    const accept = deferred<never>();
+    at("", { acceptPlace: vi.fn(() => accept.promise) });
+    key("a");
+    nameField().focus();
+    fireEvent.change(nameField(), { target: { value: "Gate 1A" } });
+    await act(async () => { accept.reject(new TypeError("Failed to fetch")); });
+    await settle();
+    expect(errorToast()?.action?.label).toBe("Retry");
+    expect(param("place")).toBe("p_small");
+    expect(nameField().value).toBe("Gate 1A");
+    expect(document.activeElement).toBe(nameField());
+    key("Escape", nameField());
+    key("s");
+    expect(param("place")).toBe("p_big");
+  });
+
+  it("counts a decision under way at once, so the progress line agrees with the proposal on screen", () => {
+    // Fix 3: an accept counts as confirmed; a reject leaves both counts.
+    at("", { acceptPlace: vi.fn(() => new Promise(() => {})), rejectPlace: vi.fn(() => new Promise(() => {})) });
+    key("a");
+    expect(screen.getByText("2 of 3 decided on L1")).toBeTruthy();
+    key("r");
+    expect(screen.getByText("2 of 2 decided on L1")).toBeTruthy();
+  });
+
+  it("leaves a proposal on no floor out of the counts while it is being decided", () => {
+    // Fix 3.
+    at("?scope=floorless", { acceptPlace: vi.fn(() => new Promise(() => {})) });
+    expect(screen.getByText("1 proposal on no floor")).toBeTruthy();
+    key("a");
+    expect(screen.getByText("0 proposals on no floor")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back to L1" }));
+    expect(screen.queryByRole("button", { name: /on no floor/ })).toBeNull();
+  });
+
+  it("hands the keys back once a category is picked, and accepts with it", async () => {
+    // Fix 4: left focused, the select would take A as type-ahead.
+    const api = at();
+    const category = screen.getByLabelText("Category") as HTMLSelectElement;
+    category.focus();
+    fireEvent.change(category, { target: { value: "lifestyle" } });
+    expect(document.activeElement).not.toBe(category);
+    key("a");
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalledWith("p_big", 0, expect.objectContaining({ category: "lifestyle" })));
+  });
+
+  it("keeps the category focused while you arrow through it; Enter accepts and Esc steps out", async () => {
+    // Fix 4, as the name field does it.
+    const api = at();
+    const category = screen.getByLabelText("Category") as HTMLSelectElement;
+    category.focus();
+    fireEvent.keyDown(category, { key: "ArrowDown" });
+    fireEvent.change(category, { target: { value: "sports" } });
+    fireEvent.keyUp(category, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(category);
+    key("a", category);
+    expect(api.acceptPlace).not.toHaveBeenCalled();
+    key("Escape", category);
+    expect(document.activeElement).not.toBe(category);
+    category.focus();
+    key("Enter", category);
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalledWith("p_big", 0, expect.objectContaining({ category: "sports" })));
+  });
+
+  it("counts the frames it can show, and says how to decide one with no frame and no note", () => {
+    // Fix 5: a tag whose frame was binned is not a frame to look at.
+    useEditorStore.getState().setModel(parseModel({
+      ...reviewModel,
+      keyframes: reviewModel.keyframes.map(k => (k.id === "kf_2" ? { ...k, deletedAt: "2026-09-27T00:00:00.000Z" } : k)),
+      places: reviewModel.places.map(p => (p.id === "p_none" ? { ...p, notes: "" } : p)),
+    }));
+    at();
+    expect(screen.getByText(/^Proposed by claude-code · 1 frame$/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /1 on no floor/ }));
+    expect(screen.getByText("No frame shows this proposal. Decide from its name and category below.")).toBeTruthy();
+    expect(screen.getByText(/^Proposed · 0 frames$/)).toBeTruthy();
+  });
+
   it("shows a proposal again once its Undo has landed", async () => {
     // An Undo leaves the place two versions on from where it was decided, so
     // it is waiting again, not decided.
@@ -249,15 +365,36 @@ describe("ReviewWorkspace", () => {
   });
 
   it("corrects the agent's box in place", async () => {
-    // Ruling 9: the frame reports a real size; jsdom gives every element zero.
-    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
-      left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}),
-    } as DOMRect);
     const api = at();
-    fireEvent.mouseDown(screen.getByTitle(/Drag to move/), { clientX: 100, clientY: 100 });
-    fireEvent.mouseMove(screen.getByTestId("tag-frame"), { clientX: 140, clientY: 100 });
-    fireEvent.mouseUp(screen.getByTestId("tag-frame"));
+    dragBox();
     await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("sighting", "s1", 0, expect.objectContaining({ box: expect.any(Object) })));
+  });
+
+  it("saves a corrected box before deciding, and decides only once it has", async () => {
+    // Fix 1: sent after the accept, the correction would meet the tag at an
+    // old version and blame a teammate.
+    const update = deferred<unknown>();
+    const api = at("", { updateEntity: vi.fn(() => update.promise) });
+    dragBox();
+    key("a");
+    expect(param("place")).toBe("p_small");
+    await settle();
+    expect(api.updateEntity).toHaveBeenCalledTimes(1);
+    expect(api.acceptPlace).not.toHaveBeenCalled();
+    await act(async () => { update.resolve({}); });
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalledWith("p_big", 0, expect.anything()));
+  });
+
+  it("does not decide when the corrected box could not be saved, and comes back to it", async () => {
+    // Fix 1: accepting anyway would settle the agent's box, not yours.
+    const api = at("", { updateEntity: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) });
+    dragBox();
+    key("a");
+    await settle();
+    expect(api.acceptPlace).not.toHaveBeenCalled();
+    expect(param("place")).toBe("p_big");
+    expect(nameField().value).toBe("Festive Mall");
+    expect(errorToast()?.action?.label).toBe("Retry");
   });
 
   it("offers the proposals on no floor, and one with no frame can still be decided", async () => {
