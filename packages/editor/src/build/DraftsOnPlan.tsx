@@ -30,8 +30,8 @@ export function DraftsOnPlan({ levelId }: { levelId: string | null }) {
   }, [frame]);
 
   const shown: ShownDraft[] = [
-    ...view.review.map(draft => ({ draft, covered: false })),
-    ...(showCovered ? view.covered.map(c => ({ draft: c.draft, covered: true })) : []),
+    ...view.review.map(draft => ({ draft, covered: false, shape: view.shapes.get(draft.id) })),
+    ...(showCovered ? view.covered.map(c => ({ draft: c.draft, covered: true, shape: view.shapes.get(c.draft.id) })) : []),
   ];
   return (
     <g ref={group}>

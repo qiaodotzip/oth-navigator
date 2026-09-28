@@ -52,6 +52,15 @@ describe("DraftsOnPlan", () => {
     expect(useEditorStore.getState().selection).toBeNull();
   });
 
+  it("keeps a draft over empty floor clickable all over, and one over a room at its outline only", () => {
+    act(() => useDrafts.getState().setShowCovered(true));
+    renderOnPlan();
+    expect(path("rd_shop").getAttribute("pointer-events")).toBe("visiblePainted");
+    // Drawn over the hall it copies: the hall must still take a click inside it.
+    expect(path("rd_hall").getAttribute("pointer-events")).toBe("none");
+    expect(screen.getByTestId("draft-rd_hall").querySelector("path[data-hit]")!.getAttribute("pointer-events")).toBe("stroke");
+  });
+
   it("takes no clicks while a drawing tool is in use", () => {
     useEditorStore.getState().setTool("draw-area");
     renderOnPlan();

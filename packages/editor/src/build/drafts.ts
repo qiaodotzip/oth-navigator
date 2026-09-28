@@ -1,7 +1,8 @@
-import { bboxOfRing, live, pointInPolygon, type BBox, type MapModel, type Room, type RoomDraft } from "@oth/model";
+import { bboxOfRing, live, pointInPolygon, type BBox, type Room, type RoomDraft } from "@oth/model";
 import { useEffect } from "react";
 import { create } from "zustand";
 import type { Api } from "../api/client";
+import { draftNameSpot, type DraftShape } from "../plan/DraftLayer";
 import { useEditorStore } from "../state/store";
 import { reportFailure } from "../ui/failure";
 
@@ -109,43 +110,64 @@ export type DraftView = {
   covered: { draft: RoomDraft; roomId: string }[];
   /** Spaces the drawing leaves open: drawn by hand at their names. */
   open: RoomDraft[];
+  /** How each draft with an outline is drawn, by id: worked out here, once per sort, not on every frame. */
+  shapes: ReadonlyMap<string, DraftShape>;
 };
 
 /**
- * A floor's drafts, sorted for review (spec §5.2 step 6). A draft covering
- * more than half of a room already on the map is under "already on the map".
- * A column is measured against columns only, so a hall is never taken for a
- * column standing in it.
+ * A floor's drafts, sorted for review (spec §5.2 step 6). A draft is under
+ * "already on the map" when it and a room there are mostly each other: it
+ * covers more than half of the room, and the room more than half of it. One
+ * way alone would hide a new hall built round a riser, since the hall covers
+ * all of the riser. A column is measured against columns only, so a hall is
+ * never taken for a column standing in it.
  */
 export function draftView(drafts: readonly RoomDraft[], rooms: readonly Room[]): DraftView {
-  const view: DraftView = { review: [], covered: [], open: [] };
+  const shapes = new Map<string, DraftShape>();
+  const view: DraftView = { review: [], covered: [], open: [], shapes };
   for (const d of drafts) {
     if (!d.footprint) {
       view.open.push(d);
       continue;
     }
+    const outline = { footprint: d.footprint, holes: d.holes };
     const detail = d.kind === "detail";
-    const room = rooms.find(r => (r.kind === "detail") === detail && coverage(d, r) > 0.5);
-    if (room) view.covered.push({ draft: d, roomId: room.id });
+    let copyOf: Room | undefined;
+    let overRooms = false;
+    for (const r of rooms) {
+      const ofRoom = coverage(d, r);
+      if ((r.kind === "detail") === detail && ofRoom > 0.5 && coverage(r, outline) > 0.5) {
+        copyOf = r;
+        break;
+      }
+      // Asked both ways: a big room's samples can step right over a small draft inside it.
+      overRooms ||= ofRoom > 0 || coverage(r, outline) > 0;
+    }
+    shapes.set(d.id, { ...draftNameSpot(d), overRooms: overRooms || copyOf !== undefined });
+    if (copyOf) view.covered.push({ draft: d, roomId: copyOf.id });
     else view.review.push(d);
   }
   return view;
 }
 
 const NO_DRAFTS: readonly RoomDraft[] = [];
-let lastView: { drafts: readonly RoomDraft[] | undefined; model: MapModel | null; levelId: string | null; view: DraftView } | null = null;
+let lastView: { drafts: readonly RoomDraft[] | undefined; rooms: string; levelId: string | null; view: DraftView } | null = null;
 
 /**
  * The open floor's drafts, sorted. One answer, shared by the plan, the review
- * and the to-do count, until the drafts or the map change: the sort samples
- * every room a draft touches, so it is done once, not three times a render.
+ * and the to-do count, until the drafts or the floor's rooms change: the sort
+ * samples every room a draft touches, so it is done once, not three times a
+ * render. Keyed on the rooms' ids and versions rather than the model, since
+ * every save reloads the whole model, and a pathway or a place saved leaves
+ * the sort as it was.
  */
 export function useDraftView(levelId: string | null): DraftView {
   const drafts = useDrafts(s => (levelId ? s.byLevel[levelId] : undefined));
   const model = useEditorStore(s => s.model);
-  if (!lastView || lastView.drafts !== drafts || lastView.model !== model || lastView.levelId !== levelId) {
-    const rooms = model && levelId ? live(model.rooms).filter(r => r.levelId === levelId) : [];
-    lastView = { drafts, model, levelId, view: draftView(drafts ?? NO_DRAFTS, rooms) };
+  const rooms = model && levelId ? live(model.rooms).filter(r => r.levelId === levelId) : [];
+  const roomsKey = rooms.map(r => `${r.id}@${r.version}`).join(" ");
+  if (!lastView || lastView.drafts !== drafts || lastView.rooms !== roomsKey || lastView.levelId !== levelId) {
+    lastView = { drafts, rooms: roomsKey, levelId, view: draftView(drafts ?? NO_DRAFTS, rooms) };
   }
   return lastView.view;
 }

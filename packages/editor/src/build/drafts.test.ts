@@ -2,6 +2,7 @@ import { RoomDraftSchema, RoomSchema, parseModel, type Room, type RoomDraft } fr
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
+import { draftNameSpot } from "../plan/DraftLayer";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
@@ -168,6 +169,31 @@ describe("draftView", () => {
     expect(view.review.map(d => d.id)).toEqual(["hall"]);
     expect(view.covered.map(c => c.roomId)).toEqual(["L2-column"]);
   });
+
+  it("keeps a new hall built round a small room for review, since that room is only a sliver of it", () => {
+    // The hall covers all of the service room, but the room covers under 1% of the hall.
+    const view = draftView([shaped("hall", square(0, 0, 30))], [room("L2-riser", square(10, 10, 2))]);
+    expect(view.review.map(d => d.id)).toEqual(["hall"]);
+    expect(view.covered).toEqual([]);
+  });
+
+  it("works out once where each draft is named, and whether it lies over the map's rooms and details", () => {
+    const hall = shaped("hall", square(0, 0, 30));
+    const view = draftView(
+      [hall, shaped("shop", square(50, 0, 10)), shaped("copy", square(80, 0, 10)), shaped("plaza", undefined)],
+      [room("L2-column", square(10, 10, 1), "detail"), room("L2-store", square(80, 0, 10))],
+    );
+    expect(view.shapes.get("hall")).toEqual({ ...draftNameSpot(hall), overRooms: true });
+    expect(view.shapes.get("shop")?.overRooms).toBe(false);
+    expect(view.shapes.get("copy")?.overRooms).toBe(true);
+    expect(view.shapes.has("plaza")).toBe(false);
+  });
+
+  it("notices a small draft inside a big room, where the room's own samples step over it", () => {
+    // The 100 m room is sampled every 5 m, at 2.5, 7.5 … 52.5: none of them falls in the draft.
+    const view = draftView([shaped("booth", square(50.3, 50.3, 1))], [room("L2-hall", square(0, 0, 100), "area")]);
+    expect(view.shapes.get("booth")?.overRooms).toBe(true);
+  });
 });
 
 describe("draftBox and useDraftView", () => {
@@ -187,5 +213,28 @@ describe("draftBox and useDraftView", () => {
     expect(a).toBe(b);
     act(() => useDrafts.getState().setDrafts("oth-L2", [draft("rd_a"), draft("rd_b")]));
     expect(renderHook(() => useDraftView("oth-L2")).result.current.review).toHaveLength(2);
+  });
+
+  it("sorts again when a room on the floor changes, but not for a save elsewhere on the map", () => {
+    const base = {
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [{ id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 }],
+      rooms: [{ id: "L2-shop", levelId: "oth-L2", kind: "room", footprint: square(0, 0, 10), heightM: 4, version: 1 }],
+    };
+    act(() => {
+      useEditorStore.getState().setModel(parseModel(base));
+      useDrafts.getState().setDrafts("oth-L2", [draft("rd_a")]);
+    });
+    const before = renderHook(() => useDraftView("oth-L2")).result.current;
+    expect(before.covered).toHaveLength(1);
+
+    // A save reloads the whole model: every room is a new object, at the version it had.
+    act(() => useEditorStore.getState().setModel(parseModel({ ...base, places: [{ id: "pl_1", nameEn: "Festive Mall", category: "retail" }] })));
+    expect(renderHook(() => useDraftView("oth-L2")).result.current).toBe(before);
+
+    act(() => useEditorStore.getState().setModel(parseModel({
+      ...base, rooms: [{ ...base.rooms[0]!, footprint: square(20, 20, 10), version: 2 }],
+    })));
+    expect(renderHook(() => useDraftView("oth-L2")).result.current.review.map(d => d.id)).toEqual(["rd_a"]);
   });
 });
