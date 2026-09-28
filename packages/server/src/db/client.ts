@@ -16,10 +16,23 @@ export type Database = NodePgDatabase<typeof schema>;
  */
 export function createPool(
   url: string,
-  log: (message: string, err: unknown) => void = console.error,
+  log: (message: string, detail: unknown) => void = console.error,
 ): Pool {
   const pool = new Pool({ connectionString: url });
-  pool.on("error", err => log("postgres: an idle connection failed; the pool will open a new one", err));
+  // The message and code only: pg hangs the whole client off the error, and
+  // printing that would be forty lines of noise in Railway's log per blip.
+  pool.on("error", err => log("postgres: an idle connection failed; the pool will open a new one", {
+    message: err.message,
+    code: (err as { code?: unknown }).code,
+  }));
+  // A client a query or transaction has checked out loses the pool's listener
+  // above, so the same drop mid-transaction would throw here too. Nothing to
+  // log: whatever holds the client already rejects, its running query with
+  // this error and its next one as "not queryable", and that rejection
+  // reaches the app's onError and its log.
+  pool.on("connect", client => {
+    client.on("error", () => {});
+  });
   return pool;
 }
 

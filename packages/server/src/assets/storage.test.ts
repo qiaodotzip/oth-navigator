@@ -2,7 +2,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readAsset, storeAsset } from "./storage";
+import { assetFile, readAsset, storedPathSegments, storeAsset } from "./storage";
 
 const dir = () => mkdtemp(join(tmpdir(), "oth-assets-"));
 
@@ -53,5 +53,48 @@ describe("storeAsset", () => {
     const a = await storeAsset(d, new Uint8Array([4, 5, 6]), "jpg");
     const windows = a.storagePath.split("/").join("\\");
     expect(Array.from(await readAsset(d, windows))).toEqual([4, 5, 6]);
+  });
+});
+
+// Pure, so each case means the same on Windows and on Linux: a backslash is
+// a separator here on both, not only where the operating system says so.
+describe("storedPathSegments", () => {
+  it("splits a path the same way whichever system wrote it", () => {
+    expect(storedPathSegments("assets\\8b\\x.jpg")).toEqual(["assets", "8b", "x.jpg"]);
+    expect(storedPathSegments("assets/8b/x.jpg")).toEqual(["assets", "8b", "x.jpg"]);
+  });
+
+  it.each([
+    "../../etc/passwd",
+    "assets/../../x",
+    "assets\\..\\..\\x",
+    "./assets/x.jpg",
+    "C:\\Windows\\win.ini",
+    "C:/Windows/win.ini",
+    "/etc/passwd",
+    "\\\\server\\share\\x.jpg",
+    "",
+  ])("refuses %j, which is not a plain path under the data folder", path => {
+    expect(() => storedPathSegments(path)).toThrow(/not a stored file path/);
+  });
+});
+
+describe("assetFile", () => {
+  const data = join(tmpdir(), "oth-data");
+
+  it("puts a path from either system in the same place", () => {
+    expect(assetFile(data, "assets\\8b\\x.jpg")).toBe(join(data, "assets", "8b", "x.jpg"));
+    expect(assetFile(data, "assets/8b/x.jpg")).toBe(join(data, "assets", "8b", "x.jpg"));
+  });
+
+  it.each(["../../etc/passwd", "assets/../../x", "C:\\Windows\\win.ini"])(
+    "never leaves the data folder for %j",
+    path => {
+      expect(() => assetFile(data, path)).toThrow(/not a stored file path/);
+    },
+  );
+
+  it("refuses a read outside the data folder before it touches the disk", async () => {
+    await expect(readAsset(await dir(), "../../etc/passwd")).rejects.toThrow(/not a stored file path/);
   });
 });
