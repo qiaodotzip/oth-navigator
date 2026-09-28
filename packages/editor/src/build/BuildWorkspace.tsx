@@ -1,6 +1,6 @@
 import { live, type ValidationReport } from "@oth/model";
 import { MapScene } from "@oth/renderer";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Api } from "../api/client";
 import { commitPoint } from "../flow/commitPoint";
 import { BUILD_STEPS, buildStepsDone, type BuildStepId } from "../flow/floorProgress";
@@ -64,6 +64,28 @@ async function recheck(api: Api, heard: () => boolean = () => true): Promise<voi
   }
   // A save that landed meanwhile brought a report of its own, from after it: keep that one.
   if (useEditorStore.getState().report === before) useEditorStore.getState().setReport(report);
+}
+
+/**
+ * Keeps a failing 3D preview to itself. The scene loads every placed model,
+ * and one that will not load (a model file gone, say) throws past Suspense.
+ * Uncaught, that blanks the whole editor — and, as the preview is remembered
+ * on, blanks it again on every reload.
+ */
+class PreviewBoundary extends Component<{ onFail: () => void; children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  override componentDidCatch() {
+    this.props.onFail();
+  }
+
+  override render() {
+    return this.state.failed ? null : this.props.children;
+  }
 }
 
 /**
@@ -136,7 +158,10 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
       useEditorStore.getState().select(wanted);
       arrived.current = wanted;
     } else if (selectValue) {
-      // Since deleted, or on another floor: select nothing, and say so in the address too.
+      // Since deleted, or on another floor: select nothing, and say so in the
+      // address too. Nothing means nothing: a selection left from before a tab
+      // switch would otherwise be written back over the link.
+      useEditorStore.getState().select(null);
       setParams({ select: null });
     }
   }, [model, levelId, selectValue]);
@@ -159,6 +184,19 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
       useEditorStore.getState().select(null);
     }
   }, [model, levelId, selection]);
+
+  // The Layers drawer deletes through this. A delete that landed lets go of
+  // what it deleted, as Delete does, even when the reload after it failed and
+  // the map still shows the thing, so the effect above cannot see it gone.
+  const drawerSaver = useMemo<Saver>(() => ({
+    ...saver,
+    remove: async (type, id, expectedVersion) => {
+      const landed = await saver.remove(type, id, expectedVersion);
+      const held = useEditorStore.getState().selection;
+      if (landed && held?.type === type && held.id === id) useEditorStore.getState().select(null);
+      return landed;
+    },
+  }), [saver]);
 
   // The selection → the address, so what you are looking at can be sent to a teammate.
   useEffect(() => {
@@ -213,6 +251,13 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
     if (await deleteWithUndo({ api, saver, removals: found.removals, label: found.label })) {
       useEditorStore.getState().select(null);
     }
+  }
+
+  // Off, and remembered off, so a reload opens on the plan rather than failing
+  // again. Turning it back on mounts a fresh boundary, which is the retry.
+  function previewFailed() {
+    if (previewOn) togglePreview();
+    toast({ tone: "error", message: "The 3D preview failed to load, so it's off. Turn it on again to retry." });
   }
 
   useBuildKeys({
@@ -286,7 +331,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
           {layersOpen && (
             <LayersDrawer
               api={api}
-              saver={saver}
+              saver={drawerSaver}
               onClose={() => setLayersOpen(false)}
               onChoose={target => {
                 const s = useEditorStore.getState();
@@ -298,15 +343,17 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
           )}
 
           {previewOn && model && levelId && (
-            <PreviewPanel>
-              <MapScene
-                model={model}
-                activeLevelId={levelId}
-                assetUrl={api.assetFileUrl}
-                selectedId={selection?.type === "room" ? selection.id : null}
-                onSelect={id => useEditorStore.getState().select({ type: "room", id })}
-              />
-            </PreviewPanel>
+            <PreviewBoundary onFail={previewFailed}>
+              <PreviewPanel>
+                <MapScene
+                  model={model}
+                  activeLevelId={levelId}
+                  assetUrl={api.assetFileUrl}
+                  selectedId={selection?.type === "room" ? selection.id : null}
+                  onSelect={id => useEditorStore.getState().select({ type: "room", id })}
+                />
+              </PreviewPanel>
+            </PreviewBoundary>
           )}
         </div>
 

@@ -6,8 +6,23 @@ import { useCurrentRoute } from "../route";
 import { createSaver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
+import { recall } from "../ui/remember";
 import { useToasts } from "../ui/toast";
 import { BuildWorkspace } from "./BuildWorkspace";
+
+/**
+ * The 3D scene has a stand-in, and only the scene: WebGL is not there to draw
+ * it, and a test can make it fail as a placed model that will not load does.
+ * The plan still takes its room colours from the real renderer.
+ */
+const scene = vi.hoisted(() => ({ fails: false }));
+vi.mock("@oth/renderer", async importOriginal => ({
+  ...(await importOriginal<typeof import("@oth/renderer")>()),
+  MapScene: () => {
+    if (scene.fails) throw new Error("Could not load /api/assets/asset_1/file: 404");
+    return null;
+  },
+}));
 
 const model = parseModel({
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
@@ -55,6 +70,7 @@ class FakeResizeObserver {
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   measureCanvas = null;
+  scene.fails = false;
   localStorage.clear();
   useToasts.getState().clear();
   const s = useEditorStore.getState();
@@ -77,8 +93,8 @@ function open(path: string, overrides: Parameters<typeof fakeApi>[0] = {}, { str
     const route = useCurrentRoute();
     return route.name === "floor" ? <BuildWorkspace api={api} saver={saver} route={route} /> : null;
   }
-  render(strict ? <StrictMode><Harness /></StrictMode> : <Harness />);
-  return { api };
+  const { unmount } = render(strict ? <StrictMode><Harness /></StrictMode> : <Harness />);
+  return { api, unmount };
 }
 
 const measure = () => act(() => measureCanvas?.([{ contentRect: { width: 1000, height: 700 } }]));
@@ -191,6 +207,20 @@ describe("BuildWorkspace — links", () => {
     expect(useEditorStore.getState().selection).toBeNull();
     expect(param("step")).toBe("rooms");
   });
+
+  it("drops a link to something since deleted, and lets go of what was selected before it", async () => {
+    const before = open("/floors/L1/build?step=rooms&select=room:L1-a");
+    expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-a" });
+    // Off to another tab: Build goes, and the selection stays in the store.
+    before.unmount();
+    const gone = { ...model.rooms[0]!, id: "L1-old", deletedAt: "2026-09-27T10:00:00.000Z" };
+    act(() => useEditorStore.getState().setModel({ ...model, rooms: [...model.rooms, gone] }));
+    open("/floors/L1/build?step=rooms&select=room:L1-old");
+    await settle();
+    // Neither the deleted room, nor the one from before, written back over the link.
+    expect(useEditorStore.getState().selection).toBeNull();
+    expect(param("select")).toBeNull();
+  });
 });
 
 describe("BuildWorkspace — the plan", () => {
@@ -226,6 +256,48 @@ describe("BuildWorkspace — the plan", () => {
     await waitFor(() => expect(api.deleteEntity).toHaveBeenCalledWith("room", "L1-a", 0));
     await waitFor(() => expect(useEditorStore.getState().selection).toBeNull());
     expect(param("select")).toBeNull();
+  });
+
+  it("lets go of what the Layers drawer deleted even when the reload after it fails", async () => {
+    const { api } = open("/floors/L1/build?step=rooms&select=room:L1-a");
+    // The delete lands; only the reload fails, so the map still shows the room.
+    vi.mocked(api.getModel).mockRejectedValue(new TypeError("Failed to fetch"));
+    fireEvent.click(screen.getByRole("button", { name: "Layers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete L1-a" }));
+    await waitFor(() => expect(useToasts.getState().toasts.some(t => /reload the map/.test(t.message))).toBe(true));
+    expect(useEditorStore.getState().selection).toBeNull();
+    expect(param("select")).toBeNull();
+  });
+
+  it("lets go of a selection a teammate deletes", () => {
+    open("/floors/L1/build?step=rooms&select=room:L1-a");
+    // Their delete arrives with the next reload.
+    act(() => useEditorStore.getState().setModel({ ...model, rooms: model.rooms.filter(r => r.id !== "L1-a") }));
+    expect(useEditorStore.getState().selection).toBeNull();
+    expect(param("select")).toBeNull();
+  });
+});
+
+describe("BuildWorkspace — the 3D preview", () => {
+  it("turns itself off when the scene fails, says so, and can be tried again", () => {
+    // Remembered on, so without a catch every reload would fail the same way.
+    localStorage.setItem("oth.build.preview", "on");
+    scene.fails = true;
+    // React reports the caught error on the console as well; the toast is what the user sees.
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    open("/floors/L1/build?step=rooms");
+    quiet.mockRestore();
+
+    expect(screen.getByRole("navigation", { name: "Build steps" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "3D preview" })).toBeNull();
+    expect(screen.getByRole("button", { name: "3D" }).getAttribute("aria-pressed")).toBe("false");
+    expect(recall("build.preview")).toBe("off");
+    expect(useToasts.getState().toasts.map(t => t.message))
+      .toEqual(["The 3D preview failed to load, so it's off. Turn it on again to retry."]);
+
+    scene.fails = false;
+    fireEvent.click(screen.getByRole("button", { name: "3D" }));
+    expect(screen.getByRole("region", { name: "3D preview" })).toBeTruthy();
   });
 });
 
