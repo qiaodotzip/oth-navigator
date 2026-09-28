@@ -25,6 +25,7 @@ import { BindTools, waitingForRoom } from "./BindPlaces";
 import { selectionRemovals } from "./deleteSelection";
 import { useDraftView, useRoomDrafts } from "./drafts";
 import { DraftsOnPlan } from "./DraftsOnPlan";
+import { DownloadModelButton } from "./DownloadModel";
 import { FloorplanTools, PlanDropZone, patchPlan } from "./FloorplanTools";
 import { LayersDrawer } from "./LayersDrawer";
 import { PreviewPanel, PreviewToggle, usePreview, usePreviewOptions } from "./PreviewToggle";
@@ -394,6 +395,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
               Layers
             </Button>
             <PreviewToggle on={previewOn} onToggle={togglePreview} />
+            <DownloadModelButton api={api} />
           </div>
 
           {layersOpen && (

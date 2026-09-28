@@ -496,6 +496,12 @@ describe("BuildWorkspace — the 3D preview", () => {
     expect(scene.props?.fullHeightWalls).toBe(true);
     expect(recall("build.preview.walls")).toBe("full");
   });
+
+  it("offers Download 3D model beside 3D, with the preview off", () => {
+    open("/floors/L1/build?step=rooms");
+    const row = screen.getByRole("button", { name: "3D" }).parentElement!;
+    expect(within(row).getByRole("button", { name: "Download 3D model" })).toBeTruthy();
+  });
 });
 
 describe("BuildWorkspace — labels", () => {
