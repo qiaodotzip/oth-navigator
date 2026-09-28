@@ -81,6 +81,9 @@ export type LevelImagePatch = {
   opacity?: number;
 };
 
+/** A tag moved by a merge, and how it stood before: what an unmerge puts back. */
+export type MovedSighting = { id: string; status: "proposed" | "confirmed" };
+
 export type ApiOptions = {
   fetchImpl?: typeof fetch;
   baseUrl?: string;
@@ -231,11 +234,39 @@ export function createApi(options: ApiOptions = {}) {
     deleteKeyframe: (id: string) =>
       request<void>(`/api/keyframes/${id}`, { method: "DELETE" }),
 
-    /** Confirms a proposed place, with any corrections, and all its sightings. */
-    acceptPlace: (id: string, expectedVersion: number, data: { nameEn: string; category: string }) =>
-      request<{ sightings: number }>(`/api/places/${id}/accept`, {
+    /**
+     * Confirms a proposed place, with any corrections, and the tags that were
+     * still claims — saying which, for Undo. `levelId` files a place with no
+     * floor of its own under the floor it was reviewed on.
+     */
+    acceptPlace: (id: string, expectedVersion: number, data: { nameEn: string; category: string; levelId?: string }) =>
+      request<{ sightings: number; confirmed: string[] }>(`/api/places/${id}/accept`, {
         method: "POST",
         body: json({ expectedVersion, ...data }),
+      }),
+
+    /** Undoes an accept: the place back in the queue as it was, and the tags it confirmed back to claims. */
+    reopenPlace: (
+      id: string, expectedVersion: number,
+      data: { nameEn: string; category: string; levelId: string | null; sightingIds: string[] },
+    ) =>
+      request<{ sightings: number }>(`/api/places/${id}/reopen`, {
+        method: "POST",
+        body: json({ expectedVersion, ...data }),
+      }),
+
+    /** "Same as…": the proposal's tags move to a place already on the map, and the proposal retires. */
+    mergePlace: (id: string, expectedVersion: number, into: string) =>
+      request<{ moved: MovedSighting[] }>(`/api/places/${id}/merge`, {
+        method: "POST",
+        body: json({ expectedVersion, into }),
+      }),
+
+    /** Undoes a merge, with exactly the tags it moved. */
+    unmergePlace: (id: string, expectedVersion: number, moved: MovedSighting[]) =>
+      request<{ sightings: number }>(`/api/places/${id}/unmerge`, {
+        method: "POST",
+        body: json({ expectedVersion, moved }),
       }),
 
     /** Retires a proposed place and its sightings together. */

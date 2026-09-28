@@ -63,6 +63,22 @@ export function buildStepsDone(
   };
 }
 
+/**
+ * Places on one floor: confirmed, and still waiting on a person (spec §5.3).
+ * A rejected proposal is deleted and leaves both counts, so the bar never
+ * goes backwards on a reject. `levels` saves a second pass when the caller
+ * already has them.
+ */
+export function reviewCounts(
+  model: MapModel, levelId: string, levels: Map<string, string | undefined> = placeLevels(model),
+): { confirmed: number; proposed: number } {
+  const places = live(model.places).filter(p => levels.get(p.id) === levelId);
+  return {
+    confirmed: places.filter(p => p.status === "confirmed").length,
+    proposed: places.filter(p => p.status === "proposed").length,
+  };
+}
+
 export type FloorProgress = {
   levelId: string;
   /** Frames on the floor's footage that carry at least one tag, of all of them. */
@@ -83,7 +99,6 @@ export function floorProgress(
   const frames = live(model.keyframes).filter(k => captures.has(k.captureId));
   const counts = labelCounts(model);
   const levels = placeLevels(model);
-  const places = live(model.places).filter(p => levels.get(p.id) === levelId);
   const done = buildStepsDone(model, report, levelImages, levelId);
 
   return {
@@ -92,10 +107,7 @@ export function floorProgress(
       tagged: frames.filter(f => (counts.get(f.id) ?? 0) > 0).length,
       total: frames.length,
     },
-    review: {
-      confirmed: places.filter(p => p.status === "confirmed").length,
-      proposed: places.filter(p => p.status === "proposed").length,
-    },
+    review: reviewCounts(model, levelId, levels),
     build: {
       done: BUILD_STEPS.filter(s => done[s.id]).length,
       total: BUILD_STEPS.length,

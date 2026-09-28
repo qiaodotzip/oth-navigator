@@ -1,7 +1,7 @@
 import { parseModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import type { LevelImage } from "../api/client";
-import { buildStepForCode, buildStepsDone, floorProgress, nextStepText, waitingReview } from "./floorProgress";
+import { buildStepForCode, buildStepsDone, floorProgress, nextStepText, reviewCounts, waitingReview } from "./floorProgress";
 
 const building = { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 };
 const levels = [
@@ -75,5 +75,23 @@ describe("buildStepForCode", () => {
     expect(buildStepForCode("entrance.offFloor")).toBe("entrances");
     expect(buildStepForCode("portal.endpoints.insufficient")).toBe("entrances");
     expect(buildStepForCode("something.else")).toBeNull();
+  });
+});
+
+describe("reviewCounts", () => {
+  it("counts confirmed and still-proposed places on a floor, by the floor they are on", () => {
+    const model = parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+      captures: [{ id: "cap_1", kind: "video", filename: "a.mp4", levelId: "oth-L1" }],
+      keyframes: [{ id: "kf_1", captureId: "cap_1", timeMs: 0, imageId: "kf_1", widthPx: 64, heightPx: 36 }],
+      places: [
+        { id: "p1", nameEn: "Mine", category: "retail", levelId: "oth-L1" },
+        { id: "p2", nameEn: "Seen on L1", category: "retail", status: "proposed" },
+        { id: "p3", nameEn: "Nowhere", category: "retail", status: "proposed" },
+      ],
+      sightings: [{ id: "s1", placeId: "p2", keyframeId: "kf_1", status: "proposed" }],
+    });
+    expect(reviewCounts(model, "oth-L1")).toEqual({ confirmed: 1, proposed: 1 });
   });
 });

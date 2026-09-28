@@ -19,6 +19,22 @@ afterEach(() => {
 });
 
 describe("api client", () => {
+  it("posts the review undo and merge requests where the server expects them", async () => {
+    const fetchImpl = mockFetch(200, { sightings: 1, confirmed: ["sg_1"], moved: [] });
+    const api = createApi({ fetchImpl });
+    await api.acceptPlace("pl_1", 0, { nameEn: "Gate 1", category: "facility", levelId: "oth-L1" });
+    await api.reopenPlace("pl_1", 1, { nameEn: "Gate 1", category: "facility", levelId: null, sightingIds: ["sg_1"] });
+    await api.mergePlace("pl_1", 0, "pl_c");
+    await api.unmergePlace("pl_1", 1, [{ id: "sg_1", status: "proposed" }]);
+    const sent = fetchImpl.mock.calls.map(([url, init]) => [url, JSON.parse(String(init?.body))]);
+    expect(sent).toEqual([
+      ["/api/places/pl_1/accept", { expectedVersion: 0, nameEn: "Gate 1", category: "facility", levelId: "oth-L1" }],
+      ["/api/places/pl_1/reopen", { expectedVersion: 1, nameEn: "Gate 1", category: "facility", levelId: null, sightingIds: ["sg_1"] }],
+      ["/api/places/pl_1/merge", { expectedVersion: 0, into: "pl_c" }],
+      ["/api/places/pl_1/unmerge", { expectedVersion: 1, moved: [{ id: "sg_1", status: "proposed" }] }],
+    ]);
+  });
+
   it("posts the chosen id to the login route", async () => {
     const fetchImpl = mockFetch(200, { user: { id: "user_1", displayName: "Wei" } });
     const user = await createApi({ fetchImpl }).login("user_1");
