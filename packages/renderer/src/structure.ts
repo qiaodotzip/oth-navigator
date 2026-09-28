@@ -9,11 +9,16 @@ export const LOW_WALL_M = 1.2;
 
 /**
  * Names the drawing gives a flight of steps. L1's escalators were imported
- * as rooms (spec §7), and walled they read as closed boxes. Anchored and
- * whole-word, so "Stairway Café" is still a room. Task 7's conversion
- * replaces this for any space someone converts.
+ * as rooms (spec §7), and walled they read as closed boxes. The whole name
+ * must be flights and their numbers ("Escalator - 05 Escalator - 06",
+ * "Stair A"), the shape MakeStop's NAMED_AS_ONE takes, so "Stairs landing",
+ * "Stairway Café" and "Stair Pressurisation Fan Rm" keep their walls. Flights
+ * only: a lift keeps its walls until someone converts it (Task 7).
  */
-const FLIGHT_NAME = /^(escalators?|staircase|stairs?)\b/i;
+const FLIGHT = "(?:escalators?|staircase|stairs?)";
+const NUMBER = "(?:\\d+[a-z]?|[a-z])";
+const NUMBERS = `(?:\\s*[-–—:#]?\\s*${NUMBER}(?:\\s*[,&/]\\s*${NUMBER})*)?`;
+const FLIGHT_NAME = new RegExp(`^${FLIGHT}${NUMBERS}(?:\\s*[,&/]?\\s*${FLIGHT}${NUMBERS})*$`, "i");
 
 /** Everything Part D builds on one level, as plain data. */
 export type LevelStructure = {

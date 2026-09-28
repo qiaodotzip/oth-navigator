@@ -71,6 +71,28 @@ describe("levelStructure", () => {
     expect(levelStructure(cafe, "oth-L1").walls).toHaveLength(4);
   });
 
+  it.each(["Stairs landing", "Stair Pressurisation Fan Rm", "Escalator lobby"])(
+    "still walls %s: a room beside a flight is not one",
+    nameEn => {
+      const room = parseModel({
+        ...base,
+        rooms: [{ id: "L1-x", levelId: "oth-L1", kind: "room", footprint: sq(0, 0, 4, 4), heightM: 3, nameEn }],
+      });
+      expect(levelStructure(room, "oth-L1").walls).toHaveLength(4);
+    },
+  );
+
+  it.each(["Escalator - 05 Escalator - 06", "Stair A", "Escalators 1 & 2"])(
+    "does not wall %s",
+    nameEn => {
+      const flight = parseModel({
+        ...base,
+        rooms: [{ id: "L1-x", levelId: "oth-L1", kind: "room", footprint: sq(0, 0, 4, 4), heightM: 3, nameEn }],
+      });
+      expect(levelStructure(flight, "oth-L1").walls).toHaveLength(0);
+    },
+  );
+
   it("cuts the atrium out of the hall and rails it", () => {
     expect(s.holesByRoom.get("L1-hall")).toHaveLength(1);
     expect(s.balustrades).toHaveLength(4);
