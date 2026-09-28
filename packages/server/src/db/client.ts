@@ -26,10 +26,11 @@ export function createPool(
     code: (err as { code?: unknown }).code,
   }));
   // A client a query or transaction has checked out loses the pool's listener
-  // above, so the same drop mid-transaction would throw here too. Nothing to
-  // log: whatever holds the client already rejects, its running query with
-  // this error and its next one as "not queryable", and that rejection
-  // reaches the app's onError and its log.
+  // above, so the same drop mid-transaction would throw here too. Whatever
+  // holds the client already rejects, so the request fails and is logged, but
+  // inside a transaction drizzle's rollback rejects with pg's "not queryable"
+  // and that replaces the original cause: the log shows the failed request,
+  // not the dropped connection by name.
   pool.on("connect", client => {
     client.on("error", () => {});
   });
