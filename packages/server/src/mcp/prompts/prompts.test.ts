@@ -137,11 +137,12 @@ describe("the four setup prompts", () => {
     expect(text).toContain('`list_frames` with floor "L1", from offset 0, gives no frames but the ones you left for a person');
   });
 
-  it("draw_paths creates entrances before calling suggest_paths, and checks entrance.offFloor first", () => {
+  it("draw_paths calls suggest_paths before the entrances, for the guesses, and again after them, and checks entrance.offFloor first", () => {
     const text = promptText(drawPaths, "L1");
-    expect(text.indexOf("2. Entrances:")).toBeGreaterThan(-1);
-    expect(text.indexOf('Call `suggest_paths` with floor "L1"')).toBeGreaterThan(-1);
-    expect(text.indexOf("2. Entrances:")).toBeLessThan(text.indexOf('Call `suggest_paths` with floor "L1"'));
+    const first = text.indexOf('2. Call `suggest_paths` with floor "L1" now, before any entrance');
+    const entrances = text.indexOf("3. Entrances:");
+    const again = text.indexOf('Then call `suggest_paths` with floor "L1" again: it only links the entrances that already exist.');
+    expect([first > -1, first < entrances, entrances < again]).toEqual([true, true, true]);
     expect(text).toContain("Fix any entrance.offFloor error first");
     expect(text).toContain("delete` one you created in this run that is wrong");
   });
@@ -198,7 +199,7 @@ describe("what the rehearsal and the final review taught each prompt", () => {
     const text = promptText(drawPaths, "L1");
     expect(text).toContain("A line with drawn true runs along a pathway the floor already has: leave it out, and draw the rest.");
     expect(text).not.toContain("if the floor already has pathways, don't draw its lines again");
-    expect(text).toContain("A place has no point of its own: find the gate on the drawing with `view_plan` around the room it is bound to");
+    expect(text).toContain("Look along that room's edge with `view_plan`: where the drawing shows the gate, put the point just inside the walkable area there");
     expect(text).toContain("one box (in metres) for every ten lines or so");
     expect(text).toContain("`check_floor` lists at most 100 problems and says the total");
     expect(toolsNamed(text)).not.toContain("drawn");
@@ -262,12 +263,8 @@ describe("what the re-review and rehearsal 2 taught each prompt (Task 10)", () =
     );
   });
 
-  it("draw_paths looks along the edge for a gate in a large open area, draws no link twice, and stops by check_floor's codes", () => {
+  it("draw_paths draws no link twice, and stops by check_floor's codes", () => {
     const text = promptText(drawPaths, "L1");
-    expect(text).toContain(
-      "If a gate's room is a large open area, you can't tell where the gate is from the room alone: look along the building's edge in that room with `view_plan`. " +
-      "If you still can't place it, name it for a person.",
-    );
     expect(text).toContain("Create each link as a short pathway too, unless `get_floor`'s pathways already has one between the same two points.");
     expect(text).toContain(
       'Stop when `check_floor` with floor "L1" and codes ["area.unreachable", "room.noAccess"] gives none, or only ones a person must fix: ' +
@@ -305,6 +302,46 @@ describe("what rehearsal 3 taught map_rooms (Task 12)", () => {
       "3. Before every `decide_drafts` call, not only the first, look with `view_plan` at every part of the floor its drafts lie in, " +
       "one box (in metres) per part, until the boxes cover all of them.",
     );
+  });
+});
+
+describe("what rehearsal 3 taught draw_paths (Task 12): the whole first pass", () => {
+  const text = promptText(drawPaths, "L1");
+
+  it("makes entrances from suggest_paths's guesses when the drawing shows nothing better, and never leaves none", () => {
+    expect(text).toContain(
+      "where it shows nothing better, use the entranceGuesses point. Never leave the floor with no entrances while entranceGuesses has some; " +
+      "name for a person a way in with neither.",
+    );
+    expect(text).toContain("point and nameEn, the place's name");
+    expect(text).toContain("Name each entrance you placed from a guess in your report, for a person to move in Check.");
+    expect(text).not.toContain("If you still can't place it, name it for a person.");
+  });
+
+  it("keeps a dead end a link ends on or that reaches a room, and leaves out a line through a shop", () => {
+    expect(text).toContain(
+      '   - a line with an "end" end stops dead: keep it if a link ends on it or its reaches is not empty (on a floor with no doorways, a dead end into a room is that room\'s way in);',
+    );
+    expect(text).toContain("   - leave out a line whose crosses is not empty, unless `view_plan` shows that room is open floor;");
+    expect(text).not.toContain('keep it only if a link ends on it;');
+  });
+
+  it("loops check_floor as its own step, at most 5 rounds, and one check is not a finished run", () => {
+    expect(text).toContain(
+      '7. The loop: call `check_floor` with floor "L1" and codes ["area.unreachable", "room.noAccess"]. ' +
+      "For each room it lists, draw the `suggest_paths` line whose reaches has that room, or a short pathway from the nearest drawn line into it",
+    );
+    expect(text).toContain(
+      "Then call `check_floor` again: that is one round. Do at most 5 rounds, and stop early when a round reaches no new room. " +
+      "One `check_floor` and stop is not a finished run.",
+    );
+    // The field names are words, not tools: never backticked, so the tool checks don't take them for tools.
+    for (const field of ["entranceGuesses", "reaches", "crosses"]) expect(text).not.toContain(`\`${field}\``);
+  });
+
+  it("stays about as long as it was: sentences replaced, not piled on", () => {
+    // Its steps ran to 3,356 characters before Task 12.
+    expect(drawPaths.steps("L1").join("\n").length).toBeLessThan(3356 * 1.15);
   });
 });
 

@@ -1,7 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { assembleModel } from "../../model/assemble";
 import { MAX_LINK_M } from "../../paths/connect";
+import { GUESS_INSET_M } from "../../paths/entrances";
 import { SurfaceTooLarge } from "../../paths/raster";
+import { CROSS_M, REACH_M } from "../../paths/reach";
 import { suggestPaths } from "../../paths/suggest";
 import type { ToolContext } from "../context";
 import { Refusal, replyJson, runTool } from "../results";
@@ -23,9 +25,15 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       "drawn is true when the floor already has a pathway along the line (70% of it within that pathway's half " +
       "width and a metre, running within 30° of it): leave those out, so a second run draws only what is still " +
       "missing. A line that only crosses a pathway, or branches off one, is not drawn. " +
+      `reaches lists the rooms a line's "end" ends lie inside or within ${REACH_M} m of: on a floor with no doorways, ` +
+      `a dead end into a room is that room's way in. crosses lists the rooms of kind room a line runs more than ${CROSS_M} m ` +
+      "inside: a pathway there opens the room's walls. " +
       "links join each doorway, lift, escalator or stair stop, and entrance to the nearest point on a line it can " +
       `reach in a straight line, within ${MAX_LINK_M} m. Links have no width. unconnected lists the ones that could ` +
-      "not be joined, and why. " +
+      "not be joined, and why. Only entrances that exist are linked, so call it again after creating them. " +
+      "entranceGuesses gives each confirmed place named as a gate, entrance, exit or way in, bound to a room and with " +
+      `no entrance of its name yet, a point ${GUESS_INSET_M} m inside that room on its longest stretch of the building's ` +
+      "outside edge: a guess a person moves in Check when the drawing shows nothing better. " +
       "Check it over view_plan, then create the pathways you agree with: type pathway, with the reply's levelId, " +
       "a polyline and a widthM.",
     inputSchema: { floor: FLOOR },

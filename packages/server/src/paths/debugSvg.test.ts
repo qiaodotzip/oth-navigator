@@ -27,6 +27,6 @@ describe("suggestionSvg", () => {
   });
 
   it("says so when there is nothing on the floor", () => {
-    expect(suggestionSvg(floor([]), LEVEL, { lines: [], links: [], unconnected: [] })).toMatch(/Nothing on this floor\./);
+    expect(suggestionSvg(floor([]), LEVEL, { lines: [], links: [], unconnected: [], entranceGuesses: [] })).toMatch(/Nothing on this floor\./);
   });
 });

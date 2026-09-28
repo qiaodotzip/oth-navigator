@@ -1,8 +1,10 @@
 import { distancePointToSegment, live, type MapModel, type Pathway, type Vec2 } from "@oth/model";
 import { connect, linkTargets } from "./connect";
 import { distanceToEdge } from "./distance";
+import { entranceGuesses, type EntranceGuess } from "./entrances";
 import { linesThroughForks, pruneSpurs, skeletonGraph } from "./graph";
 import { cellIndex, walkableRaster, type Raster } from "./raster";
+import { crossesOf, reachesOf } from "./reach";
 import { simplify } from "./simplify";
 import { thin } from "./thin";
 
@@ -31,14 +33,18 @@ const DRAWN_STEP_M = 1;
  * The shared interface contract's type, verbatim. A line's `ends` are what its
  * first and last points meet; `network` numbers the lines that join up, 0 for
  * the network with the most length; `drawn` says the floor has a pathway along
- * it already.
+ * it already. Contract v4: `reaches` are the rooms its "end" ends reach,
+ * `crosses` the rooms of kind room it runs through (reach.ts), and
+ * `entranceGuesses` where the floor's gate places probably are (entrances.ts).
  */
 export type PathSuggestion = {
   lines: {
     polyline: Vec2[]; widthM: number; ends: ["fork" | "end" | "loop", "fork" | "end" | "loop"]; network: number; drawn: boolean;
+    reaches: string[]; crosses: string[];
   }[];
   links: { from: { type: "doorway" | "stop" | "entrance"; id: string }; segment: [Vec2, Vec2] }[];
   unconnected: { type: "doorway" | "stop" | "entrance"; id: string; reason: string }[];
+  entranceGuesses: EntranceGuess[];
 };
 
 /**
@@ -144,6 +150,7 @@ export function suggestPaths(model: MapModel, levelId: string): PathSuggestion {
   const raster = walkableRaster(model, levelId);
   const targets = linkTargets(model, levelId);
   const drawn = live(model.pathways).filter(p => p.levelId === levelId);
+  const rooms = live(model.rooms).filter(r => r.levelId === levelId);
   let lines: PathSuggestion["lines"] = [];
   if (raster.cols > 0) {
     const toEdge = distanceToEdge(raster);
@@ -158,6 +165,8 @@ export function suggestPaths(model: MapModel, levelId: string): PathSuggestion {
           ends: l.ends,
           network: l.network,
           drawn: drawnAlready(polyline, drawn),
+          reaches: reachesOf(polyline, l.ends, rooms),
+          crosses: crossesOf(polyline, rooms),
         };
       });
   }
@@ -166,5 +175,6 @@ export function suggestPaths(model: MapModel, levelId: string): PathSuggestion {
     lines,
     links: links.map(l => ({ from: l.from, segment: [at(l.segment[0]), at(l.segment[1])] })),
     unconnected,
+    entranceGuesses: entranceGuesses(model, levelId),
   };
 }

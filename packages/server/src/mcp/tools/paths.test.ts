@@ -32,10 +32,19 @@ describe("suggest_paths", () => {
     expect(JSON.parse(text)).toEqual({
       floor: "L1",
       levelId: "oth-L1",
-      lines: [{ polyline: [[2.13, 1.88], [17.88, 1.88]], widthM: 3.8, ends: ["end", "end"], network: 0, drawn: false }],
+      lines: [{
+        polyline: [[2.13, 1.88], [17.88, 1.88]], widthM: 3.8, ends: ["end", "end"], network: 0, drawn: false, reaches: ["L1-corridor"], crosses: [],
+      }],
       links: [{ from: { type: "doorway", id: "L1-door-shop" }, segment: [[10, 4], [10, 1.88]] }],
       unconnected: [{ type: "entrance", id: "L1-gate-4", reason: "It is not on or beside a walkable area." }],
+      entranceGuesses: [],
     });
+  });
+
+  it("guesses where each gate is, from the place bound to its room (contract v4)", async () => {
+    await createEntity(f.db, "place", { id: "pl-gate-2", nameEn: "Gate 2", category: "facility", levelId: "oth-L1", roomId: "L1-corridor" }, f.wei.id);
+    const { entranceGuesses } = JSON.parse((await call(client, "suggest_paths", { floor: "L1" })).text) as { entranceGuesses: unknown[] };
+    expect(entranceGuesses).toEqual([{ placeId: "pl-gate-2", name: "Gate 2", roomId: "L1-corridor", point: expect.any(Array) }]);
   });
 
   it("saves nothing, takes the floor's code in any case, and shows Wei's Claude on that floor", async () => {
@@ -54,7 +63,7 @@ describe("suggest_paths", () => {
 
   it("gives a floor with no walkable area no lines", async () => {
     expect(JSON.parse((await call(client, "suggest_paths", { floor: "L2" })).text)).toEqual({
-      floor: "L2", levelId: "oth-L2", lines: [], links: [], unconnected: [],
+      floor: "L2", levelId: "oth-L2", lines: [], links: [], unconnected: [], entranceGuesses: [],
     });
   });
 
@@ -80,6 +89,8 @@ describe("suggest_paths", () => {
     for (const words of [
       "only at a fork", "longest first", "ends", "network", "blocks Publish", "no width", "view_plan", "50 m", "lift, escalator or stair stop", "levelId",
       "drawn is true", "70%", "within 30°", "crosses",
+      "reaches lists the rooms", "within 1 m", "crosses lists the rooms of kind room", "more than 2 m", "entranceGuesses",
+      "0.5 m inside", "a person moves in Check",
     ]) {
       expect(description).toContain(words);
     }
