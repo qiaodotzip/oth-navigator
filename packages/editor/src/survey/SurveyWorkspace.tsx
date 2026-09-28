@@ -368,15 +368,20 @@ export function SurveyWorkspace({ api, saver, level, params }: {
           )}
           {hasFrames && read.view === "frame" && (
             // Beside the frame's number, for teammates who use the mouse; the
-            // toast's Undo stands in for a confirmation.
+            // toast's Undo stands in for a confirmation. Quiet, not a red
+            // fill: it is used on frame after frame. The red is on the words,
+            // since Tailwind's text-danger loses to the secondary grey.
             <Button
               size="sm"
-              variant="danger"
               aria-keyshortcuts="Delete"
               disabled={!frame || writes > 0}
+              // A mouse press leaves focus where it was: left on this button,
+              // the next Enter would press it again and bin the frame after.
+              // Tab still reaches it, and Enter on it then bins.
+              onMouseDown={event => event.preventDefault()}
               onClick={bin}
             >
-              Bin frame <Kbd>Del</Kbd>
+              <span className="text-danger">Bin frame</span> <Kbd>Del</Kbd>
             </Button>
           )}
           {hasFrames && (

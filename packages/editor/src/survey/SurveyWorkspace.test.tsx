@@ -1,5 +1,6 @@
 import { parseModel, type Level } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type Api } from "../api/client";
 import { useCurrentRoute } from "../route";
@@ -264,6 +265,25 @@ describe("SurveyWorkspace", () => {
     await act(async () => { land(); });
     await waitFor(() => expect(button.disabled).toBe(false));
     expect(deleteKeyframe).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves focus where it was after a mouse click on Bin frame, so Enter does not bin the next frame", async () => {
+    // user-event, not fireEvent: only it moves focus on a mouse press, as a browser does.
+    const user = userEvent.setup();
+    const api = at();
+    const button = screen.getByRole("button", { name: /Bin frame/ });
+    await user.click(button);
+    await waitFor(() => expect(api.deleteKeyframe).toHaveBeenCalledWith("kf_3"));
+    expect(document.activeElement).not.toBe(button);
+  });
+
+  it("still bins from the keyboard once Bin frame has focus", async () => {
+    const user = userEvent.setup();
+    const api = at();
+    screen.getByRole("button", { name: /Bin frame/ }).focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(api.deleteKeyframe).toHaveBeenCalledWith("kf_3"));
+    expect(api.deleteKeyframe).toHaveBeenCalledTimes(1);
   });
 
   it("comes back to a frame whose bin failed, and a bin sent again by Retry still offers Undo", async () => {
