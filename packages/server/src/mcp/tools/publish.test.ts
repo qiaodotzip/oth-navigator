@@ -1,6 +1,8 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { levels, publishedVersions } from "../../db/schema";
+import { auditLog, levels, publishedVersions } from "../../db/schema";
 import { createEntity } from "../../entities/repository";
 import { TokenLimits, type CallKind } from "../limits";
 import { call, mcpFixture } from "../testing";
@@ -51,15 +53,33 @@ describe("publish", () => {
     expect(isError).toBe(false);
     expect(text).toMatch(/^Published version \S+, with \d+ warnings?\.$/);
     const [row] = await f.db.select().from(publishedVersions);
-    expect(row).toMatchObject({ createdBy: f.wei.id, notes: "L1 shops named (via Claude Code, Wei's laptop)" });
+    expect(row).toMatchObject({ createdBy: f.wei.id, notes: "L1 shops named (via Claude Code)" });
   });
 
-  it("says which token published when no notes are given", async () => {
+  it("never names the token in the manifest, which visitors read", async () => {
     const f = await mcpFixture({ mayPublish: true });
     await publishable(f);
     expect((await call(await f.connect(), "publish", {})).isError).toBe(false);
     const [row] = await f.db.select().from(publishedVersions);
-    expect(row?.notes).toBe("via Claude Code, Wei's laptop");
+    const manifest = await readFile(join(f.dataDir, "published", row!.id, "manifest.json"), "utf8");
+    expect(JSON.parse(manifest)).toMatchObject({ notes: "via Claude Code" });
+    expect(manifest).not.toContain("Wei's laptop");
+    expect(manifest).not.toContain(f.tokenId);
+  });
+
+  it("puts the token that published on the record, on the server only", async () => {
+    const f = await mcpFixture({ mayPublish: true });
+    await publishable(f);
+    expect((await call(await f.connect(), "publish", { notes: "L1 shops named" })).isError).toBe(false);
+    const [row] = await f.db.select().from(publishedVersions);
+    const records = await f.db.select().from(auditLog).where(eq(auditLog.action, "publish"));
+    expect(records).toEqual([expect.objectContaining({
+      entityType: "publishedVersion",
+      entityId: row!.id,
+      actorId: f.wei.id,
+      via: f.tokenId,
+      after: { id: row!.id, notes: "L1 shops named (via Claude Code)", warningCount: row!.warningCount },
+    })]);
   });
 
   it("is refused while the map has errors, and that costs no ten-minute wait", async () => {
@@ -70,6 +90,7 @@ describe("publish", () => {
     expect(blocked.isError).toBe(true);
     expect(blocked.text).toMatch(/^Not published: the map has \d+ errors?\. The first: /);
     expect(await f.db.select().from(publishedVersions)).toEqual([]);
+    expect(await f.db.select().from(auditLog).where(eq(auditLog.action, "publish"))).toEqual([]);
     await addEntrance(f);
     expect((await call(client, "publish", {})).isError).toBe(false);
   });

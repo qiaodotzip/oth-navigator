@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { recordAudit } from "../../entities/repository";
 import { PublishBlockedError, publish } from "../../publish/service";
 import type { ToolContext } from "../context";
 import { publishTooSoon } from "../limits";
@@ -27,14 +28,11 @@ export function registerPublishTools(server: McpServer, ctx: ToolContext): void 
     if (!ctx.limits.claimPublish(ctx.token.id, at)) {
       throw new Refusal(publishTooSoon(ctx.limits.publishWaitS(ctx.token.id, at)));
     }
-    // Which of the person's tokens published, by the name the Team page shows.
-    const via = `${VIA_CLAUDE}, ${ctx.token.name}`;
+    // The notes go into the manifest, which visitors read, so they never name the token.
+    const written = notes ? `${notes} (${VIA_CLAUDE})` : VIA_CLAUDE;
+    let result: Awaited<ReturnType<typeof publish>>;
     try {
-      const result = await publish(ctx.db, ctx.dataDir, {
-        createdBy: ctx.user.id,
-        notes: notes ? `${notes} (${via})` : via,
-      });
-      return reply(`Published version ${result.version}, with ${count(result.warningCount, "warning")}.`);
+      result = await publish(ctx.db, ctx.dataDir, { createdBy: ctx.user.id, notes: written });
     } catch (err) {
       // Nothing went out, so the ten-minute slot goes back.
       ctx.limits.releasePublish(ctx.token.id, at);
@@ -48,5 +46,11 @@ export function registerPublishTools(server: McpServer, ctx: ToolContext): void 
       }
       throw err;
     }
+    // Which token published stays on the server: runTool marks this row via
+    // the token. After the try, since the publish went out and its slot is spent.
+    await recordAudit(ctx.db, "publishedVersion", result.version, "publish", ctx.user.id, null, {
+      id: result.version, notes: written, warningCount: result.warningCount,
+    });
+    return reply(`Published version ${result.version}, with ${count(result.warningCount, "warning")}.`);
   }));
 }
