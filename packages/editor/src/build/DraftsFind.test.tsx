@@ -77,6 +77,68 @@ describe("DraftsFind", () => {
     expect(find.mock.calls[0]![0]).toMatchObject({ levelId: "oth-L2", image: { id: "img_2" } });
   });
 
+  describe("on a floor searched before", () => {
+    const question = () => screen.queryByText(/Find rooms again\?/);
+    /** L2's model with one room on it: accepted from the drawing, or traced by hand. */
+    const withRoom = (evidence: string[]) => parseModel({
+      ...model,
+      rooms: [{ id: "shop", levelId: "oth-L2", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 4, verification: { status: "cad", evidence } }],
+    });
+
+    it("asks first when drafts are waiting, and keeps them when you say so", async () => {
+      useEditorStore.getState().setLevelImages([plan()]);
+      useDrafts.getState().setDrafts("oth-L2", [shop, { ...shop, id: "rd_two" }]);
+      find.mockResolvedValue(foundShop);
+      render(<DraftsFind api={fakeApi()} />);
+
+      fireEvent.click(button());
+      expect(question()!.textContent)
+        .toBe("! Find rooms again? The 2 drafts waiting are replaced, and drafts you rejected or marked Done come back.");
+      expect(find).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Keep these" }));
+      expect(question()).toBeNull();
+      expect(find).not.toHaveBeenCalled();
+
+      fireEvent.click(button());
+      fireEvent.click(screen.getByRole("button", { name: "Find again" }));
+      expect(question()).toBeNull();
+      await waitFor(() => expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]));
+      expect(find).toHaveBeenCalledTimes(1);
+    });
+
+    it("asks first when every draft was decided, since the rejected ones come back", async () => {
+      useEditorStore.getState().setModel(withRoom([`pdf:${"d".repeat(64)}`]));
+      useEditorStore.getState().setLevelImages([plan()]);
+      find.mockResolvedValue(foundShop);
+      render(<DraftsFind api={fakeApi()} />);
+
+      fireEvent.click(button());
+      expect(question()!.textContent).toBe("! Find rooms again? Drafts you rejected or marked Done come back.");
+      expect(find).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Find again" }));
+      await waitFor(() => expect(find).toHaveBeenCalledTimes(1));
+    });
+
+    it("says one draft as one", () => {
+      useEditorStore.getState().setLevelImages([plan()]);
+      useDrafts.getState().setDrafts("oth-L2", [shop]);
+      render(<DraftsFind api={fakeApi()} />);
+      fireEvent.click(button());
+      expect(question()!.textContent)
+        .toBe("! Find rooms again? The 1 draft waiting is replaced, and drafts you rejected or marked Done come back.");
+    });
+
+    it("finds at once on a floor with no drafts, its rooms traced by hand", async () => {
+      useEditorStore.getState().setModel(withRoom([]));
+      useEditorStore.getState().setLevelImages([plan()]);
+      find.mockResolvedValue(foundShop);
+      render(<DraftsFind api={fakeApi()} />);
+      fireEvent.click(button());
+      expect(question()).toBeNull();
+      await waitFor(() => expect(find).toHaveBeenCalledTimes(1));
+    });
+  });
+
   it("says what it is doing, and takes no second click while it works", async () => {
     useEditorStore.getState().setLevelImages([plan()]);
     let finish!: (value: unknown) => void;
@@ -200,6 +262,8 @@ describe("DraftsFind", () => {
     find.mockRejectedValueOnce(new PlanMovedError()).mockResolvedValueOnce({ drafts: [], rooms: 0, open: 0, skipped: [] });
     render(<DraftsFind api={fakeApi()} />);
     fireEvent.click(button());
+    // It asks first, with a draft waiting; the toast's Find again, below, doesn't ask twice.
+    fireEvent.click(screen.getByRole("button", { name: "Find again" }));
     await waitFor(() => expect(lastToast()?.action?.label).toBe("Find again"));
     expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]);
 
@@ -257,6 +321,8 @@ describe("DraftsFind", () => {
     });
     render(<DraftsFind api={fakeApi()} />);
     fireEvent.click(button());
+    // It asks first, with a draft waiting.
+    fireEvent.click(screen.getByRole("button", { name: "Find again" }));
     fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
     expect(screen.getByText("Stopping…")).toBeTruthy();
     expect(cancel()).toBeNull();

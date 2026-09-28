@@ -1,4 +1,5 @@
-import { useId } from "react";
+import { live } from "@oth/model";
+import { useId, useState } from "react";
 import { create } from "zustand";
 import type { Api, LevelImage } from "../api/client";
 import {
@@ -129,25 +130,62 @@ function sayWhy(api: Api, search: Search, err: unknown): void {
 }
 
 /**
+ * What a second search would undo, asked before it runs, or null when there is
+ * nothing to lose. A search replaces the floor's drafts waiting, and finds
+ * again what you rejected or marked Done: those were only set aside.
+ *
+ * The server lists only the drafts waiting, so a floor whose drafts were all
+ * decided is known by the rooms accepted from its drawing (their evidence is
+ * the PDF). A floor whose every draft was rejected, none accepted, isn't asked:
+ * throwing a whole search away is the likeliest reason to find again.
+ */
+function againQuestion(waiting: number, roomsFromDrawing: boolean): string | null {
+  if (waiting > 0) {
+    const replaced = waiting === 1 ? "The 1 draft waiting is replaced" : `The ${waiting} drafts waiting are replaced`;
+    return `Find rooms again? ${replaced}, and drafts you rejected or marked Done come back.`;
+  }
+  return roomsFromDrawing ? "Find rooms again? Drafts you rejected or marked Done come back." : null;
+}
+
+/**
  * Find rooms in the drawing (spec §5.2 step 5), beside Import DXF. It needs
  * the floor's plan to have come from its PDF, and to be scaled. When it can't
- * run, it says why, and where to go. While it runs it says what it is doing,
- * and can be cancelled until the drafts are on their way to the server. A
- * search of another floor shows here as that floor's.
+ * run, it says why, and where to go. On a floor already searched it asks
+ * first, as Replace plan does. While it runs it says what it is doing, and can
+ * be cancelled until the drafts are on their way to the server. A search of
+ * another floor shows here as that floor's.
  */
 export function DraftsFind({ api }: { api: Api }) {
   const levelId = useEditorStore(s => s.activeLevelId);
   const image = useEditorStore(s => imageForLevel(s.levelImages, s.activeLevelId));
   const finding = useDrafts(s => s.finding);
+  const waiting = useDrafts(s => (levelId ? s.byLevel[levelId]?.length ?? 0 : 0));
+  const roomsFromDrawing = useEditorStore(s => levelId != null && s.model != null && live(s.model.rooms).some(r =>
+    r.levelId === levelId && r.verification.evidence.some(e => e.startsWith("pdf:"))));
   const searching = useSearch(s => s.running?.levelId ?? null);
   const elsewhere = useEditorStore(s =>
     searching && searching !== s.activeLevelId ? (s.model?.levels.find(l => l.id === searching)?.code ?? "another floor") : null);
+  // The floor a question is open for: it shows on that floor only, and never while a search runs.
+  const [askingFor, setAskingFor] = useState<string | null>(null);
   const hintId = useId();
 
   const why = whyNot(image);
   const canCancel = finding != null && finding !== STOPPING && finding !== SAVING_DRAFTS;
   // Another floor's stages would read as this floor's: it names the floor instead.
   const doing = finding != null && elsewhere && finding !== STOPPING ? `Finding rooms on ${elsewhere}…` : finding;
+  // Worded as the floor is now, so a draft decided while it is open is counted.
+  const question = askingFor != null && askingFor === levelId && finding == null ? againQuestion(waiting, roomsFromDrawing) : null;
+
+  function find(): void {
+    if (!levelId) return;
+    if (againQuestion(waiting, roomsFromDrawing)) setAskingFor(levelId);
+    else void findRoomsOn(api, levelId);
+  }
+
+  function findAgain(): void {
+    setAskingFor(null);
+    if (levelId) void findRoomsOn(api, levelId);
+  }
 
   function cancel(): void {
     useSearch.getState().running?.stop.abort();
@@ -157,12 +195,7 @@ export function DraftsFind({ api }: { api: Api }) {
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
-        <Button
-          size="sm" disabled={why != null || finding != null} aria-describedby={hintId}
-          onClick={() => {
-            if (levelId) void findRoomsOn(api, levelId);
-          }}
-        >
+        <Button size="sm" disabled={why != null || finding != null} aria-describedby={hintId} onClick={find}>
           Find rooms in the drawing
         </Button>
         {canCancel && (
@@ -174,6 +207,17 @@ export function DraftsFind({ api }: { api: Api }) {
       <p id={hintId} aria-live="polite" className="text-xs text-stone-600">
         {doing ?? why ?? "Finds each named space as a draft for you to review, in place of the drafts found before."}
       </p>
+      {question && (
+        <div className="space-y-2 rounded border border-yours/30 bg-yours-soft p-2">
+          <p className="text-xs text-yours">
+            <span aria-hidden className="font-semibold">!</span> {question}
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="danger" onClick={findAgain}>Find again</Button>
+            <Button size="sm" onClick={() => setAskingFor(null)}>Keep these</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

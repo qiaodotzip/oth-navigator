@@ -1,4 +1,4 @@
-import { parseModel } from "@oth/model";
+import { RoomDraftSchema, parseModel } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { ApiError, ConflictError, type Api, type LevelImage } from "../api/client";
@@ -6,6 +6,7 @@ import { planSheet, syntheticPdf } from "../pdf/testing/syntheticPdf";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
+import { useDrafts } from "./drafts";
 import { FloorplanTools, PlanDropZone, patchPlan, uploadPlan } from "./FloorplanTools";
 
 const model = parseModel({
@@ -35,6 +36,7 @@ const file = (name: string) => new File([new Uint8Array([1])], name, { type: "im
 
 beforeEach(() => {
   useEditorStore.getState().reset();
+  useDrafts.getState().reset();
   useToasts.getState().clear();
   useEditorStore.getState().setModel(model);
 });
@@ -449,6 +451,23 @@ describe("FloorplanTools", () => {
       await waitFor(() => expect(a.uploadLevelImage).toHaveBeenCalledWith("oth-L1", expect.objectContaining({ name: "L1 v2.jpg" })));
       expect(screen.queryByText(/Replacing it with/)).toBeNull();
       await waitFor(() => expect(useEditorStore.getState().levelImages.map(i => i.filename)).toEqual(["L1 v2.jpg"]));
+    });
+
+    it.each([
+      [1, "The 1 room draft waiting stays where it was found, and may not line up with the new plan."],
+      [2, "The 2 room drafts waiting stay where they were found, and may not line up with the new plan."],
+    ])("says the room drafts waiting stay where they were found (%i)", (n, words) => {
+      // Replacing touches no draft: they are in metres, where the old plan put them.
+      const draft = (id: string) => RoomDraftSchema.parse({
+        id, levelId: "oth-L1", nameEn: id, kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
+        labelPoint: [5, 5], areaM2: 96, source: { checksum: "c".repeat(64), page: 1 },
+      });
+      useDrafts.getState().setDrafts("oth-L1", Array.from({ length: n }, (_, i) => draft(`rd_${i}`)));
+      render(<FloorplanTools api={api()} />);
+      fireEvent.change(screen.getByLabelText("Replace plan…"), { target: { files: [file("L1 v2.jpg")] } });
+      expect(screen.getByText(/Replacing it with L1 v2\.jpg/).textContent).toBe(
+        `! Warning: This plan is scaled at 0.0700 m per pixel. Replacing it with L1 v2.jpg loses its scale and position, and you can't undo that. ${words}`,
+      );
     });
 
     it("keeps the plan when you say so", () => {

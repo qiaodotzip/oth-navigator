@@ -11,6 +11,7 @@ import { Button } from "../ui/Button";
 import { reportFailure, serverWords, worthRetrying } from "../ui/failure";
 import { Popover, PopoverClose } from "../ui/Popover";
 import { toast } from "../ui/toast";
+import { useDrafts } from "./drafts";
 import { PageNotAskedError, PdfPagePicker, askForPage } from "./PdfPagePicker";
 import { PAPER_SIZES, SHAPE_TOLERANCE, parseRatio, sheetScale, type PaperSize } from "./sheetScale";
 
@@ -417,6 +418,7 @@ export function FloorplanTools({ api }: { api: Api }) {
   const adding = useAddingOn(levelId);
   const words = useAddingWords(levelId);
   const image = imageForLevel(images, levelId);
+  const drafts = useDrafts(s => (levelId ? s.byLevel[levelId]?.length ?? 0 : 0));
   // A replacement waiting for you to say yes: see `replaceWith`.
   const [replacing, setReplacing] = useState<File | null>(null);
 
@@ -472,6 +474,9 @@ export function FloorplanTools({ api }: { api: Api }) {
         <div className="space-y-2 rounded border border-yours/30 bg-yours-soft p-2">
           <Warning>
             {`This plan is scaled at ${image.metresPerPixel.toFixed(4)} m per pixel. Replacing it with ${replacing.name} loses its scale and position, and you can't undo that.`}
+            {/* Replacing touches no draft: they are in metres, where they were found, and stay until the next search replaces them. */}
+            {drafts === 1 && " The 1 room draft waiting stays where it was found, and may not line up with the new plan."}
+            {drafts > 1 && ` The ${drafts} room drafts waiting stay where they were found, and may not line up with the new plan.`}
           </Warning>
           <div className="flex gap-2">
             <Button
