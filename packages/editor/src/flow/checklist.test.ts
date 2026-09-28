@@ -271,6 +271,18 @@ describe("the dressing step", () => {
       .toBe("1 detail, 0 undressed");
   });
 
+  it("still counts a detail as undressed when only an object is placed on it, not a model", () => {
+    // Plan 6A's rule (LevelGroup's roomsToDraw, warnings.ts's own dressed
+    // set): an object marks a thing, not a model dressing the detail.
+    const m = model({
+      rooms: [detail],
+      objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+      placements: [{ id: "pl_1", levelId: "oth-L1", objectKindId: "ok_bin", roomId: "L1-vend", position: [0, 0, 0] }],
+    });
+    expect(steps({ model: m, levelId: "oth-L1", image: null, report: emptyReport }).dressing?.detail)
+      .toBe("1 detail, 1 undressed");
+  });
+
   it("says so plainly when there are no details at all", () => {
     expect(steps({ model: model(), levelId: "oth-L1", image: null, report: emptyReport }).dressing?.detail)
       .toBe("none yet");

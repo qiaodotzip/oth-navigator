@@ -293,6 +293,44 @@ describe("ReviewWorkspace", () => {
     expect(screen.getByText("1 of 3 decided on L1")).toBeTruthy();
   });
 
+  it("shows a rejected proposal as decided at once, with no other event needed", async () => {
+    // Fix: noteRetired ran after the reload's render, so the module-level
+    // retired map's change never itself redrew the line; it could keep
+    // reading the old count until something unrelated re-rendered. A floor
+    // no other test decides on, so an earlier reject can't mask that.
+    const L2 = reviewModel.levels[1] as Level;
+    const twoUp = parseModel({
+      ...reviewModel,
+      places: [
+        { id: "p_x1", nameEn: "Anchor Store", category: "retail", status: "proposed" },
+        { id: "p_x2", nameEn: "Food Court", category: "retail", status: "proposed" },
+      ],
+      sightings: [
+        { id: "sx1", placeId: "p_x1", keyframeId: "kf_9", status: "proposed" },
+        { id: "sx2", placeId: "p_x2", keyframeId: "kf_9", status: "proposed" },
+      ],
+    });
+    useEditorStore.getState().setModel(twoUp);
+    const getModel = vi.fn();
+    const api = fakeApi({ getModel });
+    const saver = createSaver(api, { validate: false });
+    render(<ReviewWorkspace api={api} saver={saver} level={L2} params={{}} />);
+    expect(screen.getByText("0 of 2 decided on L2")).toBeTruthy();
+
+    // Whichever of the two comes up first: the reload answers without it.
+    const rejectedName = nameField().value;
+    const rejectedId = rejectedName === "Anchor Store" ? "p_x1" : "p_x2";
+    getModel.mockResolvedValue(parseModel({
+      ...twoUp,
+      places: twoUp.places.filter(p => p.id !== rejectedId),
+      sightings: twoUp.sightings.filter(s => s.placeId !== rejectedId),
+    }));
+
+    key("r");
+    await waitFor(() => expect(toastSaying(`Rejected ${rejectedName}`)).toBeTruthy());
+    expect(screen.getByText("1 of 2 decided on L2")).toBeTruthy();
+  });
+
   it("leaves a proposal on no floor out of the counts while it is being decided", () => {
     // Fix 3.
     at("?scope=floorless", { acceptPlace: vi.fn(() => new Promise(() => {})) });

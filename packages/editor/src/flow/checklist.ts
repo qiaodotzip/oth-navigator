@@ -60,7 +60,9 @@ export function levelChecklist(input: ChecklistInput): ChecklistStep[] {
   const rooms = model && levelId ? model.rooms.filter(r => r.levelId === levelId) : [];
   const pathways = model && levelId ? model.pathways.filter(p => p.levelId === levelId) : [];
   const details = rooms.filter(r => r.kind === "detail");
-  const dressed = new Set((model?.placements ?? []).map(p => p.roomId));
+  // An object marks a thing on the detail, not a model dressing it (Plan 6A:
+  // LevelGroup's roomsToDraw, warnings.ts's own dressed set).
+  const dressed = new Set((model?.placements ?? []).filter(p => !p.objectKindId).map(p => p.roomId));
   const undressed = details.filter(d => !dressed.has(d.id)).length;
   const entrances = model?.entrances ?? [];
   const endpoints = model && levelId ? model.portalEndpoints.filter(p => p.levelId === levelId) : [];

@@ -124,8 +124,14 @@ export function ReviewWorkspace({ api, saver, level, params }: {
     const correction = correcting.current.get(id);
     if ((!correction || await correction) && await run()) {
       drafts.current.delete(id);
-      // A reject or a merge deletes it: noted, so it still counts as decided on this floor.
-      if (becomes === "gone" && read.scope === "floor") noteRetired(level.id, id);
+      // A reject or a merge deletes it: noted, so it still counts as decided
+      // on this floor. `retired` is a plain map, not store state, so nothing
+      // redraws on its own from noting it — without this, the line could
+      // keep showing the reload's own count until something else redrew.
+      if (becomes === "gone" && read.scope === "floor") {
+        noteRetired(level.id, id);
+        redraw();
+      }
       return;
     }
 
