@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { RoomDraftInputSchema, type DraftSource, type RoomKind } from "@oth/model";
+import { RoomDraftInputSchema, labelPoint, type DraftSource, type Ring, type RoomKind, type Vec2 } from "@oth/model";
 import type { Database } from "../db/client";
 import { toModelRow, type Row } from "../db/rows";
 import { auditLog, levels, roomDrafts, rooms } from "../db/schema";
@@ -124,6 +124,85 @@ export async function listDrafts(db: Database, levelId: string): Promise<Row[]> 
     const mark = marks.get(r.id);
     return mark ? { ...row, setAside: mark } : row;
   }).sort((a, b) => Number(b.areaM2) - Number(a.areaM2) || String(a.id).localeCompare(String(b.id)));
+}
+
+/**
+ * Contract v3's line-up check: the drawing a search read sits off the rooms
+ * already on the floor. dx and dy, in metres, are the shift from the drafts'
+ * labels to the centres of the rooms they are named for, which moving the
+ * drawing by would line it up; pairs is how many drafts agree on it.
+ * Rehearsal 2's L1 plan sat 11.5 m east and 4.6 m south of its rooms, and
+ * map_rooms made about 160 rooms twice.
+ */
+export type LineUp = { dx: number; dy: number; pairs: number };
+/** At least this many pairs must agree, */
+export const LINE_UP_PAIRS = 5;
+/** each within this of the others, */
+export const LINE_UP_AGREE_M = 0.5;
+/** on a shift longer than this. */
+export const LINE_UP_SHIFT_M = 1;
+
+/** Names compared the way people mean them (editor/src/survey/suggest.ts normalName): case, inner spacing and the ends ignored. */
+function normalName(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * Whether waiting drafts sit off the rooms already on the floor (contract
+ * v3). A draft is paired with a room when exactly one room on the floor has
+ * its name, capitals and spacing aside, and each pair gives the shift from
+ * the draft's label to the room's centre (where get_floor puts its name).
+ * The largest group of shifts within LINE_UP_AGREE_M of one of them decides:
+ * at least LINE_UP_PAIRS of them, on a mean shift over LINE_UP_SHIFT_M, is a
+ * drawing that doesn't line up. A floor that does line up, or has too few
+ * named rooms to tell, gives null.
+ */
+export function lineUpOf(
+  drafts: readonly { nameEn: string; labelPoint: Vec2 }[],
+  rooms: readonly { nameEn: string; footprint: Ring; holes: readonly Ring[] }[],
+): LineUp | null {
+  const named = new Map<string, (typeof rooms)[number][]>();
+  for (const r of rooms) {
+    const name = normalName(r.nameEn);
+    if (name) named.set(name, [...(named.get(name) ?? []), r]);
+  }
+  const centres = new Map<(typeof rooms)[number], Vec2>();
+  const shifts: Vec2[] = [];
+  for (const d of drafts) {
+    const same = named.get(normalName(d.nameEn));
+    if (same?.length !== 1) continue;
+    const room = same[0]!;
+    const centre = centres.get(room) ?? labelPoint(room.footprint, room.holes, 0.5).point;
+    centres.set(room, centre);
+    shifts.push([centre[0] - d.labelPoint[0], centre[1] - d.labelPoint[1]]);
+  }
+  let agreeing: Vec2[] = [];
+  for (const s of shifts) {
+    const near = shifts.filter(t => Math.hypot(t[0] - s[0], t[1] - s[1]) <= LINE_UP_AGREE_M);
+    if (near.length > agreeing.length) agreeing = near;
+  }
+  if (agreeing.length < LINE_UP_PAIRS) return null;
+  const dx = agreeing.reduce((sum, s) => sum + s[0], 0) / agreeing.length;
+  const dy = agreeing.reduce((sum, s) => sum + s[1], 0) / agreeing.length;
+  if (Math.hypot(dx, dy) <= LINE_UP_SHIFT_M) return null;
+  return { dx: round1(dx), dy: round1(dy), pairs: agreeing.length };
+}
+
+/**
+ * lineUpOf for GET /api/levels/:id/drafts: these waiting drafts (as
+ * listDrafts gives them, set-aside ones included) against the floor's live
+ * rooms.
+ */
+export async function floorLineUp(db: Database, levelId: string, waiting: readonly Row[]): Promise<LineUp | null> {
+  if (waiting.length < LINE_UP_PAIRS) return null;
+  const here = await db.select({ nameEn: rooms.nameEn, footprint: rooms.footprint, holes: rooms.holes }).from(rooms)
+    .where(and(eq(rooms.levelId, levelId), isNull(rooms.deletedAt)));
+  return lineUpOf(
+    waiting.map(d => ({ nameEn: String(d.nameEn), labelPoint: d.labelPoint as Vec2 })),
+    here.map(r => ({ nameEn: r.nameEn, footprint: r.footprint as Ring, holes: (r.holes ?? []) as Ring[] })),
+  );
 }
 
 /**

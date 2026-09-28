@@ -3,7 +3,7 @@ import { RoomDraftSchema, RoomKindSchema, live, namedLikeAStop, type StopKind } 
 import { z } from "zod";
 import { placements } from "../../db/schema";
 import {
-  DraftRefusedError, MAX_DECISIONS, RoomIdTakenError, decideDrafts, floorDrafts, listDrafts, tallyDrafts, type Decided,
+  DraftRefusedError, MAX_DECISIONS, RoomIdTakenError, decideDrafts, floorDrafts, lineUpOf, listDrafts, tallyDrafts, type Decided,
 } from "../../drafts/service";
 import { assembleModel } from "../../model/assemble";
 import { objectSpotReport } from "../../objects/spots";
@@ -108,6 +108,9 @@ function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       "lies over (overlaps: each room's id and name, and share, how much of the draft is over that room, 0 to 1), " +
       "and whether it is named like a lift, escalator or stairs. Drafts set aside for a person are not listed. counts " +
       "says how the floor's drafts stand: waiting, setAside (waiting for a person), accepted and rejected. " +
+      "lineUp is there only when the drawing doesn't line up with the rooms already on the floor: at least 5 drafts " +
+      "sit the same way off the rooms named as they are. Its dx and dy are that shift in metres, from the drafts' " +
+      "labels to the rooms' centres, and pairs how many agree. " +
       "decide_drafts takes decided drafts off this list, so after deciding some, read again from offset 0 rather " +
       "than carrying on from where you left off.",
     inputSchema: {
@@ -119,9 +122,12 @@ function registerDraftTools(server: McpServer, ctx: ToolContext): void {
   }, ({ floor, limit, offset }) => runTool(ctx, async () => {
     const model = await assembleModel(ctx.db);
     const level = levelFor(ctx, model, floor);
-    const waiting = (await listDrafts(ctx.db, level.id)).filter(row => !row.setAside).map(row => RoomDraftSchema.parse(row));
+    // Set-aside drafts still wait, and still tell whether the drawing lines up; only the page leaves them out.
+    const all = (await listDrafts(ctx.db, level.id)).map(row => ({ row, draft: RoomDraftSchema.parse(row) }));
+    const waiting = all.filter(d => !d.row.setAside).map(d => d.draft);
     const rooms = live(model.rooms).filter(r => r.levelId === level.id);
-    return replyJson(draftList(level.code, waiting, tallyDrafts(await floorDrafts(ctx.db, level.id)), rooms, limit, offset));
+    const lineUp = lineUpOf(all.map(d => d.draft), rooms);
+    return replyJson(draftList(level.code, waiting, tallyDrafts(await floorDrafts(ctx.db, level.id)), rooms, limit, offset, lineUp));
   }));
 
   server.registerTool("decide_drafts", {

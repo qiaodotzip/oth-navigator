@@ -99,6 +99,25 @@ describe("list_drafts", () => {
     expect(listing.drafts.map(d => d.name)).toEqual(["B"]);
   });
 
+  it("says when the drawing doesn't line up with the rooms already on the floor, and by how much (contract v3)", async () => {
+    const names = ["Fire Command Centre", "Community Dance Studio 1", "2 (Wet) Team Changing", "Team Changing 3 (Dry)", "Hand Wash Area"];
+    for (const [i, nameEn] of names.entries()) {
+      await createEntity(f.db, "room", { id: `L1-room-${i}`, levelId: "oth-L1", kind: "room", footprint: sq(i * 20, 50, i * 20 + 6, 56), heightM: 6, nameEn }, amy.id);
+    }
+    // Rehearsal 2's L1: the new plan about 11.5 m east and 4.6 m south of every room. One is set aside, and still counts.
+    const drafts = await replaceDrafts(f.db, "oth-L1", SOURCE, names.map((nameEn, i) => ({
+      nameEn, kind: "room", footprint: sq(i * 20 + 11.5, 45.4, i * 20 + 17.5, 51.4), labelPoint: [i * 20 + 14.5, 48.4], areaM2: 36,
+    })), amy.id);
+    await call(client, "decide_drafts", { floor: "L1", items: [
+      { id: String(drafts[0]!.id), expectedVersion: 0, decision: "set_aside", reason: "Can't make it out" },
+    ] });
+    const listing = JSON.parse((await call(client, "list_drafts", { floor: "L1", limit: 1 })).text) as Record<string, unknown>;
+    expect(listing.lineUp).toEqual({ dx: -11.5, dy: 4.6, pairs: 5 });
+    expect(Object.keys(listing).slice(0, 3)).toEqual(["floor", "counts", "lineUp"]);
+    const { tools } = await client.listTools();
+    expect(tools.find(t => t.name === "list_drafts")?.description).toContain("lineUp");
+  });
+
   it("leaves out the drafts set aside for a person, and counts them apart", async () => {
     const drafts = await replaceDrafts(f.db, "oth-L1", SOURCE, [drafted("Plaza", undefined, 0), drafted("Hall", sq(0, 50, 30, 80), 900)], amy.id);
     const plaza = String(drafts.find(d => d.nameEn === "Plaza")!.id);

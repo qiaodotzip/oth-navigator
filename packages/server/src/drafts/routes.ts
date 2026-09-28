@@ -6,7 +6,7 @@ import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
 import { NotFoundError, VersionConflictError } from "../entities/repository";
 import {
-  DraftRefusedError, MAX_DRAFTS, RoomIdTakenError, acceptDrafts, listDrafts, replaceDrafts, unacceptDrafts,
+  DraftRefusedError, MAX_DRAFTS, RoomIdTakenError, acceptDrafts, floorLineUp, listDrafts, replaceDrafts, unacceptDrafts,
 } from "./service";
 
 const Version = z.number().int().nonnegative();
@@ -39,7 +39,14 @@ function failure(err: unknown) {
 export const levelDraftRoutes = new Hono<AppEnv>();
 levelDraftRoutes.use("*", requireUser);
 
-levelDraftRoutes.get("/:id/drafts", async c => c.json({ drafts: await listDrafts(c.get("db"), c.req.param("id")) }));
+/** The floor's waiting drafts, and lineUp when the drawing doesn't line up with the rooms already on the floor (contract v3). */
+levelDraftRoutes.get("/:id/drafts", async c => {
+  const db = c.get("db");
+  const levelId = c.req.param("id");
+  const drafts = await listDrafts(db, levelId);
+  const lineUp = await floorLineUp(db, levelId, drafts);
+  return c.json({ drafts, ...(lineUp ? { lineUp } : {}) });
+});
 
 levelDraftRoutes.put(
   "/:id/drafts",

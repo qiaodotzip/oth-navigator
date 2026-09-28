@@ -8,7 +8,7 @@ import { VersionConflictError, restoreEntity, softDeleteEntity } from "../entiti
 import { createTestDb } from "../testing/harness";
 import {
   DraftRefusedError, SET_ASIDE, UNSET_ASIDE, acceptDrafts, decideDrafts, floorDrafts, latestSearch, listDrafts, replaceDrafts,
-  tallyDrafts, unsetAside,
+  lineUpOf, tallyDrafts, unsetAside,
 } from "./service";
 
 const square = (x: number, y: number, s: number): [number, number][] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
@@ -189,5 +189,39 @@ describe("a draft set aside", () => {
     expect((await db.select().from(auditLog).where(eq(auditLog.action, UNSET_ASIDE))).map(r => r.entityId)).toEqual([id]);
     await expect(unsetAside(db, id, 0, wei.id)).rejects.toThrow("Plaza isn't set aside now, so there is nothing to take back.");
     await expect(unsetAside(db, id, 3, wei.id)).rejects.toBeInstanceOf(VersionConflictError);
+  });
+});
+
+describe("lineUpOf (contract v3): does the drawing line up with the rooms already on the floor?", () => {
+  /**
+   * Rehearsal 2's L1: Replace plan put the drawing about 11.5 m east and 4.6 m
+   * south of the 228 rooms traced by hand, the same for every room. Each room
+   * here is a 6 m square; its namesake draft's label sits that far off it.
+   */
+  const NAMES = ["Fire Command Centre", "Community Dance Studio 1", "2 (Wet) Team Changing", "Team Changing 3 (Dry)", "Hand Wash Area", "Cleaner's Room"];
+  const roomsOf = (names: readonly string[]) => names.map((nameEn, i) => ({ nameEn, footprint: square(i * 20, 0, 6), holes: [] }));
+  const draftsOff = (names: readonly string[], [ox, oy]: [number, number]) =>
+    names.map((nameEn, i) => ({ nameEn, labelPoint: [i * 20 + 3 + ox, 3 + oy] as [number, number] }));
+
+  it("gives the shift from the drafts' labels to their rooms' centres when 5 or more pairs agree on one of over a metre", () => {
+    const rooms = [...roomsOf(NAMES), { nameEn: "Kitchen", footprint: square(200, 0, 6), holes: [] }];
+    const drafts = [
+      ...draftsOff(NAMES, [11.5, -4.6]),
+      // Capitals and spacing aside, the names are the same: a pair, but one that lines up, so not one of the six.
+      { nameEn: "  kitchen ", labelPoint: [203, 3] as [number, number] },
+    ];
+    expect(lineUpOf(drafts, rooms)).toEqual({ dx: -11.5, dy: 4.6, pairs: 6 });
+  });
+
+  it("pairs a draft only with a name exactly one room on the floor has", () => {
+    const shops = [{ nameEn: "Shop", footprint: square(300, 0, 6), holes: [] }, { nameEn: "shop", footprint: square(320, 0, 6), holes: [] }];
+    const drafts = [...draftsOff(NAMES.slice(0, 4), [11.5, -4.6]), { nameEn: "Shop", labelPoint: [303 + 11.5, 3 - 4.6] as [number, number] }];
+    expect(lineUpOf(drafts, [...roomsOf(NAMES.slice(0, 4)), ...shops])).toBeNull();
+  });
+
+  it("says nothing when the pairs line up, or disagree by more than half a metre", () => {
+    expect(lineUpOf(draftsOff(NAMES, [0.4, -0.3]), roomsOf(NAMES))).toBeNull();
+    const scattered = NAMES.map((nameEn, i) => ({ nameEn, labelPoint: [i * 20 + 3 + 5 + i, 3] as [number, number] }));
+    expect(lineUpOf(scattered, roomsOf(NAMES))).toBeNull();
   });
 });
