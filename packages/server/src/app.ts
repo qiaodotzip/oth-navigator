@@ -6,9 +6,11 @@ import type { User } from "./auth/users";
 import { isDeployed, loadConfig } from "./config";
 import type { Database } from "./db/client";
 import { entityRoutes } from "./entities/routes";
-import { teamGate } from "./gate/gate";
+import { WrongCodes, teamGate } from "./gate/gate";
 import { levelImageRoutes } from "./images/routes";
 import { lockRoutes } from "./locks/routes";
+import { BAD_TOKEN_LIMIT, TokenLimits } from "./mcp/limits";
+import { mcpRoutes, type McpDeps } from "./mcp/route";
 import { modelRoutes } from "./model/routes";
 import { presenceRoutes } from "./presence/routes";
 import { placeReviewRoutes } from "./survey/review";
@@ -16,7 +18,9 @@ import { captureRoutes, keyframeRoutes } from "./survey/routes";
 import { PresenceTracker } from "./presence/service";
 import { publishRoutes } from "./publish/routes";
 import { staticRoutes } from "./static";
+import { redactError } from "./tokens/redact";
 import { tokenRoutes } from "./tokens/routes";
+import type { TokenInfo } from "./tokens/service";
 import { userRoutes } from "./users/routes";
 
 export type AppDeps = {
@@ -41,9 +45,12 @@ export type AppDeps = {
    * where a raw message can carry a query, a file path or a connection string.
    */
   exposeErrors?: boolean;
+  /** Claude Code's endpoint's counters. Injected by tests for small limits or their own window. */
+  mcp?: Partial<Pick<McpDeps, "limits" | "badTokens" | "now">>;
 };
 
-export type AppEnv = { Variables: { db: Database; user: User; dataDir: string } };
+/** `token` is set only on /mcp, for a call that came through a Claude Code token. */
+export type AppEnv = { Variables: { db: Database; user: User; dataDir: string; token: TokenInfo } };
 
 export function createApp(deps: AppDeps) {
   const app = new Hono<AppEnv>();
@@ -91,8 +98,18 @@ export function createApp(deps: AppDeps) {
   app.route("/api/level-images", levelImageRoutes);
   app.route("/api", publishRoutes);
 
-  // Defaults to a fresh tracker so every createApp({ db }) call site keeps working.
-  app.route("/api/presence", presenceRoutes(deps.presence ?? new PresenceTracker()));
+  // One tracker for the app and for Claude Code, so "Wei (Claude)" shows where people look.
+  const presence = deps.presence ?? new PresenceTracker();
+  app.route("/api/presence", presenceRoutes(presence));
+
+  // Claude Code's endpoint (spec §6). Before the editor's files, which would
+  // answer GET /mcp with the app's page.
+  app.route("/", mcpRoutes({
+    limits: deps.mcp?.limits ?? new TokenLimits(),
+    badTokens: deps.mcp?.badTokens ?? new WrongCodes(BAD_TOKEN_LIMIT),
+    presence,
+    now: deps.mcp?.now,
+  }));
 
   // Registered last so every /api route wins first.
   app.route("/", staticRoutes(deps.editorDist));
@@ -102,7 +119,7 @@ export function createApp(deps: AppDeps) {
     // The whole error goes to the log, which Railway keeps, with the request
     // it came from; tests stay quiet, but never a deployed app, whatever
     // NODE_ENV says there.
-    if (deployed || config.NODE_ENV !== "test") console.error(`${c.req.method} ${c.req.path}`, err);
+    if (deployed || config.NODE_ENV !== "test") console.error(`${c.req.method} ${c.req.path}`, redactError(err));
     return c.json({
       error: exposeErrors ? err.message : "Something went wrong on the server. Try again in a moment.",
     }, 500);

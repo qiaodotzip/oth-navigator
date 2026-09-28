@@ -6,6 +6,7 @@ import { bodyLimit } from "hono/body-limit";
 import { getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import type { AppEnv } from "../app";
+import { MCP_PATH } from "../tokens/bearer";
 import { gatePage } from "./page";
 
 export const GATE_COOKIE = "oth_gate";
@@ -161,6 +162,26 @@ export class WrongCodes {
 }
 
 /**
+ * The one way past the gate that is not the cookie (spec §6.2): Claude Code
+ * calling the map's MCP endpoint with a personal token. The /mcp route
+ * checks the token itself, gate or no gate. This only decides which
+ * requests reach it without the cookie.
+ *
+ * - Exactly /mcp, on the parsed pathname. Hono routes "/%6Dcp" to /mcp as
+ *   well, but its pathname is not "/mcp", so it still meets the gate.
+ * - POST for the calls. GET too, but only so the client's request for an
+ *   event stream gets the route's 405: from the gate, a 401 there reads to
+ *   a client that knows OAuth as "sign in first".
+ * - Never with an Origin header. Browsers send one and Claude Code does not.
+ */
+export function claudeCodeCall(req: Request): boolean {
+  if (req.method !== "POST" && req.method !== "GET") return false;
+  if (req.headers.has("origin")) return false;
+  if (!/^Bearer\s+\S/i.test(req.headers.get("authorization") ?? "")) return false;
+  return new URL(req.url).pathname === MCP_PATH;
+}
+
+/**
  * The shared team code in front of the app (spec §13): `guard` goes before
  * every route, `routes` answers the form at `/api/gate`. `key` is the one
  * loadGateKey keeps.
@@ -178,6 +199,7 @@ export function teamGate(code: string, options: { key: Buffer; secure: boolean; 
     const path = c.req.path;
     // Railway's health check, and the form's own answer, come before any code.
     if (path === "/api/health" || path === "/api/gate") return next();
+    if (claudeCodeCall(c.req.raw)) return next();
     if (!holdsPass(getCookie(c, GATE_COOKIE), tokenBytes)) {
       if (path.startsWith("/api/")) return c.json(GATE_REFUSAL, 401, noStore);
       const url = new URL(c.req.url);
