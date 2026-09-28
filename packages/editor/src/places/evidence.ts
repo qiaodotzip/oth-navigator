@@ -60,7 +60,11 @@ export function frameWindow(box: Box | undefined): FrameWindow {
   return { x: clamp(box.x + box.w / 2 - size / 2), y: clamp(box.y + box.h / 2 - size / 2), size };
 }
 
-/** The frame width to ask for, so a window of it shown `displayPx` wide is sharp. */
+/**
+ * The frame width to ask for, so a window of it shown `displayPx` wide is
+ * sharp. `displayPx` counts device pixels: callers pass the CSS width times
+ * `devicePixelRatio`, or a retina screen gets a blurred sign.
+ */
 export function imageWidthFor(displayPx: number, box: Box | undefined): number {
   const needed = displayPx / frameWindow(box).size;
   return SERVED_WIDTHS.find(w => w >= needed) ?? 1600;

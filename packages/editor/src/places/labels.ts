@@ -23,13 +23,15 @@ function anchorOf(room: Room): Anchor {
   return anchor;
 }
 
-// TODO(5A): use the shared helper from flow/
 /**
  * A place counts as bound only while the room it names still exists: a room
  * deleted from under it leaves nothing to label or to list the place on.
+ * Labels need that whatever the place's status, while `flow/`'s shared helper
+ * means "confirmed and bindable", so the two rules differ: swapping them would
+ * drop every proposed label.
  */
-function isBoundToLiveRoom(place: Place, model: MapModel): place is Place & { roomId: string } {
-  return model.rooms.some(r => r.id === place.roomId && r.deletedAt == null);
+function isBoundToLiveRoom(place: Place, liveRooms: ReadonlySet<string>): place is Place & { roomId: string } {
+  return place.roomId !== undefined && liveRooms.has(place.roomId);
 }
 
 /**
@@ -38,9 +40,10 @@ function isBoundToLiveRoom(place: Place, model: MapModel): place is Place & { ro
  * area, so the card lists them all alike rather than picking one.
  */
 export function placesByRoom(model: MapModel): Map<string, Place[]> {
+  const liveRooms = new Set(live(model.rooms).map(r => r.id));
   const byRoom = new Map<string, Place[]>();
   for (const place of live(model.places)) {
-    if (!isBoundToLiveRoom(place, model)) continue;
+    if (!isBoundToLiveRoom(place, liveRooms)) continue;
     const list = byRoom.get(place.roomId);
     if (list) list.push(place);
     else byRoom.set(place.roomId, [place]);
