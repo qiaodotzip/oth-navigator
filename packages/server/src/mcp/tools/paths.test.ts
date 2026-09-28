@@ -31,7 +31,8 @@ describe("suggest_paths", () => {
     expect(isError).toBe(false);
     expect(JSON.parse(text)).toEqual({
       floor: "L1",
-      lines: [{ polyline: [[2.13, 1.88], [17.88, 1.88]], widthM: 3.8 }],
+      levelId: "oth-L1",
+      lines: [{ polyline: [[2.13, 1.88], [17.88, 1.88]], widthM: 3.8, ends: ["end", "end"], network: 0 }],
       links: [{ from: { type: "doorway", id: "L1-door-shop" }, segment: [[10, 4], [10, 1.88]] }],
       unconnected: [{ type: "entrance", id: "L1-gate-4", reason: "It is not on or beside a walkable area." }],
     });
@@ -47,7 +48,7 @@ describe("suggest_paths", () => {
 
   it("gives a floor with no walkable area no lines", async () => {
     expect(JSON.parse((await call(client, "suggest_paths", { floor: "L2" })).text)).toEqual({
-      floor: "L2", lines: [], links: [], unconnected: [],
+      floor: "L2", levelId: "oth-L2", lines: [], links: [], unconnected: [],
     });
   });
 
@@ -65,6 +66,14 @@ describe("suggest_paths", () => {
     const { text, isError } = await call(client, "suggest_paths", { floor: "L1" });
     expect(isError).toBe(true);
     expect(text).toMatch(/^Nothing suggested for L1\. Its walkable areas span 2010 by 2004 m/);
+  });
+
+  it("tells Claude how the lines break, what ends and network mean, and what to check before drawing", async () => {
+    const { tools } = await client.listTools();
+    const description = tools.find(t => t.name === "suggest_paths")?.description ?? "";
+    for (const words of ["only at a fork", "longest first", "ends", "network", "blocks Publish", "no width", "view_plan", "50 m", "lift, escalator or stair stop", "levelId"]) {
+      expect(description).toContain(words);
+    }
   });
 
   it("is a read: marked read-only, and counted against the token's reads", async () => {
