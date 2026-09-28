@@ -9,11 +9,13 @@
 packages/server/data/
 **/survey-out/
 
-# The rest, about 20 MB the build never reads.
-.superpowers/
-.claude/
-docs/
-images/
-legacy/
-research/
-e2e/test-results/
+# The rest, about 20 MB the build never reads. Anchored with a leading slash:
+# like .gitignore, a bare "images/" matches a folder of that name at any depth,
+# and so dropped packages/server/src/images (the first deploy could not boot).
+/.superpowers/
+/.claude/
+/docs/
+/images/
+/legacy/
+/research/
+/e2e/test-results/
