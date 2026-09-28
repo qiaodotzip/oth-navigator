@@ -23,3 +23,5 @@ export * from "./pathwayStrips";
 export * from "./markers";
 export * from "./categoryTint";
 export * from "./portals";
+// Plan 6B: the whole-floor 3D export.
+export * from "./export/floorGlb";
