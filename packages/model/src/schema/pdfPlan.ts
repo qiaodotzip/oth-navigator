@@ -4,6 +4,8 @@ import { RoomKindSchema } from "./structure";
 
 const finite = z.number().finite();
 const positive = z.number().positive().finite();
+/** A file's SHA-256, as the server's content-addressed store names it. */
+const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 
 /**
  * Where a floor's plan image came from on its PDF (spec §5.3). It is kept so
@@ -35,11 +37,12 @@ export const PlanSheetSchema = z.object({
 
 export const PlanSourceSchema = PlanSheetSchema.extend({
   pdfId: z.string().min(1),
-  checksum: z.string().regex(/^[0-9a-f]{64}$/),
-  filename: z.string(),
+  checksum: Sha256Schema,
+  /** As the file was named when sent, cut to 255 characters. */
+  filename: z.string().max(255),
 });
 
-export const DraftSourceSchema = z.object({ checksum: z.string().min(1), page: z.number().int().positive() });
+export const DraftSourceSchema = z.object({ checksum: Sha256Schema, page: z.number().int().positive() });
 
 /**
  * A space found in a floor's PDF, waiting for a person to make it a room

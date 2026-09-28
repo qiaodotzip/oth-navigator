@@ -19,6 +19,34 @@ export class DraftRefusedError extends Error {
   }
 }
 
+/**
+ * Two accepts at once each saw a new room's id free, and the other took it
+ * first. Nothing of this one was written, so accepting again is safe: it
+ * numbers past the room that won. Answered 409.
+ */
+export class RoomIdTakenError extends Error {
+  constructor() {
+    super("Someone added a room with the same name just now. Accept again, and yours is numbered after theirs.");
+    this.name = "RoomIdTakenError";
+  }
+}
+
+/** Postgres's unique_violation, from pg and PGlite alike. A room's one unique key is its id. */
+function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === "23505";
+}
+
+/**
+ * The floor drafts are for. A deleted one is refused like a missing one:
+ * rooms added to it would be hidden with it, and found by no one.
+ */
+async function liveLevel(tx: Database, levelId: string) {
+  const [level] = await tx.select().from(levels).where(eq(levels.id, levelId));
+  if (!level) throw new DraftRefusedError(`There is no floor ${levelId}.`);
+  if (level.deletedAt) throw new DraftRefusedError(`Floor ${level.code} was deleted. Restore it first.`);
+  return level;
+}
+
 export type AcceptItem = { id: string; expectedVersion: number; nameEn?: string; kind?: RoomKind };
 export type UnacceptItem = { id: string; expectedVersion: number; roomVersion: number };
 export type Accepted = { draftId: string; draftVersion: number; roomId: string; roomVersion: number };
@@ -57,8 +85,7 @@ export async function replaceDrafts(
 ): Promise<Row[]> {
   return db.transaction(async t => {
     const tx = t as unknown as Database;
-    const [level] = await tx.select().from(levels).where(eq(levels.id, levelId));
-    if (!level) throw new DraftRefusedError(`There is no floor ${levelId}.`);
+    await liveLevel(tx, levelId);
     const at = new Date();
     const live = await tx.select().from(roomDrafts)
       .where(and(eq(roomDrafts.levelId, levelId), isNull(roomDrafts.deletedAt)));
@@ -80,6 +107,17 @@ export async function replaceDrafts(
  * both.
  */
 export async function acceptDrafts(db: Database, items: readonly AcceptItem[], actor: string): Promise<Accepted[]> {
+  try {
+    return await acceptInOne(db, items, actor);
+  } catch (err) {
+    // `taken` is read as the transaction starts, so a teammate's accept that
+    // commits the same new id before this one's insert meets the primary key.
+    if (isUniqueViolation(err)) throw new RoomIdTakenError();
+    throw err;
+  }
+}
+
+async function acceptInOne(db: Database, items: readonly AcceptItem[], actor: string): Promise<Accepted[]> {
   return db.transaction(async t => {
     const tx = t as unknown as Database;
     const taken = new Set((await tx.select({ id: rooms.id }).from(rooms)).map(r => r.id));
@@ -96,8 +134,7 @@ export async function acceptDrafts(db: Database, items: readonly AcceptItem[], a
       if (!draft.footprint) {
         throw new DraftRefusedError(`${draft.nameEn} is left open on the drawing, so it has no shape to add. Draw it by hand.`);
       }
-      const [level] = await tx.select().from(levels).where(eq(levels.id, draft.levelId));
-      if (!level) throw new DraftRefusedError(`There is no floor ${draft.levelId}.`);
+      const level = await liveLevel(tx, draft.levelId);
       const nameEn = item.nameEn?.trim() || draft.nameEn;
       const kind = item.kind ?? (draft.kind as RoomKind);
       const roomId = roomIdFor(level.code, nameEn, taken);

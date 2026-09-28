@@ -6,7 +6,7 @@ import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
 import { NotFoundError, VersionConflictError } from "../entities/repository";
 import {
-  DraftRefusedError, MAX_DRAFTS, acceptDrafts, listDrafts, replaceDrafts, unacceptDrafts,
+  DraftRefusedError, MAX_DRAFTS, RoomIdTakenError, acceptDrafts, listDrafts, replaceDrafts, unacceptDrafts,
 } from "./service";
 
 const Version = z.number().int().nonnegative();
@@ -28,6 +28,7 @@ function failure(err: unknown) {
   if (err instanceof VersionConflictError) {
     return { body: { error: "version conflict", current: err.current }, status: 409 as const };
   }
+  if (err instanceof RoomIdTakenError) return { body: { error: err.message, current: null }, status: 409 as const };
   if (err instanceof NotFoundError) return { body: { error: "not found" }, status: 404 as const };
   if (err instanceof DraftRefusedError) return { body: { error: err.message }, status: 422 as const };
   if (err instanceof ZodError) return { body: { error: "invalid draft", detail: String(err) }, status: 422 as const };

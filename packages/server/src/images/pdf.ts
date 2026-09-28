@@ -16,6 +16,14 @@ export function looksLikePdf(bytes: Uint8Array): boolean {
   return false;
 }
 
+/** The longest filename kept, as PlanSourceSchema holds it. */
+export const FILENAME_MAX = 255;
+
+/** A sent file's name cut to FILENAME_MAX, never between the two halves of one character. */
+export function capFilename(name: string): string {
+  return name.slice(0, FILENAME_MAX).replace(/[\uD800-\uDBFF]$/, "");
+}
+
 /** A download name that cannot break out of its header. */
 export function attachmentName(filename: string): string {
   const safe = filename.replace(/[^\w.\- ]/g, "_").slice(0, 120) || "plan";

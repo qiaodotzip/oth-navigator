@@ -9,7 +9,7 @@ import { readAsset, storeAsset } from "../assets/storage";
 import { requireUser } from "../auth/middleware";
 import { levelImages, levels, planPdfs } from "../db/schema";
 import { IMAGE_MAX_BYTES, InvalidImageError, readImageSize } from "./inspect";
-import { PDF_MAX_BYTES, attachmentName, looksLikePdf } from "./pdf";
+import { PDF_MAX_BYTES, attachmentName, capFilename, looksLikePdf } from "./pdf";
 
 const PatchBody = z.object({
   expectedVersion: z.number().int().nonnegative(),
@@ -175,15 +175,16 @@ levelImageRoutes.post(
 
     const stored = await storeAsset(c.get("dataDir"), bytes, "pdf");
     const pdfId = `pdf_${stored.checksum.slice(0, 16)}`;
+    const filename = capFilename(file.name);
     // Content-addressed like every stored file: the same PDF sent for two floors is kept once.
     await db.insert(planPdfs).values({
-      id: pdfId, filename: file.name, storagePath: stored.storagePath, checksum: stored.checksum,
+      id: pdfId, filename, storagePath: stored.storagePath, checksum: stored.checksum,
       sizeBytes: bytes.byteLength, uploadedBy: c.get("user").id,
     }).onConflictDoNothing();
 
     const [row] = await db.update(levelImages)
       .set({
-        source: { ...sheet.data, pdfId, checksum: stored.checksum, filename: file.name },
+        source: { ...sheet.data, pdfId, checksum: stored.checksum, filename },
         version: expectedVersion + 1,
         updatedBy: c.get("user").id,
         updatedAt: new Date(),

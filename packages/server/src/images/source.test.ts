@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
@@ -8,11 +8,17 @@ import { createUser } from "../auth/users";
 import type { Database } from "../db/client";
 import { buildings, levelImages, levels, planPdfs } from "../db/schema";
 import { createTestDb, json } from "../testing/harness";
-import { attachmentName, looksLikePdf } from "./pdf";
+import { attachmentName, capFilename, looksLikePdf } from "./pdf";
 
 let db: Database;
 let app: ReturnType<typeof createApp>;
 let cookie: string;
+let dataDir: string;
+
+/** Every PDF stored under the data folder. */
+async function storedPdfs(): Promise<string[]> {
+  return (await readdir(dataDir, { recursive: true })).filter(f => f.endsWith(".pdf"));
+}
 
 function png(width: number, height: number): Uint8Array {
   const bytes = new Uint8Array(33);
@@ -49,7 +55,8 @@ function send(id: string, { bytes = pdf, meta = sheet as unknown, expectedVersio
 
 beforeEach(async () => {
   db = await createTestDb();
-  app = createApp({ db, dataDir: await mkdtemp(join(tmpdir(), "oth-src-")) });
+  dataDir = await mkdtemp(join(tmpdir(), "oth-src-"));
+  app = createApp({ db, dataDir });
   const wei = await createUser(db, { email: "wei@example.com", password: "passphrase", displayName: "Wei" });
   cookie = (await app.request("/api/auth/login", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId: wei.id }),
@@ -104,6 +111,36 @@ describe("a plan's PDF", () => {
     expect((await send(image.id, { expectedVersion: 0 })).status).toBe(409);
   });
 
+  it("stores nothing for a stale version: no file and no row", async () => {
+    const image = await plan();
+    const patched = await app.request(`/api/level-images/${image.id}`, {
+      method: "PATCH", headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ expectedVersion: 0, data: { opacity: 0.5 } }),
+    });
+    expect(patched.status).toBe(200);
+    expect((await send(image.id, { expectedVersion: 0 })).status).toBe(409);
+    expect(await db.select().from(planPdfs)).toEqual([]);
+    expect(await storedPdfs()).toEqual([]);
+  });
+
+  it("404s a PDF for a plan a newer upload retired, and stores nothing", async () => {
+    const retired = await plan();
+    await plan();
+    expect((await send(retired.id)).status).toBe(404);
+    expect(await db.select().from(planPdfs)).toEqual([]);
+    expect(await storedPdfs()).toEqual([]);
+  });
+
+  it("keeps a long filename to 255 characters", async () => {
+    const image = await plan();
+    const res = await send(image.id, { name: `${"L1 ".repeat(100)}.pdf` });
+    expect(res.status).toBe(200);
+    const { image: row } = await json<{ image: { source: { filename: string } } }>(res);
+    expect(row.source.filename).toHaveLength(255);
+    const [stored] = await db.select().from(planPdfs);
+    expect(stored?.filename).toHaveLength(255);
+  });
+
   it("404s the PDF of a plan that came from an image", async () => {
     const image = await plan();
     expect((await app.request(`/api/level-images/${image.id}/source`, { headers: { cookie } })).status).toBe(404);
@@ -118,7 +155,7 @@ describe("a plan's PDF", () => {
   });
 });
 
-describe("looksLikePdf and attachmentName", () => {
+describe("looksLikePdf, capFilename and attachmentName", () => {
   it("knows a PDF by its header, within the first 1024 bytes", () => {
     expect(looksLikePdf(pdf)).toBe(true);
     expect(looksLikePdf(new TextEncoder().encode(`${"\n".repeat(900)}%PDF-1.7`))).toBe(true);
@@ -127,5 +164,11 @@ describe("looksLikePdf and attachmentName", () => {
   it("names the download safely", () => {
     expect(attachmentName('L1 "plan"\r\n.pdf')).toBe("L1 _plan___.pdf");
     expect(attachmentName("sheet")).toBe("sheet.pdf");
+  });
+  it("cuts a name to 255 characters, never through one character's two halves", () => {
+    expect(capFilename("L1.pdf")).toBe("L1.pdf");
+    expect(capFilename("a".repeat(300))).toBe("a".repeat(255));
+    // An emoji is two UTF-16 units: here the cut would fall between them.
+    expect(capFilename(`${"a".repeat(254)}🏢.pdf`)).toBe("a".repeat(254));
   });
 });

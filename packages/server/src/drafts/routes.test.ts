@@ -1,7 +1,7 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { createUser } from "../auth/users";
@@ -67,6 +67,21 @@ describe("a floor's drafts", () => {
 
   it("refuses a floor that isn't there", async () => {
     expect((await replace([found("Shop")], "oth-L9")).status).toBe(422);
+  });
+
+  it("refuses a floor that was deleted, and keeps the drafts there were", async () => {
+    await replace([found("Shop")]);
+    await db.update(levels).set({ deletedAt: new Date() }).where(eq(levels.id, "oth-L2"));
+    const res = await replace([found("Store")]);
+    expect(res.status).toBe(422);
+    expect((await json<{ error: string }>(res)).error).toMatch(/Restore it first/);
+    expect((await listed()).map(d => d.nameEn)).toEqual(["Shop"]);
+  });
+
+  it("refuses a source that isn't a PDF's SHA-256", async () => {
+    const res = await send("PUT", "/api/levels/oth-L2/drafts", { source: { checksum: "abc", page: 1 }, drafts: [found("Shop")] });
+    expect(res.status).toBe(400);
+    expect(await listed()).toEqual([]);
   });
 
   it("refuses more than 1,000 drafts at once", async () => {
@@ -141,6 +156,50 @@ describe("accepting drafts", () => {
     expect(res.status).toBe(409);
     expect((await db.select().from(rooms)).length).toBe(before);
     expect(await listed()).toHaveLength(2);
+  });
+
+  it("refuses to add rooms to a floor that was deleted", async () => {
+    await replace([found("Shop")]);
+    const shop = await named("Shop");
+    await db.update(levels).set({ deletedAt: new Date() }).where(eq(levels.id, "oth-L2"));
+    const before = (await db.select().from(rooms)).length;
+    const res = await accept([{ id: shop.id, expectedVersion: 0 }]);
+    expect(res.status).toBe(422);
+    expect((await json<{ error: string }>(res)).error).toMatch(/L2 was deleted/);
+    expect((await db.select().from(rooms)).length).toBe(before);
+    expect((await listed()).map(d => d.id)).toEqual([shop.id]);
+  });
+
+  it("409s when a teammate's accept took the same new id at the same moment, and a second try numbers past it", async () => {
+    await replace([found("Shop")]);
+    const shop = await named("Shop");
+    // Stands in for a teammate's accept committing L2-shop-2 between this
+    // one's read of the ids and its insert, which a pool of connections
+    // allows: the room is put in just ahead, so the real primary key refuses.
+    await db.execute(sql.raw(`
+      create function teammate_first() returns trigger language plpgsql as $$
+      begin
+        if pg_trigger_depth() = 1 then
+          insert into rooms (id, level_id, kind, footprint, height_m) values (new.id, new.level_id, 'room', new.footprint, new.height_m);
+        end if;
+        return new;
+      end $$`));
+    await db.execute(sql.raw(`
+      create trigger teammate_first before insert on rooms
+      for each row when (new.id = 'L2-shop-2') execute function teammate_first()`));
+
+    const res = await accept([{ id: shop.id, expectedVersion: 0 }]);
+    expect(res.status).toBe(409);
+    expect((await json<{ error: string; current: unknown }>(res))).toMatchObject({ error: expect.stringMatching(/Accept again/), current: null });
+    // All or none: the draft still waits, at the version the reviewer holds.
+    expect(await named("Shop")).toMatchObject({ id: shop.id, version: 0 });
+
+    // The teammate's room is really there now, so the retry numbers past it.
+    await db.execute(sql.raw("drop trigger teammate_first on rooms"));
+    await db.insert(rooms).values({ id: "L2-shop-2", levelId: "oth-L2", kind: "room", footprint: square(60, 60, 5), heightM: 4.5 });
+    const again = await accept([{ id: shop.id, expectedVersion: 0 }]);
+    expect(again.status).toBe(200);
+    expect((await json<{ accepted: Accepted[] }>(again)).accepted[0]?.roomId).toBe("L2-shop-3");
   });
 
   it("tells a reviewer whose draft a new search replaced, rather than adding it", async () => {

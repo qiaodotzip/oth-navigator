@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { readAsset, storeAsset } from "../assets/storage";
 import { createSession } from "../auth/sessions";
 import {
-  auditLog, captures, keyframes, levelImages, places, publishedVersions, sessions, sightings, users,
+  auditLog, captures, keyframes, levelImages, places, planPdfs, publishedVersions, roomDrafts, sessions, sightings, users,
 } from "../db/schema";
 import { createTestDb } from "../testing/harness";
 import { exportData, ExportRefused } from "./dataExport";
@@ -117,6 +117,39 @@ describe("data:export and data:import", () => {
     expect(await readFile(join(dst.dataDir, "published", VERSION, "manifest.json"), "utf8")).toBe("{}");
     const [person] = await dst.db.select().from(users);
     expect(person!.id).toBe(src.user.id);
+  }, 60_000);
+
+  it("carries a plan's PDF with its row, where the plan sits on the sheet, and the drafts found in it", async () => {
+    const src = await source();
+    const bytes = new TextEncoder().encode("%PDF-1.7\n% L1's sheet\n");
+    const pdf = await storeAsset(src.dataDir, bytes, "pdf");
+    const sheet = {
+      page: 1, pageCount: 1, pageSizePt: [792, 612] as [number, number], rotation: 90 as const,
+      clipPt: [117, 76, 684, 556] as [number, number, number, number], pointsPerPixel: 0.0933,
+      metresPerPoint: 0.7505, runsAgree: 2, runsFound: 3, pdfId: "pdf_1", checksum: pdf.checksum, filename: "L1.pdf",
+    };
+    await src.db.insert(planPdfs).values({
+      id: "pdf_1", filename: "L1.pdf", storagePath: pdf.storagePath, checksum: pdf.checksum, sizeBytes: bytes.byteLength,
+    });
+    await src.db.update(levelImages).set({ source: sheet }).where(eq(levelImages.id, "img_1"));
+    // A space the drawing leaves open: no footprint, so null rides through too.
+    await src.db.insert(roomDrafts).values({
+      id: "rd_1", levelId: "oth-L1", nameEn: "Plaza", kind: "area", labelPoint: [3, 4], areaM2: 0,
+      source: { checksum: pdf.checksum, page: 1 },
+    });
+    const out = join(await tmp("out"), "export");
+    const result = await exportData(src.db, src.dataDir, out);
+    expect(result.counts).toMatchObject({ plan_pdfs: 1, room_drafts: 1 });
+    expect(result.files).toBe(4);
+
+    const dst = await target();
+    expect((await importData(dst.db, dst.dataDir, out)).files).toEqual({ copied: 4, alreadyThere: 0 });
+    const [row] = await dst.db.select().from(planPdfs);
+    expect(Array.from(await readAsset(dst.dataDir, row!.storagePath))).toEqual(Array.from(bytes));
+    const [img] = await dst.db.select().from(levelImages);
+    expect(img!.source).toEqual(sheet);
+    const [draft] = await dst.db.select().from(roomDrafts);
+    expect(draft).toMatchObject({ footprint: null, holes: [], labelPoint: [3, 4], source: { checksum: pdf.checksum, page: 1 } });
   }, 60_000);
 
   it("leaves files where they already are, as when they were uploaded straight into the data folder", async () => {

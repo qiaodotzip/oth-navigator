@@ -29,6 +29,10 @@ describe("RoomDraftSchema", () => {
     expect(RoomDraftSchema.safeParse({ ...draft, kind: "detail" }).success).toBe(true);
     expect(RoomDraftSchema.safeParse({ ...draft, kind: "corridor" }).success).toBe(false);
   });
+  it("names the PDF it came from by its SHA-256", () => {
+    expect(RoomDraftSchema.safeParse({ ...draft, source: { checksum: "abc", page: 1 } }).success).toBe(false);
+    expect(RoomDraftSchema.safeParse({ ...draft, source: { checksum: "A".repeat(64), page: 1 } }).success).toBe(false);
+  });
   it("what the finder sends carries no id, floor or source: the server gives those", () => {
     const parsed = RoomDraftInputSchema.parse(draft);
     expect(Object.keys(parsed).sort()).toEqual(["areaM2", "footprint", "holes", "kind", "labelPoint", "nameEn"]);
@@ -49,5 +53,10 @@ describe("PlanSheetSchema and PlanSourceSchema", () => {
     const source = { ...sheet, pdfId: "pdf_1", checksum: "b".repeat(64), filename: "L1.pdf" };
     expect(PlanSourceSchema.safeParse(source).success).toBe(true);
     expect(PlanSourceSchema.safeParse({ ...source, checksum: "abc" }).success).toBe(false);
+  });
+  it("keeps a filename of at most 255 characters", () => {
+    const source = { ...sheet, pdfId: "pdf_1", checksum: "b".repeat(64) };
+    expect(PlanSourceSchema.safeParse({ ...source, filename: `${"a".repeat(251)}.pdf` }).success).toBe(true);
+    expect(PlanSourceSchema.safeParse({ ...source, filename: `${"a".repeat(252)}.pdf` }).success).toBe(false);
   });
 });
