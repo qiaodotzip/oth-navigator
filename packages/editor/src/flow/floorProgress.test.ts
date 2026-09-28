@@ -54,16 +54,22 @@ describe("buildStepsDone", () => {
     expect(buildStepsDone(empty, null, noImages, "oth-L1").bind).toBe(false);
   });
 
+  const library = { id: "L1-lib", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 3 };
+  const bindings = [
+    { id: "a", nameEn: "Library", category: "community", levelId: "oth-L1", roomId: "L1-lib" },
+    { id: "w", nameEn: "Covered link", category: "facility", levelId: "oth-L1", pathwayKindId: "pk-1" },
+  ];
+
   it("calls binding done once every confirmed unit on the floor has a room, walkways aside", () => {
-    const bound = parseModel({
-      building,
-      levels,
-      places: [
-        { id: "a", nameEn: "Library", category: "community", levelId: "oth-L1", roomId: "L1-lib" },
-        { id: "w", nameEn: "Covered link", category: "facility", levelId: "oth-L1", pathwayKindId: "pk-1" },
-      ],
-    });
+    const bound = parseModel({ building, levels, rooms: [library], places: bindings });
     expect(buildStepsDone(bound, null, noImages, "oth-L1").bind).toBe(true);
+  });
+
+  it("does not count a place as bound to a room that has been deleted", () => {
+    const gone = parseModel({
+      building, levels, rooms: [{ ...library, deletedAt: "2026-09-28T08:00:00.000Z" }], places: bindings,
+    });
+    expect(buildStepsDone(gone, null, noImages, "oth-L1").bind).toBe(false);
   });
 });
 

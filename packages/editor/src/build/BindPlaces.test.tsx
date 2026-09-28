@@ -5,7 +5,7 @@ import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
-import { BindPlaces, BindTools } from "./BindPlaces";
+import { BindPlaces, BindTools, offersPlaces } from "./BindPlaces";
 
 const square = (x: number): [number, number][] => [[x, 0], [x + 10, 0], [x + 10, 10], [x, 10]];
 
@@ -43,6 +43,16 @@ const model = parseModel({
     { id: "s1", placeId: "pl_mall", keyframeId: "kf_1" },
     { id: "s2", placeId: "pl_mall", keyframeId: "kf_2" },
   ],
+});
+
+// Bound, then its room deleted to be drawn again. The place still names it.
+const orphaned = parseModel({
+  ...base,
+  rooms: [
+    ...base.rooms,
+    { id: "L1-gone", levelId: "oth-L1", kind: "room", footprint: square(40), heightM: 3.5, deletedAt: "2026-09-28T08:00:00.000Z" },
+  ],
+  places: [{ id: "pl_gate", nameEn: "Gate 2", category: "facility", levelId: "oth-L1", roomId: "L1-gone" }],
 });
 
 // Typed with its arguments: `vi.fn(async () => true)` records calls as `[]`,
@@ -198,6 +208,18 @@ describe("BindPlaces", () => {
     expect(update.mock.calls).toEqual([["place", "pl_1", 0, { roomId: null }]]);
   });
 
+  it("offers again a place whose room has since been deleted, so a room drawn again can have it", async () => {
+    const { update, onBound } = setup({ m: orphaned });
+    expect(names(screen.getByRole("list", { name: "On L1" }))).toEqual(["Bind to Gate 2"]);
+    fireEvent.click(screen.getByRole("button", { name: "Bind to Gate 2" }));
+    await waitFor(() => expect(onBound).toHaveBeenCalled());
+    expect(update.mock.calls[0]).toEqual(["place", "pl_gate", 0, { roomId: "L1-a", levelId: "oth-L1" }]);
+  });
+
+  it("offers the room the picker even when every place waiting is one whose room was deleted", () => {
+    expect(offersPlaces(orphaned, orphaned.rooms.find(r => r.id === "L1-a")!)).toBe(true);
+  });
+
   it("says what to do when no place is waiting for a room", () => {
     setup({ m: parseModel(base) });
     expect(screen.getByText(/tag and review this floor's footage first/i)).toBeTruthy();
@@ -234,5 +256,11 @@ describe("BindTools", () => {
     render(<BindTools api={fakeApi()} pendingPlaceId="pl_taken" onCancel={vi.fn()} />);
     expect(screen.queryByText(/click the room where you see/i)).toBeNull();
     expect(screen.getByText(/pick a place from the to-do list/i)).toBeTruthy();
+  });
+
+  it("asks for a room for a place whose room has since been deleted", () => {
+    useEditorStore.getState().setModel(orphaned);
+    render(<BindTools api={fakeApi()} pendingPlaceId="pl_gate" onCancel={vi.fn()} />);
+    expect(screen.getByRole("status").textContent).toMatch(/Click the room where you see Gate 2/);
   });
 });

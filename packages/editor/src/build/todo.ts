@@ -1,6 +1,6 @@
-import { live, placeLevels, type MapModel, type ValidationIssue, type ValidationReport } from "@oth/model";
+import { live, type MapModel, type ValidationIssue, type ValidationReport } from "@oth/model";
 import type { LevelImage } from "../api/client";
-import { BUILD_STEPS, buildStepForCode, type BuildStepId } from "../flow/buildSteps";
+import { BUILD_STEPS, buildStepForCode, floorUnits, type BuildStepId } from "../flow/buildSteps";
 import type { Selection } from "../state/store";
 import { imageForLevel } from "../state/underlay";
 import { SELECTABLE_TYPES, type Selectable } from "./selection";
@@ -75,11 +75,12 @@ export function stepTodos(
     });
   }
 
-  const floors = placeLevels(model);
   const roomLevel = new Map(live(model.rooms).map(r => [r.id, r.levelId]));
   const places = new Map(live(model.places).map(p => [p.id, p]));
   const portals = new Map(live(model.portals).map(p => [p.id, p]));
   const stops = live(model.portalEndpoints);
+  const waiting = floorUnits(model, levelId).waiting;
+  const waitingIds = new Set(waiting.map(p => p.id));
   const seen = new Map<string, number>();
 
   for (const issue of report?.issues ?? []) {
@@ -98,6 +99,19 @@ export function stepTodos(
     });
   }
 
+  // A place whose room was deleted still names it, so the validator, which
+  // asks only that a room be named, says nothing. It is waiting all the same,
+  // and without a line here nothing would lead back to it.
+  const listed = new Set(todos.bind.flatMap(t => (t.target.kind === "place" ? [t.target.placeId] : [])));
+  for (const place of waiting) {
+    if (!place.roomId || listed.has(place.id)) continue;
+    todos.bind.push({
+      key: `place.unbound:${place.id}`, step: "bind", severity: "warning", code: "place.unbound",
+      message: `Surveyed place "${place.nameEn}" was bound to a room that has since been deleted. Bind it to a room again.`,
+      target: { kind: "place", placeId: place.id },
+    });
+  }
+
   // Errors first: they are what stop Publish. Otherwise the report's own
   // order, which keeps like with like.
   for (const { id } of BUILD_STEPS) {
@@ -110,17 +124,17 @@ export function stepTodos(
     if (issue.entityType === "place") {
       const place = places.get(issue.entityId);
       if (!place) return null;
+      // Waiting for a room on this floor (`floorUnits`): choosing it asks which room it is.
+      if (waitingIds.has(place.id)) return { kind: "place", placeId: place.id };
+      // Otherwise it is not this floor's to bind: a proposal, a walkway,
+      // another floor's place, or one bound since this report was made.
+      if (issue.code === "place.unbound" || !place.roomId) return null;
       // A bound place's item selects its room, so it is listed where that room
       // is. Places bound before binding set a floor have no level of their own,
       // and the footage they were filmed on can be another floor's.
-      const floor = place.roomId ? roomLevel.get(place.roomId) : floors.get(place.id);
-      if (floor !== levelId) return null;
-      // Binding is for confirmed units: a proposal is still Review's to decide,
-      // and a walkway is built as a path, not bound to a room.
-      if (issue.code === "place.unbound" && (place.status !== "confirmed" || place.pathwayKindId)) return null;
-      return place.roomId
+      return roomLevel.get(place.roomId) === levelId
         ? { kind: "select", selection: { type: "room", id: place.roomId } }
-        : { kind: "place", placeId: place.id };
+        : null;
     }
     if (issue.entityType === "portal") {
       const itsStops = stops.filter(e => e.portalId === issue.entityId);

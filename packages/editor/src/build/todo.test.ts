@@ -163,6 +163,71 @@ describe("stepTodos — binding places", () => {
   });
 });
 
+/**
+ * Redrawing a wrong room: delete it, draw it again. Deleting leaves the place
+ * naming the old room, and the validator, which asks only that a room be
+ * named, says nothing about it.
+ */
+describe("stepTodos and the Bind tick — a place whose room was deleted", () => {
+  const drawn = {
+    building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+    levels: [
+      { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 },
+      { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 },
+    ],
+    captures: [{ id: "cap_1", kind: "video", filename: "l1.mp4", levelId: "oth-L1" }],
+    keyframes: [{ id: "kf_1", captureId: "cap_1", imageId: "kf_1", widthPx: 640, heightPx: 480 }],
+    sightings: [{ id: "s1", placeId: "pl_old", keyframeId: "kf_1" }],
+  };
+  const concourse = { id: "L1-concourse", levelId: "oth-L1", kind: "area", footprint: square, heightM: 5, nameEn: "Concourse" };
+  const places = [
+    { id: "pl_gate", nameEn: "Gate 2", category: "facility", levelId: "oth-L1", roomId: "L1-concourse" },
+    // Bound before binding set a floor: only its footage says it is L1's.
+    { id: "pl_old", nameEn: "Gate 3", category: "facility", roomId: "L1-concourse" },
+  ];
+  const bound = parseModel({ ...drawn, rooms: [concourse], places });
+  const deleted = parseModel({ ...drawn, rooms: [{ ...concourse, deletedAt: "2026-09-28T08:00:00.000Z" }], places });
+  // What the validator says once the room is gone: nothing about either place.
+  const silent = report();
+
+  it("ticks Bind places while the room is there", () => {
+    expect(stepTodos(bound, silent, [scaled], "oth-L1").bind).toEqual([]);
+    expect(buildStepsDone(bound, silent, [scaled], "oth-L1").bind).toBe(true);
+  });
+
+  it("lists each place on its floor again once the room is deleted, and asks which room it is", () => {
+    const bind = stepTodos(deleted, silent, [scaled], "oth-L1").bind;
+    expect(bind.map(i => i.target)).toEqual([
+      { kind: "place", placeId: "pl_gate" },
+      { kind: "place", placeId: "pl_old" },
+    ]);
+    expect(bind[0]).toMatchObject({ step: "bind", severity: "warning", code: "place.unbound" });
+    expect(bind[0]!.message).toContain("Gate 2");
+    expect(stepTodos(deleted, silent, [scaled], "oth-L2").bind).toEqual([]);
+  });
+
+  it("takes the tick off Bind places once the room is deleted", () => {
+    expect(buildStepsDone(deleted, silent, [scaled], "oth-L1").bind).toBe(false);
+  });
+
+  it("lists a place once when a report from before the bind still calls it unbound", () => {
+    const stale = report({ ...issue("place.unbound", "place", "pl_gate"), message: "Surveyed place \"Gate 2\" is not bound to any room yet." });
+    const bind = stepTodos(deleted, stale, [scaled], "oth-L1").bind;
+    expect(bind.filter(i => i.target.kind === "place" && i.target.placeId === "pl_gate")).toHaveLength(1);
+    expect(new Set(bind.map(i => i.key)).size).toBe(bind.length);
+  });
+
+  it("puts the tick back once the places are bound to the room drawn in its place", () => {
+    const redrawn = parseModel({
+      ...drawn,
+      rooms: [{ ...concourse, deletedAt: "2026-09-28T08:00:00.000Z" }, { ...concourse, id: "L1-concourse-2" }],
+      places: places.map(p => ({ ...p, roomId: "L1-concourse-2" })),
+    });
+    expect(stepTodos(redrawn, silent, [scaled], "oth-L1").bind).toEqual([]);
+    expect(buildStepsDone(redrawn, silent, [scaled], "oth-L1").bind).toBe(true);
+  });
+});
+
 describe("stepTodos — lifts and stairs", () => {
   const tooFew = (id: string) => issue("portal.endpoints.insufficient", "portal", id, undefined, "error");
 

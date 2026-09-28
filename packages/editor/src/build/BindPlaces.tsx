@@ -1,6 +1,7 @@
 import { live, placeLevels, type MapModel, type Place, type Room, type Sighting } from "@oth/model";
 import { useState } from "react";
 import type { Api } from "../api/client";
+import { floorUnits } from "../flow/buildSteps";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { matchPlaces } from "../survey/places";
@@ -23,12 +24,21 @@ function placeFrames(sightings: readonly Sighting[]): Map<string, string> {
 }
 
 /**
- * Confirmed units nothing has claimed: a proposal is still Review's to
- * decide, and a walkway is built as a path, not bound to a room. A bound
- * place is never listed, so it is never ringed as the one in hand either.
+ * The places a room on this floor can be bound to: this floor's units waiting
+ * for a room, and those no floor claims (`floorUnits`, the rule Bind places'
+ * tick and to-do read too). One whose room was deleted is waiting again. A
+ * bound place is never listed, so it is never ringed as the one in hand either.
  */
-function openPlaces(model: MapModel): Place[] {
-  return live(model.places).filter(p => p.status === "confirmed" && !p.pathwayKindId && !p.roomId);
+function openPlaces(model: MapModel, levelId: string): { here: Place[]; floorless: Place[] } {
+  const levels = placeLevels(model);
+  return { here: floorUnits(model, levelId, levels).waiting, floorless: floorUnits(model, undefined, levels).waiting };
+}
+
+/** Whether a place still needs a room: one whose room was deleted does. */
+function waitingForRoom(model: MapModel, place: Place): boolean {
+  const levels = placeLevels(model);
+  // An unbound place is filed on its own floor, or the one it was filmed on.
+  return floorUnits(model, levels.get(place.id), levels).waiting.includes(place);
 }
 
 /**
@@ -36,7 +46,9 @@ function openPlaces(model: MapModel): Place[] {
  * to pick from. The inspector asks too, as the picker then has the column.
  */
 export function offersPlaces(model: MapModel, room: Room): boolean {
-  return !live(model.places).some(p => p.roomId === room.id) && openPlaces(model).length > 0;
+  if (live(model.places).some(p => p.roomId === room.id)) return false;
+  const { here, floorless } = openPlaces(model, room.levelId);
+  return here.length + floorless.length > 0;
 }
 
 /**
@@ -93,8 +105,8 @@ export function BindPlaces({
     );
   }
 
-  const open = openPlaces(model);
-  if (open.length === 0) {
+  const open = openPlaces(model, room.levelId);
+  if (open.here.length + open.floorless.length === 0) {
     return (
       <p className="text-xs text-stone-600">
         No confirmed places are waiting for a room. Tag and review this floor's footage first.
@@ -102,10 +114,9 @@ export function BindPlaces({
     );
   }
 
-  const floors = placeLevels(model);
   const pendingFirst = (a: Place, b: Place) => Number(b.id === pendingPlaceId) - Number(a.id === pendingPlaceId);
-  const here = matchPlaces(open.filter(p => floors.get(p.id) === room.levelId), query).sort(pendingFirst);
-  const floorless = matchPlaces(open.filter(p => floors.get(p.id) === undefined), query).sort(pendingFirst);
+  const here = matchPlaces(open.here, query).sort(pendingFirst);
+  const floorless = matchPlaces(open.floorless, query).sort(pendingFirst);
   const sightings = live(model.sightings);
   const frames = placeFrames(sightings);
   const code = model.levels.find(l => l.id === room.levelId)?.code ?? "this floor";
@@ -147,8 +158,8 @@ export function BindPlaces({
       ...(verified
         ? [() => api.updateEntity("room", room.id, room.version + 1, { verification: room.verification })]
         : []),
-      // Only unbound places are offered, so it had no room; an explicit null
-      // clears a floor it did not have either.
+      // Only places with no live room are offered, so it had none worth
+      // putting back; an explicit null clears a floor it did not have either.
       () => api.updateEntity("place", place.id, place.version + 1, { roomId: null, levelId: place.levelId ?? null }),
     ];
     offerUndo({
@@ -252,7 +263,7 @@ export function BindTools({
   const place = pendingPlaceId ? live(model?.places ?? []).find(p => p.id === pendingPlaceId) : undefined;
   // One bound after all — by a Retry that went through late, say — already
   // has its room, so there is nothing left to ask for.
-  if (!model || !place || place.roomId) {
+  if (!model || !place || !waitingForRoom(model, place)) {
     return <p className="text-xs text-stone-600">Or pick a place from the to-do list, then click the room it is in.</p>;
   }
   const frame = placeFrames(live(model.sightings)).get(place.id);

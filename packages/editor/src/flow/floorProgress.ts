@@ -3,7 +3,7 @@ import type { LevelImage } from "../api/client";
 import { stepTodos, type StepTodos } from "../build/todo";
 import { imageForLevel } from "../state/underlay";
 import { labelCounts } from "../survey/labelled";
-import { BUILD_STEPS, type BuildStepId } from "./buildSteps";
+import { BUILD_STEPS, floorUnits, type BuildStepId } from "./buildSteps";
 import { levelChecklist, type StepId } from "./checklist";
 
 export { BUILD_STEPS, buildStepForCode, type BuildStepId } from "./buildSteps";
@@ -28,18 +28,14 @@ export function buildStepsDone(
 ): Record<BuildStepId, boolean> {
   const checklist = levelChecklist({ model, levelId, image: imageForLevel(levelImages, levelId), report });
   const done = (id: StepId) => checklist.find(s => s.id === id)?.status === "done";
-  const levels = placeLevels(model);
-  // Walkways are stretches of floor, not units: nothing to bind them to.
-  const units = live(model.places).filter(
-    p => p.status === "confirmed" && !p.pathwayKindId && levels.get(p.id) === levelId,
-  );
+  const units = floorUnits(model, levelId);
   const there: Record<BuildStepId, boolean> = {
     floorplan: done("floorplan") && done("scale"),
     rooms: done("rooms"),
     pathways: done("connect"),
     entrances: done("entrances") && done("portals"),
     // Nothing to bind is not the same as bound: a floor with no survey yet is not done.
-    bind: units.length > 0 && units.every(p => Boolean(p.roomId)),
+    bind: units.bound.length > 0 && units.waiting.length === 0,
     // The checklist calls dressing done when there is nothing to dress, which
     // on a blank floor would read as one step of six already finished.
     dressing: done("rooms") && done("dressing"),
