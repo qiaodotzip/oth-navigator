@@ -86,9 +86,9 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
   /**
    * The first load of a screen, which nothing is awaiting.
    *
-   * An expired session sends you back to sign in; anything else is said out
-   * loud in the status bar. A bare `void refresh()` threw into nowhere, and the
-   * screen just sat there empty.
+   * An expired session asks you to sign in again; anything else is a toast
+   * with Retry. A bare `void refresh()` threw into nowhere, and the screen
+   * just sat there empty.
    */
   async function load(): Promise<boolean> {
     try {
@@ -99,11 +99,12 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
         store.getState().endSession("expired");
         return false;
       }
-      store.getState().setStatus(
-        err instanceof ApiError
-          ? `The server refused to load the map (HTTP ${err.status}). Try reloading the page.`
-          : "Can't reach the server. Check your connection and reload the page.",
-      );
+      reportFailure(err, {
+        doing: "load the map",
+        retry: async () => {
+          await load();
+        },
+      });
       return false;
     }
   }

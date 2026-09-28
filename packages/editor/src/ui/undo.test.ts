@@ -59,4 +59,39 @@ describe("deleteWithUndo", () => {
     expect(await deleteWithUndo({ api, saver, removals: [removals[0]!], label: "Lift A" })).toBe(false);
     expect(useToasts.getState().toasts).toHaveLength(0);
   });
+
+  it("reloads even when the undo fails, so the plan shows what is really there", async () => {
+    const { api, saver } = fakes();
+    api.restoreEntity.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await deleteWithUndo({ api, saver, removals: [removals[0]!], label: "Lift A" });
+    await useToasts.getState().toasts[0]!.action!.run();
+    expect(saver.refresh).toHaveBeenCalled();
+  });
+
+  it("says what came back when only part of the undo worked", async () => {
+    const { api, saver } = fakes();
+    // Restores run in reverse: the lift first, then its stop — which a teammate has touched.
+    api.restoreEntity.mockResolvedValueOnce({}).mockRejectedValueOnce(new ConflictError({ version: 9 }, null));
+    await deleteWithUndo({ api, saver, removals, label: "Lift A" });
+    await useToasts.getState().toasts[0]!.action!.run();
+    const message = useToasts.getState().toasts.at(-1)!.message;
+    expect(message).toMatch(/the lift or stair came back/i);
+    expect(message).toMatch(/its stop on this floor was changed since/i);
+  });
+
+  it("retries only what did not come back", async () => {
+    const { api, saver } = fakes();
+    api.restoreEntity.mockResolvedValueOnce({}).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await deleteWithUndo({ api, saver, removals, label: "Lift A" });
+    await useToasts.getState().toasts[0]!.action!.run();
+    const failed = useToasts.getState().toasts.at(-1)!;
+    expect(failed.action?.label).toBe("Retry");
+    await failed.action!.run();
+    expect(api.restoreEntity.mock.calls).toEqual([
+      ["portal", "lift-a", 2],
+      ["portalEndpoint", "ep-1", 4],
+      ["portalEndpoint", "ep-1", 4],
+    ]);
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({ tone: "success", message: "Restored Lift A" });
+  });
 });

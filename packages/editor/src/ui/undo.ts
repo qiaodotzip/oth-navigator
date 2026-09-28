@@ -1,15 +1,31 @@
-import { ConflictError, isUnauthorized, type Api } from "../api/client";
+import type { Api, EntityType } from "../api/client";
 import type { Removal } from "../flow/removeLayer";
 import type { Saver } from "../state/save";
-import { toast } from "./toast";
+import { offerUndo } from "./offerUndo";
+
+/** What each part is called when an undo only half works. */
+const PART: Partial<Record<EntityType, string>> = {
+  portal: "the lift or stair",
+  portalEndpoint: "its stop on this floor",
+  room: "the space",
+  pathway: "the pathway",
+  entrance: "the entrance",
+  placement: "the placed model",
+  doorway: "the doorway",
+  pathwayKind: "the walkway type",
+};
+
+const part = (r: Removal) => PART[r.type] ?? r.type;
 
 /**
  * Deletes, then offers Undo, instead of asking "are you sure?" first.
  *
  * Every delete here is soft, so undoing is a restore at the version the delete
  * left (one more than it had). Restores run in reverse, so a lift comes back
- * before its last stop. If a teammate has touched it since, the restore is
- * refused, and the toast says so rather than overwriting what they did.
+ * before its last stop. The Undo is `offerUndo`'s, so it sounds like every
+ * other Undo in the app: it reloads whatever the outcome, and a teammate's
+ * change since is refused rather than overwritten. A half-done undo says what
+ * did come back, and its Retry restores only what did not.
  */
 export async function deleteWithUndo({
   api,
@@ -29,29 +45,28 @@ export async function deleteWithUndo({
   }
   if (done.length === 0) return false;
 
-  toast({
+  // Kept across attempts, so Retry carries on from where the last try stopped
+  // instead of restoring the first part twice.
+  const pending = [...done].reverse();
+  const restored: Removal[] = [];
+
+  offerUndo({
     message: `Deleted ${label}`,
-    action: {
-      label: "Undo",
-      run: async () => {
-        try {
-          for (const r of [...done].reverse()) await api.restoreEntity(r.type, r.id, r.version + 1);
-          await saver.refresh();
-          toast({ message: `Restored ${label}`, tone: "success" });
-        } catch (err) {
-          // A 401 means the session expired; the sign-in dialog over the
-          // page says so, and this would only contradict it.
-          if (isUnauthorized(err)) return;
-          toast({
-            tone: "error",
-            message:
-              err instanceof ConflictError
-                ? `Couldn't undo: ${label} was changed since. Reload to see the latest.`
-                : `Couldn't undo ${label}. Check your connection and try again.`,
-          });
-        }
-      },
+    undone: `Restored ${label}`,
+    // Read when the failure is said, so it names what came back and the part
+    // the undo stopped at: "…the lift or stair came back, but its stop on this
+    // floor was changed since."
+    what: () => restored.length === 0
+      ? label
+      : `${label}: ${restored.map(part).join(" and ")} came back, but ${part(pending[0]!)}`,
+    run: async () => {
+      while (pending.length > 0) {
+        const next = pending[0]!;
+        await api.restoreEntity(next.type, next.id, next.version + 1);
+        restored.push(pending.shift()!);
+      }
     },
+    refresh: saver.refresh,
   });
   return done.length === removals.length;
 }

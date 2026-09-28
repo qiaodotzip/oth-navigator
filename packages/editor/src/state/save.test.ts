@@ -67,10 +67,15 @@ describe("saver.load", () => {
     expect(useEditorStore.getState().user).toBeNull();
   });
 
-  it("says the server cannot be reached, instead of throwing into the void", async () => {
-    const getModel = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+  it("says the map could not be loaded, and offers Retry", async () => {
+    const getModel = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(model);
     expect(await createSaver(fakeApi({ getModel })).load()).toBe(false);
-    expect(useEditorStore.getState().status).toMatch(/can't reach the server/i);
+    const failed = useToasts.getState().toasts.at(-1)!;
+    expect(failed.message).toMatch(/couldn't load the map/i);
+    await failed.action!.run();
+    expect(useEditorStore.getState().model).toEqual(model);
   });
 });
 
