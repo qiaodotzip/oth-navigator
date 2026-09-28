@@ -27,13 +27,19 @@ export type Draft = { nameEn: string; category: TenantCategory };
  * back as `draft`, so a proposal whose decision failed returns as you left it.
  */
 export function ProposalFocus({
-  api, entry, evidence, draft, findSame, onDraft, onAccept, onReject, onSkip, onMerge, onMoveBox,
+  api, entry, evidence, draft, decideByKey, findSame, onDraft, onAccept, onReject, onSkip, onMerge, onMoveBox,
 }: {
   api: Pick<Api, "keyframeFileUrl">;
   entry: ProposedPlace;
   evidence: readonly Evidence[];
   /** What was typed for this proposal before, if anything. */
   draft?: Draft;
+  /**
+   * Whether A, R and S decide it. Not while the list is open: a tick box
+   * takes no letters, so an A pressed after a tick would land here, on the
+   * proposal behind the list, not on the ones ticked.
+   */
+  decideByKey: boolean;
   /** Places already on this floor with the name as typed now. */
   findSame: (name: string) => Place[];
   onDraft: (draft: Draft) => void;
@@ -65,6 +71,7 @@ export function ProposalFocus({
 
   useKeys(event => {
     const command = reviewCommand(event.key);
+    if (!decideByKey && (command === "accept" || command === "reject" || command === "skip")) return;
     if (command === "accept") accept();
     else if (command === "reject") onReject();
     else if (command === "skip") onSkip();
@@ -138,6 +145,10 @@ export function ProposalFocus({
                 if (event.key === "Escape") event.currentTarget.blur();
               }}
               onKeyUp={() => { keyed.current = false; }}
+              // Esc and Tab take the focus away before their keyup arrives, so
+              // leaving clears it too; otherwise the next pick with the mouse
+              // would keep the focus and take R and S as type-ahead.
+              onBlur={() => { keyed.current = false; }}
               onChange={event => {
                 edit({ category: event.target.value as TenantCategory });
                 // A pick from the list is the end of it: let go of the focus,

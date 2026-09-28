@@ -18,8 +18,12 @@ export function offerUndo({ message, undone, what, run, refresh }: {
   message: string;
   /** Said when the undo worked: "Frame 3 is back". */
   undone: string;
-  /** What was undone, for the failure messages: "frame 3", "Gate 1". */
-  what: string;
+  /**
+   * What was undone, for the failure messages: "frame 3", "Gate 1". A `run`
+   * of several steps passes a function, read when the failure is said, so it
+   * names the step that failed rather than counting them all.
+   */
+  what: string | (() => string);
   run: () => Promise<unknown>;
   refresh: () => Promise<void>;
 }): void {
@@ -30,17 +34,18 @@ export function offerUndo({ message, undone, what, run, refresh }: {
     } catch (err) {
       if (isUnauthorized(err)) return;
       const conflict = err instanceof ConflictError;
+      const named = typeof what === "string" ? what : what();
       const retry = !conflict && worthRetrying(err) ? { label: "Retry", run: undo } : undefined;
       toast({
         tone: "error",
         action: retry,
         message: conflict
-          ? `Couldn't undo: ${what} was changed since. Reload to see the latest.`
+          ? `Couldn't undo: ${named} was changed since. Reload to see the latest.`
           : retry
-            ? `Couldn't undo ${what}. Check your connection, then retry.`
+            ? `Couldn't undo ${named}. Check your connection, then retry.`
             // A refusal that trying again would only meet the same way, so the
             // next step is to reload rather than to retry.
-            : `Couldn't undo ${what}: ${serverWords(err) ?? "the server refused it"}. Reload to see where it stands.`,
+            : `Couldn't undo ${named}: ${serverWords(err) ?? "the server refused it"}. Reload to see where it stands.`,
       });
     } finally {
       await refresh().catch(() => {});

@@ -11,8 +11,9 @@ import { Kbd } from "../ui/Kbd";
 import { Progress } from "../ui/Progress";
 import { useKeys } from "../ui/keys";
 import { isTyping } from "../ui/typing";
-import { acceptProposal, mergeProposal, rejectProposal } from "./decide";
+import { acceptProposal, acceptProposals, mergeProposal, rejectProposal } from "./decide";
 import { reviewCommand } from "./keys";
+import { ProposalDrawer } from "./ProposalDrawer";
 import { ProposalFocus, type Draft } from "./ProposalFocus";
 import {
   currentProposal, evidenceFor, floorlessProposals, nextProposal, readReviewParams, reviewQueue, sameAs,
@@ -125,6 +126,42 @@ export function ReviewWorkspace({ api, saver, level, params }: {
     setParams({ place: id });
   }
 
+  /**
+   * Accepts several ticked in the list, as they stand, with one Undo for all.
+   * They join the decisions under way, as A does, so they leave the list, the
+   * view and the counts at once, and none can be decided twice.
+   *
+   * One whose corrected box could not be saved is not accepted, nor is the
+   * first the server refuses or any after it: each comes back to the list
+   * and the queue. The view is not pulled back to it, as A's would be; you
+   * are in the list, and the banner or the toast says which it was.
+   */
+  async function acceptMany(entries: readonly ProposedPlace[]): Promise<void> {
+    // The same backstop as decide's: one already under way is not sent again.
+    const batch = entries.filter(({ place }) => !underWay(place));
+    if (batch.length === 0) return;
+    for (const { place } of batch) deciding.current.set(place.id, { version: place.version, becomes: "confirmed" });
+    if (current && batch.some(({ place }) => place.id === current.place.id)) {
+      const gone = new Set([...decided, ...batch.map(({ place }) => place.id)]);
+      setParams({ place: nextProposal(queue, current.place.id, gone)?.place.id ?? null });
+    }
+    redraw();
+
+    // As in decide: a box corrected just before is saved first, and one that
+    // was not saved is not accepted with the agent's box instead.
+    const saved = await Promise.all(batch.map(({ place }) => correcting.current.get(place.id) ?? true));
+    const ready = batch.filter((_, i) => saved[i]);
+    const accepted = ready.length > 0 ? await acceptProposals(deps, ready, level.id) : 0;
+
+    for (const { place } of ready.slice(0, accepted)) drafts.current.delete(place.id);
+    const back = [...batch.filter((_, i) => !saved[i]), ...ready.slice(accepted)];
+    if (back.length === 0) return;
+    for (const { place } of back) {
+      if (deciding.current.get(place.id)?.version === place.version) deciding.current.delete(place.id);
+    }
+    redraw();
+  }
+
   const toScope = (scope: ReviewScope) => setParams({ scope: scope === "floor" ? null : scope, place: null });
 
   useKeys(event => {
@@ -186,6 +223,7 @@ export function ReviewWorkspace({ api, saver, level, params }: {
             entry={current}
             evidence={evidenceFor(model, current.sightings)}
             draft={drafts.current.get(current.place.id)}
+            decideByKey={!read.listOpen}
             findSame={name => sameAs(model, level.id, current.place, name)}
             onDraft={draft => drafts.current.set(current.place.id, draft)}
             onAccept={fields => void decide(current, "confirmed", () => acceptProposal(deps, current, fields, level.id))}
@@ -219,6 +257,16 @@ export function ReviewWorkspace({ api, saver, level, params }: {
           </div>
         )}
       </div>
+      {read.listOpen && (
+        <ProposalDrawer
+          queue={queue}
+          decided={decided}
+          currentId={current?.place.id ?? null}
+          onJump={placeId => setParams({ place: placeId })}
+          onAcceptMany={acceptMany}
+          onClose={() => setParams({ list: null })}
+        />
+      )}
     </div>
   );
 }

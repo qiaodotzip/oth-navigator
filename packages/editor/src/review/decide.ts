@@ -205,7 +205,9 @@ export async function acceptProposals(
     offerUndo({
       message: `Accepted ${label}`,
       undone: `${label} ${done.length === 1 ? "is" : "are"} back in the queue`,
-      what: label,
+      // The place the undo stopped at, which is the one a failure is about:
+      // "Couldn't undo: Gate 1 was changed since", never "2 places was".
+      what: () => (pending[0] ?? done[0]!).place.nameEn,
       run: async () => {
         while (pending.length > 0) {
           const next = pending[0]!;

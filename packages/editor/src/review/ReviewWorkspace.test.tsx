@@ -307,6 +307,21 @@ describe("ReviewWorkspace", () => {
     await waitFor(() => expect(api.acceptPlace).toHaveBeenCalledWith("p_big", 0, expect.objectContaining({ category: "sports" })));
   });
 
+  it("hands the keys back after a pick with the mouse, even when Esc left the category before its keyup", async () => {
+    // Esc blurs the select before its keyup arrives; a key still counted as
+    // down would keep the next pick focused, and R would go to it as type-ahead.
+    const api = at();
+    const category = screen.getByLabelText("Category") as HTMLSelectElement;
+    category.focus();
+    fireEvent.keyDown(category, { key: "Escape" });
+    expect(document.activeElement).not.toBe(category);
+    category.focus();
+    fireEvent.change(category, { target: { value: "lifestyle" } });
+    expect(document.activeElement).not.toBe(category);
+    key("r", document.activeElement!);
+    await waitFor(() => expect(api.rejectPlace).toHaveBeenCalledWith("p_big", 0));
+  });
+
   it("counts the frames it can show, and says how to decide one with no frame and no note", () => {
     // Fix 5: a tag whose frame was binned is not a frame to look at.
     useEditorStore.getState().setModel(parseModel({
@@ -434,5 +449,148 @@ describe("ReviewWorkspace", () => {
   it("loads nothing itself: the shell's one load is the only one", () => {
     const api = at();
     expect(api.getModel).not.toHaveBeenCalled();
+  });
+
+  it("refuses to accept a proposal whose name has been emptied", () => {
+    // A place with no name is no place: A, Enter and the button all wait for one.
+    const api = at();
+    fireEvent.change(nameField(), { target: { value: "   " } });
+    key("a");
+    key("Enter", nameField());
+    expect(screen.getByRole("button", { name: /^Accept/ })).toHaveProperty("disabled", true);
+    expect(api.acceptPlace).not.toHaveBeenCalled();
+    expect(param("place")).toBeNull();
+    expect(nameField().value).toBe("   ");
+  });
+
+  it("says where proposals come from when nothing on the floor has been labelled", () => {
+    useEditorStore.getState().setModel(parseModel({ ...reviewModel, places: [], sightings: [] }));
+    at();
+    expect(screen.getByText("Nothing waiting on L1.")).toBeTruthy();
+    expect(screen.getByText("Proposals appear here once this floor's footage has been labelled.")).toBeTruthy();
+  });
+
+  it("opens the list on L and closes it on Esc, and the address says so", () => {
+    at();
+    key("l");
+    expect(param("list")).toBe("open");
+    expect(screen.getByRole("complementary", { name: "Proposals" })).toBeTruthy();
+    key("Escape");
+    expect(param("list")).toBeNull();
+  });
+
+  it("accepts several ticked in the list, with one Undo for all", async () => {
+    const api = at("?list=open");
+    fireEvent.click(screen.getByLabelText("Tick Festive Mall"));
+    fireEvent.click(screen.getByLabelText("Tick Gate 1"));
+    fireEvent.click(screen.getByRole("button", { name: "Accept 2 ticked" }));
+    await waitFor(() => expect(toastSaying("Accepted 2 places")).toBeTruthy());
+    expect(api.acceptPlace!.mock.calls.map(c => (c as unknown[])[0])).toEqual(["p_big", "p_small"]);
+  });
+
+  it("leaves the proposal behind the list alone: A, R and S do nothing until the list is closed", async () => {
+    // A tick box takes no letters, so without this an A pressed after a tick
+    // would accept the proposal in view, not the ones ticked.
+    const api = at("?list=open");
+    key("a");
+    key("r");
+    key("s");
+    const tick = screen.getByLabelText("Tick Gate 1");
+    fireEvent.click(tick);
+    tick.focus();
+    key(" ", tick);
+    key("a", tick);
+    key("r", tick);
+    key("s", tick);
+    expect(api.acceptPlace).not.toHaveBeenCalled();
+    expect(api.rejectPlace).not.toHaveBeenCalled();
+    expect(param("place")).toBeNull();
+    expect(param("list")).toBe("open");
+    expect((tick as HTMLInputElement).checked).toBe(true);
+    key("Escape");
+    key("a");
+    expect(param("place")).toBe("p_small");
+    await waitFor(() => expect(api.acceptPlace).toHaveBeenCalledWith("p_big", 0, expect.anything()));
+  });
+
+  it("takes letters typed into the filter as text, and Esc steps out of it before closing the list", () => {
+    const api = at("?list=open");
+    const filter = screen.getByLabelText("Filter proposals");
+    filter.focus();
+    key("l", filter);
+    key("a", filter);
+    fireEvent.change(filter, { target: { value: "gate" } });
+    expect(param("list")).toBe("open");
+    expect(api.acceptPlace).not.toHaveBeenCalled();
+    key("Escape", filter);
+    expect(document.activeElement).not.toBe(filter);
+    expect(param("list")).toBe("open");
+    key("Escape");
+    expect(param("list")).toBeNull();
+  });
+
+  it("leaves out of the list a proposal still being decided", () => {
+    // Ruling: listed, it could be ticked and accepted a second time.
+    at("", { acceptPlace: vi.fn(() => new Promise(() => {})) });
+    key("a");
+    key("l");
+    expect(screen.getByRole("heading", { name: "Proposals (1)" })).toBeTruthy();
+    expect(screen.queryByLabelText("Tick Festive Mall")).toBeNull();
+    expect(screen.getByLabelText("Tick Gate 1")).toBeTruthy();
+  });
+
+  it("counts the ones accepted from the list at once, and moves on from the one in view", () => {
+    // A batch joins the decisions under way, as A does.
+    at("?list=open", { acceptPlace: vi.fn(() => new Promise(() => {})) });
+    fireEvent.click(screen.getByLabelText("Tick Festive Mall"));
+    fireEvent.click(screen.getByRole("button", { name: "Accept 1 ticked" }));
+    expect(screen.getByText("2 of 3 decided on L1")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Proposals (1)" })).toBeTruthy();
+    expect(param("place")).toBe("p_small");
+    expect(nameField().value).toBe("Gate 1");
+  });
+
+  it("saves a corrected box before accepting it from the list", async () => {
+    const update = deferred<unknown>();
+    const api = at("", { updateEntity: vi.fn(() => update.promise) });
+    dragBox();
+    key("l");
+    fireEvent.click(screen.getByLabelText("Tick Festive Mall"));
+    fireEvent.click(screen.getByLabelText("Tick Gate 1"));
+    fireEvent.click(screen.getByRole("button", { name: "Accept 2 ticked" }));
+    await settle();
+    expect(api.acceptPlace).not.toHaveBeenCalled();
+    await act(async () => { update.resolve({}); });
+    await waitFor(() => expect(toastSaying("Accepted 2 places")).toBeTruthy());
+  });
+
+  it("accepts the rest from the list when one's corrected box could not be saved, and lists that one again", async () => {
+    const api = at("", { updateEntity: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) });
+    dragBox();
+    key("l");
+    fireEvent.click(screen.getByLabelText("Tick Festive Mall"));
+    fireEvent.click(screen.getByLabelText("Tick Gate 1"));
+    fireEvent.click(screen.getByRole("button", { name: "Accept 2 ticked" }));
+    await waitFor(() => expect(toastSaying("Accepted Gate 1")).toBeTruthy());
+    expect(api.acceptPlace!.mock.calls.map(c => (c as unknown[])[0])).toEqual(["p_small"]);
+    await waitFor(() => expect(screen.getByLabelText("Tick Festive Mall")).toBeTruthy());
+    expect(errorToast()?.action?.label).toBe("Retry");
+  });
+
+  it("lists again the ones a batch could not accept, and says so with Retry", async () => {
+    const api = at("?list=open", {
+      acceptPlace: vi.fn()
+        .mockResolvedValueOnce({ sightings: 2, confirmed: ["s1", "s2"] })
+        .mockRejectedValueOnce(new TypeError("Failed to fetch")),
+    });
+    fireEvent.click(screen.getByLabelText("Tick Festive Mall"));
+    fireEvent.click(screen.getByLabelText("Tick Gate 1"));
+    fireEvent.click(screen.getByRole("button", { name: "Accept 2 ticked" }));
+    await waitFor(() => expect(screen.getByLabelText("Tick Gate 1")).toBeTruthy());
+    expect(api.acceptPlace).toHaveBeenCalledTimes(2);
+    expect(toastSaying("Accepted Festive Mall")).toBeTruthy();
+    expect(errorToast()?.action?.label).toBe("Retry");
+    expect(screen.queryByLabelText("Tick Festive Mall")).toBeNull();
+    expect(screen.getByText("2 of 3 decided on L1")).toBeTruthy();
   });
 });

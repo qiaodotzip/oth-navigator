@@ -240,4 +240,32 @@ describe("acceptProposals", () => {
     await rest.action!.run();
     expect(api.reopenPlace.mock.calls.map(c => (c as unknown[])[0])).toEqual(["p3", "p2"]);
   });
+
+  it("names the place whose Undo was refused, not a count, so the sentence reads right", async () => {
+    // "Couldn't undo: 2 places was changed since" said neither which one nor good English.
+    const { api, both } = deps();
+    api.reopenPlace
+      .mockResolvedValueOnce({ sightings: 1 })
+      .mockRejectedValueOnce(new ConflictError({ id: "p1", version: 9 }, null));
+    await acceptProposals(both, [entry("p1"), entry("p2")], "oth-L1");
+    await undo();
+    expect(api.reopenPlace.mock.calls.map(c => (c as unknown[])[0])).toEqual(["p2", "p1"]);
+    expect(lastToast().message).toBe("Couldn't undo: Name p1 was changed since. Reload to see the latest.");
+  });
+
+  it("names the place an Undo stopped at when it never arrived, and Retry carries on from there", async () => {
+    const { api, both } = deps();
+    api.reopenPlace
+      .mockResolvedValueOnce({ sightings: 1 })
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await acceptProposals(both, [entry("p1"), entry("p2")], "oth-L1");
+    await undo();
+    expect(failure()).toMatchObject({
+      message: "Couldn't undo Name p1. Check your connection, then retry.",
+      action: { label: "Retry" },
+    });
+    await failure().action!.run();
+    expect(api.reopenPlace.mock.calls.map(c => (c as unknown[])[0])).toEqual(["p2", "p1", "p1"]);
+    expect(lastToast()).toMatchObject({ tone: "success", message: "2 places are back in the queue" });
+  });
 });
