@@ -32,7 +32,7 @@ describe("suggest_paths", () => {
     expect(JSON.parse(text)).toEqual({
       floor: "L1",
       levelId: "oth-L1",
-      lines: [{ polyline: [[2.13, 1.88], [17.88, 1.88]], widthM: 3.8, ends: ["end", "end"], network: 0 }],
+      lines: [{ polyline: [[2.13, 1.88], [17.88, 1.88]], widthM: 3.8, ends: ["end", "end"], network: 0, drawn: false }],
       links: [{ from: { type: "doorway", id: "L1-door-shop" }, segment: [[10, 4], [10, 1.88]] }],
       unconnected: [{ type: "entrance", id: "L1-gate-4", reason: "It is not on or beside a walkable area." }],
     });
@@ -44,6 +44,12 @@ describe("suggest_paths", () => {
     expect(await f.db.select().from(pathways)).toEqual([]);
     expect(await f.db.select().from(auditLog)).toHaveLength(audited);
     expect(presence.list()).toContainEqual(expect.objectContaining({ displayName: "Wei (Claude)", levelId: "oth-L1" }));
+  });
+
+  it("marks a line the floor already has a pathway along as drawn, so a second run carries on", async () => {
+    await createEntity(f.db, "pathway", { id: "L1-main", levelId: "oth-L1", polyline: [[0, 2], [20, 2]], widthM: 3 }, f.wei.id);
+    const { lines } = JSON.parse((await call(client, "suggest_paths", { floor: "L1" })).text) as { lines: { drawn: boolean }[] };
+    expect(lines.map(l => l.drawn)).toEqual([true]);
   });
 
   it("gives a floor with no walkable area no lines", async () => {
@@ -71,7 +77,10 @@ describe("suggest_paths", () => {
   it("tells Claude how the lines break, what ends and network mean, and what to check before drawing", async () => {
     const { tools } = await client.listTools();
     const description = tools.find(t => t.name === "suggest_paths")?.description ?? "";
-    for (const words of ["only at a fork", "longest first", "ends", "network", "blocks Publish", "no width", "view_plan", "50 m", "lift, escalator or stair stop", "levelId"]) {
+    for (const words of [
+      "only at a fork", "longest first", "ends", "network", "blocks Publish", "no width", "view_plan", "50 m", "lift, escalator or stair stop", "levelId",
+      "drawn is true", "70%",
+    ]) {
       expect(description).toContain(words);
     }
   });

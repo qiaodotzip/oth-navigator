@@ -152,6 +152,24 @@ describe("suggestPaths", () => {
     }
   });
 
+  it("says which lines run along a pathway the floor already has: 70% of the line within its half width and a metre", () => {
+    const corridor = { footprint: rect(0, 0, 40, 4) };
+    const drawnWith = (...pathways: Record<string, unknown>[]) =>
+      suggest([corridor], { pathways: pathways.map((p, i) => ({ id: `pw-${i}`, levelId: LEVEL, widthM: 2, ...p })) }).lines.map(l => l.drawn);
+    expect(drawnWith()).toEqual([false]);
+    expect(drawnWith({ polyline: [[0, 2], [40, 2]] })).toEqual([true]);
+    // The line runs from about x 2 to x 38: a pathway to x 20 covers about half of it, one to x 32 nearly all.
+    expect(drawnWith({ polyline: [[0, 2], [20, 2]] })).toEqual([false]);
+    expect(drawnWith({ polyline: [[0, 2], [32, 2]] })).toEqual([true]);
+    // Alongside, but 2.6 m off the line: past its 1 m half width and the metre more.
+    expect(drawnWith({ polyline: [[0, 4.5], [40, 4.5]] })).toEqual([false]);
+    // A wider one reaches it.
+    expect(drawnWith({ polyline: [[0, 4.5], [40, 4.5]], widthM: 4 })).toEqual([true]);
+    // Only this floor's live pathways count.
+    expect(drawnWith({ polyline: [[0, 2], [40, 2]], levelId: "oth-L2" }, { polyline: [[0, 2], [40, 2]], deletedAt: "2026-09-28T00:00:00.000Z" }))
+      .toEqual([false]);
+  });
+
   it("does a floor the size of L1 with 36 courtyards in well under 2 s, each aisle one line", () => {
     const holes: Pt[][] = [];
     for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) holes.push(rect(10 + i * 32, 10 + j * 35, 30 + i * 32, 30 + j * 35));

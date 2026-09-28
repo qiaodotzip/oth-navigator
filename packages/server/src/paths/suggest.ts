@@ -1,4 +1,4 @@
-import type { MapModel, Vec2 } from "@oth/model";
+import { distancePointToSegment, live, type MapModel, type Pathway, type Vec2 } from "@oth/model";
 import { connect, linkTargets } from "./connect";
 import { distanceToEdge } from "./distance";
 import { linesThroughForks, pruneSpurs, skeletonGraph } from "./graph";
@@ -16,12 +16,24 @@ export const MAX_WIDTH_M = 6;
 export const WIDTH_PERCENTILE = 0.25;
 
 /**
+ * A line runs along a pathway already drawn when this much of it lies within
+ * the pathway's half width and DRAWN_MARGIN_M more (contract v2), measured at
+ * a point every DRAWN_STEP_M along it.
+ */
+export const DRAWN_SHARE = 0.7;
+export const DRAWN_MARGIN_M = 1;
+const DRAWN_STEP_M = 1;
+
+/**
  * The shared interface contract's type, verbatim. A line's `ends` are what its
  * first and last points meet; `network` numbers the lines that join up, 0 for
- * the network with the most length.
+ * the network with the most length; `drawn` says the floor has a pathway along
+ * it already.
  */
 export type PathSuggestion = {
-  lines: { polyline: Vec2[]; widthM: number; ends: ["fork" | "end" | "loop", "fork" | "end" | "loop"]; network: number }[];
+  lines: {
+    polyline: Vec2[]; widthM: number; ends: ["fork" | "end" | "loop", "fork" | "end" | "loop"]; network: number; drawn: boolean;
+  }[];
   links: { from: { type: "doorway" | "stop" | "entrance"; id: string }; segment: [Vec2, Vec2] }[];
   unconnected: { type: "doorway" | "stop" | "entrance"; id: string; reason: string }[];
 };
@@ -46,6 +58,49 @@ export function lineWidth(points: readonly Vec2[], r: Raster, toEdge: Float32Arr
 const cm = (v: number) => Math.round(v * 100) / 100;
 const at = (p: Vec2): Vec2 => [cm(p[0]), cm(p[1])];
 
+/** A point every `step` metres along a line, both ends included. */
+function samplesAlong(line: readonly Vec2[], step: number): Vec2[] {
+  const out: Vec2[] = line.length > 0 ? [line[0]!] : [];
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+    for (let k = 1; k <= n; k++) out.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
+  }
+  return out;
+}
+
+function distanceToLine(p: Vec2, line: readonly Vec2[]): number {
+  let d = Infinity;
+  for (let i = 1; i < line.length; i++) d = Math.min(d, distancePointToSegment(p, line[i - 1]!, line[i]!));
+  return d;
+}
+
+type Box = { minX: number; minY: number; maxX: number; maxY: number };
+function boxOf(line: readonly Vec2[], pad: number): Box {
+  const xs = line.map(p => p[0]);
+  const ys = line.map(p => p[1]);
+  return { minX: Math.min(...xs) - pad, minY: Math.min(...ys) - pad, maxX: Math.max(...xs) + pad, maxY: Math.max(...ys) + pad };
+}
+const meet = (a: Box, b: Box) => a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
+
+/**
+ * Whether a suggested line runs along a pathway already drawn (contract v2):
+ * at least DRAWN_SHARE of its points lie within a pathway's half width and a
+ * metre. suggest_paths works from the walkable surface alone, so this is how
+ * a second run of draw_paths knows what the first one drew.
+ */
+export function drawnAlready(line: readonly Vec2[], pathways: readonly Pathway[]): boolean {
+  if (line.length < 2) return false;
+  const reach = (p: Pathway) => p.widthM / 2 + DRAWN_MARGIN_M;
+  const box = boxOf(line, 0);
+  const near = pathways.filter(p => p.polyline.length >= 2 && meet(box, boxOf(p.polyline, reach(p))));
+  if (near.length === 0) return false;
+  const points = samplesAlong(line, DRAWN_STEP_M);
+  const along = points.filter(pt => near.some(p => distanceToLine(pt, p.polyline) <= reach(p))).length;
+  return along / points.length >= DRAWN_SHARE;
+}
+
 /**
  * Spec §7.3: a first pass of one floor's pathways, from its walkable surface.
  * Read-only and pure: the floor is rasterised, thinned to its skeleton, pruned,
@@ -60,18 +115,23 @@ const at = (p: Vec2): Vec2 => [cm(p[0]), cm(p[1])];
 export function suggestPaths(model: MapModel, levelId: string): PathSuggestion {
   const raster = walkableRaster(model, levelId);
   const targets = linkTargets(model, levelId);
+  const drawn = live(model.pathways).filter(p => p.levelId === levelId);
   let lines: PathSuggestion["lines"] = [];
   if (raster.cols > 0) {
     const toEdge = distanceToEdge(raster);
     const width = (points: readonly Vec2[]) => lineWidth(points, raster, toEdge);
     lines = linesThroughForks(pruneSpurs(skeletonGraph(thin(raster), raster), SPUR_M), width)
       .sort((p, q) => q.lengthM - p.lengthM)
-      .map(l => ({
-        polyline: simplify(l.points, SIMPLIFY_M).map(at),
-        widthM: Math.round(width(l.points) * 10) / 10,
-        ends: l.ends,
-        network: l.network,
-      }));
+      .map(l => {
+        const polyline = simplify(l.points, SIMPLIFY_M).map(at);
+        return {
+          polyline,
+          widthM: Math.round(width(l.points) * 10) / 10,
+          ends: l.ends,
+          network: l.network,
+          drawn: drawnAlready(polyline, drawn),
+        };
+      });
   }
   const { links, unconnected } = connect(raster, lines.map(l => l.polyline), targets);
   return {
