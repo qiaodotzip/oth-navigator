@@ -27,6 +27,7 @@ export function polylineLength(points: readonly Vec2[]): number {
  */
 export function skeletonGraph(skeleton: Uint8Array, r: Raster): SkeletonGraph {
   const { cols } = r;
+  // No bounds checks: walkableRaster's padding keeps every skeleton pixel off the grid's outer ring.
   const around = [-cols, -cols + 1, 1, cols + 1, cols, cols - 1, -1, -cols - 1];
   const on: number[] = [];
   for (let i = 0; i < skeleton.length; i++) if (skeleton[i]) on.push(i);
@@ -183,4 +184,130 @@ export function pruneSpurs(graph: SkeletonGraph, minM: number): SkeletonGraph {
     const gone = shortest;
     edges = joinThrough(edges.filter(e => e !== gone));
   }
+}
+
+/** What one end of a line meets: other lines at a fork, nothing (a dead end), or its own start round a loop. */
+export type LineEnd = "fork" | "end" | "loop";
+/**
+ * One or more edges run on through the forks between them. `ends` are what
+ * `points`' first and last points meet. `network` numbers the lines that join
+ * up, 0 for the network with the most length in all.
+ */
+export type SkeletonLine = { points: Vec2[]; lengthM: number; ends: [LineEnd, LineEnd]; network: number };
+
+/** A line runs on through a fork only where it bends less than this. */
+export const THROUGH_BEND_DEG = 30;
+/** …and only into one no more than this many times as wide or narrow. */
+export const THROUGH_WIDTH_RATIO = 1.5;
+/** How far out along an edge its heading from a fork is taken, past the skeleton's wobble at the fork. */
+export const HEADING_M = 3;
+
+/**
+ * The unit heading from an edge's end at `end` (0 for `a`, 1 for `b`) to its
+ * point HEADING_M along it, or its far end if it is shorter. Null when that
+ * is the same point, as on a small loop.
+ */
+function heading(e: SkeletonEdge, end: 0 | 1): Vec2 | null {
+  const n = e.points.length;
+  const at = (k: number) => e.points[end === 0 ? k : n - 1 - k]!;
+  const from = at(0);
+  let to = at(n - 1);
+  let run = 0;
+  for (let k = 1; k < n; k++) {
+    run += Math.hypot(at(k)[0] - at(k - 1)[0], at(k)[1] - at(k - 1)[1]);
+    if (run >= HEADING_M) {
+      to = at(k);
+      break;
+    }
+  }
+  const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+  return length === 0 ? null : [(to[0] - from[0]) / length, (to[1] - from[1]) / length];
+}
+
+/**
+ * The skeleton's edges as lines, each breaking only at a fork. At each fork,
+ * the pair of edges that bends least is joined into one line, then the next,
+ * while the bend is under THROUGH_BEND_DEG and their widths (by `widthOf`)
+ * are within THROUGH_WIDTH_RATIO. So a straight aisle or spine is one line
+ * however many side ways leave it. A loop's own node always joins its ends.
+ * A line of no length (two nodes on one point) is left out.
+ */
+export function linesThroughForks(graph: SkeletonGraph, widthOf: (points: readonly Vec2[]) => number): SkeletonLine[] {
+  const { edges } = graph;
+  // Edge i's end at a is 2i, its end at b 2i + 1.
+  const nodeOf = (end: number) => (end & 1 ? edges[end >> 1]!.b : edges[end >> 1]!.a);
+  const endsAt = new Map<number, number[]>();
+  for (let end = 0; end < edges.length * 2; end++) {
+    const at = endsAt.get(nodeOf(end));
+    if (at) at.push(end);
+    else endsAt.set(nodeOf(end), [end]);
+  }
+
+  const partner = new Int32Array(edges.length * 2).fill(-1);
+  const pair = (u: number, v: number) => {
+    partner[u] = v;
+    partner[v] = u;
+  };
+  const widths = edges.map(e => widthOf(e.points));
+  const minStraight = Math.cos((THROUGH_BEND_DEG * Math.PI) / 180);
+  for (const at of endsAt.values()) {
+    if (at.length === 2) pair(at[0]!, at[1]!);
+    if (at.length < 3) continue;
+    const pairs: Array<{ u: number; v: number; straight: number }> = [];
+    for (let i = 0; i < at.length; i++) {
+      for (let j = i + 1; j < at.length; j++) {
+        const u = at[i]!;
+        const v = at[j]!;
+        const hu = heading(edges[u >> 1]!, (u & 1) as 0 | 1);
+        const hv = heading(edges[v >> 1]!, (v & 1) as 0 | 1);
+        if (!hu || !hv) continue;
+        // In along u, out along v: straight on is hv = −hu, and the cosine of the bend is −hu·hv.
+        const straight = -(hu[0] * hv[0] + hu[1] * hv[1]);
+        const [wu, wv] = [widths[u >> 1]!, widths[v >> 1]!];
+        if (straight > minStraight && Math.max(wu, wv) <= THROUGH_WIDTH_RATIO * Math.min(wu, wv)) pairs.push({ u, v, straight });
+      }
+    }
+    pairs.sort((p, q) => q.straight - p.straight);
+    for (const { u, v } of pairs) if (partner[u] === -1 && partner[v] === -1) pair(u, v);
+  }
+
+  const root = graph.nodes.map((_, i) => i);
+  const find = (n: number): number => {
+    while (root[n] !== n) n = root[n] = root[root[n]!]!;
+    return n;
+  };
+  for (const e of edges) root[find(e.a)] = find(e.b);
+
+  const done = new Uint8Array(edges.length);
+  const lines: Array<Omit<SkeletonLine, "network"> & { component: number }> = [];
+  const follow = (start: number) => {
+    const points: Vec2[] = [];
+    let lengthM = 0;
+    for (let end = start; ;) {
+      const e = edges[end >> 1]!;
+      done[end >> 1] = 1;
+      lengthM += e.lengthM;
+      const n = e.points.length;
+      for (let k = points.length === 0 ? 0 : 1; k < n; k++) points.push(e.points[end & 1 ? n - 1 - k : k]!);
+      const next = partner[end ^ 1]!;
+      if (next === start) {
+        lines.push({ points, lengthM, ends: ["loop", "loop"], component: find(e.a) });
+        return;
+      }
+      if (next === -1) {
+        const meets = (lineEnd: number): LineEnd => (endsAt.get(nodeOf(lineEnd))!.length === 1 ? "end" : "fork");
+        lines.push({ points, lengthM, ends: [meets(start), meets(end ^ 1)], component: find(e.a) });
+        return;
+      }
+      end = next;
+    }
+  };
+  for (let end = 0; end < edges.length * 2; end++) if (partner[end] === -1 && !done[end >> 1]) follow(end);
+  for (let i = 0; i < edges.length; i++) if (!done[i]) follow(2 * i);
+
+  const kept = lines.filter(l => l.lengthM > 0);
+  const total = new Map<number, number>();
+  for (const l of kept) total.set(l.component, (total.get(l.component) ?? 0) + l.lengthM);
+  const order = [...total.keys()].sort((p, q) => total.get(q)! - total.get(p)!);
+  return kept.map(({ component, ...l }) => ({ ...l, network: order.indexOf(component) }));
 }

@@ -26,7 +26,8 @@ describe.skipIf(!modelPath)("suggestPaths on the real floors", () => {
       const started = performance.now();
       const s = suggestPaths(model, level.id);
       const ms = performance.now() - started;
-      console.log(`${code}: ${s.lines.length} lines, ${s.links.length} links, ${s.unconnected.length} unconnected, ${Math.round(ms)} ms`);
+      const networks = new Set(s.lines.map(l => l.network)).size;
+      console.log(`${code}: ${s.lines.length} lines in ${networks} networks, ${s.links.length} links, ${s.unconnected.length} unconnected, ${Math.round(ms)} ms`);
       if (outDir) {
         const svg = suggestionSvg(model, level.id, s);
         await writeFile(join(outDir, `paths-${code}.svg`), svg);

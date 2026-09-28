@@ -1,6 +1,6 @@
 import type { Vec2 } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { pruneSpurs, skeletonGraph, type SkeletonEdge, type SkeletonGraph } from "./graph";
+import { linesThroughForks, pruneSpurs, skeletonGraph, type SkeletonEdge, type SkeletonGraph } from "./graph";
 import { walkableRaster } from "./raster";
 import { thin } from "./thin";
 import { floor, LEVEL, rect, type TestRoom } from "./testing";
@@ -88,5 +88,79 @@ describe("pruneSpurs", () => {
 
   it("never prunes a piece standing on its own, however short", () => {
     expect(pruneSpurs(drawn([[0, 0], [1, 0]], [[0, 1, 1]]), 2).edges).toHaveLength(1);
+  });
+});
+
+/** 10 m from the origin, `deg` clockwise from north. */
+const out = (deg: number): Vec2 => [10 * Math.sin((deg * Math.PI) / 180), 10 * Math.cos((deg * Math.PI) / 180)];
+/** Three lines 10 m long from a fork at the origin: one from the south, and one each way given. */
+const y = (right: number, left: number): SkeletonGraph =>
+  drawn([[0, 0], [0, -10], out(right), out(-left)], [[1, 0, 10], [0, 2, 10], [0, 3, 10]]);
+const sameWidth = () => 2;
+
+describe("linesThroughForks", () => {
+  it("runs a line on through the straightest pair at a fork: a 20° bend, not a 50° one", () => {
+    const lines = linesThroughForks(y(20, 50), sameWidth);
+    expect(lines).toHaveLength(2);
+    const through = lines.find(l => l.points.length === 3)!;
+    expect(through.points).toEqual([[0, -10], [0, 0], out(20)]);
+    expect(through.lengthM).toBe(20);
+    expect(lines.find(l => l !== through)!.points).toEqual([[0, 0], out(-50)]);
+  });
+
+  it("leaves a bend of 30° or more as a fork", () => {
+    expect(linesThroughForks(y(35, 50), sameWidth)).toHaveLength(3);
+  });
+
+  it("measures the bend about 3 m out, so a kink at the fork itself does not count", () => {
+    // The line north jinks 0.5 m east at the fork, then runs straight on.
+    const g: SkeletonGraph = {
+      nodes: [[0, 0], [0, -10], [0.5, 10], [-10, 0]],
+      edges: [
+        { a: 1, b: 0, points: [[0, -10], [0, 0]], lengthM: 10 },
+        { a: 0, b: 2, points: [[0, 0], [0.5, 0.5], [0.5, 10]], lengthM: 10.2 },
+        { a: 0, b: 3, points: [[0, 0], [-10, 0]], lengthM: 10 },
+      ],
+    };
+    expect(linesThroughForks(g, sameWidth)).toHaveLength(2);
+  });
+
+  it("does not run a line on into one more than 1.5 times as wide or narrow", () => {
+    const g = drawn([[0, 0], [-10, 0], [10, 0], [0, 10]], [[1, 0, 10], [0, 2, 10], [0, 3, 10]]);
+    const eastWidth = (east: number) => (points: readonly Vec2[]) => (points.some(p => p[0] > 0) ? east : 2);
+    expect(linesThroughForks(g, eastWidth(3.1))).toHaveLength(3);
+    expect(linesThroughForks(g, eastWidth(3))).toHaveLength(2);
+  });
+
+  it("says what each end of a line meets: a fork, a dead end, or itself round a loop", () => {
+    const g: SkeletonGraph = {
+      nodes: [[0, 0], [-10, 0], [10, 0], [0, 10], [50, 0]],
+      edges: [
+        { a: 1, b: 0, points: [[-10, 0], [0, 0]], lengthM: 10 },
+        { a: 0, b: 2, points: [[0, 0], [10, 0]], lengthM: 10 },
+        { a: 0, b: 3, points: [[0, 0], [0, 10]], lengthM: 10 },
+        { a: 4, b: 4, points: [[50, 0], [55, 5], [60, 0], [55, -5], [50, 0]], lengthM: 28.3 },
+      ],
+    };
+    const ends = linesThroughForks(g, sameWidth).map(l => l.ends);
+    expect(ends).toContainEqual(["end", "end"]);
+    expect(ends).toContainEqual(["fork", "end"]);
+    expect(ends).toContainEqual(["loop", "loop"]);
+  });
+
+  it("numbers each network of lines that join up by its total length, the longest 0", () => {
+    // A T of 30 m in all, and one straight line of 25 m standing apart.
+    const g = drawn(
+      [[0, 0], [-10, 0], [10, 0], [0, 10], [100, 0], [125, 0]],
+      [[1, 0, 10], [0, 2, 10], [0, 3, 10], [4, 5, 25]],
+    );
+    const lines = linesThroughForks(g, sameWidth);
+    const networkOf = (lengthM: number) => lines.find(l => l.lengthM === lengthM)!.network;
+    expect([networkOf(20), networkOf(10), networkOf(25)]).toEqual([0, 0, 1]);
+  });
+
+  it("leaves out a line of no length, and does not count it as a network", () => {
+    const g = drawn([[0, 0], [10, 0], [50, 50], [50, 50]], [[0, 1, 10], [2, 3, 0]]);
+    expect(linesThroughForks(g, sameWidth).map(l => [l.lengthM, l.network])).toEqual([[10, 0]]);
   });
 });
