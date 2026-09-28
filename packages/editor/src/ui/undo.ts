@@ -54,11 +54,12 @@ export async function deleteWithUndo({
     message: `Deleted ${label}`,
     undone: `Restored ${label}`,
     // Read when the failure is said, so it names what came back and the part
-    // the undo stopped at: "…the lift or stair came back, but its stop on this
-    // floor was changed since."
+    // the undo stopped at. A noun phrase, since offerUndo's every sentence
+    // wraps it: "Couldn't undo the rest of Lift A (the lift or stair came
+    // back), its stop on this floor. Check your connection, then retry."
     what: () => restored.length === 0
       ? label
-      : `${label}: ${restored.map(part).join(" and ")} came back, but ${part(pending[0]!)}`,
+      : `the rest of ${label} (${restored.map(part).join(" and ")} came back), ${part(pending[0]!)}`,
     run: async () => {
       while (pending.length > 0) {
         const next = pending[0]!;

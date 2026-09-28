@@ -65,6 +65,8 @@ describe("saver.load", () => {
     const getModel = vi.fn(async () => { throw new ApiError(401, null); });
     expect(await createSaver(fakeApi({ getModel })).load()).toBe(false);
     expect(useEditorStore.getState().user).toBeNull();
+    // The sign-in dialog is the message; a toast would only repeat it.
+    expect(useToasts.getState().toasts).toHaveLength(0);
   });
 
   it("says the map could not be loaded, and offers Retry", async () => {
@@ -73,9 +75,44 @@ describe("saver.load", () => {
       .mockResolvedValueOnce(model);
     expect(await createSaver(fakeApi({ getModel })).load()).toBe(false);
     const failed = useToasts.getState().toasts.at(-1)!;
+    expect(failed).toMatchObject({ tone: "error", action: { label: "Retry" } });
     expect(failed.message).toMatch(/couldn't load the map/i);
     await failed.action!.run();
     expect(useEditorStore.getState().model).toEqual(model);
+  });
+
+  it("gives a refusal in the server's words, and says to reload the page rather than retry", async () => {
+    const getModel = vi.fn(async () => { throw new ApiError(403, { error: "not allowed" }); });
+    expect(await createSaver(fakeApi({ getModel })).load()).toBe(false);
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({
+      tone: "error",
+      message: "Couldn't load the map: not allowed. Reload the page to try again.",
+      action: undefined,
+    });
+  });
+
+  it("says the server refused, with its status, when it gave no words", async () => {
+    const getModel = vi.fn(async () => { throw new ApiError(404, null); });
+    await createSaver(fakeApi({ getModel })).load();
+    expect(useToasts.getState().toasts.at(-1)!.message)
+      .toBe("Couldn't load the map: the server refused it (HTTP 404). Reload the page to try again.");
+  });
+
+  it("shares one attempt between loads at once, so a failure is said once", async () => {
+    // StrictMode runs the mount effect twice in development, on the same saver.
+    const getModel = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    const saver = createSaver(fakeApi({ getModel }));
+    expect(await Promise.all([saver.load(), saver.load()])).toEqual([false, false]);
+    expect(getModel).toHaveBeenCalledTimes(1);
+    expect(useToasts.getState().toasts).toHaveLength(1);
+  });
+
+  it("tries afresh once the last attempt has finished", async () => {
+    const getModel = vi.fn(async () => model);
+    const saver = createSaver(fakeApi({ getModel }));
+    await saver.load();
+    await saver.load();
+    expect(getModel).toHaveBeenCalledTimes(2);
   });
 });
 

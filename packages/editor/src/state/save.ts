@@ -1,6 +1,7 @@
 import type { Api, EntityType } from "../api/client";
 import { ApiError, ConflictError, isUnauthorized } from "../api/client";
-import { reportFailure } from "../ui/failure";
+import { reportFailure, serverWords, worthRetrying } from "../ui/failure";
+import { toast } from "../ui/toast";
 import { useEditorStore } from "./store";
 
 /**
@@ -83,20 +84,39 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
     return true;
   }
 
+  // One load at a time, shared by everyone who asks while it runs: StrictMode
+  // runs the mount effect twice in development, and two identical failure
+  // toasts read as two failures.
+  let loading: Promise<boolean> | null = null;
+
   /**
    * The first load of a screen, which nothing is awaiting.
    *
-   * An expired session asks you to sign in again; anything else is a toast
-   * with Retry. A bare `void refresh()` threw into nowhere, and the screen
-   * just sat there empty.
+   * An expired session asks you to sign in again; anything else is a toast,
+   * with Retry where trying again could work. A bare `void refresh()` threw
+   * into nowhere, and the screen just sat there empty.
    */
-  async function load(): Promise<boolean> {
+  function load(): Promise<boolean> {
+    loading ??= attemptLoad().finally(() => {
+      loading = null;
+    });
+    return loading;
+  }
+
+  async function attemptLoad(): Promise<boolean> {
     try {
       await refresh();
       return true;
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         store.getState().endSession("expired");
+        return false;
+      }
+      // A refusal would only be refused again, so there is no Retry to offer;
+      // but the screen behind it is empty, so it still says what to do next.
+      if (err instanceof ApiError && !worthRetrying(err)) {
+        const said = serverWords(err) ?? `the server refused it (HTTP ${err.status})`;
+        toast({ tone: "error", message: `Couldn't load the map: ${said}. Reload the page to try again.` });
         return false;
       }
       reportFailure(err, {

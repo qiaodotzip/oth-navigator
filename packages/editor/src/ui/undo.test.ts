@@ -53,6 +53,14 @@ describe("deleteWithUndo", () => {
     expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(false);
   });
 
+  it("still reloads after a 401, since part of the undo may have landed first", async () => {
+    const { api, saver } = fakes();
+    api.restoreEntity.mockResolvedValueOnce({}).mockRejectedValueOnce(new ApiError(401, null));
+    await deleteWithUndo({ api, saver, removals, label: "Lift A" });
+    await useToasts.getState().toasts[0]!.action!.run();
+    expect(saver.refresh).toHaveBeenCalled();
+  });
+
   it("offers nothing when the delete itself failed", async () => {
     const { api, saver } = fakes();
     saver.remove.mockResolvedValueOnce(false);
@@ -85,6 +93,9 @@ describe("deleteWithUndo", () => {
     await deleteWithUndo({ api, saver, removals, label: "Lift A" });
     await useToasts.getState().toasts[0]!.action!.run();
     const failed = useToasts.getState().toasts.at(-1)!;
+    expect(failed.message).toBe(
+      "Couldn't undo the rest of Lift A (the lift or stair came back), its stop on this floor. Check your connection, then retry.",
+    );
     expect(failed.action?.label).toBe("Retry");
     await failed.action!.run();
     expect(api.restoreEntity.mock.calls).toEqual([
