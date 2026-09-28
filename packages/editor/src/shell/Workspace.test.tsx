@@ -128,6 +128,13 @@ describe("Workspace", () => {
     expect(screen.getByRole("dialog", { name: /session ended/i })).toBeTruthy();
   });
 
+  it("shows the Places tab", async () => {
+    at("/floors/L1/places");
+    // sampleModel: L1's one place is still a proposal.
+    expect(await screen.findByRole("heading", { name: "No confirmed places on L1 yet" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "1 waiting in Review →" })).toBeTruthy();
+  });
+
   it("opens a link to a room on an upper floor with that room selected", async () => {
     // The map loads onto the lowest floor. Were Build shown before this floor
     // is the active one, it would judge the link against L1 and drop it.

@@ -3,10 +3,10 @@ import { waitingReview } from "../flow/floorProgress";
 import { FLOOR_TABS, followLink, href, type FloorTab } from "../route";
 import { useEditorStore } from "../state/store";
 
-const LABELS: Record<FloorTab, string> = { survey: "Survey", review: "Review", build: "Build" };
+const LABELS: Record<FloorTab, string> = { survey: "Survey", review: "Review", build: "Build", places: "Places" };
 
 /**
- * Survey · Review (n) · Build for one floor; n is what is waiting on a person.
+ * Survey · Review (n) · Build · Places for one floor; n is what is waiting on a person.
  * On Build, clicking Build again stays on the step you are on (`buildStep`)
  * rather than jumping to the first unfinished one.
  */

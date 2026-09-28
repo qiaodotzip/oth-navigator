@@ -34,8 +34,9 @@ export function useRoute(): string {
   );
 }
 
-export type FloorTab = "survey" | "review" | "build";
-export const FLOOR_TABS: readonly FloorTab[] = ["survey", "review", "build"];
+export type FloorTab = "survey" | "review" | "build" | "places";
+/** Places reads across Review and Build, so it is a tab of its own, not a view under either (spec §4). */
+export const FLOOR_TABS: readonly FloorTab[] = ["survey", "review", "build", "places"];
 
 export type Route =
   | { name: "home" }

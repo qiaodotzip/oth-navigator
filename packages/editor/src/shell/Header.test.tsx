@@ -34,6 +34,7 @@ describe("Header", () => {
     expect(tabs.getByRole("link", { name: "Survey" }).getAttribute("aria-current")).toBe("page");
     expect(tabs.getByRole("link", { name: /Review/ }).textContent).toContain("1");
     expect(tabs.getByRole("link", { name: "Build" }).getAttribute("href")).toBe("/floors/L1/build");
+    expect(tabs.getByRole("link", { name: "Places" }).getAttribute("href")).toBe("/floors/L1/places");
   });
 
   it("shows Review's waiting count in a pill that is readable at 13 px", () => {

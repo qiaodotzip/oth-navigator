@@ -51,6 +51,12 @@ describe("parseRoute", () => {
     });
   });
 
+  it("reads the Places tab and its filter", () => {
+    expect(parseRoute("/floors/L1/places", "?filter=all")).toEqual({
+      name: "floor", code: "L1", tab: "places", params: { filter: "all" },
+    });
+  });
+
   it("forgives a lowercase floor code typed by hand", () => {
     expect(parseRoute("/floors/l1/build")).toMatchObject({ code: "L1", tab: "build" });
   });
