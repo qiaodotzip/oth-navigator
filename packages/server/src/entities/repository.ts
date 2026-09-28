@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { ZodError } from "zod";
 import type { Database } from "../db/client";
 import type { Row } from "../db/rows";
 import { stripAuditFields, toModelRow } from "../db/rows";
@@ -95,6 +96,18 @@ export async function updateEntity(
   const input: Row = { ...toModelRow(before), ...patch, id };
   for (const key of cleared) delete input[key];
   const merged = schema.parse(input) as Row;
+  // A field with a default can't be emptied either: the model puts the
+  // default back, and the null would then meet the column's NOT NULL as a
+  // server error rather than a refusal. `{ flipped: null }` is the case.
+  const columns = table as unknown as Record<string, { notNull?: boolean } | undefined>;
+  const alwaysSet = cleared.filter(key => columns[key]?.notNull);
+  if (alwaysSet.length > 0) {
+    throw new ZodError(alwaysSet.map(key => ({
+      code: "custom" as const,
+      path: [key],
+      message: "it always has a value, so it can't be cleared. Send the value you want instead",
+    })));
+  }
 
   const updated = (await db
     .update(table)

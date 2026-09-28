@@ -198,4 +198,11 @@ describe("SelectionInspector", () => {
     setup({ type: "room", id: "L1-a" }, "entrances");
     expect(screen.getByRole("button", { name: "Escalator" })).toBeTruthy();
   });
+
+  // At 1536×864 the room's fields fill the box, and the choice below them was out of view.
+  it("puts the lift or stair choice above the room's own details", () => {
+    setup({ type: "room", id: "L1-a" }, "entrances");
+    const choice = screen.getByRole("button", { name: "Escalator" });
+    expect(choice.compareDocumentPosition(screen.getByLabelText("Name")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

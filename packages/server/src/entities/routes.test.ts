@@ -149,6 +149,16 @@ describe("a lift or stair stop's outline", () => {
     const list = await app.request("/api/entities/portalEndpoint", { headers: { cookie } });
     expect((await json<{ items: unknown[] }>(list)).items).toEqual([expect.objectContaining({ footprint, flipped: true })]);
   });
+
+  it("422s clearing which way the flight climbs, rather than failing on the column", async () => {
+    await post("/api/entities/portal", { data: { id: "esc-1", kind: "escalator" } });
+    await post("/api/entities/portalEndpoint", {
+      data: { id: "esc-1-1", portalId: "esc-1", levelId: "oth-L1", roomId: "L1-lobby", point: [5, 5] },
+    });
+    const res = await patch("/api/entities/portalEndpoint/esc-1-1", { expectedVersion: 0, data: { flipped: null } });
+    expect(res.status).toBe(422);
+    expect((await json<{ detail: string }>(res)).detail).toMatch(/can't be cleared/);
+  });
 });
 
 describe("level owners", () => {

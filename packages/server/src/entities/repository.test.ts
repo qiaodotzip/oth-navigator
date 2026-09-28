@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../db/client";
-import { auditLog, buildings, levels, places, rooms } from "../db/schema";
+import { auditLog, buildings, levels, places, portalEndpoints, rooms } from "../db/schema";
 import { assembleModel } from "../model/assemble";
 import { createTestDb } from "../testing/harness";
 import {
@@ -149,5 +149,15 @@ describe("a lift or stair stop's outline", () => {
     const model = await assembleModel(db);
     expect(model.portalEndpoints[0]?.footprint).toBeUndefined();
     expect(model.portalEndpoints[0]?.flipped).toBe(false);
+  });
+
+  it("refuses to clear which way the flight climbs, which always has a value, and writes nothing", async () => {
+    await createEntity(db, "portal", { id: "esc-1", kind: "escalator" }, "user_1");
+    await createEntity(db, "portalEndpoint", stop, "user_1");
+    await updateEntity(db, "portalEndpoint", "esc-1-1", 0, { flipped: true }, "user_1");
+    await expect(updateEntity(db, "portalEndpoint", "esc-1-1", 1, { flipped: null }, "user_1"))
+      .rejects.toMatchObject({ issues: [expect.objectContaining({ path: ["flipped"], message: expect.stringMatching(/can't be cleared/) })] });
+    const [row] = await db.select().from(portalEndpoints).where(eq(portalEndpoints.id, "esc-1-1"));
+    expect(row).toMatchObject({ flipped: true, version: 1 });
   });
 });

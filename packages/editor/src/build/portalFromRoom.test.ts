@@ -1,6 +1,6 @@
 import { live, parseModel, pointInPolygon, type MapModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { insidePoint, portalFromRoom } from "./portalFromRoom";
+import { floorAbove, insidePoint, namedLikeAStop, portalFromRoom } from "./portalFromRoom";
 
 const sq = (x0: number, y0: number, x1: number, y1: number): Array<[number, number]> =>
   [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
@@ -64,6 +64,81 @@ describe("portalFromRoom", () => {
       portalEndpoints: [{ id: "esc-7-1", portalId: "esc-7", levelId: "oth-L1", roomId: "L1-esc", point: [5, 7], footprint: sq(4, 2, 6, 12) }],
     });
     expect(portalFromRoom(already, room(already, "L1-esc"), "escalator", 1)).toMatchObject({ ok: false });
+  });
+});
+
+describe("portalFromRoom and a stop placed by hand", () => {
+  const withHand = (kind: string) => parseModel({
+    building, levels, rooms,
+    portals: [{ id: "lift-h", kind }],
+    portalEndpoints: [
+      { id: "oth-L1-portal-9", portalId: "lift-h", levelId: "oth-L1", roomId: "L1-esc", point: [5, 3], version: 2 },
+      { id: "oth-L2-portal-9", portalId: "lift-h", levelId: "oth-L2", roomId: "L2-esc", point: [5, 3] },
+    ],
+  });
+
+  it("gives the stop its outline, and its lift the kind chosen, rather than a twin", () => {
+    const m = withHand("lift");
+    const plan = portalFromRoom(m, room(m, "L1-esc"), "escalator", 4000);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.portal).toBeNull();
+    expect(plan.endpoint).toEqual({
+      id: "oth-L1-portal-9", portalId: "lift-h", levelId: "oth-L1", roomId: "L1-esc", point: [5, 3], footprint: sq(4, 2, 6, 12),
+    });
+    expect(plan.placedByHand).toEqual({ version: 2 });
+    expect(plan.kindPatch).toEqual({
+      portalId: "lift-h", version: 0,
+      to: { kind: "escalator", stepFree: false },
+      from: { kind: "lift", stepFree: true },
+    });
+    expect(plan.roomPatch).toEqual({ kind: "area", walkable: true });
+  });
+
+  it("leaves the kind alone when it is the one chosen", () => {
+    const m = withHand("escalator");
+    const plan = portalFromRoom(m, room(m, "L1-esc"), "escalator", 4000);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.kindPatch).toBeNull();
+    expect(plan.placedByHand).toEqual({ version: 2 });
+  });
+
+  it("refuses a space with two stops in it, since its outline can't be both", () => {
+    const m = parseModel({
+      building, levels, rooms,
+      portals: [{ id: "lift-a", kind: "lift" }, { id: "lift-b", kind: "lift" }],
+      portalEndpoints: [
+        { id: "a-1", portalId: "lift-a", levelId: "oth-L1", roomId: "L1-esc", point: [5, 3] },
+        { id: "b-1", portalId: "lift-b", levelId: "oth-L1", roomId: "L1-esc", point: [5, 10] },
+      ],
+    });
+    expect(portalFromRoom(m, room(m, "L1-esc"), "lift", 1)).toMatchObject({ ok: false, reason: expect.stringMatching(/2 lift or stair stops/) });
+  });
+});
+
+describe("namedLikeAStop", () => {
+  it("takes a name that is the flight or the shaft itself", () => {
+    for (const name of ["Escalator - 07", "Escalator – 07", "Escalator - 05 Escalator - 06", "Lift A", "Lifts", "Stairs", "Staircase 2", " stair 3B ", "Elevator 1 & 2"]) {
+      expect(namedLikeAStop(name), name).toBe(true);
+    }
+  });
+
+  it("leaves a space named for what is beside one", () => {
+    for (const name of ["Lift lobby", "Stairs landing", "Lift Lobby 2", "Stairway Café", "Escalator hall", "Shop 12", ""]) {
+      expect(namedLikeAStop(name), name).toBe(false);
+    }
+  });
+});
+
+describe("floorAbove", () => {
+  const withL2Room = parseModel({ building, levels, rooms });
+
+  it("says whether the next floor has a space traced over the spot for the next stop", () => {
+    expect(floorAbove(withL2Room, "oth-L1", [5, 7])).toEqual({ code: "L2", landing: true });
+    expect(floorAbove(withL2Room, "oth-L1", [50, 50])).toEqual({ code: "L2", landing: false });
+  });
+
+  it("is null on the top floor", () => {
+    expect(floorAbove(withL2Room, "oth-L2", [5, 7])).toBeNull();
   });
 });
 

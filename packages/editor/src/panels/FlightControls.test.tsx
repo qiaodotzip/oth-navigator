@@ -37,6 +37,19 @@ describe("FlightControls", () => {
     expect(update).toHaveBeenCalledWith("portalEndpoint", "esc-1-1", 0, { flipped: true });
   });
 
+  it("flips once for a double click, and can flip again once that has landed", async () => {
+    let land: (ok: boolean) => void = () => {};
+    const update = vi.fn(() => new Promise<boolean>(resolve => { land = resolve; }));
+    render(<FlightControls saver={{ update } as unknown as Saver} endpoint={stop("esc-1-1")} portal={portal("esc-1")} />);
+    const flip = screen.getByRole("button", { name: "Flip direction" });
+    fireEvent.click(flip);
+    fireEvent.click(flip);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect((flip as HTMLButtonElement).disabled).toBe(true);
+    land(true);
+    await waitFor(() => expect((flip as HTMLButtonElement).disabled).toBe(false));
+  });
+
   it("sends you to the stop below for the flight arriving here", () => {
     render(<FlightControls saver={{} as Saver} endpoint={stop("esc-1-2")} portal={portal("esc-1")} />);
     expect(screen.getByText("Its flight up to here is set on the L1 stop.")).toBeTruthy();

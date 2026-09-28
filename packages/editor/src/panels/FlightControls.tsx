@@ -1,5 +1,6 @@
 import { live, type Portal, type PortalEndpoint } from "@oth/model";
 import { DEFAULT_SHAFT_M, nextStopAbove } from "@oth/renderer";
+import { useState } from "react";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
@@ -10,6 +11,9 @@ import { Button } from "../ui/Button";
  */
 export function FlightControls({ saver, endpoint, portal }: { saver: Saver; endpoint: PortalEndpoint; portal: Portal }) {
   const model = useEditorStore(s => s.model);
+  // One flip at a time: a second click before the first lands would send the
+  // same version again and meet it as a conflict.
+  const [busy, setBusy] = useState(false);
   if (!model) return null;
   const code = (levelId: string) => model.levels.find(l => l.id === levelId)?.code ?? levelId;
 
@@ -42,13 +46,18 @@ export function FlightControls({ saver, endpoint, portal }: { saver: Saver; endp
   const flipped = endpoint.flipped || topFlag;
 
   const flip = async () => {
-    if (!flipped) {
-      await saver.update("portalEndpoint", endpoint.id, endpoint.version, { flipped: true });
-      return;
+    setBusy(true);
+    try {
+      if (!flipped) {
+        await saver.update("portalEndpoint", endpoint.id, endpoint.version, { flipped: true });
+        return;
+      }
+      // Either flag alone keeps it turned round, so turning it back clears both.
+      if (endpoint.flipped && !(await saver.update("portalEndpoint", endpoint.id, endpoint.version, { flipped: false }))) return;
+      if (topFlag) await saver.update("portalEndpoint", above.id, above.version, { flipped: false });
+    } finally {
+      setBusy(false);
     }
-    // Either flag alone keeps it turned round, so turning it back clears both.
-    if (endpoint.flipped && !(await saver.update("portalEndpoint", endpoint.id, endpoint.version, { flipped: false }))) return;
-    if (topFlag) await saver.update("portalEndpoint", above.id, above.version, { flipped: false });
   };
 
   return (
@@ -60,7 +69,7 @@ export function FlightControls({ saver, endpoint, portal }: { saver: Saver; endp
       </p>
       {outline && (
         // Filled while pressed, as the preview's toggles are.
-        <Button size="sm" variant={flipped ? "primary" : "secondary"} aria-pressed={flipped} onClick={() => void flip()}>
+        <Button size="sm" variant={flipped ? "primary" : "secondary"} aria-pressed={flipped} disabled={busy} onClick={() => void flip()}>
           Flip direction
         </Button>
       )}

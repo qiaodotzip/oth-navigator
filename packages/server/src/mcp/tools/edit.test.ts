@@ -162,6 +162,17 @@ describe("update", () => {
     expect(await stop()).toMatchObject({ footprint: wider, flipped: true });
   });
 
+  it("says clearing which way a flight climbs isn't possible, and saves nothing", async () => {
+    await call(client, "create", { type: "portal", data: { id: "esc-1", kind: "escalator" } });
+    await call(client, "create", { type: "portalEndpoint", data: { id: "esc-1-1", portalId: "esc-1", levelId: "oth-L1", roomId: ROOM.id, point: [5, 5] } });
+    const { text, isError } = await call(client, "update", { type: "portalEndpoint", id: "esc-1-1", expectedVersion: 0, data: { flipped: null } });
+    expect({ text, isError }).toEqual({
+      text: "Not saved: flipped: it always has a value, so it can't be cleared. Send the value you want instead.",
+      isError: true,
+    });
+    expect((await f.db.select().from(portalEndpoints).where(eq(portalEndpoints.id, "esc-1-1")))[0]).toMatchObject({ flipped: false, version: 0 });
+  });
+
   it("says a deleted or missing thing is not there", async () => {
     expect((await call(client, "update", { type: "room", id: "nope", expectedVersion: 0, data: { nameEn: "X" } })).text)
       .toBe("There is no room nope, or it is deleted. get says which; restore brings back a deleted one.");

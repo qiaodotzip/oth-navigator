@@ -102,6 +102,8 @@ export function SelectionInspector({
                 pickerBelow={picking}
               />
             )}
+            {/* Above the room's fields, so it is in view without scrolling the column. */}
+            <MakeStop api={api} saver={saver} room={room} step={step} />
             <div className={picking ? "max-h-[30%] min-h-0 overflow-y-auto" : undefined}>
               <Inspector
                 onRename={(id, version, nameEn) => {
@@ -117,7 +119,6 @@ export function SelectionInspector({
                 <BindPlaces api={api} saver={saver} room={room} pendingPlaceId={pendingPlaceId} onBound={onBound} />
               </div>
             )}
-            <MakeStop saver={saver} room={room} step={step} />
           </>
         );
       }
