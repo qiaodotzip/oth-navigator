@@ -1,5 +1,5 @@
 import {
-  DoorwaySchema, PathwaySchema, RoomSchema, type Doorway, type Pathway, type Room, type RoomKind,
+  DoorwaySchema, PathwaySchema, RoomSchema, distancePointToSegment, type Doorway, type Pathway, type Room, type RoomKind,
 } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import type { Interval } from "./intervals";
@@ -323,16 +323,23 @@ describe("wallRuns", () => {
         expect(onFront(runs)).toEqual([[0, 0.75], [0.75, 1.5], [4.5, 5.25], [5.25, 6]]);
       });
 
-      it("opens one whole side of a round kiosk standing in a concourse", () => {
-        // 16 sides, 3 m to each corner, so each side is 1.17 m. Its sides turn
-        // 22.5° at each corner, too much to run on as one frontage.
-        const corners = Array.from({ length: 16 }, (_, k): [number, number] =>
-          [3 * Math.cos((k * Math.PI) / 8), 3 * Math.sin((k * Math.PI) / 8)]);
-        const kiosk = wallsOf("L1-kiosk", corners);
-        const runs = wallRuns(kiosk, [], [], [walled("L1-kiosk", corners), space(sq(-10, -10, 10, 10))]);
-        // All 16 stand in the concourse and are as long as each other: the west-then-southmost opens.
-        expect(runs).toHaveLength(15);
-        expect(kiosk.filter(p => !runs.some(r => r.a[0] === p.a[0] && r.a[1] === p.a[1]))).toEqual([kiosk[8]]);
+      describe("a round kiosk standing in a concourse", () => {
+        // 16 sides turning 22.5° at each corner run on as one frontage, a loop (Ruling 12).
+        const roundKiosk = (radius: number) => {
+          const corners = Array.from({ length: 16 }, (_, k): [number, number] =>
+            [radius * Math.cos((k * Math.PI) / 8), radius * Math.sin((k * Math.PI) / 8)]);
+          const kiosk = wallsOf("L1-kiosk", corners);
+          return { kiosk, runs: wallRuns(kiosk, [], [], [walled("L1-kiosk", corners), space(sq(-10, -10, 10, 10))]) };
+        };
+        const lengthOf = (ps: WallPiece[]) => ps.reduce((sum, p) => sum + Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1]), 0);
+
+        // 3 m to each corner makes 1.17 m sides; 1.2 m makes 0.47 m sides, each too short for a door alone.
+        it.each([3, 1.2])("opens a 3 m door across the sides of one %s m to each corner", radius => {
+          const { kiosk, runs } = roundKiosk(radius);
+          expect(lengthOf(kiosk) - lengthOf(runs)).toBeCloseTo(3);
+          // The loop's seam is its west-then-southmost corner, so the door is centred on the east one.
+          expect(runs.every(r => distancePointToSegment([radius, 0], r.a, r.b) > 0.01)).toBe(true);
+        });
       });
     });
 

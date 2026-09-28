@@ -37,8 +37,13 @@ export const MIN_DOOR_M = 0.9;
 const PROBE_M = 0.01;
 /** How far outside a wall to look for an area it stands inside, or that overlaps the room (Ruling 11). */
 const PROBE_OUT_M = 0.1;
-/** A room's consecutive own pieces turning less than this at their joint are one frontage (Ruling 11). */
-const FRONTAGE_ANGLE_SIN = Math.sin((5 * Math.PI) / 180);
+/**
+ * A room's consecutive own pieces turning less than this at their joint are
+ * one frontage (Ruling 11). 25° (Ruling 12) takes in a traced round kiosk,
+ * whose 16 sides turn 22.5° at each corner, and leaves out a chamfered
+ * corner's 45°.
+ */
+const FRONTAGE_ANGLE_SIN = Math.sin((25 * Math.PI) / 180);
 /** Doors whose gaps differ by no more than this are equally near (Ruling 11). */
 const EQUALLY_NEAR_M = 0.1;
 /** A shorter stand of wall between two openings is dropped. */
@@ -175,9 +180,9 @@ function nearestOnPiece(f: Frame, p: Vec2, q: Vec2): { t: number; distance: numb
 
 /**
  * A room's own pieces that run on from one another, end to start, turning
- * less than 5° at each joint (Ruling 11). A front traced as several short
- * edges is one frontage, and a door may span its joints. `from` is where each
- * piece starts, in metres along the frontage.
+ * less than 25° at each joint (Rulings 11 and 12). A front traced as several
+ * short edges, or a round kiosk's sides, is one frontage, and a door may span
+ * its joints. `from` is where each piece starts, in metres along the frontage.
  */
 type Frontage = { parts: Array<{ index: number; f: Frame; from: number }>; len: number };
 
@@ -559,7 +564,7 @@ function areaDoor(
  * nearest walkable area out in front of its own wall, up to 6 m away, or one
  * its wall stands inside, through at least 0.9 m of wall. A room with neither
  * stays closed. A door may span the joints of a front traced as several
- * pieces running on in line.
+ * pieces running on, or round a kiosk's sides.
  *
  * `rooms` is every live room on this level, walled rooms and areas. The
  * walkable areas among them are what a closed room can open onto; areas are
