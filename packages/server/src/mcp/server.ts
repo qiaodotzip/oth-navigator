@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ToolContext } from "./context";
+import { registerPrompts } from "./prompts";
 import { registerEditTools } from "./tools/edit";
 import { registerPathTools } from "./tools/paths";
 import { registerPublishTools } from "./tools/publish";
@@ -30,5 +31,6 @@ export function buildMcpServer(ctx: ToolContext): McpServer {
   registerPathTools(server, ctx);
   registerPublishTools(server, ctx);
   registerSetupTools(server, ctx);
+  registerPrompts(server);
   return server;
 }
