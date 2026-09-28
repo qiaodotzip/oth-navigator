@@ -66,18 +66,18 @@ const brief = (changes: Awaited<ReturnType<typeof listClaudeChanges>>) =>
   changes.map(c => [c.group, c.summary, c.entityType, c.action, c.undone]);
 
 describe("listClaudeChanges", () => {
-  it("lists each accepted draft once, as the room's create, and a set-aside apart, in plain words, each by its draft (contract v3)", async () => {
-    const { shop, plaza } = await claudeDecides();
+  it("lists each accepted draft once, as the room's create, and a set-aside apart, in plain words (contract v3, amended)", async () => {
+    const { plaza } = await claudeDecides();
     const changes = await listClaudeChanges(f.db, "oth-L1", EPOCH);
     expect(brief(changes)).toEqual(expect.arrayContaining([
-      ["rooms", "Made Starbucks from a draft (the drawing said SHOP 12), 100 m²", "roomDraft", "create", false],
+      ["rooms", "Made Starbucks from a draft (the drawing said SHOP 12), 100 m²", "room", "create", false],
       ["drafts", "Set aside Plaza for you: Open on the drawing", "roomDraft", "set-aside", false],
     ]));
     expect(changes).toHaveLength(2);
     const rooms = changes.find(c => c.group === "rooms")!;
     expect(Object.keys(rooms).sort()).toEqual(["action", "at", "auditId", "entityId", "entityType", "group", "summary", "undone"]);
-    // Show frames the draft's outline, so the row names the draft, not the room it became.
-    expect(rooms.entityId).toBe(shop);
+    // A draft made a room is Shown as the room on the map; a draft still waiting is Shown by its own outline.
+    expect(rooms.entityId).toBe("L1-starbucks");
     expect(changes.find(c => c.group === "drafts")!.entityId).toBe(plaza);
   });
 

@@ -17,7 +17,7 @@ describe("patchBack", () => {
 });
 
 describe("foldChanges", () => {
-  it("folds a draft's accept into one change, keyed on the room's own create but naming the draft, and a person's edits not at all", () => {
+  it("folds a draft's accept into one change, the room's own create, naming the room, and a person's edits not at all", () => {
     const folded = foldChanges([
       row({ id: "a1", entityType: "room", entityId: "L1-starbucks", action: "create", after: { id: "L1-starbucks", version: 0, levelId: "oth-L1", nameEn: "Starbucks", kind: "room" } }),
       row({ id: "a2", entityType: "roomDraft", entityId: "rd_1", action: "update", before: { nameEn: "SHOP 12", version: 0 }, after: { nameEn: "Starbucks", acceptedRoomId: "L1-starbucks", version: 1 } }),
@@ -26,7 +26,7 @@ describe("foldChanges", () => {
     ]);
     expect(folded).toHaveLength(1);
     expect(folded[0]).toMatchObject({
-      id: "a1", group: "rooms", levelId: "oth-L1", entityType: "roomDraft", entityId: "rd_1", action: "create",
+      id: "a1", group: "rooms", levelId: "oth-L1", entityType: "room", entityId: "L1-starbucks", action: "create",
       auditIds: ["a1", "a2", "a3"],
       touches: [{ type: "room", id: "L1-starbucks", version: 0 }, { type: "roomDraft", id: "rd_1", version: 2 }],
       undo: [{ do: "unaccept", draftId: "rd_1", draftVersion: 2, roomId: "L1-starbucks", roomVersion: 0 }],
