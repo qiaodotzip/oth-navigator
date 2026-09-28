@@ -87,10 +87,11 @@ const placementsOutsideAnchor: Rule = model => {
  *
  * A warning and never an error: drawing the extents of a whole floor before any
  * modelling starts is a legitimate way to work, and blocking publish on it
- * would punish exactly that.
+ * would punish exactly that. An object standing on a detail is not its model,
+ * so it leaves the detail undressed.
  */
 const undressedDetails: Rule = model => {
-  const dressed = new Set(live(model.placements).map(p => p.roomId));
+  const dressed = new Set(live(model.placements).filter(p => !p.objectKindId).map(p => p.roomId));
   return live(model.rooms)
     .filter(r => r.kind === "detail" && !dressed.has(r.id))
     .map<ValidationIssue>(r => ({

@@ -11,13 +11,14 @@ import { RoomMesh, type RoomExtras } from "./RoomMesh";
  *
  * A detail's block is a placeholder for a mesh that does not exist yet. Once
  * one is placed on it the block would sit inside the vending machines, so it
- * stops being drawn. A room is never replaced by the furniture standing in it.
+ * stops being drawn. A room is never replaced by the furniture standing in it,
+ * and a detail never by an object standing on it: a wastebin is not its model.
  */
 export function roomsToDraw(
   rooms: readonly Room[],
   placements: readonly Placement[],
 ): Room[] {
-  const dressed = new Set(placements.map(p => p.roomId));
+  const dressed = new Set(placements.filter(p => !p.objectKindId).map(p => p.roomId));
   return rooms.filter(r => r.kind !== "detail" || !dressed.has(r.id));
 }
 

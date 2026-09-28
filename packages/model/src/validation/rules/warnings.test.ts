@@ -121,6 +121,17 @@ describe("details", () => {
     })).toContain("detail.undressed");
   });
 
+  it("still warns when only an object stands on it, since a wastebin is not the detail's model", () => {
+    expect(codes({
+      rooms: [detail],
+      objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+      placements: [{
+        id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin",
+        roomId: "L1-seats", position: [2, 1, 0],
+      }],
+    })).toContain("detail.undressed");
+  });
+
   it("never blocks a publish, since drawing extents first is a way to work", () => {
     const r = validateModel(parseModel({ building, levels: [level], rooms: [detail] }), warningRules);
     expect(r.errorCount).toBe(0);

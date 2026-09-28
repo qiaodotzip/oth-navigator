@@ -36,4 +36,11 @@ describe("roomsToDraw", () => {
   it("keeps drawing a detail dressed by a placement anchored elsewhere", () => {
     expect(roomsToDraw(rooms, [on("L1-shop")]).map(r => r.id)).toContain("L1-vend");
   });
+
+  it("keeps drawing a detail an object stands on, since a wastebin is not the detail's model", () => {
+    const bin = PlacementSchema.parse({
+      id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", roomId: "L1-vend", position: [4, 3, 0],
+    });
+    expect(roomsToDraw(rooms, [bin]).map(r => r.id)).toContain("L1-vend");
+  });
 });
