@@ -6,6 +6,7 @@ import { tracePlansIntoModel } from "./cli/trace";
 import { exportCaptureForLabelling } from "./cli/surveyExport";
 import { importProposals } from "./cli/surveyImport";
 import { importL1Plan } from "./cli/planL1";
+import { KeepRefused, onePlanPerFloor } from "./cli/plansOnePerFloor";
 import { tidySurvey } from "./cli/surveyTidy";
 import { exportData, ExportRefused } from "./cli/dataExport";
 import { importData, ImportRefused } from "./cli/dataImport";
@@ -129,6 +130,37 @@ if (command === "data:import") {
     }
   } catch (err) {
     if (!(err instanceof ImportRefused)) throw err;
+    console.error(err.message);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+if (command === "plans:one-per-floor") {
+  const args = process.argv.slice(3);
+  const dryRun = args.includes("--dry-run");
+  const rest = args.filter(a => a !== "--dry-run");
+  if (rest.length !== 0 && !(rest.length === 2 && rest[0] === "--keep")) {
+    throw new Error("usage: plans:one-per-floor [--keep <imageId>] [--dry-run]");
+  }
+  const keep = rest[1];
+  const mpp = (m: number | null) => (m == null ? "not scaled" : `${m} m/px`);
+  try {
+    const r = await onePlanPerFloor(db, { keep, dryRun });
+    if (dryRun) console.log("--dry-run: nothing was written.");
+    for (const f of r.fixed) {
+      console.log(
+        `${f.levelId}: ${dryRun ? "would keep" : "kept"} ${f.kept.id} (${f.kept.filename}, ${mpp(f.kept.metresPerPixel)}), ` +
+          (f.chosenBy === "keep" ? "named by --keep" : "the newest"),
+      );
+      for (const p of f.retired) {
+        console.log(`  ${dryRun ? "would retire" : "retired"} ${p.id} (${p.filename}, ${mpp(p.metresPerPixel)})`);
+      }
+    }
+    console.log(`${r.floorsWithOne} floor(s) already had one plan.`);
+    if (dryRun && r.fixed.length) console.log("Run it again without --dry-run to apply.");
+  } catch (err) {
+    if (!(err instanceof KeepRefused)) throw err;
     console.error(err.message);
     process.exit(1);
   }
