@@ -1,11 +1,11 @@
 import { live, type Level } from "@oth/model";
 import { useEffect, useMemo } from "react";
 import type { Api } from "../api/client";
-import { loadDrafts, useLineUp } from "../build/drafts";
+import { loadDrafts, useLinedUp, useLineUp } from "../build/drafts";
 import { DraftsFind } from "../build/DraftsFind";
 import { DraftsOnPlan } from "../build/DraftsOnPlan";
 import { FloorplanTools, PlanDropZone, patchPlan } from "../build/FloorplanTools";
-import { alreadyHasRoomsWords, LineUpWarning, lineUpWords } from "../build/LineUpWarning";
+import { alreadyHasRoomsWords, linedUpWords, LineUpWarning, lineUpWords, notCheckedWords } from "../build/LineUpWarning";
 import { StepGuide } from "../build/StepGuide";
 import { belowRingsFor, levelBelow } from "../flow/floors";
 import { roomLabels } from "../places/labels";
@@ -15,6 +15,8 @@ import { useElementSize } from "../plan/useElementSize";
 import { useEditorStore } from "../state/store";
 import { imageForLevel } from "../state/underlay";
 import { useRefuseWindowFileDrop } from "../ui/fileDrop";
+import { roomsFound } from "./progress";
+import { useStepContext } from "./sync";
 
 /**
  * Step 4 (spec §4.2): Build's Floorplan tools and canvas, then Find rooms.
@@ -30,7 +32,13 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
   const below = levelBelow(model, level.id);
   const belowRings = useMemo(() => belowRingsFor(model, below), [model, below]);
   const labels = useMemo(() => (model ? roomLabels(model, level.id) : []), [model, level.id]);
+  // One line under the tools says whether the drawing lines up with the rooms
+  // already on the floor: it doesn't (amber), it does, or, once Find rooms
+  // has run and neither was said, that it couldn't be checked.
   const lineUp = useLineUp(level.id);
+  const linedUp = useLinedUp(level.id);
+  const ctx = useStepContext(level);
+  const found = ctx !== null && roomsFound(ctx);
   const existingRooms = useMemo(
     () => (model ? live(model.rooms).filter(r => r.levelId === level.id).length : 0),
     [model, level.id],
@@ -72,9 +80,13 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
           <div className="space-y-2 border-t border-stone-200 pt-2">
             {lineUp ? (
               <LineUpWarning>{lineUpWords(lineUp, level.code)}</LineUpWarning>
-            ) : existingRooms > 0 ? (
+            ) : linedUp ? (
+              <p className="text-xs text-stone-600">{linedUpWords(level.code)}</p>
+            ) : existingRooms === 0 ? null : found ? (
+              <p className="text-xs text-stone-600">{notCheckedWords(level.code, existingRooms)}</p>
+            ) : (
               <LineUpWarning>{alreadyHasRoomsWords(level.code, existingRooms)}</LineUpWarning>
-            ) : null}
+            )}
             <DraftsFind api={api} inSetup />
           </div>
         </>}

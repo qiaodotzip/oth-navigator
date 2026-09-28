@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { alreadyHasRoomsWords, LineUpWarning, lineUpWords } from "./LineUpWarning";
+import { alreadyHasRoomsWords, linedUpWords, LineUpWarning, lineUpWords, notCheckedWords } from "./LineUpWarning";
 
 describe("lineUpWords", () => {
   it("says how far east/west and north/south the drawing sits, rounded to 0.1 m", () => {
@@ -33,6 +33,20 @@ describe("alreadyHasRoomsWords", () => {
     expect(alreadyHasRoomsWords("L1", 1)).toBe(
       "L1 already has 1 room: line the plan up with them first (Align), so Find rooms can match them.",
     );
+  });
+});
+
+describe("linedUpWords", () => {
+  it("says the drawing lines up with the floor's rooms, by floor code (contract v4)", () => {
+    expect(linedUpWords("L1")).toBe("The drawing lines up with L1's rooms.");
+    expect(linedUpWords("B2")).toBe("The drawing lines up with B2's rooms.");
+  });
+});
+
+describe("notCheckedWords", () => {
+  it("says the drawing couldn't be checked against the floor's rooms, and to look before step 5, singular for one", () => {
+    expect(notCheckedWords("L1", 228)).toBe("Couldn't check the drawing against L1's 228 rooms: look before step 5.");
+    expect(notCheckedWords("L2", 1)).toBe("Couldn't check the drawing against L2's 1 room: look before step 5.");
   });
 });
 

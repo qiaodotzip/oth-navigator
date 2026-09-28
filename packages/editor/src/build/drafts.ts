@@ -1,7 +1,7 @@
 import { bboxOfRing, draftMatch, live, type BBox, type Room, type RoomDraft } from "@oth/model";
 import { useEffect } from "react";
 import { create } from "zustand";
-import type { Api, LineUp, RoomDraftRow } from "../api/client";
+import type { Api, LinedUp, LineUp, RoomDraftRow } from "../api/client";
 import { draftNameSpot, type DraftShape } from "../plan/DraftLayer";
 import { useEditorStore } from "../state/store";
 import { reportFailure } from "../ui/failure";
@@ -15,6 +15,11 @@ type DraftsState = {
    * is known — cleared by every load, since a stale one would be wrong.
    */
   lineUpByLevel: Readonly<Record<string, LineUp | undefined>>;
+  /**
+   * Each floor's word that the drawing does line up with its rooms (contract
+   * v4), kept and cleared exactly as `lineUpByLevel` is. At most one of the two.
+   */
+  linedUpByLevel: Readonly<Record<string, LinedUp | undefined>>;
   /** The draft in hand. Part B's own, so the map's selection (state/store.ts) is left alone. */
   selectedId: string | null;
   /** Whether drafts already on the map are drawn too. */
@@ -23,7 +28,7 @@ type DraftsState = {
   finding: string | null;
   /** A request to frame part of the plan. `seq` makes the same box asked twice two requests. */
   frame: { box: BBox; seq: number } | null;
-  setDrafts: (levelId: string, drafts: RoomDraftRow[], lineUp?: LineUp) => void;
+  setDrafts: (levelId: string, drafts: RoomDraftRow[], lineUp?: LineUp, linedUp?: LinedUp) => void;
   select: (id: string | null) => void;
   setShowCovered: (on: boolean) => void;
   setFinding: (words: string | null) => void;
@@ -31,7 +36,7 @@ type DraftsState = {
   reset: () => void;
 };
 
-const initial = { byLevel: {}, lineUpByLevel: {}, selectedId: null, showCovered: false, finding: null, frame: null };
+const initial = { byLevel: {}, lineUpByLevel: {}, linedUpByLevel: {}, selectedId: null, showCovered: false, finding: null, frame: null };
 
 /**
  * Each floor's count of what has changed its drafts, a load's start included.
@@ -47,7 +52,7 @@ function change(levelId: string): number {
 
 export const useDrafts = create<DraftsState>(set => ({
   ...initial,
-  setDrafts: (levelId, drafts, lineUp) => {
+  setDrafts: (levelId, drafts, lineUp, linedUp) => {
     change(levelId);
     set(s => {
       // A draft in hand that this floor's new list no longer has is let go; one on another floor is not.
@@ -56,6 +61,7 @@ export const useDrafts = create<DraftsState>(set => ({
       return {
         byLevel: { ...s.byLevel, [levelId]: drafts },
         lineUpByLevel: { ...s.lineUpByLevel, [levelId]: lineUp },
+        linedUpByLevel: { ...s.linedUpByLevel, [levelId]: linedUp },
         selectedId: wasHere && !stillHere ? null : s.selectedId,
       };
     });
@@ -76,8 +82,8 @@ export async function loadDrafts(api: Pick<Api, "listRoomDrafts">, levelId: stri
   const mine = change(levelId);
   const latest = () => changes.get(levelId) === mine;
   try {
-    const { drafts, lineUp } = await api.listRoomDrafts(levelId);
-    if (latest()) useDrafts.getState().setDrafts(levelId, drafts, lineUp);
+    const { drafts, lineUp, linedUp } = await api.listRoomDrafts(levelId);
+    if (latest()) useDrafts.getState().setDrafts(levelId, drafts, lineUp, linedUp);
     return true;
   } catch (err) {
     if (latest()) reportFailure(err, { doing: "load the drafts from the drawing", retry: () => loadDrafts(api, levelId).then(() => {}) });
@@ -100,6 +106,15 @@ export function useRoomDrafts(api: Pick<Api, "listRoomDrafts">, levelId: string 
  */
 export function useLineUp(levelId: string | null): LineUp | undefined {
   return useDrafts(s => (levelId ? s.lineUpByLevel[levelId] : undefined));
+}
+
+/**
+ * A floor's word that the drawing lines up with its rooms, from its drafts'
+ * last load (contract v4): undefined while it hasn't loaded, while `lineUp`
+ * says it doesn't, or once the server has too little to tell by.
+ */
+export function useLinedUp(levelId: string | null): LinedUp | undefined {
+  return useDrafts(s => (levelId ? s.linedUpByLevel[levelId] : undefined));
 }
 
 export type DraftView = {

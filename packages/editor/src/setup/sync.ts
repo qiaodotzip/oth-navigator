@@ -2,7 +2,7 @@ import type { Level } from "@oth/model";
 import { useEffect, useMemo, useRef } from "react";
 import { create } from "zustand";
 import { isUnauthorized } from "../api/client";
-import { useDrafts } from "../build/drafts";
+import { useDrafts, useLineUp } from "../build/drafts";
 import { useEditorStore } from "../state/store";
 import { countsKey, type StepContext } from "./progress";
 import type { SetupApi, SetupState } from "./types";
@@ -129,8 +129,9 @@ export function useStepContext(level: Pick<Level, "id" | "code"> | null): StepCo
   const model = useEditorStore(s => s.model);
   const levelImages = useEditorStore(s => s.levelImages);
   const draftsWaiting = useDrafts(s => (levelId ? s.byLevel[levelId]?.length ?? 0 : 0));
+  const lineUp = useLineUp(levelId);
   return useMemo(
-    () => (levelId ? { setup, model, levelImages, levelId, levelCode, draftsWaiting } : null),
-    [setup, model, levelImages, levelId, levelCode, draftsWaiting],
+    () => (levelId ? { setup, model, levelImages, levelId, levelCode, draftsWaiting, lineUp } : null),
+    [setup, model, levelImages, levelId, levelCode, draftsWaiting, lineUp],
   );
 }

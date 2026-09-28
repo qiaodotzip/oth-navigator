@@ -142,6 +142,14 @@ export type RoomDraftRow = RoomDraft & { setAside?: DraftSetAside };
  */
 export type LineUp = { dx: number; dy: number; pairs: number };
 
+/**
+ * The drawing does line up with the rooms already on the floor (contract
+ * v4): `pairs` drafts, matched to rooms by name or by shape, agree on a shift
+ * of 1 m or less. Present on `listRoomDrafts` in place of `lineUp`, never
+ * beside it; neither on a floor with too little to tell by.
+ */
+export type LinedUp = { pairs: number };
+
 // --- Floor setup and Claude's changes (plan 6C) ---
 // The same shapes as Plan 6E's setup/types.ts, which is the contract; its
 // setupApi.ts holds the methods below to its SetupApi.
@@ -532,8 +540,8 @@ export function createApi(options: ApiOptions = {}) {
      * a person with its mark, and how far a fresh plan sits from the rooms
      * already there, when the server found a shift worth a warning (contract v3).
      */
-    listRoomDrafts: (levelId: string): Promise<{ drafts: RoomDraftRow[]; lineUp?: LineUp }> =>
-      request<{ drafts: RoomDraftRow[]; lineUp?: LineUp }>(`/api/levels/${levelId}/drafts`),
+    listRoomDrafts: (levelId: string): Promise<{ drafts: RoomDraftRow[]; lineUp?: LineUp; linedUp?: LinedUp }> =>
+      request<{ drafts: RoomDraftRow[]; lineUp?: LineUp; linedUp?: LinedUp }>(`/api/levels/${levelId}/drafts`),
 
     /** A new search's drafts in place of the floor's old ones. */
     replaceRoomDrafts: async (levelId: string, body: { source: DraftSource; drafts: RoomDraftInput[] }): Promise<RoomDraft[]> =>

@@ -131,6 +131,17 @@ describe("a step's tick", () => {
     });
     expect(stepDone("floorplan", on("L1", { ...withPlan, model: fromPdf }))).toBe(true);
   });
+
+  it("isn't done while the floor's drafts say the drawing doesn't line up with its rooms (contract v4)", () => {
+    const found = { levelImages: [plan()], draftsWaiting: 215 };
+    const off = on("L1", { ...found, lineUp: { dx: 11.7, dy: -4.8, pairs: 5 } });
+    expect(stepDone("floorplan", off)).toBe(false);
+    expect(notDoneLine("floorplan", off)).toBe("The drawing doesn't line up with L1's rooms yet.");
+    expect(stepDone("floorplan", on("L1", found))).toBe(true);
+    // Marked done by hand, it is done: a person's word stands, as for every step.
+    expect(stepDone("floorplan", on("L1", { ...found, lineUp: { dx: 11.7, dy: -4.8, pairs: 5 }, setup: setupState({ floorplan: done }) })))
+      .toBe(true);
+  });
 });
 
 describe("where the wizard opens", () => {

@@ -1,8 +1,9 @@
-import { act, render } from "@testing-library/react";
+import { act, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
+import { useDrafts } from "../build/drafts";
 import { useEditorStore } from "../state/store";
-import { POLL_MS, loadSetup, putSetup, useSetupPoll, useSetupStore } from "./sync";
+import { POLL_MS, loadSetup, putSetup, useSetupPoll, useSetupStore, useStepContext } from "./sync";
 import { setupState } from "./testing";
 import type { SetupApi, SetupState } from "./types";
 
@@ -138,5 +139,19 @@ describe("useSetupPoll", () => {
     await wait(3 * POLL_MS);
     expect(api.getSetup).toHaveBeenCalledTimes(1);
     unmount();
+  });
+});
+
+describe("useStepContext", () => {
+  afterEach(() => useDrafts.getState().reset());
+
+  it("carries the floor's line-up warning from its drafts, so the Floorplan step's tick reads it (contract v4)", () => {
+    const { result } = renderHook(() => useStepContext({ id: "oth-L1", code: "L1" }));
+    expect(result.current?.lineUp).toBeUndefined();
+    act(() => useDrafts.getState().setDrafts("oth-L1", [], { dx: 11.7, dy: -4.8, pairs: 5 }));
+    expect(result.current?.lineUp).toEqual({ dx: 11.7, dy: -4.8, pairs: 5 });
+    act(() => useDrafts.getState().setDrafts("oth-L2", [], { dx: 1.5, dy: 0, pairs: 5 }));
+    act(() => useDrafts.getState().setDrafts("oth-L1", []));
+    expect(result.current?.lineUp).toBeUndefined();
   });
 });

@@ -12,6 +12,12 @@ describe("STEP_GUIDES", () => {
     for (const { id } of BUILD_STEPS) expect(STEP_GUIDES[id].instruction).toMatch(/\.$/);
   });
 
+  it("lines a plan up with the floor below, or with the rooms already on this floor, in one sentence", () => {
+    expect(STEP_GUIDES.floorplan.instruction).toBe(
+      "Add this floor's plan, set its scale, then drag it into line with the floor below, or with the rooms already on this floor.",
+    );
+  });
+
   it("names every tool it offers, so no button renders blank", () => {
     for (const tool of offered) expect(TOOL_LABELS[tool]).toBeTruthy();
   });

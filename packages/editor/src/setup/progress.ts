@@ -1,5 +1,5 @@
 import { live, type MapModel } from "@oth/model";
-import type { LevelImage, TeamMember } from "../api/client";
+import type { LevelImage, LineUp, TeamMember } from "../api/client";
 import { waitingReview } from "../flow/floorProgress";
 import { href } from "../route";
 import { imageForLevel } from "../state/underlay";
@@ -16,6 +16,12 @@ export type StepContext = {
   levelCode: string;
   /** The floor's drafts waiting, from the drafts store: 0 where they aren't loaded, as on the Floors home. */
   draftsWaiting: number;
+  /**
+   * The floor's line-up warning, from the drafts store (contract v3): the
+   * drawing doesn't line up with the floor's rooms. Left out where the
+   * drafts aren't loaded, as on the Floors home.
+   */
+  lineUp?: LineUp;
 };
 
 /** "Every change there is": the since sent before a run has a start. */
@@ -34,9 +40,9 @@ function stored(ctx: StepContext, step: SetupStepId): boolean {
  * Whether Find rooms has run on this floor. The server counts every search's
  * drafts, decided or not; the drafts store has them the moment a search
  * saves; and a floor whose drafts were all decided long ago still has rooms
- * whose evidence is its PDF.
+ * whose evidence is its PDF. The Floorplan step's line-up line reads it too.
  */
-function roomsFound(ctx: StepContext): boolean {
+export function roomsFound(ctx: StepContext): boolean {
   const r = ctx.setup?.counts.rooms;
   if (r && r.waiting + r.setAside + r.accepted + r.rejected > 0) return true;
   if (ctx.draftsWaiting > 0) return true;
@@ -52,6 +58,7 @@ export function floorplanGap(ctx: StepContext): string | null {
   if (!image.source) return "This plan came from an image. Add the floor's PDF to find rooms in it.";
   if (image.metresPerPixel == null) return "The plan isn't scaled yet.";
   if (!roomsFound(ctx)) return "Find rooms hasn't run on this plan yet.";
+  if (ctx.lineUp) return `The drawing doesn't line up with ${ctx.levelCode}'s rooms yet.`;
   return null;
 }
 

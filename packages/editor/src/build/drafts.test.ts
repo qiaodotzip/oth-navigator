@@ -6,7 +6,7 @@ import { draftNameSpot } from "../plan/DraftLayer";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
-import { draftBox, draftView, loadDrafts, useDraftView, useDrafts, useLineUp, useRoomDrafts } from "./drafts";
+import { draftBox, draftView, loadDrafts, useDraftView, useDrafts, useLinedUp, useLineUp, useRoomDrafts } from "./drafts";
 
 const draft = (id: string): RoomDraft => RoomDraftSchema.parse({
   id, levelId: "oth-L2", nameEn: id, kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
@@ -32,6 +32,16 @@ describe("the drafts store", () => {
     expect(await loadDrafts(api, "oth-L2")).toBe(true);
     expect(useDrafts.getState().lineUpByLevel["oth-L2"]).toEqual({ dx: 11.5, dy: -4.6, pairs: 7 });
     expect(renderHook(() => useLineUp("oth-L2")).result.current).toEqual({ dx: 11.5, dy: -4.6, pairs: 7 });
+  });
+
+  it("keeps a floor's linedUp beside its drafts, as it keeps lineUp, and clears it on a load without one (contract v4)", async () => {
+    const api = fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [draft("rd_a")], linedUp: { pairs: 162 } }) });
+    expect(await loadDrafts(api, "oth-L2")).toBe(true);
+    expect(useDrafts.getState().linedUpByLevel["oth-L2"]).toEqual({ pairs: 162 });
+    expect(useDrafts.getState().lineUpByLevel["oth-L2"]).toBeUndefined();
+    expect(renderHook(() => useLinedUp("oth-L2")).result.current).toEqual({ pairs: 162 });
+    act(() => useDrafts.getState().setDrafts("oth-L2", [draft("rd_a")]));
+    expect(useDrafts.getState().linedUpByLevel["oth-L2"]).toBeUndefined();
   });
 
   it("clears a floor's line-up warning on a load that finds none, or names none in hand", () => {

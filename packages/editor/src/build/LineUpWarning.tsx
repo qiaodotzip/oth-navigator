@@ -38,6 +38,24 @@ export function alreadyHasRoomsWords(floorCode: string, roomCount: number): stri
     + "line the plan up with them first (Align), so Find rooms can match them.";
 }
 
+/**
+ * Said plainly on the Floorplan step once a fresh plan's drafts show it does
+ * line up with the rooms already on the floor (contract v4 `linedUp`).
+ */
+export function linedUpWords(floorCode: string): string {
+  return `The drawing lines up with ${floorCode}'s rooms.`;
+}
+
+/**
+ * Said plainly on the Floorplan step once Find rooms has run on a floor with
+ * rooms, and its drafts gave neither answer: too few of them pair with a room
+ * to tell whether the drawing lines up, so the person looks before step 5,
+ * where Claude decides the drafts.
+ */
+export function notCheckedWords(floorCode: string, roomCount: number): string {
+  return `Couldn't check the drawing against ${floorCode}'s ${roomCount} room${roomCount === 1 ? "" : "s"}: look before step 5.`;
+}
+
 /** The amber line-up warning box, worded the same wherever it shows. */
 export function LineUpWarning({ children }: { children: ReactNode }) {
   return (

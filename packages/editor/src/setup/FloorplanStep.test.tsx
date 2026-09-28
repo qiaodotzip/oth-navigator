@@ -1,4 +1,4 @@
-import { parseModel, type Level, type PlanSource } from "@oth/model";
+import { parseModel, RoomDraftSchema, type Level, type PlanSource, type RoomDraft } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { LevelImage } from "../api/client";
@@ -36,6 +36,20 @@ const model = parseModel({
   rooms: [{ id: "L1-a", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 3 }],
 });
 const L2 = model.levels[1] as Level;
+/** L2 with two rooms on it already, for Find rooms to match. */
+const withRooms = parseModel({
+  building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+  levels: [{ id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 }],
+  rooms: [
+    { id: "L2-a", levelId: "oth-L2", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 3 },
+    { id: "L2-b", levelId: "oth-L2", kind: "room", footprint: [[20, 0], [30, 0], [30, 10], [20, 10]], heightM: 3 },
+  ],
+});
+/** A draft Find rooms left on L2. */
+const found: RoomDraft = RoomDraftSchema.parse({
+  id: "rd_a", levelId: "oth-L2", nameEn: "Shop", kind: "room", footprint: [[40, 0], [50, 0], [50, 10], [40, 10]],
+  labelPoint: [45, 5], areaM2: 100, source: { checksum: "c".repeat(64), page: 1 },
+});
 const source: PlanSource = {
   page: 1, pageCount: 1, pageSizePt: [400, 300], rotation: 0, clipPt: [36, 78, 246, 292], pointsPerPixel: 0.1,
   metresPerPoint: 0.5, runsAgree: 2, runsFound: 2, pdfId: "pdf_1", checksum: "d".repeat(64), filename: "L2.pdf",
@@ -116,18 +130,30 @@ describe("FloorplanStep", () => {
   });
 
   it("warns to line the plan up first, before Find rooms, when the floor already has rooms", () => {
-    useEditorStore.getState().setModel(parseModel({
-      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
-      levels: [{ id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "L2", nameZh: "二楼", elevationM: 6, heightM: 4 }],
-      rooms: [
-        { id: "L2-a", levelId: "oth-L2", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 3 },
-        { id: "L2-b", levelId: "oth-L2", kind: "room", footprint: [[20, 0], [30, 0], [30, 10], [20, 10]], heightM: 3 },
-      ],
-    }));
+    useEditorStore.getState().setModel(withRooms);
     open([plan()]);
     expect(guide().getByText(
       "L2 already has 2 rooms: line the plan up with them first (Align), so Find rooms can match them.",
     )).toBeTruthy();
+  });
+
+  it("says plainly that the drawing lines up, once its drafts show it does (contract v4)", () => {
+    useEditorStore.getState().setModel(withRooms);
+    open([plan()]);
+    act(() => useDrafts.getState().setDrafts("oth-L2", [found], undefined, { pairs: 162 }));
+    // Plain: no warning mark before it.
+    expect(guide().getByText("The drawing lines up with L2's rooms.").textContent).toBe("The drawing lines up with L2's rooms.");
+    expect(screen.queryByText(/already has/)).toBeNull();
+    expect(screen.queryByText(/Couldn't check/)).toBeNull();
+  });
+
+  it("says plainly it couldn't check the drawing, once Find rooms has run and neither answer came", () => {
+    useEditorStore.getState().setModel(withRooms);
+    open([plan()]);
+    act(() => useDrafts.getState().setDrafts("oth-L2", [found]));
+    const line = guide().getByText("Couldn't check the drawing against L2's 2 rooms: look before step 5.");
+    expect(line.textContent).toBe("Couldn't check the drawing against L2's 2 rooms: look before step 5.");
+    expect(screen.queryByText(/already has/)).toBeNull();
   });
 
   it("warns with the drawing's own offset once its drafts show one, in place of the generic warning", () => {

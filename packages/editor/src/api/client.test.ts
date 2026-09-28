@@ -235,8 +235,16 @@ describe("assets", () => {
 
   it("has no line-up warning when the server sends none", async () => {
     const fetchImpl = mockFetch(200, { drafts: [] });
-    const { drafts, lineUp } = await createApi({ fetchImpl }).listRoomDrafts("oth-L1");
+    const { drafts, lineUp, linedUp } = await createApi({ fetchImpl }).listRoomDrafts("oth-L1");
     expect(drafts).toEqual([]);
+    expect(lineUp).toBeUndefined();
+    expect(linedUp).toBeUndefined();
+  });
+
+  it("reads linedUp when the drawing does line up with the floor's rooms (contract v4)", async () => {
+    const fetchImpl = mockFetch(200, { drafts: [{ id: "rd_1" }], linedUp: { pairs: 162 } });
+    const { lineUp, linedUp } = await createApi({ fetchImpl }).listRoomDrafts("oth-L1");
+    expect(linedUp).toEqual({ pairs: 162 });
     expect(lineUp).toBeUndefined();
   });
 });
