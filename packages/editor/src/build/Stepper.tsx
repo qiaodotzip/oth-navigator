@@ -1,9 +1,15 @@
 import { BUILD_STEPS, type BuildStepId } from "../flow/floorProgress";
+import type { TodoCounts } from "./todo";
+
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 /**
- * The six steps across the top of Build. Each says whether it is done and how
- * much is open on it; choosing one changes the guide, the tools and the to-do
- * list. None is locked: they guide, they do not gate.
+ * The six steps across the top of Build. Each says whether it is done and
+ * what is on its to-do list; choosing one changes the guide, the tools and the
+ * to-do list. None is locked: they guide, they do not gate.
+ *
+ * Errors and warnings are counted apart, each with its own sign: a ✓ means
+ * nothing on the step stops Publish, and a ✓ over warnings still shows them.
  */
 export function Stepper({
   current,
@@ -12,8 +18,10 @@ export function Stepper({
   onChoose,
 }: {
   current: BuildStepId;
+  /** From `buildStepsDone`: done means nothing on the step is an error. */
   done: Record<BuildStepId, boolean>;
-  counts: Record<BuildStepId, number>;
+  /** From `stepCounts`: exactly what each step's to-do list shows. */
+  counts: Record<BuildStepId, TodoCounts>;
   onChoose: (step: BuildStepId) => void;
 }) {
   return (
@@ -21,10 +29,15 @@ export function Stepper({
       <ol className="flex gap-1 overflow-x-auto py-2">
         {BUILD_STEPS.map((s, i) => {
           const isCurrent = s.id === current;
-          const open = counts[s.id];
+          const { errors, warnings } = counts[s.id];
           // Said whole, because the button is a flex row: each part is a block,
           // and a name pieced together from blocks reads "Floorplan , done".
-          const name = `${s.label}${done[s.id] ? ", done" : ""}${open > 0 ? `, ${open} open` : ""}`;
+          const name = [
+            s.label,
+            done[s.id] && "done",
+            errors > 0 && plural(errors, "error"),
+            warnings > 0 && plural(warnings, "warning"),
+          ].filter(Boolean).join(", ");
           return (
             <li key={s.id}>
               <button
@@ -46,8 +59,18 @@ export function Stepper({
                   {done[s.id] ? "✓" : i + 1}
                 </span>
                 {s.label}
-                {open > 0 && (
-                  <span className="rounded-full bg-yours-soft px-1.5 text-xs font-medium text-yours">{open}</span>
+                {errors > 0 && (
+                  <span className="flex items-center gap-0.5 rounded-full bg-danger-soft px-1.5 text-xs font-semibold text-danger">
+                    <span aria-hidden>✕</span>
+                    {errors}
+                  </span>
+                )}
+                {/* Secondary on purpose: unfilled, so a step's errors are what catch the eye. */}
+                {warnings > 0 && (
+                  <span className="flex items-center gap-0.5 text-xs text-stone-600">
+                    <span aria-hidden className="font-semibold text-yours">!</span>
+                    {warnings}
+                  </span>
                 )}
               </button>
             </li>

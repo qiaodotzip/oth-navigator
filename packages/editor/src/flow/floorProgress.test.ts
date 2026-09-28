@@ -68,9 +68,10 @@ describe("buildStepsDone", () => {
 });
 
 describe("buildStepForCode", () => {
-  it("files survey issues under Bind places, and the rest where the checklist puts them", () => {
+  it("files place issues under Bind places, and the rest where the checklist puts them", () => {
     expect(buildStepForCode("place.unbound")).toBe("bind");
-    expect(buildStepForCode("room.unsurveyed")).toBe("bind");
+    // A room nobody filmed: binding answers it from the place's side, or Survey does.
+    expect(buildStepForCode("room.unsurveyed")).toBeNull();
     expect(buildStepForCode("area.unreachable")).toBe("pathways");
     expect(buildStepForCode("entrance.offFloor")).toBe("entrances");
     expect(buildStepForCode("portal.endpoints.insufficient")).toBe("entrances");

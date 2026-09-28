@@ -52,6 +52,26 @@ describe("StepTodo", () => {
     expect(screen.queryByText(/nothing left/i)).toBeNull();
   });
 
+  it("says why a step with only warnings is ticked: none of them stops you publishing", () => {
+    setup([item()], "pathways", true);
+    const note = screen.getByText(/nothing here stops you publishing/i);
+    expect(note.textContent).toContain("✓");
+    expect(note.textContent).toContain("1 warning");
+  });
+
+  it("says what the errors on a step are for, and gives no tick", () => {
+    const broken = item({ key: "a", severity: "error", message: 'Room "L1-west-column-05" has an area below 0.5 m².' });
+    setup([broken, item({ key: "b", severity: "error" }), item({ key: "c" })], "rooms", false);
+    expect(screen.getByText("Fix these 2 errors before publishing.")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "To do" }).textContent).not.toContain("✓");
+  });
+
+  it("never ticks a list that has an error on it, whatever it is told", () => {
+    setup([item({ severity: "error" })], "rooms", true);
+    expect(screen.getByText("Fix this error before publishing.")).toBeTruthy();
+    expect(screen.queryByText(/nothing here stops/i)).toBeNull();
+  });
+
   it("takes you to the thing an item is about", () => {
     const todo = item();
     const { onChoose } = setup([todo]);

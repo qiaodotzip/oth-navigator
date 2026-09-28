@@ -1,47 +1,30 @@
 import { live, placeLevels, type MapModel, type ValidationReport } from "@oth/model";
 import type { LevelImage } from "../api/client";
+import { stepTodos, type StepTodos } from "../build/todo";
 import { imageForLevel } from "../state/underlay";
 import { labelCounts } from "../survey/labelled";
-import { levelChecklist, stepForCode, type StepId } from "./checklist";
+import { BUILD_STEPS, type BuildStepId } from "./buildSteps";
+import { levelChecklist, type StepId } from "./checklist";
 
-export type BuildStepId = "floorplan" | "rooms" | "pathways" | "entrances" | "bind" | "dressing";
-
-/** The six build steps, in the order a floor is built, with what "next" says for each. */
-export const BUILD_STEPS: ReadonlyArray<{ id: BuildStepId; label: string; next: string }> = [
-  { id: "floorplan", label: "Floorplan", next: "add the floorplan and set its scale" },
-  { id: "rooms", label: "Areas & rooms", next: "trace areas and rooms" },
-  { id: "pathways", label: "Pathways", next: "draw pathways" },
-  { id: "entrances", label: "Entrances & lifts", next: "mark entrances, lifts and stairs" },
-  { id: "bind", label: "Bind places", next: "bind surveyed places to rooms" },
-  { id: "dressing", label: "Dressing", next: "dress the details" },
-];
-
-const FROM_CHECKLIST: Record<StepId, BuildStepId> = {
-  floorplan: "floorplan",
-  scale: "floorplan",
-  rooms: "rooms",
-  connect: "pathways",
-  entrances: "entrances",
-  portals: "entrances",
-  dressing: "dressing",
-};
+export { BUILD_STEPS, buildStepForCode, type BuildStepId } from "./buildSteps";
 
 /**
- * Which build step owns a validation code. Survey agreement — a place with no
- * room, a room nobody surveyed — is answered by binding, not by tracing.
+ * Which of the six steps a floor has finished — the one rule the stepper, the
+ * to-do list, the floor cards and the step Build opens on all read.
+ *
+ * A step is done when its work is there and nothing on its to-do list is an
+ * error, since an error is what stops Publish: a ✓ over twelve columns too
+ * small to publish would send you to Publish only to be turned back. Warnings
+ * leave the tick alone; the stepper counts them beside it instead.
+ *
+ * `todos` saves a second pass when the caller already has the floor's lists.
  */
-export function buildStepForCode(code: string): BuildStepId | null {
-  if (code.startsWith("place.") || code === "room.unsurveyed") return "bind";
-  const step = stepForCode(code);
-  return step ? FROM_CHECKLIST[step] : null;
-}
-
-/** Which of the six steps a floor has finished, from the existing checklist plus binding. */
 export function buildStepsDone(
   model: MapModel,
   report: ValidationReport | null,
   levelImages: LevelImage[],
   levelId: string,
+  todos: StepTodos = stepTodos(model, report, levelImages, levelId),
 ): Record<BuildStepId, boolean> {
   const checklist = levelChecklist({ model, levelId, image: imageForLevel(levelImages, levelId), report });
   const done = (id: StepId) => checklist.find(s => s.id === id)?.status === "done";
@@ -50,7 +33,7 @@ export function buildStepsDone(
   const units = live(model.places).filter(
     p => p.status === "confirmed" && !p.pathwayKindId && levels.get(p.id) === levelId,
   );
-  return {
+  const there: Record<BuildStepId, boolean> = {
     floorplan: done("floorplan") && done("scale"),
     rooms: done("rooms"),
     pathways: done("connect"),
@@ -61,6 +44,9 @@ export function buildStepsDone(
     // on a blank floor would read as one step of six already finished.
     dressing: done("rooms") && done("dressing"),
   };
+  return Object.fromEntries(
+    BUILD_STEPS.map(({ id }) => [id, there[id] && todos[id].every(t => t.severity !== "error")]),
+  ) as Record<BuildStepId, boolean>;
 }
 
 /**

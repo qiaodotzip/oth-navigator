@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { BUILD_STEPS, type BuildStepId } from "../flow/floorProgress";
 import { Button } from "../ui/Button";
-import type { TodoItem } from "./todo";
+import { countTodos, type TodoItem } from "./todo";
 
 /** Enough to act on, with the rest one click away: a floor can have 190 places to bind. */
 const SHOWN_AT_FIRST = 50;
@@ -33,7 +33,10 @@ export function StepTodo({
   onDeleteOrphan,
 }: {
   step: BuildStepId;
-  /** Whether the step is finished. An empty list is not enough: a blank floor has nothing to fix only because nothing is traced yet. */
+  /**
+   * Whether the step is finished (`buildStepsDone`). An empty list is not
+   * enough: a blank floor has nothing to fix only because nothing is traced yet.
+   */
   done: boolean;
   items: readonly TodoItem[];
   onChoose: (item: TodoItem) => void;
@@ -61,12 +64,26 @@ export function StepTodo({
 
   const { label, next } = BUILD_STEPS.find(s => s.id === step)!;
   const shown = showAll ? items : items.slice(0, SHOWN_AT_FIRST);
+  const { errors, warnings } = countTodos(items);
 
   return (
     <section aria-label="To do" className="flex min-h-0 flex-1 flex-col">
       <h2 className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-stone-500">
         To do{items.length > 0 ? ` · ${items.length}` : ""}
       </h2>
+      {/* What the stepper's mark means, said here in words: errors stop Publish, warnings never do. */}
+      {errors > 0 ? (
+        <p className="px-3 pb-1 text-xs text-stone-600">
+          Fix {errors === 1 ? "this error" : `these ${errors} errors`} before publishing.
+        </p>
+      ) : (
+        done && warnings > 0 && (
+          <p className="px-3 pb-1 text-xs text-stone-600">
+            <span aria-hidden className="text-confirmed">✓ </span>Nothing here stops you publishing, but{" "}
+            {warnings === 1 ? "1 warning is" : `${warnings} warnings are`} worth a look.
+          </p>
+        )
+      )}
       {items.length === 0 ? (
         done ? (
           <p className="px-3 text-xs text-stone-600">

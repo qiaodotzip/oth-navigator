@@ -1,7 +1,8 @@
 import { parseModel, type ValidationIssue, type ValidationReport } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import type { LevelImage } from "../api/client";
-import { EMPTY_TODOS, stepTodos } from "./todo";
+import { buildStepsDone } from "../flow/floorProgress";
+import { EMPTY_TODOS, stepCounts, stepTodos } from "./todo";
 
 const square: [number, number][] = [[0, 0], [10, 0], [10, 10], [0, 10]];
 
@@ -92,7 +93,6 @@ describe("stepTodos — which step an issue belongs to", () => {
     ["entrance.offFloor", "entrances"],
     ["portalEndpoint.point.outsideRoom", "entrances"],
     ["level.portals.none", "entrances"],
-    ["room.unsurveyed", "bind"],
     ["detail.undressed", "dressing"],
     ["placement.outsideAnchorRoom", "dressing"],
   ] as const)("files %s under %s", (code, step) => {
@@ -101,6 +101,11 @@ describe("stepTodos — which step an issue belongs to", () => {
 
   it("leaves out what no build step fixes", () => {
     const todos = on("oth-L1", report(issue("tenant.unverified", "tenant", "t1", "oth-L1")));
+    expect(Object.values(todos).flat()).toEqual([]);
+  });
+
+  it("leaves out a room nobody has filmed: a place it could be is listed as a place, and the rest is Survey's", () => {
+    const todos = on("oth-L1", report(issue("room.unsurveyed", "room", "L1-a", "oth-L1")));
     expect(Object.values(todos).flat()).toEqual([]);
   });
 
@@ -200,6 +205,67 @@ describe("EMPTY_TODOS", () => {
     for (const items of Object.values(EMPTY_TODOS)) {
       expect(items).toEqual([]);
       expect(Object.isFrozen(items)).toBe(true);
+    }
+  });
+});
+
+/**
+ * A floor shaped like the real L1 on the walk that found the stepper lying:
+ * twelve columns too small to publish, 168 rooms no pathway reaches, eleven
+ * surveyed places waiting for a room, and 166 rooms nobody has filmed.
+ */
+describe("the stepper's ticks and counts, on a floor shaped like L1", () => {
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+  const column = (n: number) => `L1-west-column-${String(n).padStart(2, "0")}`;
+  const l1 = parseModel({
+    building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+    levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+    rooms: [
+      { id: "L1-hall", levelId: "oth-L1", kind: "area", footprint: square, heightM: 5, walkable: true, nameEn: "Hall" },
+      { id: "L1-shop", levelId: "oth-L1", kind: "room", footprint: square, heightM: 3, nameEn: "Shop" },
+    ],
+    pathways: [{ id: "L1-p", levelId: "oth-L1", polyline: [[0, 5], [10, 5]] }],
+    places: range(11).map(n => ({ id: `pl_${n}`, nameEn: `Place ${n}`, category: "retail", levelId: "oth-L1" })),
+  });
+  const l1Report = report(
+    ...range(12).map(n => ({
+      ...issue("room.footprint.degenerateArea", "room", column(n), "oth-L1", "error"),
+      message: `Room "${column(n)}" has an area below 0.5 m².`,
+    })),
+    ...range(2).map(n => issue("room.name.missing", "room", `L1-unnamed-${n}`, "oth-L1")),
+    ...range(168).map(n => issue("room.noAccess", "room", `L1-room-${n}`, "oth-L1")),
+    ...range(11).map(n => issue("place.unbound", "place", `pl_${n}`)),
+    ...range(166).map(n => issue("room.unsurveyed", "room", `L1-room-${n}`, "oth-L1")),
+  );
+  const todos = stepTodos(l1, l1Report, [scaled], "oth-L1");
+  const done = buildStepsDone(l1, l1Report, [scaled], "oth-L1", todos);
+  const counts = stepCounts(todos);
+
+  it("does not tick a step with an error on it, since an error stops Publish", () => {
+    expect(done.rooms).toBe(false);
+    expect(counts.rooms).toEqual({ errors: 12, warnings: 2 });
+  });
+
+  it("ticks the same step once its errors are gone", () => {
+    const fixed = report(...l1Report.issues.filter(i => i.severity !== "error"));
+    expect(buildStepsDone(l1, fixed, [scaled], "oth-L1").rooms).toBe(true);
+  });
+
+  it("ticks a step with only warnings, and still counts them", () => {
+    expect(done.pathways).toBe(true);
+    expect(counts.pathways).toEqual({ errors: 0, warnings: 168 });
+  });
+
+  it("counts on Bind places only the places waiting for a room", () => {
+    expect(codes(todos.bind)).toEqual(range(11).map(() => "place.unbound"));
+    expect(counts.bind).toEqual({ errors: 0, warnings: 11 });
+    expect(done.bind).toBe(false);
+  });
+
+  it("counts on every step exactly what its to-do list shows", () => {
+    for (const step of Object.keys(todos) as (keyof typeof todos)[]) {
+      expect(counts[step].errors).toBe(todos[step].filter(i => i.severity === "error").length);
+      expect(counts[step].errors + counts[step].warnings).toBe(todos[step].length);
     }
   });
 });

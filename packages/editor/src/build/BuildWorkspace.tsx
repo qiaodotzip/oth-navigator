@@ -31,7 +31,7 @@ import { StepTodo } from "./StepTodo";
 import { Stepper } from "./Stepper";
 import { STEP_GUIDES, parseStep } from "./steps";
 import { DressingTools, PathwaysTools, RoomsTools } from "./StepTools";
-import { EMPTY_TODOS, stepTodos, type TodoItem } from "./todo";
+import { EMPTY_TODOS, stepCounts, stepTodos, type TodoItem } from "./todo";
 import { useBuildKeys } from "./useBuildKeys";
 import { zoomViewportTo } from "./zoomTo";
 
@@ -111,13 +111,14 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
     () => (model && levelId ? stepTodos(model, report, levelImages, levelId) : EMPTY_TODOS),
     [model, report, levelImages, levelId],
   );
+  // The tick and the numbers are both read off `todos`, so neither can disagree with the list.
   const done = useMemo(
-    () => (model && levelId ? buildStepsDone(model, report, levelImages, levelId) : NOTHING_DONE),
-    [model, report, levelImages, levelId],
+    () => (model && levelId ? buildStepsDone(model, report, levelImages, levelId, todos) : NOTHING_DONE),
+    [model, report, levelImages, levelId, todos],
   );
   // No step in the address: the first one not done yet — a new floor starts at its plan.
   const step: BuildStepId = parseStep(route.params.step) ?? BUILD_STEPS.find(s => !done[s.id])?.id ?? "floorplan";
-  const counts = Object.fromEntries(BUILD_STEPS.map(s => [s.id, todos[s.id].length])) as Record<BuildStepId, number>;
+  const counts = useMemo(() => stepCounts(todos), [todos]);
   const image = imageForLevel(levelImages, levelId);
   const selectValue = route.params.select ?? "";
 

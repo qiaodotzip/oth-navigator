@@ -1,6 +1,6 @@
 import { live, placeLevels, type MapModel, type ValidationIssue, type ValidationReport } from "@oth/model";
 import type { LevelImage } from "../api/client";
-import { BUILD_STEPS, buildStepForCode, type BuildStepId } from "../flow/floorProgress";
+import { BUILD_STEPS, buildStepForCode, type BuildStepId } from "../flow/buildSteps";
 import type { Selection } from "../state/store";
 import { imageForLevel } from "../state/underlay";
 import { SELECTABLE_TYPES, type Selectable } from "./selection";
@@ -33,6 +33,20 @@ export const EMPTY_TODOS: StepTodos = Object.freeze({
 });
 
 const NONE: TodoTarget = { kind: "none" };
+
+/** A step's to-do list, counted: errors stop Publish, warnings do not. */
+export type TodoCounts = { errors: number; warnings: number };
+
+/** One list's numbers. Every item is counted once, so the two always add up to what the list shows. */
+export function countTodos(items: readonly TodoItem[]): TodoCounts {
+  const errors = items.filter(t => t.severity === "error").length;
+  return { errors, warnings: items.length - errors };
+}
+
+/** Each step's numbers, for the stepper: read off its to-do list, never from anywhere else. */
+export function stepCounts(todos: StepTodos): Record<BuildStepId, TodoCounts> {
+  return Object.fromEntries(BUILD_STEPS.map(({ id }) => [id, countTodos(todos[id])])) as Record<BuildStepId, TodoCounts>;
+}
 
 /**
  * What is left to do on each step of one floor — spec §11's "to-do from"
