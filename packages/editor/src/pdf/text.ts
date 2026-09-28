@@ -11,26 +11,57 @@ export type Word = { text: string; x: number; y: number; box: Box };
 
 type RawItem = { str: string; transform: number[]; width: number; height: number };
 type ToShown = (x: number, y: number) => [number, number];
+/** How far a font reaches above and below its baseline, per unit of size: pdf.js's `styles`. */
+export type FontExtent = { ascent: number; descent: number };
+
+/**
+ * A font's reach below and above the baseline, as PyMuPDF boxes a line: a font
+ * spanning less than its size (Helvetica's 0.741 and −0.212 span 0.953) is
+ * stretched to span the whole of it.
+ */
+function letterExtent(font: FontExtent | undefined): [number, number] {
+  let ascent = font?.ascent ?? 0;
+  let descent = Math.min(font?.descent ?? 0, 0);
+  // No ascent to speak of: PyMuPDF's stand-in, for a font that gives none.
+  if (ascent < 1e-3) [ascent, descent] = [0.9, -0.1];
+  const span = ascent - descent;
+  return span < 1 ? [descent / span, ascent / span] : [descent, ascent];
+}
 
 /**
  * Where a pdf.js text item sits on the sheet as shown. Its transform places
- * the baseline's start in PDF space (y up, before the page's turn); the box is
- * the run's width along its direction and the font's height across it.
+ * the baseline's start in PDF space (y up, before the page's turn).
+ *
+ * The box is the one PyMuPDF gives, because the rooms already on L1 were
+ * found with PyMuPDF's boxes: the lettering is erased by its box, and a name
+ * floods from its box's middle. It runs the width of the run along its
+ * direction, and across it from the descent to the ascent, at the size the
+ * transform's two scales average to (L1 draws its lettering narrow, 0.639
+ * along to 1.111 up). pdf.js's own height is the 1.111, up from the baseline.
+ *
+ * One departure: PyMuPDF boxes a line read along −x on the side of the
+ * baseline away from its letters (it undoes the half turn with a mirror).
+ * This boxes the side the letters stand on, where the transform puts them.
+ * On L1 that costs a little parity (median IoU 0.935 → 0.929), and it keeps
+ * a larger label on another sheet from walling off its own room.
  */
-export function placeItem(item: RawItem, toShown: ToShown): TextItem | null {
+export function placeItem(item: RawItem, toShown: ToShown, font?: FontExtent): TextItem | null {
   const text = item.str.replace(/\s+/g, " ").trim();
   if (!text) return null;
   const [a = 0, b = 0, c = 0, d = 0, e = 0, f = 0] = item.transform;
   const along = Math.hypot(a, b) || 1;
-  const up = Math.hypot(c, d) || 1;
-  const [ax, ay, cx, cy] = [a / along, b / along, c / up, d / up];
+  const [ax, ay] = [a / along, b / along];
+  // Across the line: its direction turned a quarter, toward the side the letters stand on.
+  const side = -ay * c + ax * d < 0 ? -1 : 1;
+  const [nx, ny] = [-ay * side, ax * side];
+  const size = Math.sqrt(Math.abs(a * d - b * c)) || item.height;
+  const [below, above] = letterExtent(font).map(v => v * size) as [number, number];
   const w = item.width;
-  const h = item.height;
   const corners = [
-    toShown(e, f),
-    toShown(e + ax * w, f + ay * w),
-    toShown(e + cx * h, f + cy * h),
-    toShown(e + ax * w + cx * h, f + ay * w + cy * h),
+    toShown(e + nx * below, f + ny * below),
+    toShown(e + nx * above, f + ny * above),
+    toShown(e + ax * w + nx * below, f + ay * w + ny * below),
+    toShown(e + ax * w + nx * above, f + ay * w + ny * above),
   ];
   const xs = corners.map(p => p[0]);
   const ys = corners.map(p => p[1]);
@@ -53,7 +84,7 @@ export async function readTextItems(page: PdfPage): Promise<TextItem[]> {
   const out: TextItem[] = [];
   for (const item of content.items) {
     if (!("str" in item)) continue;
-    const placed = placeItem(item as RawItem, toShown);
+    const placed = placeItem(item as RawItem, toShown, content.styles[item.fontName]);
     if (placed) out.push(placed);
   }
   return out;
