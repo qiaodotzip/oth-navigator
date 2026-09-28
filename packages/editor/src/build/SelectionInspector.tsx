@@ -10,12 +10,19 @@ import { EntranceInspector, PortalInspector } from "../panels/PointInspectors";
 import type { Saver } from "../state/save";
 import { useEditorStore, type Selection } from "../state/store";
 import { Kbd } from "../ui/Kbd";
-import { BindPlaces } from "./BindPlaces";
+import { BindPlaces, offersPlaces } from "./BindPlaces";
+
+/** Rooms and areas are bound to a surveyed place; a detail is dressing, and has none. */
+const bindable = (kind: string) => kind === "room" || kind === "area";
 
 /**
  * The right column's top half: whatever is selected, on every step (spec §11),
  * with what the step adds to it — binding on Bind places, the Blender export
  * on Dressing.
+ *
+ * While a room's place picker is open, the picker has the column (the rail
+ * gives this section most of its height for it): the room's own fields take at
+ * most 30% of it and scroll, so they cannot push the places out of view.
  */
 export function SelectionInspector({
   api,
@@ -35,6 +42,15 @@ export function SelectionInspector({
 
   if (!model) return <p className="p-3 text-xs text-stone-500">Loading the floor…</p>;
 
+  const chosen = selection?.type === "room" ? live(model.rooms).find(r => r.id === selection.id) : undefined;
+  const picking = step === "bind" && chosen !== undefined && bindable(chosen.kind) && offersPlaces(model, chosen);
+  // Two lines at this width: while the picker is open they go in with the
+  // room's fields, below the fold of that box, rather than under the places.
+  const keys = (
+    <p className="shrink-0 px-3 pb-3 text-xs text-stone-500">
+      <Kbd>Del</Kbd> or <Kbd>Backspace</Kbd> deletes it, with Undo · <Kbd>Esc</Kbd> lets it go
+    </p>
+  );
   const body = selection ? inspectorFor(model, selection) : null;
   // On Dressing the detail export stays in view before a detail is chosen,
   // disabled and saying what it waits for, as it was in the old editor: it
@@ -57,12 +73,10 @@ export function SelectionInspector({
   }
 
   return (
-    <div>
+    <div className={picking ? "flex min-h-0 flex-1 flex-col" : undefined}>
       {body}
       {detailExport}
-      <p className="px-3 pb-3 text-xs text-stone-500">
-        <Kbd>Del</Kbd> or <Kbd>Backspace</Kbd> deletes it, with Undo · <Kbd>Esc</Kbd> lets it go
-      </p>
+      {!picking && keys}
     </div>
   );
 
@@ -73,15 +87,18 @@ export function SelectionInspector({
         if (!room) return null;
         return (
           <>
-            <Inspector
-              onRename={(id, version, nameEn) => {
-                // A blur is not an edit: only a changed name is worth a write.
-                if (nameEn !== room.nameEn) void saver.update("room", id, version, { nameEn });
-              }}
-              onResize={(id, version, heightM) => void saver.update("room", id, version, { heightM })}
-            />
-            {step === "bind" && (room.kind === "room" || room.kind === "area") && (
-              <div className="border-t border-stone-200 p-3">
+            <div className={picking ? "max-h-[30%] min-h-0 overflow-y-auto" : undefined}>
+              <Inspector
+                onRename={(id, version, nameEn) => {
+                  // A blur is not an edit: only a changed name is worth a write.
+                  if (nameEn !== room.nameEn) void saver.update("room", id, version, { nameEn });
+                }}
+                onResize={(id, version, heightM) => void saver.update("room", id, version, { heightM })}
+              />
+              {picking && keys}
+            </div>
+            {step === "bind" && bindable(room.kind) && (
+              <div className={`border-t border-stone-200 p-3 ${picking ? "flex min-h-0 flex-1 flex-col" : ""}`}>
                 <BindPlaces api={api} saver={saver} room={room} pendingPlaceId={pendingPlaceId} onBound={onBound} />
               </div>
             )}

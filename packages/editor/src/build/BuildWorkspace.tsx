@@ -369,8 +369,11 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
         </div>
 
         <aside aria-label="Selection and to-do" className="flex w-80 shrink-0 flex-col border-l border-stone-200 bg-white">
-          <section aria-label="Selection" className="max-h-[55%] shrink-0 overflow-auto border-b border-stone-200">
-            <h2 className="px-3 pt-3 text-xs font-semibold uppercase tracking-wide text-stone-500">Selection</h2>
+          <section
+            aria-label="Selection"
+            className="flex max-h-[55%] min-h-0 shrink-0 flex-col overflow-auto border-b border-stone-200 has-[[data-place-picker]]:max-h-none has-[[data-place-picker]]:flex-[3_1_0%]"
+          >
+            <h2 className="shrink-0 px-3 pt-3 text-xs font-semibold uppercase tracking-wide text-stone-500">Selection</h2>
             <SelectionInspector
               api={api}
               saver={saver}

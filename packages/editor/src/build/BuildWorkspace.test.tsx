@@ -197,6 +197,51 @@ describe("BuildWorkspace — the to-do list", () => {
   });
 });
 
+describe("BuildWorkspace — the Bind places rail", () => {
+  const classes = (el: Element) => [...el.classList];
+
+  /**
+   * On a laptop the places to bind were pushed out of view: the rail gave the
+   * selection a share sized by its content, and the room's fields took it.
+   * jsdom does no layout, so this cannot measure that; it pins the structure
+   * the layout rests on instead. The places sit in one box that scrolls, and
+   * every box from it up to the rail is an item of a flex column that may
+   * shrink below its content (`min-h-0`), so the rail's height reaches the
+   * list rather than the list's length reaching the rail.
+   */
+  it("keeps the places in a box of their own that scrolls, bounded by the rail, under a search that stays", () => {
+    open("/floors/L1/build?step=bind&select=room:L1-hall");
+    const rail = screen.getByRole("complementary", { name: "Selection and to-do" });
+    const choices = screen.getByTestId("place-choices");
+    const search = screen.getByLabelText("Find a place");
+    expect(within(choices).getByRole("button", { name: "Bind to Festive Mall" })).toBeTruthy();
+
+    expect(classes(choices)).toEqual(expect.arrayContaining(["min-h-0", "flex-1", "overflow-y-auto"]));
+    expect(choices.contains(search)).toBe(false);
+    expect(classes(search)).toContain("shrink-0");
+
+    expect(classes(rail)).toEqual(expect.arrayContaining(["flex", "flex-col"]));
+    for (let el: HTMLElement = choices; el !== rail; el = el.parentElement!) {
+      expect(classes(el)).toContain("min-h-0");
+      expect(classes(el.parentElement!)).toEqual(expect.arrayContaining(["flex", "flex-col"]));
+    }
+
+    // While the picker is in it, the selection takes three parts of the rail
+    // to the to-do's one, whatever its content; the to-do takes only its share.
+    const selection = screen.getByRole("region", { name: "Selection" });
+    expect(selection.querySelector("[data-place-picker]")).toBeTruthy();
+    expect(classes(selection)).toEqual(
+      expect.arrayContaining(["has-[[data-place-picker]]:max-h-none", "has-[[data-place-picker]]:flex-[3_1_0%]"]),
+    );
+    expect(classes(screen.getByRole("region", { name: "To do" }))).toEqual(expect.arrayContaining(["min-h-0", "flex-1"]));
+
+    // The room's own fields cap their height and scroll, so they cannot push the places out.
+    const fields = screen.getByLabelText("Name").closest(".overflow-y-auto")!;
+    expect(classes(fields)).toEqual(expect.arrayContaining(["min-h-0", "max-h-[30%]"]));
+    expect(fields.contains(choices)).toBe(false);
+  });
+});
+
 describe("BuildWorkspace — links", () => {
   it("selects what a link points at", () => {
     open("/floors/L1/build?step=rooms&select=room:L1-a");

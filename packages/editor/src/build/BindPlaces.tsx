@@ -1,4 +1,4 @@
-import { live, placeLevels, type Place, type Room, type Sighting } from "@oth/model";
+import { live, placeLevels, type MapModel, type Place, type Room, type Sighting } from "@oth/model";
 import { useState } from "react";
 import type { Api } from "../api/client";
 import type { Saver } from "../state/save";
@@ -20,6 +20,23 @@ function placeFrames(sightings: readonly Sighting[]): Map<string, string> {
   for (const s of sightings) if (s.status === "confirmed" && !frames.has(s.placeId)) frames.set(s.placeId, s.keyframeId);
   for (const s of sightings) if (!frames.has(s.placeId)) frames.set(s.placeId, s.keyframeId);
   return frames;
+}
+
+/**
+ * Confirmed units nothing has claimed: a proposal is still Review's to
+ * decide, and a walkway is built as a path, not bound to a room. A bound
+ * place is never listed, so it is never ringed as the one in hand either.
+ */
+function openPlaces(model: MapModel): Place[] {
+  return live(model.places).filter(p => p.status === "confirmed" && !p.pathwayKindId && !p.roomId);
+}
+
+/**
+ * Whether the room gets the picker: it has no place yet and there are places
+ * to pick from. The inspector asks too, as the picker then has the column.
+ */
+export function offersPlaces(model: MapModel, room: Room): boolean {
+  return !live(model.places).some(p => p.roomId === room.id) && openPlaces(model).length > 0;
 }
 
 /**
@@ -76,10 +93,7 @@ export function BindPlaces({
     );
   }
 
-  // Confirmed units nothing has claimed: a proposal is still Review's to
-  // decide, and a walkway is built as a path, not bound to a room. A bound
-  // place is never listed, so it is never ringed as the one in hand either.
-  const open = live(model.places).filter(p => p.status === "confirmed" && !p.pathwayKindId && !p.roomId);
+  const open = openPlaces(model);
   if (open.length === 0) {
     return (
       <p className="text-xs text-stone-600">
@@ -188,31 +202,38 @@ export function BindPlaces({
     );
   };
 
+  // A column that fills what the inspector gives it (`data-place-picker` is
+  // how the rail knows to give it most of its height): the question and the
+  // search stay put, and the places scroll in the one box below them, the
+  // floorless ones too once opened. The box's padding keeps the ring round the
+  // place in hand clear of its edge.
   return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-semibold text-stone-700">Which place is this?</h3>
+    <div data-place-picker className="flex min-h-0 flex-1 flex-col gap-2">
+      <h3 className="shrink-0 text-xs font-semibold text-stone-700">Which place is this?</h3>
       <input
         aria-label="Find a place"
         placeholder="Find a place…"
         value={query}
         onChange={e => setQuery(e.target.value)}
-        className="w-full rounded border border-stone-300 px-2 py-1 text-sm"
+        className="w-full shrink-0 rounded border border-stone-300 px-2 py-1 text-sm"
       />
-      {here.length > 0 ? (
-        <ul aria-label={`On ${code}`} className="space-y-1">{here.map(row)}</ul>
-      ) : (
-        <p className="text-xs text-stone-600">
-          {query
-            ? `Nothing on ${code} matches "${query}".`
-            : `No places filmed on ${code} are waiting for a room. Places are confirmed in Review.`}
-        </p>
-      )}
-      {floorless.length > 0 && (
-        <details>
-          <summary className="cursor-pointer text-xs text-stone-600">Places with no floor ({floorless.length})</summary>
-          <ul aria-label="With no floor" className="mt-1 space-y-1">{floorless.map(row)}</ul>
-        </details>
-      )}
+      <div data-testid="place-choices" className="-mx-1 min-h-0 flex-1 space-y-2 overflow-y-auto px-1 py-0.5">
+        {here.length > 0 ? (
+          <ul aria-label={`On ${code}`} className="space-y-1">{here.map(row)}</ul>
+        ) : (
+          <p className="text-xs text-stone-600">
+            {query
+              ? `Nothing on ${code} matches "${query}".`
+              : `No places filmed on ${code} are waiting for a room. Places are confirmed in Review.`}
+          </p>
+        )}
+        {floorless.length > 0 && (
+          <details>
+            <summary className="cursor-pointer text-xs text-stone-600">Places with no floor ({floorless.length})</summary>
+            <ul aria-label="With no floor" className="mt-1 space-y-1">{floorless.map(row)}</ul>
+          </details>
+        )}
+      </div>
     </div>
   );
 }

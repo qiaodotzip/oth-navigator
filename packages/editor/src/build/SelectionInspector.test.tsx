@@ -64,6 +64,28 @@ describe("SelectionInspector", () => {
     expect(screen.getByRole("button", { name: "Bind to Festive Mall" })).toBeTruthy();
   });
 
+  // The rail's layout rests on this; jsdom does no layout, so it is the class
+  // that is pinned. BuildWorkspace's test has the picker's side of it.
+  it("caps the room's fields only while the place picker is open, and keeps the keys in with them", () => {
+    setup({ type: "room", id: "L1-a" }, "bind");
+    const fields = screen.getByLabelText("Name").closest(".max-h-\\[30\\%\\]");
+    expect(fields).toBeTruthy();
+    // Two lines under the places would be two lines fewer of them.
+    expect(fields!.contains(screen.getByText(/deletes it, with Undo/))).toBe(true);
+  });
+
+  it("leaves the room's fields their full height on another step", () => {
+    setup({ type: "room", id: "L1-a" }, "rooms");
+    expect(screen.getByLabelText("Name").closest(".max-h-\\[30\\%\\]")).toBeNull();
+  });
+
+  it("leaves the room's fields their full height once the room is bound, as there is no picker", () => {
+    useEditorStore.getState().setModel({ ...model, places: model.places.map(p => ({ ...p, roomId: "L1-a" })) });
+    setup({ type: "room", id: "L1-a" }, "bind");
+    expect(screen.getByRole("button", { name: "Unbind" })).toBeTruthy();
+    expect(screen.getByLabelText("Name").closest(".max-h-\\[30\\%\\]")).toBeNull();
+  });
+
   it("does not offer binding on another step", () => {
     setup({ type: "room", id: "L1-a" }, "rooms");
     expect(screen.queryByRole("button", { name: /^Bind to / })).toBeNull();
