@@ -20,6 +20,34 @@ describe("imageForLevel", () => {
   it("returns null when no level is active", () => {
     expect(imageForLevel([base], null)).toBeNull();
   });
+
+  describe("when a floor has more than one plan", () => {
+    const older = { ...base, id: "img_old", updatedAt: "2026-09-27T07:53:56.696Z" };
+    const newer = { ...base, id: "img_new", updatedAt: "2026-09-28T07:06:18.066Z" };
+
+    it("shows the newest, whatever order the list came in", () => {
+      expect(imageForLevel([older, newer], "oth-L1")?.id).toBe("img_new");
+      expect(imageForLevel([newer, older], "oth-L1")?.id).toBe("img_new");
+    });
+
+    it("keeps showing the plan you just edited, which is now the newest", () => {
+      // An edit saves it, and a refresh lists it last: it must not flip to the other.
+      const edited = { ...older, version: 1, updatedAt: "2026-09-28T08:00:00.000Z" };
+      expect(imageForLevel([newer, edited], "oth-L1")?.id).toBe("img_old");
+    });
+
+    it("breaks a tie by id, so two clients agree", () => {
+      const a = { ...base, id: "img_a", updatedAt: newer.updatedAt };
+      const b = { ...base, id: "img_b", updatedAt: newer.updatedAt };
+      expect(imageForLevel([a, b], "oth-L1")?.id).toBe("img_b");
+      expect(imageForLevel([b, a], "oth-L1")?.id).toBe("img_b");
+    });
+
+    it("never picks another floor's plan, however new", () => {
+      const l2 = { ...base, id: "img_l2", levelId: "oth-L2", updatedAt: "2030-01-01T00:00:00.000Z" };
+      expect(imageForLevel([older, l2], "oth-L1")?.id).toBe("img_old");
+    });
+  });
 });
 
 describe("imageCalibration", () => {

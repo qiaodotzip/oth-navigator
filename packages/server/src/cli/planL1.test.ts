@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RoomSchema } from "@oth/model";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../db/client";
 import { levelImages, levels, rooms } from "../db/schema";
@@ -101,6 +101,19 @@ describe("plan:l1", () => {
     const r = await importL1Plan(db, dataDir, { imagesDir: dataDir, files: [file] });
     expect(r.underlay).toBe("missing");
     expect(r.spaces).toBe(3);
+  });
+
+  it("retires the floor's other plan when it hangs its own, as an upload does", async () => {
+    const other = (id: string, levelId: string) => ({
+      id, levelId, filename: `${id}.jpg`, storagePath: `assets/${id}.jpg`, checksum: id,
+      widthPx: 3000, heightPx: 2121, sizeBytes: 1, metresPerPixel: 0.21,
+    });
+    await db.insert(levelImages).values([other("img_sheet", "oth-L1"), other("img_l2", "oth-L2")]);
+    await importL1Plan(db, dataDir, { imagesDir, files: [file] });
+    const live = await db.select().from(levelImages).where(isNull(levelImages.deletedAt));
+    expect(live.map(i => i.filename).sort()).toEqual([L1_PLAN.file, "img_l2.jpg"]);
+    const [retired] = await db.select().from(levelImages).where(eq(levelImages.id, "img_sheet"));
+    expect(retired?.updatedBy).toBe("cli:plan:l1");
   });
 });
 

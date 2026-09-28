@@ -204,6 +204,12 @@ async function importUnderlay(
     return "recalibrated";
   }
 
+  // One live plan per floor, as an upload keeps it (images/routes.ts). Added
+  // by the l1-plans fix: without it L1 had two, and the editor showed either.
+  await db.update(levelImages)
+    .set({ deletedAt: new Date(), updatedBy: "cli:plan:l1", updatedAt: new Date() })
+    .where(and(eq(levelImages.levelId, L1_PLAN.levelId), isNull(levelImages.deletedAt)));
+
   await db.insert(levelImages).values({
     id: `img_${stored.checksum.slice(0, 16)}`,
     levelId: L1_PLAN.levelId,

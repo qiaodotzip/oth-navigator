@@ -2,11 +2,35 @@ import type { BBox } from "@oth/model";
 import type { LevelImage } from "../api/client";
 import type { Calibration } from "../plan/calibration";
 
+/**
+ * The one plan a floor shows: its newest, by when it was last saved, then by
+ * id. A floor should only ever have one live plan (an upload retires the
+ * last), but one that has two must not show whichever the list happened to
+ * give first: that flipped the view to the other drawing after any edit. The
+ * plan you edit becomes the newest, so it stays the one on screen. The server
+ * lists in this order and `plans:one-per-floor` keeps by the same rule.
+ */
 export function imageForLevel(
   images: readonly LevelImage[], levelId: string | null,
 ): LevelImage | null {
   if (!levelId) return null;
-  return images.find(i => i.levelId === levelId) ?? null;
+  let best: LevelImage | null = null;
+  for (const image of images) {
+    if (image.levelId === levelId && (!best || isNewer(image, best))) best = image;
+  }
+  return best;
+}
+
+/** Last saved, then the greater id. A plan with no time counts as the oldest. */
+function isNewer(a: LevelImage, b: LevelImage): boolean {
+  const at = savedAt(a);
+  const bt = savedAt(b);
+  return at !== bt ? at > bt : a.id > b.id;
+}
+
+function savedAt(image: LevelImage): number {
+  const t = image.updatedAt ? Date.parse(image.updatedAt) : NaN;
+  return Number.isNaN(t) ? -Infinity : t;
 }
 
 /** Null until someone has measured a known dimension on the image. */

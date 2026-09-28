@@ -81,6 +81,11 @@ export type LevelImage = {
   offsetY: number;
   opacity: number;
   version: number;
+  /**
+   * ISO time it was last saved. The server always sends it; optional so a
+   * test's plan need not invent one. `imageForLevel` picks the newest by it.
+   */
+  updatedAt?: string;
 };
 
 export type LevelImagePatch = {

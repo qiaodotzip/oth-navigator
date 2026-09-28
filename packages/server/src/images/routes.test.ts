@@ -117,4 +117,19 @@ describe("level image routes", () => {
     const list = await app.request("/api/level-images", { headers: { cookie } });
     expect((await json<{ items: unknown[] }>(list)).items).toHaveLength(1);
   });
+
+  it("lists in one order every time: last saved last, then by id", async () => {
+    // Stored in an order the list must not follow: without an ORDER BY, the
+    // database hands rows back as they lie on disk, and an edit moves them.
+    const plan = (id: string, updatedAt: string) => ({
+      id, levelId: "oth-L1", filename: `${id}.png`, storagePath: `assets/${id}.png`, checksum: id,
+      widthPx: 10, heightPx: 10, sizeBytes: 1, updatedAt: new Date(updatedAt),
+    });
+    await db.insert(levelImages).values(plan("img_z", "2026-09-02T00:00:00Z"));
+    await db.insert(levelImages).values(plan("img_b", "2026-09-01T00:00:00Z"));
+    await db.insert(levelImages).values(plan("img_a", "2026-09-01T00:00:00Z"));
+    const list = await app.request("/api/level-images", { headers: { cookie } });
+    const ids = (await json<{ items: { id: string }[] }>(list)).items.map(i => i.id);
+    expect(ids).toEqual(["img_a", "img_b", "img_z"]);
+  });
 });

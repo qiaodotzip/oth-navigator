@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app";
@@ -22,8 +22,19 @@ export const levelImageRoutes = new Hono<AppEnv>();
 
 levelImageRoutes.use("*", requireUser);
 
+/**
+ * In one order, every time: last saved last, then by id. Without an ORDER BY
+ * the database returns rows as they lie on disk, and saving one moves it, so
+ * a floor with two plans showed one, then the other after any edit. There is
+ * no created_at on this table, and the editor's `imageForLevel` picks by the
+ * same rule, so the plan it shows is the one listed last for its floor.
+ */
 levelImageRoutes.get("/", async c =>
-  c.json({ items: await c.get("db").select().from(levelImages).where(isNull(levelImages.deletedAt)) }),
+  c.json({
+    items: await c.get("db").select().from(levelImages)
+      .where(isNull(levelImages.deletedAt))
+      .orderBy(asc(levelImages.updatedAt), asc(levelImages.id)),
+  }),
 );
 
 levelImageRoutes.post("/", async c => {
