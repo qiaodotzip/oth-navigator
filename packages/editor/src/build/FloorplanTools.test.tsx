@@ -5,7 +5,7 @@ import { ApiError, ConflictError, type Api, type LevelImage } from "../api/clien
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
-import { FloorplanTools, PlanDropZone, patchPlan } from "./FloorplanTools";
+import { FloorplanTools, PlanDropZone, patchPlan, uploadPlan } from "./FloorplanTools";
 
 const model = parseModel({
   building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
@@ -188,6 +188,26 @@ describe("patchPlan", () => {
     expect(await scaled).toBe(true);
     expect(patchLevelImage).toHaveBeenCalledTimes(2);
     expect(lastToast()?.message).toBe("Couldn't move the plan. Check your connection, then retry.");
+  });
+
+  it("drops a save still queued for a plan that a Replace has since retired", async () => {
+    let answer!: () => void;
+    const answered = new Promise<void>(resolve => { answer = resolve; });
+    const patchLevelImage = vi.fn(async (_id: string, version: number, patch: Record<string, unknown>) => {
+      await answered;
+      return { ...image, ...patch, version: version + 1 };
+    });
+    const a = api({ patchLevelImage });
+    const moved = patchPlan(a, image, { offsetX: 5, offsetY: 2 }, { doing: "move the plan" });
+    const scaled = patchPlan(a, image, { metresPerPixel: 0.21 }, { doing: "set the scale" });
+    // The Replace is confirmed while the move is on its way and the scale waits behind it.
+    await uploadPlan(a, "oth-L1", file("L1 v2.jpg"));
+    answer();
+    await moved;
+    expect(await scaled).toBe(false);
+    expect(patchLevelImage).toHaveBeenCalledTimes(1);
+    expect(useEditorStore.getState().levelImages.map(i => i.id)).toEqual(["img_2"]);
+    expect(useToasts.getState().toasts.filter(t => t.tone === "error")).toEqual([]);
   });
 });
 

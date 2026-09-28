@@ -104,6 +104,20 @@ describe("level image routes", () => {
     expect((await patch(0)).status).toBe(409);
   });
 
+  it("refuses a patch to a plan a newer one has retired, as it does a missing one", async () => {
+    const { image: old } = await json<{ image: { id: string } }>(await upload(png(100, 100), "oth-L1", "first.png"));
+    await upload(png(200, 200), "oth-L1", "second.png");
+    const res = await app.request(`/api/level-images/${old.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ expectedVersion: 0, data: { metresPerPixel: 0.21 } }),
+    });
+    expect(res.status).toBe(404);
+    const [row] = await db.select().from(levelImages).where(eq(levelImages.id, old.id));
+    expect(row?.metresPerPixel).toBeNull();
+    expect(row?.version).toBe(0);
+  });
+
   it("serves the stored bytes back as an image", async () => {
     const { image } = await json<{ image: { id: string } }>(await upload(png(100, 100)));
     const file = await app.request(`/api/level-images/${image.id}/file`, { headers: { cookie } });

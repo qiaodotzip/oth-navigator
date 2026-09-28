@@ -100,11 +100,14 @@ export function patchPlan(
 async function sendPlanPatch(
   api: Api, image: LevelImage, patch: LevelImagePatch, words: { doing: string; done?: string },
 ): Promise<boolean> {
-  // The version as it is now, after the saves queued ahead of this one.
-  const version = useEditorStore.getState().levelImages.find(i => i.id === image.id)?.version ?? image.version;
+  // The plan as it is now, after the saves queued ahead of this one. Gone
+  // means a Replace retired it while this save waited: nothing is left to
+  // change, and nobody would see it if it landed.
+  const live = useEditorStore.getState().levelImages.find(i => i.id === image.id);
+  if (!live) return false;
   let updated: LevelImage;
   try {
-    updated = await api.patchLevelImage(image.id, version, patch);
+    updated = await api.patchLevelImage(image.id, live.version, patch);
   } catch (err) {
     reportFailure(err, { doing: words.doing, retry: () => patchPlan(api, image, patch, words).then(() => {}) });
     return false;

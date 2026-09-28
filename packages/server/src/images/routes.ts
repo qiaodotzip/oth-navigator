@@ -100,13 +100,15 @@ levelImageRoutes.patch("/:id", async c => {
       updatedBy: c.get("user").id,
       updatedAt: new Date(),
     })
-    .where(and(eq(levelImages.id, id), eq(levelImages.version, body.data.expectedVersion)))
+    // A retired plan is no longer anyone's to change: a save that was queued
+    // behind its Replace would otherwise land on a sheet nobody sees.
+    .where(and(eq(levelImages.id, id), eq(levelImages.version, body.data.expectedVersion), isNull(levelImages.deletedAt)))
     .returning();
 
   const row = updated[0];
   if (!row) {
     const [current] = await db.select().from(levelImages).where(eq(levelImages.id, id));
-    if (!current) return c.json({ error: "not found" }, 404);
+    if (!current || current.deletedAt) return c.json({ error: "not found" }, 404);
     return c.json({ error: "version conflict", current }, 409);
   }
   return c.json({ image: row });
