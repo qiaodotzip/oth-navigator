@@ -261,12 +261,36 @@ describe("ReviewWorkspace", () => {
   });
 
   it("counts a decision under way at once, so the progress line agrees with the proposal on screen", () => {
-    // Fix 3: an accept counts as confirmed; a reject leaves both counts.
+    // Fix 3: an accept counts as confirmed; a reject counts as decided too, and the total holds.
     at("", { acceptPlace: vi.fn(() => new Promise(() => {})), rejectPlace: vi.fn(() => new Promise(() => {})) });
     key("a");
     expect(screen.getByText("2 of 3 decided on L1")).toBeTruthy();
     key("r");
-    expect(screen.getByText("2 of 2 decided on L1")).toBeTruthy();
+    expect(screen.getByText("3 of 3 decided on L1")).toBeTruthy();
+  });
+
+  it("keeps a rejected proposal counted as decided once the reload leaves it out, and not after its Undo", async () => {
+    // Rehearsal: "28 of 192 decided" became "28 of 191" on a reject.
+    const withoutBig = parseModel({
+      ...reviewModel,
+      places: reviewModel.places.filter(p => p.id !== "p_big"),
+      sightings: reviewModel.sightings.filter(s => s.placeId !== "p_big"),
+    });
+    // Undo restores it two versions on: deleted, then restored.
+    const restored = parseModel({
+      ...reviewModel,
+      places: reviewModel.places.map(p => (p.id === "p_big" ? { ...p, version: 2 } : p)),
+    });
+    const getModel = vi.fn().mockResolvedValueOnce(withoutBig).mockResolvedValue(restored);
+    at("", { getModel });
+    expect(screen.getByText("1 of 3 decided on L1")).toBeTruthy();
+    key("r");
+    await waitFor(() => expect(toastSaying("Rejected Festive Mall")).toBeTruthy());
+    await waitFor(() => expect(useEditorStore.getState().model).toBe(withoutBig));
+    expect(screen.getByText("2 of 3 decided on L1")).toBeTruthy();
+    await act(async () => { await toastSaying("Rejected Festive Mall")!.action!.run(); });
+    await waitFor(() => expect(useEditorStore.getState().model).toBe(restored));
+    expect(screen.getByText("1 of 3 decided on L1")).toBeTruthy();
   });
 
   it("leaves a proposal on no floor out of the counts while it is being decided", () => {

@@ -1,4 +1,4 @@
-import type { Box, Level, Place, Sighting } from "@oth/model";
+import { live, type Box, type Level, type Place, type Sighting } from "@oth/model";
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import type { Api } from "../api/client";
 import { reviewCounts } from "../flow/floorProgress";
@@ -15,6 +15,7 @@ import { acceptProposal, acceptProposals, mergeProposal, rejectProposal } from "
 import { reviewCommand } from "./keys";
 import { ProposalDrawer } from "./ProposalDrawer";
 import { ProposalFocus, type Draft } from "./ProposalFocus";
+import { noteRetired, retiredCount } from "./retired";
 import {
   currentProposal, evidenceFor, floorlessProposals, nextProposal, readReviewParams, reviewQueue, sameAs,
   type ReviewScope,
@@ -123,6 +124,8 @@ export function ReviewWorkspace({ api, saver, level, params }: {
     const correction = correcting.current.get(id);
     if ((!correction || await correction) && await run()) {
       drafts.current.delete(id);
+      // A reject or a merge deletes it: noted, so it still counts as decided on this floor.
+      if (becomes === "gone" && read.scope === "floor") noteRetired(level.id, id);
       return;
     }
 
@@ -196,11 +199,14 @@ export function ReviewWorkspace({ api, saver, level, params }: {
 
   // The model catches up only when the reload after a decision lands. Until
   // then, a decision under way counts as made, so the line agrees with the
-  // proposal on screen.
+  // proposal on screen. A reject or a merge is a decision too: the proposal
+  // leaves the map, but it stays in the total, counted as decided.
   const counts = reviewCounts(model, level.id);
   const settling = read.scope === "floor" ? queue.flatMap(({ place }) => underWay(place) ?? []) : [];
   const confirmed = counts.confirmed + settling.filter(d => d.becomes === "confirmed").length;
-  const total = confirmed + counts.proposed - settling.length;
+  const gone = read.scope === "floor" ? retiredCount(level.id, new Set(live(model.places).map(p => p.id))) : 0;
+  const decidedHere = confirmed + settling.filter(d => d.becomes === "gone").length + gone;
+  const total = counts.confirmed + counts.proposed + gone;
   const waiting = queue.length - decided.size;
 
   return (
@@ -209,9 +215,9 @@ export function ReviewWorkspace({ api, saver, level, params }: {
         <div className="flex flex-wrap items-center gap-3 border-b border-stone-200 bg-white px-4 py-2">
           {read.scope === "floor" ? (
             <>
-              <span className="text-sm font-medium">{confirmed} of {total} decided on {level.code}</span>
+              <span className="text-sm font-medium">{decidedHere} of {total} decided on {level.code}</span>
               <span className="w-40">
-                <Progress value={confirmed} max={total} label={`Review progress on ${level.code}`} tone="confirmed" />
+                <Progress value={decidedHere} max={total} label={`Review progress on ${level.code}`} tone="confirmed" />
               </span>
               {floorless > 0 && (
                 <Button size="sm" variant="ghost" onClick={() => toScope("floorless")}>{floorless} on no floor →</Button>
