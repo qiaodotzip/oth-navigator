@@ -172,43 +172,78 @@ async function uploadPdfPlan(api: Api, levelId: string, file: File): Promise<voi
  * Retry sends only what is missing: uploading again would retire the plan
  * that did go in, and draw the sheet a second time.
  */
-function reportUnfinished(api: Api, levelId: string, file: File, err: PlanPartlyStoredError): void {
+function reportUnfinished(api: Api, levelId: string, file: File, err: PlanPartlyStoredError, retried = false): void {
   const cause = err.cause;
   // A 401 already opened the session-ended dialog; a toast would only contradict it.
   if (isUnauthorized(cause)) return;
   const { missing, patch } = err.unfinished;
+  // A 409 answers with the plan as the server has it, whoever changed it.
+  const version = cause instanceof ConflictError ? cause.current?.version : undefined;
+  const serverVersion = typeof version === "number" ? version : undefined;
+  const retry = (again = false) =>
+    finishPdfPlanUpload(api, levelId, file, err.unfinished, { serverVersion, retried: again });
+  // A 409 on the PDF is a drag or nudge that landed while it went up. The PDF
+  // changes nothing a drag did, so it goes again at once, on the version the
+  // drag left, rather than being lost.
+  if (cause instanceof ConflictError && missing === "pdf" && !retried) {
+    void retry(true);
+    return;
+  }
   const part = missing === "pdf" ? "PDF" : patch.metresPerPixel != null ? "scale" : "place";
   const lost = `The plan is in, but its ${part} didn't save`;
   if (cause instanceof ConflictError) {
-    toast({ tone: "error", message: `${lost}: someone changed it since. Reload to see the latest.` });
+    toast({ tone: "error", message: `${lost}: the plan changed while it went up.`, action: { label: "Retry", run: () => retry() } });
   } else if (!worthRetrying(cause)) {
     toast({ tone: "error", message: `${lost}: ${serverWords(cause) ?? `the server refused it (HTTP ${(cause as ApiError).status})`}.` });
   } else {
     toast({
       tone: "error",
       message: `${lost}. ${cause instanceof ApiError ? "The server had a problem. Try again in a moment." : "Check your connection, then retry."}`,
-      action: { label: "Retry", run: () => finishPdfPlanUpload(api, levelId, file, err.unfinished) },
+      action: { label: "Retry", run: () => retry() },
     });
   }
 }
 
-/** Retry for a part-stored PDF plan: sends what it lacks, from the plan as it stands now. */
-async function finishPdfPlanUpload(api: Api, levelId: string, file: File, unfinished: Unfinished): Promise<void> {
-  // Nudged since, it has moved on a version; the save must carry the latest.
+/**
+ * Retry for a part-stored PDF plan: sends what it lacks, from the plan as it
+ * stands now. `serverVersion` is the version a 409 reported, which may be
+ * past the one this tab has seen when someone else made the change.
+ */
+async function finishPdfPlanUpload(
+  api: Api, levelId: string, file: File, unfinished: Unfinished,
+  { serverVersion, retried = false }: { serverVersion?: number; retried?: boolean } = {},
+): Promise<void> {
   const live = useEditorStore.getState().levelImages.find(i => i.id === unfinished.image.id);
+  // Replaced since, or a new plan on its way for this floor: there is nothing
+  // left here to finish, as a save queued behind a Replace finds (sendPlanPatch).
+  if (!live || useAddingPlan.getState().byLevel[levelId] != null) return;
+  const version = Math.max(live.version, serverVersion ?? live.version);
+  // Changed since the import stopped (a drag, a scale you set by hand): the
+  // PDF still goes, but the scale and place the import meant to set would
+  // overwrite yours, so they stay unsent.
+  const changed = version !== unfinished.image.version;
+  const skipsScale = changed && unfinished.missing === "scale";
   setAdding(levelId, file.name);
   setStage(levelId, `Uploading ${file.name}…`);
   let done: Awaited<ReturnType<typeof finishPdfPlan>>;
   try {
-    done = await finishPdfPlan(api, { ...unfinished, image: live ?? unfinished.image }, image => showPlan(levelId, image));
+    done = await finishPdfPlan(
+      api, { ...unfinished, image: { ...live, version }, missing: changed ? "pdf" : unfinished.missing },
+      image => showPlan(levelId, image),
+    );
   } catch (err) {
     doneAdding(levelId);
-    if (err instanceof PlanPartlyStoredError) reportUnfinished(api, levelId, file, err);
+    if (err instanceof PlanPartlyStoredError) reportUnfinished(api, levelId, file, err, retried);
     else reportFailure(err, { doing: `finish ${file.name}` });
     return;
   }
   doneAdding(levelId);
-  toast({ tone: "success", message: `Added ${file.name}. ${done.report}` });
+  toast({
+    tone: "success",
+    message: skipsScale
+      ? `Added ${file.name}. The plan keeps the scale and place it has now: it changed after it went in.`
+      : `Added ${file.name}. ${done.report}`,
+  });
 }
 
 /** Per plan, the last save queued for it; forgotten once the queue is empty. */

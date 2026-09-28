@@ -555,6 +555,82 @@ describe("a PDF plan", () => {
     expect(useEditorStore.getState().levelImages.map(i => i.source?.pdfId)).toEqual(["pdf_x"]);
   });
 
+  /** The server's 409: the plan as it has it now, moved on to `version` by someone's drag. */
+  const draggedTo = (version: number) =>
+    new ConflictError({ ...image, id: "img_2", version, offsetX: 7 }, { error: "version conflict" });
+
+  it("sends the PDF again at once when a drag lands while it goes up, on the version the drag left", async () => {
+    const a = pdfApi({ patchLevelImage: keepingId() });
+    (a.uploadPlanSource as Mock).mockRejectedValueOnce(draggedTo(2));
+    render(<PlanDropZone api={a} />);
+    fireEvent.drop(screen.getByTestId("plan-drop-zone"), { dataTransfer: { files: [pdf()] } });
+    await waitFor(() => expect(lastToast()?.message).toMatch(/^Added L2\.pdf\. Scale from the drawing's grid/));
+    expect((a.uploadPlanSource as Mock).mock.calls.map(c => c[1])).toEqual([1, 2]);
+    expect(a.patchLevelImage).toHaveBeenCalledTimes(1);
+    expect(useToasts.getState().toasts.filter(t => t.tone === "error")).toEqual([]);
+    expect(useEditorStore.getState().levelImages.map(i => i.source?.pdfId)).toEqual(["pdf_x"]);
+  });
+
+  it("offers Retry, not a reload, when the PDF meets a change a second time", async () => {
+    const a = pdfApi({ patchLevelImage: keepingId() });
+    (a.uploadPlanSource as Mock).mockRejectedValueOnce(draggedTo(2)).mockRejectedValueOnce(draggedTo(3));
+    render(<PlanDropZone api={a} />);
+    fireEvent.drop(screen.getByTestId("plan-drop-zone"), { dataTransfer: { files: [pdf()] } });
+    await waitFor(() => expect(lastToast()?.message).toBe("The plan is in, but its PDF didn't save: the plan changed while it went up."));
+    expect(lastToast()?.action?.label).toBe("Retry");
+    await lastToast()!.action!.run();
+    expect((a.uploadPlanSource as Mock).mock.calls.map(c => c[1])).toEqual([1, 2, 3]);
+    expect(lastToast()?.tone).toBe("success");
+  });
+
+  /** A drop whose scale doesn't save, leaving the plan in and a Retry on the toast. */
+  async function scaleLost(a: Api) {
+    render(<PlanDropZone api={a} />);
+    fireEvent.drop(screen.getByTestId("plan-drop-zone"), { dataTransfer: { files: [pdf()] } });
+    await waitFor(() => expect(lastToast()?.action?.label).toBe("Retry"));
+    return lastToast()!.action!.run;
+  }
+
+  it("lets a Retry go quietly when the plan it would finish has been replaced since", async () => {
+    const patchLevelImage = keepingId().mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const a = pdfApi({ patchLevelImage });
+    const retry = await scaleLost(a);
+    act(() => useEditorStore.getState().setLevelImages([{ ...image, id: "img_9" }]));
+    const toasts = useToasts.getState().toasts.length;
+    await retry();
+    expect(patchLevelImage).toHaveBeenCalledTimes(1);
+    expect(a.uploadPlanSource).not.toHaveBeenCalled();
+    expect(useToasts.getState().toasts).toHaveLength(toasts);
+  });
+
+  it("lets a Retry go quietly while a new plan is on its way for the floor", async () => {
+    let finish!: (value: LevelImage) => void;
+    const uploadLevelImage = vi.fn()
+      .mockResolvedValueOnce({ ...image, id: "img_2", filename: "L2.jpg" })
+      .mockImplementationOnce(() => new Promise<LevelImage>(resolve => { finish = resolve; }));
+    const patchLevelImage = keepingId().mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const a = pdfApi({ uploadLevelImage, patchLevelImage });
+    const retry = await scaleLost(a);
+    const replacing = uploadPlan(a, "oth-L1", file("L1 v2.jpg"));
+    await retry();
+    expect(patchLevelImage).toHaveBeenCalledTimes(1);
+    expect(a.uploadPlanSource).not.toHaveBeenCalled();
+    finish({ ...image, id: "img_3", filename: "L1 v2.jpg" });
+    await replacing;
+  });
+
+  it("never overwrites a scale you set by hand since: Retry sends only the PDF", async () => {
+    const patchLevelImage = keepingId().mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const a = pdfApi({ patchLevelImage });
+    const retry = await scaleLost(a);
+    // Sheet scale, used on the plan while its own scale was missing.
+    act(() => useEditorStore.getState().setLevelImages([{ ...image, id: "img_2", metresPerPixel: 0.21, version: 1 }]));
+    await retry();
+    expect(patchLevelImage).toHaveBeenCalledTimes(1);
+    expect((a.uploadPlanSource as Mock).mock.calls.map(c => [c[0], c[1]])).toEqual([["img_2", 1]]);
+    expect(lastToast()?.message).toBe("Added L2.pdf. The plan keeps the scale and place it has now: it changed after it went in.");
+  });
+
   it("says to open the Floorplan step when there is nowhere to ask which page, rather than stopping without a word", async () => {
     const a = pdfApi();
     // The drop zone alone: no Floorplan tools, so no page picker on screen.
