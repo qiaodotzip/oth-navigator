@@ -112,6 +112,22 @@ describe("PortalEndpointSchema", () => {
     });
     expect(ep.portalId).toBe("portal-lift-a");
   });
+
+  it("takes an optional outline, and climbs the way the upper stop says unless flipped", () => {
+    const stop = { id: "ep", portalId: "esc", levelId: "oth-L1", roomId: "L1-a", point: [5, 5] };
+    const plain = PortalEndpointSchema.parse(stop);
+    expect(plain.footprint).toBeUndefined();
+    expect(plain.flipped).toBe(false);
+    const traced = PortalEndpointSchema.parse({ ...stop, footprint: [[4, 0], [6, 0], [6, 10], [4, 10]], flipped: true });
+    expect(traced.footprint).toHaveLength(4);
+    expect(traced.flipped).toBe(true);
+  });
+
+  it("rejects an outline of fewer than three points", () => {
+    expect(() => PortalEndpointSchema.parse({
+      id: "ep", portalId: "esc", levelId: "oth-L1", roomId: "L1-a", point: [5, 5], footprint: [[0, 0], [1, 1]],
+    })).toThrow();
+  });
 });
 
 describe("NavHintSchema", () => {

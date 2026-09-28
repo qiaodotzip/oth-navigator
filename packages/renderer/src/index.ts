@@ -22,3 +22,4 @@ export * from "./StructuredLevel";
 export * from "./pathwayStrips";
 export * from "./markers";
 export * from "./categoryTint";
+export * from "./portals";

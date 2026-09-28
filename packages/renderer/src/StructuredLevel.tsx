@@ -4,6 +4,7 @@ import { roomTints } from "./categoryTint";
 import { LevelGroup } from "./LevelGroup";
 import { Markers } from "./MarkerMesh";
 import { Pathways } from "./Pathways";
+import { Portals } from "./PortalMesh";
 import type { RoomExtras } from "./RoomMesh";
 import { levelStructure } from "./structure";
 import { StructureMesh } from "./StructureMesh";
@@ -13,7 +14,9 @@ import { StructureMesh } from "./StructureMesh";
  * the level's merged and opened walls in place of each room's own shell.
  * The active level also shows its pathways, its entrances and lift stops,
  * and each bound room in its category's tint. The ghosted level below gets
- * none of these: it is only there for lining up.
+ * none of these: it is only there for lining up. Both levels build their
+ * lift shafts and flights, since the flights on the floor below are what
+ * show where its escalators and stairs arrive on this one.
  */
 export function StructuredLevel({
   model, level, ghosted = false, fullHeightWalls = false, selectedId, onSelect, assetUrl,
@@ -54,6 +57,7 @@ export function StructuredLevel({
       roomExtras={roomExtras}
     >
       <StructureMesh structure={structure} fullHeight={fullHeightWalls} ghosted={ghosted} selectedId={selectedId ?? null} />
+      <Portals model={model} levelId={level.id} ghosted={ghosted} />
       {!ghosted && <Pathways model={model} levelId={level.id} />}
       {!ghosted && <Markers model={model} levelId={level.id} />}
     </LevelGroup>

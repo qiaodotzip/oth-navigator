@@ -21,3 +21,6 @@ export * from "./nav/grid";
 export * from "./nav/reachability";
 export * from "./survey/graph";
 export * from "./survey/levels";
+
+// Part D: 3D fidelity.
+export * from "./geometry/rect";

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AuditFieldsSchema, SlugSchema, Vec2Schema } from "../primitives";
+import { AuditFieldsSchema, RingSchema, SlugSchema, Vec2Schema } from "../primitives";
 
 const SegmentSchema = z.tuple([Vec2Schema, Vec2Schema]);
 
@@ -58,6 +58,17 @@ export const PortalEndpointSchema = AuditFieldsSchema.extend({
   levelId: SlugSchema,
   roomId: SlugSchema,
   point: Vec2Schema,
+  /**
+   * The drawing's outline of the lift shaft or the flight at this stop, in
+   * metres. Optional: a lift without one is built as a standard shaft at
+   * `point`, and a flight without one only as a marker.
+   */
+  footprint: RingSchema.optional(),
+  /**
+   * The flight rising from this stop climbs toward the end nearer the next
+   * stop up. When that guess is wrong, a person flips it.
+   */
+  flipped: z.boolean().default(false),
 });
 
 /** Optional hand-authored polyline forcing a route through a specific path. */
