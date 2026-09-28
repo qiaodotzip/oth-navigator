@@ -1,5 +1,5 @@
 import { labelPoint, labelSpan, live, type MapModel, type Place, type Room, type Vec2 } from "@oth/model";
-import type { LabelTone, RoomLabel } from "@oth/renderer";
+import { labelLiftM, type LabelTone, type RoomLabel } from "@oth/renderer";
 
 type Anchor = { at: Vec2; widthM: number; heightM: number };
 
@@ -75,6 +75,10 @@ function called(room: Room, places: readonly Place[]): { name: string; tone: Lab
  * until then; a room with several shows its own name and how many. An
  * unbound room shows the drawing's name, in grey, and a room with neither has
  * no label.
+ *
+ * In 3D each sits on what the preview draws there. Both wall heights are
+ * worked out here, so raising the preview's walls leaves the plan's labels
+ * alone.
  */
 export function roomLabels(model: MapModel, levelId: string): RoomLabel[] {
   const byRoom = placesByRoom(model);
@@ -82,7 +86,11 @@ export function roomLabels(model: MapModel, levelId: string): RoomLabel[] {
   for (const room of live(model.rooms)) {
     if (room.levelId !== levelId) continue;
     const label = called(room, byRoom.get(room.id) ?? []);
-    if (label) labels.push({ roomId: room.id, ...label, ...anchorOf(room), liftM: room.heightM });
+    if (!label) continue;
+    labels.push({
+      roomId: room.id, ...label, ...anchorOf(room),
+      liftM: labelLiftM(room, false), fullHeightLiftM: labelLiftM(room, true),
+    });
   }
   return labels;
 }

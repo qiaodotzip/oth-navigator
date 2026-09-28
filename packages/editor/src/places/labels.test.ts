@@ -110,6 +110,11 @@ describe("roomLabels", () => {
     // About a metre, one way or both: never the arm's full ten.
     expect(Math.min(ell.widthM, ell.heightM)).toBeGreaterThan(0.9);
     expect(Math.min(ell.widthM, ell.heightM)).toBeLessThan(1.3);
-    expect(ell.liftM).toBe(5);
+  });
+
+  it("sits each label in 3D on what the preview draws: an area's slab, a room's walls low or at full height", () => {
+    // Both 4 m and more high: at their tops, the labels floated over the rooms behind.
+    expect(byRoom.get("L1-ell")).toMatchObject({ liftM: 0.12, fullHeightLiftM: 0.12 });
+    expect(byRoom.get("L1-shop")).toMatchObject({ liftM: 1.2, fullHeightLiftM: 4 });
   });
 });

@@ -54,8 +54,13 @@ const SceneLabel = memo(function SceneLabel({ text, tone, x, y, z }: {
  * over the canvas by drei's `Html`. Only the labels in view, and fitting
  * their room at the camera's distance, are mounted: at most L1's 252, and far
  * fewer at any one time.
+ *
+ * `fullHeightWalls` is the scene's own (`MapScene`), so each label sits on
+ * the walls the scene draws rather than floating over them or sinking in.
  */
-export function SceneRoomLabels({ labels, elevationM }: { labels: readonly RoomLabel[]; elevationM: number }) {
+export function SceneRoomLabels({ labels, elevationM, fullHeightWalls = false }: {
+  labels: readonly RoomLabel[]; elevationM: number; fullHeightWalls?: boolean;
+}) {
   const invalidate = useThree(state => state.invalidate);
   const [shown, setShown] = useState<ShownLabel[]>([]);
   const shownKey = useRef("");
@@ -65,10 +70,10 @@ export function SceneRoomLabels({ labels, elevationM }: { labels: readonly RoomL
   // set just mounted, would otherwise wait for someone to touch the view.
   useEffect(() => {
     invalidate();
-  }, [labels, elevationM, shown, invalidate]);
+  }, [labels, elevationM, fullHeightWalls, shown, invalidate]);
 
   useFrame(({ camera, size }) => {
-    const next = sceneLabelsToShow(labels, cameraView(camera, size.height, elevationM, probe));
+    const next = sceneLabelsToShow(labels, cameraView(camera, size.height, elevationM, probe), fullHeightWalls);
     // Set only on a change. Setting it every frame would keep the demand loop
     // awake for as long as the preview is open.
     const key = shownLabelsKey(next);

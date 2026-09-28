@@ -505,6 +505,15 @@ describe("BuildWorkspace — labels", () => {
     expect(given.props.labels.map(l => l.roomId)).toEqual(["L2-a"]);
     expect(given.props.elevationM).toBe(6);
   });
+
+  it("raises the 3D labels with the walls, so each stays on its own room", () => {
+    localStorage.setItem("oth.build.preview", "on");
+    open("/floors/L1/build?step=rooms");
+    const given = () => scene.children as ReactElement<{ fullHeightWalls: boolean }>;
+    expect(given().props.fullHeightWalls).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Full-height walls" }));
+    expect(given().props.fullHeightWalls).toBe(true);
+  });
 });
 
 describe("BuildWorkspace — keys", () => {

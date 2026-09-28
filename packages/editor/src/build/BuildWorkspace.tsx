@@ -409,7 +409,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
                   onSelect={id => useEditorStore.getState().select({ type: "room", id })}
                   fullHeightWalls={previewOptions.fullHeightWalls}
                 >
-                  <SceneRoomLabels labels={labels} elevationM={elevationM} />
+                  <SceneRoomLabels labels={labels} elevationM={elevationM} fullHeightWalls={previewOptions.fullHeightWalls} />
                 </MapScene>
               </PreviewPanel>
             </PreviewBoundary>

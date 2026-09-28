@@ -1,7 +1,7 @@
 import { PerspectiveCamera } from "three";
 import { describe, expect, it } from "vitest";
 import {
-  cameraView, fitLabel, labelExtra, pixelsPerMetreAt, sceneLabelsToShow, shownLabelsKey,
+  cameraView, fitLabel, labelExtra, labelLiftM, pixelsPerMetreAt, sceneLabelsToShow, shownLabelsKey,
   type RoomLabel, type ShownLabel,
 } from "./labelFit";
 
@@ -48,7 +48,7 @@ describe("sceneLabelsToShow", () => {
   const star: RoomLabel = { roomId: "L1-shop", name: "Starbucks", tone: "confirmed", at: [0, 0], widthM: 10, heightM: 10, liftM: 3 };
   const from = (height: number) => ({ camera: [0, height, 0] as const, fovDeg: 45, heightPx: 256, elevationM: 0 });
 
-  it("shows a label near the camera whole, at the top of its room, with north as -z", () => {
+  it("shows a label near the camera whole, at its lift, with north as -z", () => {
     const moved: RoomLabel = { ...star, at: [5, 8] };
     expect(sceneLabelsToShow([moved], { camera: [5, 23, -8], fovDeg: 45, heightPx: 256, elevationM: 0 })).toEqual([
       { roomId: "L1-shop", text: "Starbucks", tone: "confirmed", position: [5, 3, -8] },
@@ -66,6 +66,28 @@ describe("sceneLabelsToShow", () => {
 
   it("mounts nothing the camera cannot see", () => {
     expect(sceneLabelsToShow([star], { ...from(23), inView: () => false })).toEqual([]);
+  });
+
+  // L1's rooms are 5 m high and its walls stand 1.2 m: a label at the room's
+  // top floated over the room behind. Each massing, with the walls low and at
+  // full height, as roomLabels hands them over.
+  it.each([
+    ["an area on its slab", "area", 5, 0.12, 0.12],
+    ["a room on its walls, 1.2 m or full height", "room", 5, 1.2, 5],
+    ["a service space on its walls, as a room", "service", 4.5, 1.2, 4.5],
+    ["a room lower than the walls on its own top", "room", 0.8, 0.8, 0.8],
+    ["a solid on its own top", "detail", 2, 2, 2],
+    ["a void, which builds nothing, on its floor", "void", 5, 0, 0],
+  ] as const)("sits %s", (_, kind, roomHeightM, low, full) => {
+    const room = { kind, heightM: roomHeightM };
+    const label: RoomLabel = { ...star, liftM: labelLiftM(room, false), fullHeightLiftM: labelLiftM(room, true) };
+    const heightOf = (fullHeightWalls: boolean) => sceneLabelsToShow([label], from(29), fullHeightWalls)[0]?.position[1];
+    expect(heightOf(false)).toBeCloseTo(low);
+    expect(heightOf(true)).toBeCloseTo(full);
+  });
+
+  it("keeps a label's one lift under full-height walls when it has no other", () => {
+    expect(sceneLabelsToShow([star], from(29), true)[0]?.position).toEqual([0, 3, 0]);
   });
 });
 

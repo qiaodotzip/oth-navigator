@@ -1,6 +1,9 @@
-import type { Vec2 } from "@oth/model";
+import type { Room, Vec2 } from "@oth/model";
 import { Frustum, Matrix4, PerspectiveCamera, Vector3, type Camera } from "three";
 import { modelToThree } from "./coords";
+import { SLAB_HEIGHT_M } from "./geometry";
+import { MASSING } from "./massing";
+import { LOW_WALL_M } from "./structure";
 
 /** How a room's label reads: its place, confirmed or still proposed, or the drawing's own name. */
 export type LabelTone = "confirmed" | "proposed" | "drawing";
@@ -18,8 +21,10 @@ export type RoomLabel = {
   /** The widest and tallest a label centred on `at` can be inside the room, in metres (`labelSpan`). */
   widthM: number;
   heightM: number;
-  /** How far above its floor the label floats in 3D: the top of the room, which is what the camera sees. */
+  /** How far above its floor the label floats in 3D: on top of what the preview draws there (`labelLiftM`). */
   liftM: number;
+  /** The same with the preview's walls at full height. Absent, it is `liftM`. */
+  fullHeightLiftM?: number;
 };
 
 export type ShownLabel = { roomId: string; text: string; tone: LabelTone; position: [number, number, number] };
@@ -83,6 +88,30 @@ export function fitLabel(
   return `${name.slice(0, fits - 1).trimEnd()}…`;
 }
 
+/**
+ * How far above its floor a room's label floats in 3D: on top of what the
+ * preview draws there. The top of the room was too high once walls stood at
+ * 1.2 m: L1's rooms are 4.5–5 m high and mostly under 12 m deep, so from the
+ * preview's pitch a pill that high sat past the back wall, over the room
+ * behind, and named the wrong unit.
+ *
+ * An area is its slab. A room's walls stand 1.2 m, or at the room's full
+ * height when the preview is asked for that. A solid stands as tall as it
+ * is, and a void builds nothing.
+ */
+export function labelLiftM(room: Pick<Room, "kind" | "heightM">, fullHeightWalls: boolean): number {
+  switch (MASSING[room.kind]) {
+    case "slab":
+      return SLAB_HEIGHT_M;
+    case "shell":
+      return fullHeightWalls ? room.heightM : Math.min(LOW_WALL_M, room.heightM);
+    case "solid":
+      return room.heightM;
+    case "none":
+      return 0;
+  }
+}
+
 /** How many screen pixels a metre covers at this distance from a perspective camera. */
 export function pixelsPerMetreAt(distanceM: number, fovDeg: number, viewportHeightPx: number): number {
   if (!(distanceM > 0)) return Number.POSITIVE_INFINITY;
@@ -92,12 +121,16 @@ export function pixelsPerMetreAt(distanceM: number, fovDeg: number, viewportHeig
 /**
  * The labels worth mounting in 3D for this camera: in view, and fitting their
  * room at the scale the room is seen at, which is the plan's fit rule applied
- * by camera distance.
+ * by camera distance. Each sits on what the preview draws, so it rises with
+ * the walls when they stand at full height.
  */
-export function sceneLabelsToShow(labels: readonly RoomLabel[], view: SceneView): ShownLabel[] {
+export function sceneLabelsToShow(
+  labels: readonly RoomLabel[], view: SceneView, fullHeightWalls = false,
+): ShownLabel[] {
   const shown: ShownLabel[] = [];
   for (const label of labels) {
-    const position = modelToThree(label.at[0], label.at[1], view.elevationM + label.liftM);
+    const liftM = fullHeightWalls ? label.fullHeightLiftM ?? label.liftM : label.liftM;
+    const position = modelToThree(label.at[0], label.at[1], view.elevationM + liftM);
     if (view.inView && !view.inView(position)) continue;
     const distance = Math.hypot(
       position[0] - view.camera[0], position[1] - view.camera[1], position[2] - view.camera[2],
