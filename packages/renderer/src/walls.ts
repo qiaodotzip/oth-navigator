@@ -5,7 +5,7 @@ import { modelToThree } from "./coords";
 /**
  * Vertical strips along every boundary edge, floor to ceiling.
  *
- * These exist for the Blender context export, not for the visitor app — a
+ * These exist for the Blender detail export (buildDetailGlb), not for the visitor app — a
  * teammate modelling a shopfront needs to see where the walls are. They are
  * reference geometry and are never part of the structural model.
  */

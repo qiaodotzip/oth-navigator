@@ -67,9 +67,9 @@ describe("DressingTools", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("offers the level's context for Blender", () => {
+  it("leaves the floor's export to Download 3D model, beside 3D", () => {
     openModels();
-    expect(screen.getByRole("button", { name: /Export context for Blender/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Export context for Blender/ })).toBeNull();
   });
 
   it("does not title the models Dressing again, inside the step that already is", async () => {

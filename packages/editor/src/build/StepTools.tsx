@@ -1,6 +1,5 @@
 import type { Api } from "../api/client";
 import { AssetLibrary } from "../panels/AssetLibrary";
-import { ContextExportButton } from "../panels/ContextExportButton";
 import { DxfImportButton } from "../panels/DxfImportButton";
 import { PathwayKindsPanel } from "../panels/PathwayKindsPanel";
 import type { Saver } from "../state/save";
@@ -37,11 +36,10 @@ export function PathwaysTools({ saver }: { saver: Saver }) {
   );
 }
 
-/** Dressing: the level out to Blender, and the models back in. */
+/** Dressing: the models back in from Blender. The whole floor goes out with Download 3D model, beside 3D. */
 export function DressingTools({ api, saver }: { api: Api; saver: Saver }) {
   return (
     <div className="space-y-2">
-      <ContextExportButton />
       <Popover trigger={<Button size="sm">Models…</Button>}>
         <div className="max-h-96 w-80 overflow-auto">
           <AssetLibrary
