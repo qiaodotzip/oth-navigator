@@ -80,6 +80,30 @@ describe("Flooder", () => {
     expect(flooder.fill(g.data, [2, 0])!.pixels.length).toBe(2);
     expect(flooder.fill(g.data, [0, 1])!.pixels.length).toBe(2);
   });
+
+  it("forgets a flood it gave up on, so the next one on the same grid sees every pixel", () => {
+    const open = new Uint8Array(16).fill(1);
+    const flooder = new Flooder(4, 4);
+    expect(flooder.fill(open, [0, 0], 10)).toBeNull();
+    expect(flooder.fill(open, [3, 3])!.pixels.length).toBe(16);
+  });
+
+  it("refuses a grid of another size", () => {
+    expect(() => new Flooder(3, 2).fill(new Uint8Array(5).fill(1), [0, 0])).toThrow("3 × 2");
+  });
+
+  it("lets go of the queue a flood of the open sheet grew, and floods on after it", () => {
+    const W = 1100;
+    const H = 1000;
+    const flooder = new Flooder(W, H);
+    const open = new Uint8Array(W * H).fill(1);
+    expect(flooder.fill(open, [0, 0])!.pixels.length).toBe(W * H);
+    // Private, so read round the type: 1.1 Mpx is past what a flooder keeps.
+    expect((flooder as unknown as { queue: Int32Array }).queue.length).toBeLessThanOrEqual(Flooder.KEEP);
+    const room = new Uint8Array(W * H);
+    room[W + 1] = room[W + 2] = 1;
+    expect(Array.from(flooder.fill(room, [1, 1])!.pixels)).toEqual([W + 1, W + 2]);
+  });
 });
 
 describe("nearest", () => {
@@ -117,6 +141,24 @@ describe("loops", () => {
     const xs = rings[0]!.map(p => p[0]);
     expect([Math.min(...xs), Math.max(...xs)]).toEqual([0, 5]);
     expect(new Set(rings[1]!.map(p => p.join(",")))).toEqual(new Set(["2,2", "3,2", "3,3", "2,3"]));
+  });
+
+  // The rings below are the script's own, run on the same masks, less the one its pad adds.
+  it("splits two pixels that meet only at a corner into two rings, in the script's order and from its start", () => {
+    expect(loops(grid(["#.", ".#"]))).toEqual([
+      [[0, 0], [1, 0], [1, 1], [0, 1]],
+      [[1, 1], [2, 1], [2, 2], [1, 2]],
+    ]);
+  });
+
+  it("walks a mask that touches the grid's edge as if the grid went on clear", () => {
+    expect(loops(grid(["###", "#.#", "###"]))).toEqual([
+      [[0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [3, 2], [3, 3], [2, 3], [1, 3], [0, 3], [0, 2], [0, 1]],
+      [[1, 2], [2, 2], [2, 1], [1, 1]],
+    ]);
+    expect(loops(grid([".#", "##"]))).toEqual([
+      [[1, 0], [2, 0], [2, 1], [2, 2], [1, 2], [0, 2], [0, 1], [1, 1]],
+    ]);
   });
 });
 

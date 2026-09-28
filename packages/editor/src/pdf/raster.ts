@@ -1,8 +1,9 @@
 /**
  * The raster half of `scripts/extract-storey-plan.py`, on typed arrays. A grid
  * is row-major, one byte a pixel, 1 set and 0 clear. Each function matches its
- * Python counterpart, including where the script is odd, because L1's 193
- * rooms came out of the Python and a port that disagrees would move walls.
+ * Python counterpart, including where the script is odd, because L1's
+ * spaces, about 190 of them, came out of the Python and a port that disagrees
+ * would move walls.
  */
 export type Grid = { data: Uint8Array; width: number; height: number };
 export type Pt = [number, number];
@@ -54,9 +55,16 @@ export function invert(g: Grid): Grid {
   return { width: g.width, height: g.height, data };
 }
 
-/** `~shift_or(~a, r)`: outside the grid counts as set, so nothing wears away at its edge. */
+/**
+ * `~shift_or(~a, r)`: outside the grid counts as set, so nothing wears away at
+ * its edge. The last flip is done in place on `dilate`'s own fresh output,
+ * which saves a whole grid, 31 MB on L1.
+ */
 export function erode(g: Grid, r: number): Grid {
-  return invert(dilate(invert(g), r));
+  const out = dilate(invert(g), r);
+  const d = out.data;
+  for (let i = 0; i < d.length; i++) d[i] = d[i] ? 0 : 1;
+  return out;
 }
 
 export function and(a: Grid, b: Grid): Grid {
@@ -107,58 +115,69 @@ export function nearest(ok: Grid, sx: number, sy: number, reach = 40): Pt | null
 }
 
 /**
- * Four-way floods over one grid size, as PIL's floodfill. A stamp per pixel
- * says which flood saw it last, so the hundreds of floods on one sheet never
- * copy or clear the whole grid. The script copied the image for every label.
+ * Four-way floods over one grid size, as PIL's floodfill. The hundreds of
+ * floods on one sheet share a byte a pixel of "seen", which each flood clears
+ * from its own pixels when it is done, so no flood copies or clears the whole
+ * grid. The script copied the image for every label.
  */
 export class Flooder {
-  private readonly seen: Int32Array;
-  private stamp = 0;
-  private stack = new Int32Array(4096);
+  /**
+   * The largest queue kept between floods: 1 Mpx, a 2,500 m² room at 0.05 m/px.
+   * A flood of the open sheet can grow it to the whole grid, 4 bytes a pixel,
+   * and that is let go rather than held for the rest of the sheet.
+   */
+  static readonly KEEP = 1 << 20;
+  private readonly seen: Uint8Array;
+  /** The flood's queue, and its answer too: every pixel is queued once, in the order it was reached. */
+  private queue = new Int32Array(4096);
 
   constructor(readonly width: number, readonly height: number) {
-    this.seen = new Int32Array(width * height);
+    this.seen = new Uint8Array(width * height);
   }
 
   /** The pixels joined to `seed`, or null once there are more than `limit`: bigger than any room. */
   fill(passable: Uint8Array, [sx, sy]: Pt, limit = Infinity): Region | null {
     const { width: W, height: H, seen } = this;
-    const stamp = ++this.stamp;
+    if (passable.length !== W * H) {
+      throw new Error(`This flooder is for a ${W} × ${H} grid, and was handed ${passable.length} pixels.`);
+    }
     const seed = sy * W + sx;
     let minX = sx;
     let maxX = sx;
     let minY = sy;
     let maxY = sy;
     if (!passable[seed]) return { pixels: new Int32Array(0), minX, minY, maxX, maxY };
-    const pixels: number[] = [];
-    let top = 0;
-    const push = (q: number) => {
-      if (!passable[q] || seen[q] === stamp) return;
-      seen[q] = stamp;
-      if (top === this.stack.length) {
-        const grown = new Int32Array(this.stack.length * 2);
-        grown.set(this.stack);
-        this.stack = grown;
+    let queue = this.queue;
+    let tail = 0;
+    const visit = (q: number) => {
+      if (!passable[q] || seen[q]) return;
+      seen[q] = 1;
+      if (tail === queue.length) {
+        // A flood never holds more than the grid, so the queue never grows past it.
+        const grown = new Int32Array(Math.min(queue.length * 2, W * H));
+        grown.set(queue);
+        queue = grown;
       }
-      this.stack[top++] = q;
+      queue[tail++] = q;
     };
-    push(seed);
-    while (top > 0) {
-      const p = this.stack[--top]!;
-      pixels.push(p);
-      if (pixels.length > limit) return null;
+    visit(seed);
+    for (let head = 0; head < tail && tail <= limit; head++) {
+      const p = queue[head]!;
       const x = p % W;
       const y = (p - x) / W;
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
-      if (x > 0) push(p - 1);
-      if (x < W - 1) push(p + 1);
-      if (y > 0) push(p - W);
-      if (y < H - 1) push(p + W);
+      if (x > 0) visit(p - 1);
+      if (x < W - 1) visit(p + 1);
+      if (y > 0) visit(p - W);
+      if (y < H - 1) visit(p + W);
     }
-    return { pixels: Int32Array.from(pixels), minX, minY, maxX, maxY };
+    for (let i = 0; i < tail; i++) seen[queue[i]!] = 0;
+    this.queue = queue.length > Flooder.KEEP ? new Int32Array(4096) : queue;
+    if (tail > limit) return null;
+    return { pixels: queue.slice(0, tail), minX, minY, maxX, maxY };
   }
 }
 
@@ -272,12 +291,17 @@ export function rdp(pts: readonly Pt[], eps: number): Pt[] {
   const b = pts[pts.length - 1]!;
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
-  const den = Math.hypot(dx, dy);
+  // The root of the sum, as the script's `** 0.5` takes it. Math.hypot scales
+  // its arguments and can land a bit away, and a tie against eps would then go
+  // the other way.
+  const den = Math.sqrt(dx * dx + dy * dy);
   let best = -1;
   let bi = 0;
   for (let i = 1; i < pts.length - 1; i++) {
     const p = pts[i]!;
-    const d = den ? Math.abs(dx * (a[1] - p[1]) - dy * (a[0] - p[0])) / den : Math.hypot(p[0] - a[0], p[1] - a[1]);
+    const ex = p[0] - a[0];
+    const ey = p[1] - a[1];
+    const d = den ? Math.abs(dx * (a[1] - p[1]) - dy * (a[0] - p[0])) / den : Math.sqrt(ex * ex + ey * ey);
     if (d > best) {
       best = d;
       bi = i;
