@@ -3,7 +3,11 @@ import { roomColor } from "@oth/renderer";
 import { useEffect, useRef, useState } from "react";
 import type { SpaceKind } from "../flow/newSpace";
 import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore } from "../state/store";
-import { imageCalibration, imageForLevel, underlayBBox } from "../state/underlay";
+import { displayBBox, displayCalibration, imageForLevel } from "../state/underlay";
+import { Kbd } from "../ui/Kbd";
+import { isTyping } from "../ui/typing";
+import { draggedOffset, type PlanOffset } from "./align";
+import { BELOW_STROKE, SELECTED_FILL, SELECTED_STROKE } from "./colours";
 import { contentBBox, hasArea } from "./content";
 import { DrawingHint } from "./DrawingHint";
 import { PathwayShape } from "./PathwayShape";
@@ -16,6 +20,12 @@ const SNAP_TOLERANCE_PX = 10;
 const GRID_M = 0.25;
 
 const PORTAL_LETTER = { lift: "L", escalator: "Es", stair: "S", ramp: "R" } as const;
+
+/**
+ * Spaces are washes over the plan, not paint on it (spec §11): the architect's
+ * drawing has to show through for a trace to be checked against it.
+ */
+const SPACE_FILL_OPACITY = 0.55;
 
 /**
  * A point on the plan that means something: an entrance, or a stop of a lift or
@@ -35,7 +45,7 @@ function PointMarker({
   pointerEvents?: "none";
 }) {
   const [x, y] = at;
-  const stroke = selected ? "#f2a33c" : "#ffffff";
+  const stroke = selected ? SELECTED_STROKE : "#ffffff";
   return (
     <g data-testid={testId} onClick={onClick} pointerEvents={pointerEvents} style={{ cursor: "pointer" }}>
       <title>{title}</title>
@@ -71,6 +81,12 @@ export type PlanCanvasProps = {
   onMovePlacement?: (placement: Placement, position: [number, number, number]) => void;
   /** Resolves a level image id to a URL. */
   imageUrl?: (imageId: string) => string;
+  /** Footprints of the floor below, drawn faintly so this floor's plan can be lined up on them. */
+  belowRings?: readonly Ring[];
+  /** Once per drag with the Align tool: where the plan's top-left corner now sits, in world metres. */
+  onMoveUnderlay?: (offset: PlanOffset) => void;
+  /** False where the page has its own guide, which then carries the drawing hint. */
+  showHint?: boolean;
 };
 
 export function PlanCanvas({
@@ -83,6 +99,9 @@ export function PlanCanvas({
   onReshapeRoom,
   onMovePlacement,
   imageUrl,
+  belowRings,
+  onMoveUnderlay,
+  showHint = true,
 }: PlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const state = useEditorStore();
@@ -93,8 +112,12 @@ export function PlanCanvas({
   const [placementAt, setPlacementAt] = useState<Vec2 | null>(null);
 
   const image = imageForLevel(state.levelImages, state.activeLevelId);
-  const calibration = imageCalibration(image);
-  const underlay = underlayBBox(image);
+  // Drawn at its scale, or at a provisional metre per pixel until it has one,
+  // so a plan can be seen — and measured on — before anyone has scaled it.
+  const calibration = displayCalibration(image);
+  const underlay = displayBBox(image);
+  const [alignDrag, setAlignDrag] = useState<{ from: Vec2; start: PlanOffset } | null>(null);
+  const [alignAt, setAlignAt] = useState<PlanOffset | null>(null);
 
   // Shapes take clicks only for Select. Otherwise a click lands on whatever
   // room is under the pointer instead of the drawing surface beneath it, and an
@@ -107,8 +130,9 @@ export function PlanCanvas({
   // Fit once per level, not on every render. Refitting continuously would snap
   // the canvas back the instant anyone panned, which is worse than not fitting.
   const fittedFor = useRef<string | null>(null);
-  // Keyed on the image too, so adding a floorplan re-frames to include it.
-  const fitKey = `${state.activeLevelId ?? ""}:${image?.id ?? ""}`;
+  // Keyed on the image and its scale too, so adding a floorplan, or scaling
+  // one, re-frames to include it.
+  const fitKey = `${state.activeLevelId ?? ""}:${image?.id ?? ""}:${image?.metresPerPixel ?? "unscaled"}`;
 
   useEffect(() => {
     if (!state.activeLevelId || fittedFor.current === fitKey) return;
@@ -152,6 +176,34 @@ export function PlanCanvas({
   });
 
   /**
+   * Dragging the plan with the Align tool. The same shape as the placement
+   * drag: no dependency array, so the handlers always see the current drag,
+   * and one save on release rather than one per pixel.
+   */
+  useEffect(() => {
+    if (!alignDrag) return;
+    const onMove = (event: MouseEvent) =>
+      setAlignAt(draggedOffset(
+        alignDrag.start,
+        event.clientX - alignDrag.from[0],
+        event.clientY - alignDrag.from[1],
+        state.viewport.scale,
+      ));
+    const onUp = () => {
+      const at = alignAt;
+      setAlignDrag(null);
+      setAlignAt(null);
+      if (at) onMoveUnderlay?.(at);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  });
+
+  /**
    * Panning: drag empty canvas in Select, or middle-drag / Space-drag in any
    * tool. A drawing tool owns the left button, so it needs a way to move the
    * view that is not also a click.
@@ -162,10 +214,8 @@ export function PlanCanvas({
   const panMoved = useRef(false);
 
   useEffect(() => {
-    const typing = (event: KeyboardEvent) =>
-      event.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName);
     const down = (event: KeyboardEvent) => {
-      if (event.code === "Space" && !typing(event)) spaceHeld.current = true;
+      if (event.code === "Space" && !isTyping(event.target)) spaceHeld.current = true;
     };
     const up = (event: KeyboardEvent) => {
       if (event.code === "Space") spaceHeld.current = false;
@@ -203,6 +253,15 @@ export function PlanCanvas({
   }, [pan, state]);
 
   function startPan(event: React.MouseEvent) {
+    // The Align tool drags the plan itself, not the view.
+    if (state.tool === "align-plan" && calibration && event.button === 0 && !spaceHeld.current) {
+      event.preventDefault();
+      setAlignDrag({
+        from: [event.clientX, event.clientY],
+        start: { offsetX: calibration.offsetX, offsetY: calibration.offsetY },
+      });
+      return;
+    }
     const wantsPan =
       event.button === 1 || spaceHeld.current || (event.button === 0 && state.tool === "select");
     if (!wantsPan) return;
@@ -225,8 +284,10 @@ export function PlanCanvas({
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (!state.draft) return;
+      if (!state.draft || isTyping(event.target)) return;
       if (event.key === "Escape") {
+        // Claimed, so the page's own Escape (let go of the tool) waits for the next press.
+        event.preventDefault();
         state.clearDraft();
         setCursor(null);
       }
@@ -291,7 +352,7 @@ export function PlanCanvas({
       panMoved.current = false;
       return;
     }
-    if (state.tool === "select") return;
+    if (state.tool === "select" || state.tool === "align-plan") return;
 
     if (state.tool === "calibrate") {
       // Raw and unsnapped: you are measuring the image, not the geometry, and
@@ -336,7 +397,8 @@ export function PlanCanvas({
       key={room.id}
       data-testid={`room-${room.id}`}
       points={ringPoints(room.footprint)}
-      fill={roomColor(room.kind, { selected: state.selection?.id === room.id })}
+      fill={state.selection?.id === room.id ? SELECTED_FILL : roomColor(room.kind)}
+      fillOpacity={SPACE_FILL_OPACITY}
       pointerEvents={shapeEvents}
       stroke="#57534e"
       strokeWidth={1}
@@ -362,13 +424,27 @@ export function PlanCanvas({
         {image && calibration && imageUrl && (
           <Underlay
             src={imageUrl(image.id)}
-            calibration={calibration}
+            calibration={alignAt ? { ...calibration, ...alignAt } : calibration}
             viewport={state.viewport}
             widthPx={image.widthPx}
             heightPx={image.heightPx}
             opacity={image.opacity}
           />
         )}
+
+        {belowRings?.map((ring, i) => (
+          <polygon
+            key={`below-${i}`}
+            data-testid="below-ring"
+            points={ringPoints(ring)}
+            fill="none"
+            stroke={BELOW_STROKE}
+            strokeOpacity={0.7}
+            strokeWidth={1}
+            strokeDasharray="4 3"
+            pointerEvents="none"
+          />
+        ))}
 
         <rect
           data-testid="plan-surface"
@@ -377,12 +453,17 @@ export function PlanCanvas({
           width={width}
           height={height}
           fill="transparent"
-          style={{ cursor: pan ? "grabbing" : state.tool === "select" ? "grab" : "crosshair" }}
+          style={{
+            cursor: pan || alignDrag ? "grabbing"
+              : state.tool === "select" ? "grab"
+              : state.tool === "align-plan" ? "move"
+              : "crosshair",
+          }}
           onMouseDown={startPan}
           onClick={onSurfaceClick}
           onDoubleClick={commitDraft}
           onMouseMove={event => {
-            if (state.tool === "select" || pan) return;
+            if (state.tool === "select" || state.tool === "align-plan" || pan) return;
             // The indicator shows where a click will land, so it snaps only
             // for the tools that snap.
             const unsnapped =
@@ -395,9 +476,9 @@ export function PlanCanvas({
         {rooms.filter(r => r.kind !== "detail").map(renderRoom)}
 
         {/*
-          Painted over the rooms, not under them. Room fills are opaque, so a
-          pathway drawn beneath one is invisible exactly where it matters most:
-          crossing a floor, or running along a row of shop fronts.
+          Painted over the rooms, not under them. Even as a wash, a room's fill
+          all but hides a pathway drawn beneath it, exactly where it matters
+          most: crossing a floor, or running along a row of shop fronts.
         */}
         {state.model?.pathways
           .filter(p => p.levelId === state.activeLevelId)
@@ -426,6 +507,9 @@ export function PlanCanvas({
 
         {state.tool === "select" && selectedRoom && (
           <VertexHandles
+            // Keyed on the room: a corner picked on one room must not stay
+            // picked on the next, or Delete would take a corner of the wrong one.
+            key={selectedRoom.id}
             room={selectedRoom}
             viewport={state.viewport}
             toWorld={pointerWorld}
@@ -448,7 +532,7 @@ export function PlanCanvas({
                 y={y - 5}
                 width={10}
                 height={10}
-                fill={state.selection?.id === p.id ? "#f2a33c" : "#8b5cf6"}
+                fill={state.selection?.id === p.id ? SELECTED_FILL : "#8b5cf6"}
                 stroke="#4c1d95"
                 strokeWidth={1}
                 pointerEvents={shapeEvents}
@@ -485,7 +569,7 @@ export function PlanCanvas({
                     x={x - 9} y={y - 9} width={18} height={18} rx={3}
                     fill="none" stroke="#1d4ed8" strokeWidth={1.5} strokeDasharray="3 2"
                   />
-                  <text x={x + 13} y={y + 4} fontSize={10} fill="#1d4ed8">
+                  <text x={x + 13} y={y + 4} fontSize={13} fill="#1d4ed8">
                     {level?.code ?? ""}
                   </text>
                 </g>
@@ -608,8 +692,11 @@ export function PlanCanvas({
         )}
       </svg>
 
-      {state.tool !== "select" && (
-        <DrawingHint tool={state.tool} pointCount={state.draft?.length ?? 0} />
+      {showHint && state.tool !== "select" && (
+        <DrawingHint
+          tool={state.tool}
+          pointCount={(state.tool === "calibrate" ? state.calibrationDraft : state.draft)?.length ?? 0}
+        />
       )}
 
       <div className="absolute bottom-3 right-3 flex items-center gap-2">
@@ -619,10 +706,10 @@ export function PlanCanvas({
         <button
           type="button"
           aria-label="Fit to level"
-          className="rounded border bg-white px-3 py-1 text-sm shadow-sm hover:bg-stone-100"
+          className="inline-flex items-center gap-1.5 rounded border border-stone-300 bg-white px-3 py-1 text-sm shadow-sm hover:bg-stone-100"
           onClick={fitToLevel}
         >
-          Fit
+          Fit <Kbd>F</Kbd>
         </button>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { parseModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { findLevel, pickTab, sortedLevels, yourFloor } from "./floors";
+import { findLevel, levelBelow, pickTab, sortedLevels, yourFloor } from "./floors";
 
 const lvl = (code: string, ordinal: number, ownerIds: string[] = []) => ({
   id: `oth-${code}`, buildingId: "oth", code, ordinal, nameEn: code, nameZh: code,
@@ -20,6 +20,12 @@ describe("floors", () => {
   it("finds a floor by code, whatever its case", () => {
     expect(findLevel(model, "l2")?.id).toBe("oth-L2");
     expect(findLevel(model, "L9")).toBeNull();
+  });
+
+  it("finds the floor below, and none below the lowest", () => {
+    expect(levelBelow(model, "oth-L2")?.code).toBe("L1");
+    expect(levelBelow(model, "oth-L1")).toBeNull();
+    expect(levelBelow(model, "oth-L9")).toBeNull();
   });
 
   it("takes your floor to be the lowest you own", () => {

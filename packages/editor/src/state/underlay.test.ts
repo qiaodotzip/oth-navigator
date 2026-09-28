@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LevelImage } from "../api/client";
-import { imageCalibration, imageForLevel, underlayBBox } from "./underlay";
+import { displayBBox, displayCalibration, imageCalibration, imageForLevel, underlayBBox } from "./underlay";
 
 const base: LevelImage = {
   id: "img_1", levelId: "oth-L1", filename: "L1.png",
@@ -47,5 +47,31 @@ describe("underlayBBox", () => {
   it("applies the offset", () => {
     expect(underlayBBox({ ...base, metresPerPixel: 0.1, offsetX: 10, offsetY: 60 }))
       .toEqual({ minX: 10, minY: 10, maxX: 110, maxY: 60 });
+  });
+});
+
+describe("displayCalibration", () => {
+  it("draws a scaled image at its scale", () => {
+    expect(displayCalibration({ ...base, metresPerPixel: 0.1, offsetX: 5, offsetY: -2 }))
+      .toEqual({ metresPerPixel: 0.1, offsetX: 5, offsetY: -2 });
+  });
+
+  it("draws an unscaled image at a metre per pixel from its offset, so it can be seen and measured", () => {
+    expect(displayCalibration({ ...base, offsetX: 3, offsetY: 4 })).toEqual({ metresPerPixel: 1, offsetX: 3, offsetY: 4 });
+  });
+
+  it("draws nothing without an image", () => {
+    expect(displayCalibration(null)).toBeNull();
+  });
+});
+
+describe("displayBBox", () => {
+  it("spans an unscaled image at a metre per pixel", () => {
+    expect(displayBBox(base)).toEqual({ minX: 0, minY: -500, maxX: 1000, maxY: 0 });
+  });
+
+  it("is the underlay's extent once the image is scaled", () => {
+    const scaled = { ...base, metresPerPixel: 0.1 };
+    expect(displayBBox(scaled)).toEqual(underlayBBox(scaled));
   });
 });

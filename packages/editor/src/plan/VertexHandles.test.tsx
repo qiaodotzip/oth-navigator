@@ -107,4 +107,20 @@ describe("VertexHandles", () => {
     fireEvent.keyDown(window, { key: "Delete" });
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  it("claims Delete on a selected corner even when the shape cannot lose one, so the room is not deleted instead", () => {
+    setup([[0, 0], [5, 0], [0, 5]]);
+    fireEvent.click(screen.getByTestId("vertex-0"));
+    // fireEvent returns false when a listener called preventDefault.
+    expect(fireEvent.keyDown(window, { key: "Delete" })).toBe(false);
+  });
+
+  it("leaves Backspace in a text field alone, even with a corner selected", () => {
+    const { onCommit } = setup();
+    fireEvent.click(screen.getByTestId("vertex-2"));
+    const field = document.body.appendChild(document.createElement("input"));
+    expect(fireEvent.keyDown(field, { key: "Backspace" })).toBe(true);
+    expect(onCommit).not.toHaveBeenCalled();
+    field.remove();
+  });
 });

@@ -1,5 +1,7 @@
 import type { Ring, Room, Vec2 } from "@oth/model";
 import { useEffect, useState } from "react";
+import { isTyping } from "../ui/typing";
+import { SELECTED_FILL } from "./colours";
 import { deleteVertex, insertVertex, MIN_RING_LENGTH, moveVertex } from "./ring";
 import { worldToScreen, type Viewport } from "./viewport";
 
@@ -59,10 +61,12 @@ export function VertexHandles({
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (selected === null) return;
+      if (selected === null || isTyping(event.target)) return;
       if (event.key !== "Delete" && event.key !== "Backspace") return;
-      if (room.footprint.length <= MIN_RING_LENGTH) return;
+      // The key was aimed at this corner, even when the shape is too small to
+      // lose it: claimed, so the page does not delete the whole room instead.
       event.preventDefault();
+      if (room.footprint.length <= MIN_RING_LENGTH) return;
       onCommit(deleteVertex(room.footprint, selected));
       setSelected(null);
     }
@@ -81,7 +85,7 @@ export function VertexHandles({
             cx={x}
             cy={y}
             r={6}
-            fill={selected === i ? "#f2a33c" : "#ffffff"}
+            fill={selected === i ? SELECTED_FILL : "#ffffff"}
             stroke="#57534e"
             strokeWidth={2}
             style={{ cursor: "grab" }}

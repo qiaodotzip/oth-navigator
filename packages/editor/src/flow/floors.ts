@@ -13,6 +13,13 @@ export function findLevel(model: MapModel | null, code: string): Level | null {
   return sortedLevels(model).find(l => l.code.toUpperCase() === wanted) ?? null;
 }
 
+/** The floor directly below, by ordinal — what a plan is lined up against. Null for the lowest. */
+export function levelBelow(model: MapModel | null, levelId: string): Level | null {
+  const levels = sortedLevels(model);
+  const i = levels.findIndex(l => l.id === levelId);
+  return i > 0 ? levels[i - 1]! : null;
+}
+
 /**
  * "Your floor", wherever the app says it: the lowest floor you own; if you own
  * none, the one you last worked on in this browser; failing that, the lowest.

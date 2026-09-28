@@ -2,6 +2,7 @@ import { parseModel } from "@oth/model";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEditorStore } from "../state/store";
+import { BELOW_STROKE, SELECTED_FILL } from "./colours";
 import { PlanCanvas } from "./PlanCanvas";
 
 const model = parseModel({
@@ -185,10 +186,19 @@ describe("underlay", () => {
     expect(screen.queryByTestId("underlay")).toBeNull();
   });
 
-  it("does not render an uncalibrated image, which has no size in metres", () => {
+  it("draws an unscaled plan at a metre per pixel, so it can be seen and measured on", () => {
     useEditorStore.getState().setLevelImages([{ ...levelImage, metresPerPixel: null }]);
     render(<PlanCanvas width={800} height={600} imageUrl={url} />);
-    expect(screen.queryByTestId("underlay")).toBeNull();
+    const scale = useEditorStore.getState().viewport.scale;
+    expect(Number(screen.getByTestId("underlay").getAttribute("width"))).toBeCloseTo(1000 * scale);
+  });
+
+  it("frames the plan again once it has been scaled", () => {
+    useEditorStore.getState().setLevelImages([{ ...levelImage, metresPerPixel: null }]);
+    render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    const before = useEditorStore.getState().viewport.scale;
+    act(() => useEditorStore.getState().setLevelImages([{ ...levelImage, metresPerPixel: 0.01 }]));
+    expect(useEditorStore.getState().viewport.scale).not.toBe(before);
   });
 
   it("draws the underlay behind the rooms", () => {
@@ -331,6 +341,26 @@ describe("vertex handles on the canvas", () => {
     fireEvent.mouseUp(window, { clientX: 150, clientY: 130 });
     expect(onReshapeRoom).toHaveBeenCalledTimes(1);
     expect(onReshapeRoom.mock.calls[0]![0].id).toBe("L1-a");
+  });
+
+  it("lets go of a selected corner when another room is selected, so Delete never takes a corner of the wrong room", () => {
+    useEditorStore.getState().setModel(parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+      rooms: [
+        { id: "L1-a", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 3, walkable: true },
+        { id: "L1-b", levelId: "oth-L1", kind: "room", footprint: [[20, 0], [30, 0], [30, 10], [20, 10]], heightM: 3, walkable: true },
+      ],
+    }));
+    const onReshapeRoom = vi.fn();
+    useEditorStore.getState().setTool("select");
+    useEditorStore.getState().select({ type: "room", id: "L1-a" });
+    render(<PlanCanvas width={800} height={600} onReshapeRoom={onReshapeRoom} />);
+    fireEvent.click(screen.getByTestId("vertex-2"));
+    act(() => useEditorStore.getState().select({ type: "room", id: "L1-b" }));
+    expect(screen.getByTestId("vertex-2").getAttribute("fill")).toBe("#ffffff");
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(onReshapeRoom).not.toHaveBeenCalled();
   });
 });
 
@@ -779,5 +809,95 @@ describe("entrances and lifts", () => {
     render(<PlanCanvas width={800} height={600} />);
     fireEvent.click(screen.getByTestId("portal-endpoint-ep-1"));
     expect(useEditorStore.getState().selection).toEqual({ type: "portalEndpoint", id: "ep-1" });
+  });
+});
+
+describe("the plan under the spaces", () => {
+  it("draws spaces see-through, so the floorplan shows under them", () => {
+    render(<PlanCanvas width={800} height={600} />);
+    const opacity = Number(screen.getByTestId("room-L1-a").getAttribute("fill-opacity"));
+    expect(opacity).toBeGreaterThan(0);
+    expect(opacity).toBeLessThan(1);
+  });
+
+  it("draws the selected space in the accent colour", () => {
+    useEditorStore.getState().select({ type: "room", id: "L1-a" });
+    render(<PlanCanvas width={800} height={600} />);
+    expect(screen.getByTestId("room-L1-a").getAttribute("fill")).toBe(SELECTED_FILL);
+  });
+
+  it("draws the floor below faintly, and never in the way of a click", () => {
+    render(<PlanCanvas width={800} height={600} belowRings={[[[50, 50], [70, 50], [70, 70]]]} />);
+    const ring = screen.getByTestId("below-ring");
+    expect(ring.getAttribute("fill")).toBe("none");
+    expect(ring.getAttribute("stroke")).toBe(BELOW_STROKE);
+    expect(ring.getAttribute("pointer-events")).toBe("none");
+  });
+
+  it("leaves its hint to the page when told to", () => {
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} showHint={false} />);
+    expect(screen.queryByTestId("drawing-hint")).toBeNull();
+  });
+
+  it("claims Escape when it cancels a shape, so nothing else acts on the same press", () => {
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.click(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100 });
+    expect(fireEvent.keyDown(window, { key: "Escape" })).toBe(false);
+  });
+
+  it("leaves Backspace in a text field to the field, even mid-shape", () => {
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} />);
+    fireEvent.click(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100 });
+    const field = document.body.appendChild(document.createElement("input"));
+    fireEvent.keyDown(field, { key: "Backspace" });
+    expect(useEditorStore.getState().draft).toHaveLength(1);
+    field.remove();
+  });
+});
+
+describe("aligning the plan", () => {
+  const url = (id: string) => `/api/level-images/${id}/file`;
+
+  beforeEach(() => {
+    useEditorStore.getState().setLevelImages([levelImage]);
+    useEditorStore.getState().setTool("align-plan");
+  });
+
+  function startDrag(onMoveUnderlay = vi.fn()) {
+    render(<PlanCanvas width={800} height={600} imageUrl={url} onMoveUnderlay={onMoveUnderlay} />);
+    act(() => useEditorStore.getState().setViewport({ originX: 0, originY: 600, scale: 10 }));
+    fireEvent.mouseDown(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100, button: 0 });
+    fireEvent.mouseMove(window, { clientX: 150, clientY: 80 });
+    return onMoveUnderlay;
+  }
+
+  it("moves the plan under the pointer while dragging", () => {
+    startDrag();
+    // 50 px right at 10 px per metre: the plan's left edge is now 5 m east of 0.
+    expect(Number(screen.getByTestId("underlay").getAttribute("x"))).toBe(50);
+  });
+
+  it("saves once, on release, where the plan's corner now is", () => {
+    const onMoveUnderlay = startDrag();
+    expect(onMoveUnderlay).not.toHaveBeenCalled();
+    fireEvent.mouseUp(window, { clientX: 150, clientY: 80 });
+    expect(onMoveUnderlay).toHaveBeenCalledTimes(1);
+    expect(onMoveUnderlay).toHaveBeenCalledWith({ offsetX: 5, offsetY: 2 });
+  });
+
+  it("moves the plan, not the view", () => {
+    startDrag();
+    expect(useEditorStore.getState().viewport).toMatchObject({ originX: 0, originY: 600 });
+  });
+
+  it("saves nothing for a press that did not move", () => {
+    const onMoveUnderlay = vi.fn();
+    render(<PlanCanvas width={800} height={600} imageUrl={url} onMoveUnderlay={onMoveUnderlay} />);
+    fireEvent.mouseDown(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100, button: 0 });
+    fireEvent.mouseUp(window, { clientX: 100, clientY: 100 });
+    expect(onMoveUnderlay).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,5 @@
 import type { Vec2 } from "@oth/model";
+import { SELECTED_STROKE } from "./colours";
 import { worldToScreen, type Viewport } from "./viewport";
 
 /**
@@ -32,7 +33,7 @@ export function PathwayShape({
       data-testid={`pathway-${id}`}
       points={points}
       fill="none"
-      stroke={selected ? "#f2a33c" : color ?? "#38bdf8"}
+      stroke={selected ? SELECTED_STROKE : color ?? "#38bdf8"}
       strokeOpacity={0.45}
       strokeWidth={widthM * viewport.scale}
       strokeLinecap="round"

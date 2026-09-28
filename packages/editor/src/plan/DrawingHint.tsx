@@ -9,6 +9,7 @@ const WHAT: Partial<Record<Tool, string>> = {
   "place-entrance": "Placing an entrance",
   "place-portal": "Placing a lift or stair",
   calibrate: "Measuring a known distance",
+  "align-plan": "Aligning the plan",
 };
 
 function howTo(tool: Tool, pointCount: number): string {
@@ -42,11 +43,24 @@ function howTo(tool: Tool, pointCount: number): string {
       : "Click the other side, then double-click to finish.";
   }
   if (tool === "calibrate") {
+    // The drawn scale bars on OTH's sheets are wrong; a dimensioned grid bay is not.
     return pointCount < 2
-      ? `Click two points a known distance apart (${pointCount}/2).`
-      : "Now type the real distance in the Floorplan panel.";
+      ? `Click two points a known distance apart — a structural grid bay, not the drawn scale bar (${pointCount}/2).`
+      : "Now type the real distance below.";
+  }
+  if (tool === "align-plan") {
+    return "Drag the plan until its walls sit on the dashed outlines of the floor below.";
   }
   return "Click where it goes.";
+}
+
+/**
+ * What a tool is doing and how to finish it. The canvas's own hint and the
+ * Build guide both say this, so there is one wording to learn.
+ */
+export function hintFor(tool: Tool, pointCount: number): { what: string; how: string } | null {
+  const what = WHAT[tool];
+  return what ? { what, how: howTo(tool, pointCount) } : null;
 }
 
 /**
@@ -54,16 +68,16 @@ function howTo(tool: Tool, pointCount: number): string {
  * discoverable only by guessing that double-click ends a shape.
  */
 export function DrawingHint({ tool, pointCount }: { tool: Tool; pointCount: number }) {
-  const what = WHAT[tool];
-  if (!what) return null;
+  const hint = hintFor(tool, pointCount);
+  if (!hint) return null;
 
   return (
     <div
       data-testid="drawing-hint"
       className="pointer-events-none absolute left-3 top-3 rounded bg-stone-900/85 px-3 py-2 text-xs text-white"
     >
-      <div className="font-medium">{what}</div>
-      <div className="opacity-80">{howTo(tool, pointCount)}</div>
+      <div className="font-medium">{hint.what}</div>
+      <div className="opacity-80">{hint.how}</div>
     </div>
   );
 }
