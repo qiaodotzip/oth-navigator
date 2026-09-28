@@ -11,3 +11,11 @@ export * from "./contextExport";
 export * from "./PlacementMesh";
 export * from "./labelFit";
 export * from "./RoomLabels";
+// Part D: 3D fidelity.
+export * from "./intervals";
+export * from "./wallPlan";
+export * from "./openings";
+export * from "./voids";
+export * from "./structure";
+export * from "./blocks";
+export * from "./StructuredLevel";

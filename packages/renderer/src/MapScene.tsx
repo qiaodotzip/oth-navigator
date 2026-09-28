@@ -3,7 +3,7 @@ import { OrbitControls } from "@react-three/drei";
 import { bboxOfRings } from "@oth/model";
 import { Canvas } from "@react-three/fiber";
 import { useMemo, type ReactNode } from "react";
-import { LevelGroup } from "./LevelGroup";
+import { StructuredLevel } from "./StructuredLevel";
 
 export type MapSceneProps = {
   model: MapModel;
@@ -14,6 +14,8 @@ export type MapSceneProps = {
   onSelect?: (roomId: string) => void;
   /** Resolves an asset id to a URL the renderer can fetch. */
   assetUrl?: (assetId: string) => string;
+  /** Walls at each room's full height rather than 1.2 m (Part D). */
+  fullHeightWalls?: boolean;
   /**
    * More of the scene, drawn with the active level: room labels, and the
    * layers later parts add. Rendered inside the canvas, so three.js elements
@@ -23,7 +25,7 @@ export type MapSceneProps = {
 };
 
 export function MapScene({
-  model, activeLevelId, showLevelBelow = true, selectedId, onSelect, assetUrl, children,
+  model, activeLevelId, showLevelBelow = true, selectedId, onSelect, assetUrl, fullHeightWalls = false, children,
 }: MapSceneProps) {
   const { active, below } = useMemo(() => {
     const ordered = [...model.levels].sort((a, b) => a.ordinal - b.ordinal);
@@ -71,16 +73,16 @@ export function MapScene({
       <ambientLight intensity={0.7} />
       <directionalLight position={[60, 120, 40]} intensity={1.1} castShadow />
       {showLevelBelow && below && (
-        <LevelGroup level={below} rooms={roomsFor(below.id)} ghosted />
+        <StructuredLevel model={model} level={below} ghosted fullHeightWalls={fullHeightWalls} />
       )}
       {active && (
-        <LevelGroup
+        <StructuredLevel
+          model={model}
           level={active}
-          rooms={roomsFor(active.id)}
-          placements={model.placements.filter(p => p.levelId === active.id)}
           assetUrl={assetUrl}
           selectedId={selectedId}
           onSelect={onSelect}
+          fullHeightWalls={fullHeightWalls}
         />
       )}
       {children}

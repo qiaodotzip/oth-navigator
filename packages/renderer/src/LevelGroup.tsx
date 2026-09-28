@@ -1,8 +1,8 @@
 import type { Level, Placement, Room } from "@oth/model";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { modelToThree } from "./coords";
 import { PlacementBoundary, PlacementMesh } from "./PlacementMesh";
-import { RoomMesh } from "./RoomMesh";
+import { RoomMesh, type RoomExtras } from "./RoomMesh";
 
 /**
  * Which rooms draw geometry of their own.
@@ -20,7 +20,7 @@ export function roomsToDraw(
 }
 
 export function LevelGroup({
-  level, rooms, placements = [], assetUrl, ghosted = false, selectedId, onSelect,
+  level, rooms, placements = [], assetUrl, ghosted = false, selectedId, onSelect, roomExtras, children,
 }: {
   level: Level;
   rooms: Room[];
@@ -29,6 +29,10 @@ export function LevelGroup({
   ghosted?: boolean;
   selectedId?: string | null;
   onSelect?: (roomId: string) => void;
+  /** Per-room changes from the level's structure (Part D). */
+  roomExtras?: (room: Room) => RoomExtras;
+  /** Drawn inside the level, so it stands at the level's elevation. */
+  children?: ReactNode;
 }) {
   // The level's elevation is applied once, here, rather than baked per room.
   const [x, y, z] = modelToThree(0, 0, level.elevationM);
@@ -42,6 +46,7 @@ export function LevelGroup({
           ghosted={ghosted}
           selected={selectedId === room.id}
           onSelect={ghosted ? undefined : onSelect}
+          {...(roomExtras ? roomExtras(room) : {})}
         />
       ))}
       {!ghosted && assetUrl && placements.map(p => (
@@ -52,6 +57,7 @@ export function LevelGroup({
           </Suspense>
         </PlacementBoundary>
       ))}
+      {children}
     </group>
   );
 }
