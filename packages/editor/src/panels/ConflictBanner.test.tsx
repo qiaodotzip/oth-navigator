@@ -44,4 +44,16 @@ describe("ConflictBanner", () => {
     render(<ConflictBanner onReload={vi.fn()} />);
     expect(screen.getByRole("alert").textContent).toMatch(/^Wei Kang changed Stadium/);
   });
+
+  it("says your own last change was still saving, rather than blaming you as someone else", () => {
+    useEditorStore.getState().setUser({ id: "user_1", email: "a@oth.local", displayName: "Stef Chan" });
+    useEditorStore.getState().setTeam([{ id: "user_1", displayName: "Stef Chan" }]);
+    useEditorStore.getState().setConflict({
+      entityType: "placement", entityId: "L1-bin-1",
+      current: { updatedBy: "user_1", version: 3 },
+    });
+    render(<ConflictBanner onReload={vi.fn()} />);
+    expect(screen.getByRole("alert").textContent)
+      .toMatch(/^Your last change to L1-bin-1 was still saving, so this one was not saved\. Reload, then make it again\./);
+  });
 });

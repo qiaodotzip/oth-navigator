@@ -1,8 +1,48 @@
+import type { MapModel } from "@oth/model";
 import type { Api, EntityType, LevelImage } from "../api/client";
 import { ApiError, ConflictError, isUnauthorized } from "../api/client";
 import { reportFailure, serverWords, worthRetrying } from "../ui/failure";
 import { toast } from "../ui/toast";
 import { useEditorStore } from "./store";
+
+/** Where each kind of entity lives in the model, so a saved update can go straight into the store's copy. */
+const COLLECTION = {
+  level: "levels",
+  room: "rooms",
+  pathway: "pathways",
+  doorway: "doorways",
+  entrance: "entrances",
+  portal: "portals",
+  portalEndpoint: "portalEndpoints",
+  navHint: "navHints",
+  placement: "placements",
+  tenant: "tenants",
+  capture: "captures",
+  place: "places",
+  sighting: "sightings",
+  pathwayKind: "pathwayKinds",
+  objectKind: "objectKinds",
+} as const satisfies Record<EntityType, Exclude<keyof MapModel, "building">>;
+
+/**
+ * The model with one saved update in it: the fields sent, and the version
+ * the server gave the row. A null sent clears its field, as it does on the
+ * server. Unchanged when the reply has no version to trust or the entity is
+ * not in the model.
+ */
+function withSaved(
+  model: MapModel, type: EntityType, id: string, sent: Record<string, unknown>, saved: unknown,
+): MapModel {
+  const version = (saved as { version?: unknown } | null)?.version;
+  if (typeof version !== "number") return model;
+  const key = COLLECTION[type];
+  const list = model[key] as readonly { id: string }[];
+  const at = list.findIndex(e => e.id === id);
+  if (at < 0) return model;
+  const next: Record<string, unknown> = { ...list[at], ...sent, id, version };
+  for (const [field, value] of Object.entries(sent)) if (value === null) delete next[field];
+  return { ...model, [key]: list.map((e, i) => (i === at ? next : e)) };
+}
 
 /**
  * The plans a reload listed, each kept at the newest version this page has
@@ -35,17 +75,36 @@ function newestPlans(listed: readonly LevelImage[], held: readonly LevelImage[])
  * Running the validator bakes every level's nav grid, which costs about half
  * a second on each write for nothing anyone there looks at — and every survey
  * rule is a warning, so skipping it never hides a publish blocker.
+ *
+ * An update also goes into the store the moment it lands, with the version
+ * the server gave it, rather than waiting for the reload after it. That
+ * reload is slow — the whole model, validated in Build — and until it
+ * answered the store still held the old version, so a rotation typed just
+ * after a drag sent that and was refused as a conflict with yourself. The
+ * version is only ever the server's, so a teammate's write in between still
+ * makes the next one a conflict.
  */
 export function createSaver(api: Api, options: { validate?: boolean } = {}) {
   const store = useEditorStore;
   const validates = options.validate ?? true;
 
+  // Each reload is numbered as it starts. Its answer goes into the store only
+  // if nothing newer is there already: no reload started after it has been
+  // applied, and no write has landed since it was asked. Otherwise a slow
+  // reload from before a write would put the old version back.
+  let started = 0;
+  let applied = 0;
+  let askedBeforeLastWrite = 0;
+
   async function refresh(): Promise<void> {
+    const mine = ++started;
     const [model, report, levelImages] = await Promise.all([
       api.getModel(),
       validates ? api.validate() : Promise.resolve(null),
       api.listLevelImages(),
     ]);
+    if (mine <= applied || mine <= askedBeforeLastWrite) return;
+    applied = mine;
     store.getState().setModel(model);
     if (validates) store.getState().setReport(report);
     store.getState().setLevelImages(newestPlans(levelImages, store.getState().levelImages));
@@ -80,6 +139,8 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
       return false;
     }
 
+    // Every reload asked so far may have been read before this write.
+    askedBeforeLastWrite = started;
     store.getState().setConflict(null);
     try {
       await refresh();
@@ -154,7 +215,14 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
       guard(type, String(data.id ?? "new"), () => api.createEntity(type, data), options),
 
     update: (type: EntityType, id: string, expectedVersion: number, data: Record<string, unknown>) =>
-      guard(type, id, () => api.updateEntity(type, id, expectedVersion, data)),
+      guard(type, id, async () => {
+        const saved = await api.updateEntity(type, id, expectedVersion, data);
+        const model = store.getState().model;
+        if (model) {
+          const next = withSaved(model, type, id, data, saved);
+          if (next !== model) store.getState().setModel(next);
+        }
+      }),
 
     remove: (type: EntityType, id: string, expectedVersion: number) =>
       guard(type, id, () => api.deleteEntity(type, id, expectedVersion)),

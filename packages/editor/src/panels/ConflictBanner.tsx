@@ -11,6 +11,7 @@ export function ConflictBanner({ onReload }: { onReload: () => void }) {
   const conflict = useEditorStore(s => s.conflict);
   const setConflict = useEditorStore(s => s.setConflict);
   const team = useEditorStore(s => s.team);
+  const me = useEditorStore(s => s.user?.id);
   if (!conflict) return null;
 
   const by = conflict.current?.updatedBy;
@@ -20,9 +21,16 @@ export function ConflictBanner({ onReload }: { onReload: () => void }) {
 
   return (
     <div role="alert" className="flex items-center gap-3 border-b border-yours/30 bg-yours-soft px-4 py-2 text-sm">
-      <span>
-        {who} changed <strong>{what}</strong> while you were editing it. Your change was not saved.
-      </span>
+      {/* Your own earlier write, still on its way when this one was sent: nobody else to ask. */}
+      {me && by === me ? (
+        <span>
+          Your last change to <strong>{what}</strong> was still saving, so this one was not saved. Reload, then make it again.
+        </span>
+      ) : (
+        <span>
+          {who} changed <strong>{what}</strong> while you were editing it. Your change was not saved.
+        </span>
+      )}
       <Button
         size="sm"
         onClick={() => {

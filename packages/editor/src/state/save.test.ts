@@ -244,6 +244,164 @@ describe("saver", () => {
   });
 });
 
+describe("a write followed quickly by another", () => {
+  const start = parseModel({
+    building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+    levels: model.levels,
+    objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+    placements: [{ id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", roomId: "L1-hall", position: [3, 3, 0] }],
+  });
+  type Placed = (typeof start.placements)[number];
+
+  /**
+   * The server in miniature: it keeps each placement's version and refuses a
+   * stale one with a 409, as the real one does. Its reloads are slow: each
+   * answers only when the test says, with what the server had when it was asked.
+   */
+  function server() {
+    let now = start;
+    const waiting: (() => void)[] = [];
+    const bin = () => now.placements.find(p => p.id === "L1-bin-1")!;
+    const write = (patch: Partial<Placed>) => {
+      const saved = { ...bin(), ...patch, version: bin().version + 1 } as Placed;
+      now = { ...now, placements: now.placements.map(p => (p.id === saved.id ? saved : p)) };
+      return saved;
+    };
+    const api = fakeApi({
+      getModel: vi.fn(() => {
+        const asked = now;
+        return new Promise(resolve => waiting.push(() => resolve(asked)));
+      }),
+      updateEntity: vi.fn(async (_type: string, _id: string, expectedVersion: number, data: Partial<Placed>) => {
+        if (bin().version !== expectedVersion) throw new ConflictError({ ...bin() }, null);
+        return write(data);
+      }),
+    });
+    return {
+      api,
+      /** A teammate's change, straight to the server. */
+      teammate: (patch: Partial<Placed>) => write(patch),
+      /** Answers the reloads asked so far, the earliest first unless told otherwise. */
+      answer: (order: "in turn" | "latest first" = "in turn") => {
+        const now = waiting.splice(0);
+        for (const go of order === "in turn" ? now : now.reverse()) go();
+      },
+      /** Answers only the earliest reload still out. */
+      answerEarliest: async () => {
+        waiting.shift()!();
+        // Let its answer reach the store.
+        for (let i = 0; i < 5; i++) await Promise.resolve();
+      },
+    };
+  }
+
+  const held = () => useEditorStore.getState().model!.placements.find(p => p.id === "L1-bin-1")!;
+
+  beforeEach(() => useEditorStore.getState().setModel(start));
+
+  it("puts the saved version and the fields sent into the store at once, before the reload answers", async () => {
+    const { api } = server();
+    void createSaver(api).update("placement", "L1-bin-1", 0, { position: [5, 4, 0] });
+    await vi.waitFor(() => expect(held().version).toBe(1));
+    expect(held().position).toEqual([5, 4, 0]);
+  });
+
+  it("lets a rotation typed just after a drag save too, rather than 409 against your own drag", async () => {
+    const { api, answer } = server();
+    const saver = createSaver(api);
+    const drag = saver.update("placement", "L1-bin-1", held().version, { position: [5, 4, 0] });
+    await vi.waitFor(() => expect(held().version).toBe(1));
+    // The drag's reload has not answered yet.
+    const turn = saver.update("placement", "L1-bin-1", held().version, { rotationDeg: 90 });
+    await vi.waitFor(() => expect(held().version).toBe(2));
+    answer();
+    expect(await Promise.all([drag, turn])).toEqual([true, true]);
+    expect(useEditorStore.getState().conflict).toBeNull();
+    expect(held()).toMatchObject({ version: 2, position: [5, 4, 0], rotationDeg: 90 });
+  });
+
+  it("never lets the drag's slow reload put the old version back after the rotation saved", async () => {
+    const { api, answer } = server();
+    const saver = createSaver(api);
+    const drag = saver.update("placement", "L1-bin-1", 0, { position: [5, 4, 0] });
+    await vi.waitFor(() => expect(held().version).toBe(1));
+    const turn = saver.update("placement", "L1-bin-1", 1, { rotationDeg: 90 });
+    await vi.waitFor(() => expect(held().version).toBe(2));
+    // Both reloads answer, the drag's first: it was asked at version 1.
+    answer();
+    await Promise.all([drag, turn]);
+    expect(held().version).toBe(2);
+    // So a third change, made now, still saves.
+    const scale = saver.update("placement", "L1-bin-1", held().version, { scale: 2 });
+    await vi.waitFor(() => expect(held().version).toBe(3));
+    answer();
+    expect(await scale).toBe(true);
+  });
+
+  it("drops a reload asked before a write landed, even when it answers before the write's own reload", async () => {
+    const { api, answer, answerEarliest } = server();
+    const saver = createSaver(api);
+    // A reload already on its way — a load, say — when the drag lands.
+    const before = saver.refresh();
+    const drag = saver.update("placement", "L1-bin-1", 0, { position: [5, 4, 0] });
+    await vi.waitFor(() => expect(held().version).toBe(1));
+    await answerEarliest();
+    await before;
+    // Asked at version 0, it would have made a rotation typed now a conflict.
+    expect(held()).toMatchObject({ version: 1, position: [5, 4, 0] });
+    answer();
+    await drag;
+    expect(held()).toMatchObject({ version: 1, position: [5, 4, 0] });
+  });
+
+  it("keeps the newer of two reloads, whichever answers last", async () => {
+    const { api, answer, teammate } = server();
+    const saver = createSaver(api);
+    const first = saver.refresh();
+    teammate({ rotationDeg: 45 });
+    const second = saver.refresh();
+    answer("latest first");
+    await Promise.all([first, second]);
+    expect(held()).toMatchObject({ version: 1, rotationDeg: 45 });
+  });
+
+  it("still refuses a change a teammate saved in between, with a conflict naming it", async () => {
+    const { api, teammate } = server();
+    const saver = createSaver(api);
+    const drag = saver.update("placement", "L1-bin-1", 0, { position: [5, 4, 0] });
+    await vi.waitFor(() => expect(held().version).toBe(1));
+    teammate({ rotationDeg: 180 });
+    expect(await saver.update("placement", "L1-bin-1", held().version, { scale: 2 })).toBe(false);
+    expect(useEditorStore.getState().conflict).toMatchObject({
+      entityType: "placement", entityId: "L1-bin-1", current: { version: 2, rotationDeg: 180 },
+    });
+    void drag;
+  });
+
+  it("clears a field sent as null, as the server does", async () => {
+    const withRoom = parseModel({ ...start, placements: [{ ...start.placements[0]!, assetId: "asset_1" }] });
+    useEditorStore.getState().setModel(withRoom);
+    const api = fakeApi({
+      getModel: vi.fn(() => new Promise(() => {})),
+      updateEntity: vi.fn(async () => ({ id: "L1-bin-1", version: 1 })),
+    });
+    void createSaver(api).update("placement", "L1-bin-1", 0, { assetId: null });
+    await vi.waitFor(() => expect(held().version).toBe(1));
+    expect(held()).not.toHaveProperty("assetId");
+  });
+
+  it("leaves the store alone when the reply carries no version to trust", async () => {
+    const api = fakeApi({
+      getModel: vi.fn(() => new Promise(() => {})),
+      updateEntity: vi.fn(async () => ({})),
+    });
+    void createSaver(api).update("placement", "L1-bin-1", 0, { position: [5, 4, 0] });
+    await vi.waitFor(() => expect(api.updateEntity).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(held()).toMatchObject({ version: 0, position: [3, 3, 0] });
+  });
+});
+
 describe("an expired session", () => {
   it("ends the session as expired when a write is refused as signed out", async () => {
     useEditorStore.getState().setUser({ id: "u1", email: "a@oth.local", displayName: "A" });
