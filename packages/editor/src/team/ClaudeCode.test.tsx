@@ -62,6 +62,9 @@ describe("ClaudeCode", () => {
       `claude mcp add --transport http --scope user oth ${window.location.origin}/mcp --header "Authorization: Bearer ${SECRET}"`,
     );
     expect(createToken).toHaveBeenCalledWith("Wei's laptop", false);
+    // Claude Code refuses a second server named oth, so a replacement needs the old one gone first.
+    expect(command).toHaveAccessibleDescription("Replacing an old token? Run claude mcp remove oth first.");
+    expect(within(dialog).getByText("claude mcp remove oth").tagName).toBe("CODE");
     // Focused and selected, ready to copy; copying itself is still yours to do.
     expect(document.activeElement).toBe(command);
     expect([command.selectionStart, command.selectionEnd]).toEqual([0, command.value.length]);

@@ -81,11 +81,16 @@ export function NewTokenDialog({
             readOnly
             autoFocus
             aria-label="Command to connect Claude Code"
+            aria-describedby={`${ids}-replace-hint`}
             value={command}
             rows={4}
             onFocus={e => e.currentTarget.select()}
             className="w-full rounded border border-stone-300 bg-stone-50 p-2 font-mono text-xs"
           />
+          {/* Claude Code refuses a second server named oth, so the old one has to go first. */}
+          <p id={`${ids}-replace-hint`} className="text-xs text-stone-500">
+            Replacing an old token? Run <code className="font-mono">claude mcp remove oth</code> first.
+          </p>
           <div className="flex justify-end gap-2">
             <Button onClick={() => void copy(command)}>Copy command</Button>
             <Button variant="primary" onClick={onClose}>Done</Button>
