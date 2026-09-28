@@ -40,6 +40,27 @@ describe("voidHoles", () => {
     expect(voidHoles([pierced, atrium]).size).toBe(0);
   });
 
+  // Ray casting counts a corner on a left or bottom edge as inside and one on
+  // a right or top edge as outside, so every side is checked.
+  it.each([
+    ["left", square(0, 5, 10, 15)],
+    ["bottom", square(10, 0, 20, 10)],
+    ["right", square(30, 5, 40, 15)],
+    ["top", square(10, 10, 20, 20)],
+  ])("leaves a floor whole when the void is flush with its %s edge", (_side, footprint) => {
+    expect(voidHoles([hall, space("L1-v", "void", footprint)]).size).toBe(0);
+  });
+
+  it("leaves a floor whole when the void's corner sits on a hole's edge", () => {
+    const pierced = space("L1-hall", "area", square(0, 0, 40, 20), { holes: [[[6, 1], [14, 1], [6, 9]]] });
+    expect(voidHoles([pierced, atrium]).size).toBe(0);
+  });
+
+  it("leaves a floor whole when a hole's corner sits on the void's edge", () => {
+    const pierced = space("L1-hall", "area", square(0, 0, 40, 20), { holes: [square(12, 15, 18, 18)] });
+    expect(voidHoles([pierced, atrium]).size).toBe(0);
+  });
+
   it("cuts nothing from furniture: a detail is not a floor", () => {
     const plinth = space("L1-plinth", "detail", square(0, 0, 40, 20));
     expect(voidHoles([plinth, atrium]).size).toBe(0);

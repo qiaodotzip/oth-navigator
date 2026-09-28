@@ -1,5 +1,5 @@
 import {
-  pointInPolygon, pointInRing, segmentsProperlyIntersect,
+  distancePointToSegment, pointInPolygon, pointInRing, segmentsProperlyIntersect,
   type Ring, type Room, type RoomKind, type Vec2,
 } from "@oth/model";
 
@@ -13,6 +13,23 @@ const FLOORED: ReadonlySet<RoomKind> = new Set<RoomKind>(["room", "area", "servi
 
 /** A stretch of balustrade. It has the same shape as a wall piece, so one builder stands both. */
 export type Rail = { a: Vec2; b: Vec2; thicknessM: number; rooms: string[] };
+
+/** A corner within a millimetre of an edge is on it. */
+const ON_EDGE_M = 1e-3;
+
+function cornerOnEdge(corners: Ring, ring: Ring): boolean {
+  return corners.some(p =>
+    ring.some((a, i) => distancePointToSegment(p, a, ring[(i + 1) % ring.length]!) < ON_EDGE_M),
+  );
+}
+
+/**
+ * Whether the rings meet without properly crossing. Any touch or shared stretch
+ * of edge puts a corner of one ring on an edge of the other.
+ */
+function touches(p: Ring, q: Ring): boolean {
+  return cornerOnEdge(p, q) || cornerOnEdge(q, p);
+}
 
 function edgesCross(p: Ring, q: Ring): boolean {
   for (let i = 0; i < p.length; i++) {
@@ -32,13 +49,16 @@ function edgesCross(p: Ring, q: Ring): boolean {
  * Every corner inside is not enough, since an edge can still cross a notch
  * of an L-shaped floor, and a hole already there must not overlap the new
  * one. Either would make a slab its triangulation cannot draw. A void that
- * only touches the slab's edge is left uncut rather than guessed at.
+ * only touches the slab's edge or a hole's is left uncut rather than guessed
+ * at, because ray casting gives a corner on an edge no reliable answer: it
+ * counts one on a left or bottom edge as inside and one on a right or top
+ * edge as outside.
  */
 export function floorContains(slab: Room, inner: Ring): boolean {
   if (!inner.every(p => pointInPolygon(p, slab.footprint, slab.holes))) return false;
-  if (edgesCross(inner, slab.footprint)) return false;
+  if (edgesCross(inner, slab.footprint) || touches(inner, slab.footprint)) return false;
   for (const hole of slab.holes) {
-    if (edgesCross(inner, hole)) return false;
+    if (edgesCross(inner, hole) || touches(inner, hole)) return false;
     if (hole.some(p => pointInRing(p, inner))) return false;
   }
   return true;
