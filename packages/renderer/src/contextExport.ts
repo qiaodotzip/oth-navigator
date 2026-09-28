@@ -114,6 +114,8 @@ export async function buildDetailGlb(
   detail: Room,
   context: readonly Room[],
   level: Level,
+  /** What the file says about its origin. A kind of object's export says it in its own words. */
+  note: string = DETAIL_ORIGIN_NOTE,
 ): Promise<{ bytes: Uint8Array; offset: Vec2 }> {
   const offset = ringCentroid(detail.footprint);
   const doc = new Document();
@@ -121,9 +123,9 @@ export async function buildDetailGlb(
   const buffer = doc.getRoot().listBuffers()[0]!;
   const scene = doc.createScene(`${detail.id}-detail`);
 
-  doc.getRoot().getAsset().copyright = DETAIL_ORIGIN_NOTE;
+  doc.getRoot().getAsset().copyright = note;
   doc.getRoot().setExtras({
-    othDetail: { origin: DETAIL_ORIGIN_NOTE, level: level.code, detailId: detail.id, offset },
+    othDetail: { origin: note, level: level.code, detailId: detail.id, offset },
   });
 
   // One offset moves the whole scene — the block and its surroundings together

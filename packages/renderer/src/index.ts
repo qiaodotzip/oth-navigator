@@ -28,3 +28,4 @@ export * from "./export/floorGlb";
 // Plan 6A: objects.
 export * from "./objectBox";
 export * from "./ObjectBoxMesh";
+export * from "./objectExport";
