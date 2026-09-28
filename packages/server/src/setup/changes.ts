@@ -1,12 +1,18 @@
 import { distancePointToSegment, live, pointInPolygon, type MapModel, type Ring, type Vec2 } from "@oth/model";
-import { and, desc, eq, gte, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { auditLog, users } from "../db/schema";
+import { auditLog, doorways, entrances, placements, places, portalEndpoints, roomDrafts, tenants, users } from "../db/schema";
+import { latestSearch, unacceptDrafts } from "../drafts/service";
 import { entityRegistry, type EntityType } from "../entities/registry";
+import {
+  NotDeletedError, NotFoundError, VersionConflictError, recordAudit, restoreEntity, softDeleteEntity, updateEntity,
+} from "../entities/repository";
 import { singaporeTime } from "../mcp/results";
 import { assembleModel } from "../model/assemble";
 import { confidenceFor } from "../objects/spots";
-import { TYPE_WORDS, foldChanges, summarise, type AuditRow, type ChangeGroup, type Folded, type Names, type Touch } from "./fold";
+import {
+  TYPE_WORDS, foldChanges, summarise, type AuditRow, type ChangeGroup, type Folded, type Names, type Touch, type UndoStep,
+} from "./fold";
 
 /** Undo's marker rows go in the audit log under this type, keyed on the change's id (undoChange writes them). */
 export const CHANGE_ENTITY = "change";
@@ -185,4 +191,125 @@ export async function listClaudeChanges(db: Database, levelId: string, since: Da
     ...(c.facts.kind === "object" ? { confidence: confidence!(c.facts.sightingIds) } : {}),
     undone: undone.has(c.id),
   }));
+}
+
+export class ChangeNotFoundError extends Error {
+  constructor() {
+    super("There is no change of Claude's with that id.");
+    this.name = "ChangeNotFoundError";
+  }
+}
+
+/** Undo refused; the message is the reason, in the check step's words. Answered 409. */
+export class UndoRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UndoRefusedError";
+  }
+}
+
+const listed = (things: readonly string[]) =>
+  things.length <= 3 ? things.join(", ") : `${things.slice(0, 3).join(", ")} and ${things.length - 3} more`;
+
+/**
+ * A room Undo would take off the map must have nothing of anyone's on it now,
+ * and a lift or stair must stop nowhere else (spec §8: "refuses, with a
+ * reason, when a later change depends on the entity").
+ */
+async function refuseDependents(tx: Database, type: EntityType, id: string, label: string): Promise<void> {
+  if (type === "portal") {
+    const stops = await tx.select({ id: portalEndpoints.id }).from(portalEndpoints)
+      .where(and(eq(portalEndpoints.portalId, id), isNull(portalEndpoints.deletedAt)));
+    if (stops.length > 0) {
+      throw new UndoRefusedError(`It now also stops on another floor (${listed(stops.map(s => s.id))}). Undo ${stops.length === 1 ? "that stop" : "those stops"} first.`);
+    }
+    return;
+  }
+  if (type !== "room") return;
+  const found = [
+    ...(await tx.select({ name: places.nameEn }).from(places).where(and(eq(places.roomId, id), isNull(places.deletedAt)))).map(p => `the place ${p.name}`),
+    ...(await tx.select({ id: doorways.id }).from(doorways)
+      .where(and(or(eq(doorways.roomA, id), eq(doorways.roomB, id)), isNull(doorways.deletedAt)))).map(d => `doorway ${d.id}`),
+    ...(await tx.select({ id: entrances.id }).from(entrances).where(and(eq(entrances.roomId, id), isNull(entrances.deletedAt)))).map(e => `entrance ${e.id}`),
+    ...(await tx.select({ id: portalEndpoints.id }).from(portalEndpoints)
+      .where(and(eq(portalEndpoints.roomId, id), isNull(portalEndpoints.deletedAt)))).map(s => `the stop ${s.id}`),
+    ...(await tx.select({ id: tenants.id }).from(tenants).where(and(eq(tenants.roomId, id), isNull(tenants.deletedAt)))).map(t => `tenant ${t.id}`),
+    ...(await tx.select({ id: placements.id }).from(placements).where(and(eq(placements.roomId, id), isNull(placements.deletedAt)))).map(p => `placement ${p.id}`),
+  ];
+  if (found.length > 0) {
+    throw new UndoRefusedError(`${label} has ${listed(found)} on it now. Undo or remove ${found.length === 1 ? "that" : "those"} first.`);
+  }
+}
+
+/** A draft from before the floor's latest Find rooms would come back beside the new search's. */
+async function refuseOldDraft(tx: Database, draftId: string): Promise<void> {
+  const [draft] = await tx.select({ levelId: roomDrafts.levelId }).from(roomDrafts).where(eq(roomDrafts.id, draftId));
+  if (!draft || !(await latestSearch(tx, draft.levelId)).some(d => d.id === draftId)) {
+    throw new UndoRefusedError("Find rooms has run again since, so this draft is from an older search. Change the map by hand instead.");
+  }
+}
+
+async function apply(tx: Database, step: UndoStep, actor: string, label: (t: Touch) => string): Promise<void> {
+  switch (step.do) {
+    case "delete":
+      await refuseDependents(tx, step.type, step.id, label(step));
+      await softDeleteEntity(tx, step.type, step.id, step.version, actor);
+      return;
+    case "restore":
+      if (step.type === "roomDraft") await refuseOldDraft(tx, step.id);
+      await restoreEntity(tx, step.type, step.id, step.version, actor);
+      return;
+    case "patch":
+      await updateEntity(tx, step.type, step.id, step.version, step.patch, actor);
+      return;
+    case "unaccept":
+      await refuseDependents(tx, "room", step.roomId, label({ type: "room", id: step.roomId, version: step.roomVersion }));
+      await refuseOldDraft(tx, step.draftId);
+      await unacceptDrafts(tx, [{ id: step.draftId, expectedVersion: step.draftVersion, roomVersion: step.roomVersion }], actor);
+      return;
+  }
+}
+
+/**
+ * Takes back one of Claude's changes (spec §8), as a person, all or none.
+ * Refused while anything it wrote has changed since, or something depends
+ * on it. Leaves an undo row keyed on the change, so the list says it was.
+ */
+export async function undoChange(db: Database, auditId: string, actorId: string): Promise<{ summary: string }> {
+  const [key] = await db.select().from(auditLog).where(eq(auditLog.id, auditId));
+  if (!key || !key.via) throw new ChangeNotFoundError();
+  // Its call's rows share its moment. JavaScript keeps it to the millisecond and
+  // Postgres to the microsecond, so they are read a millisecond either side.
+  const siblings = await db.select().from(auditLog).where(and(
+    eq(auditLog.via, key.via),
+    gte(auditLog.at, new Date(key.at.getTime() - 1)),
+    lte(auditLog.at, new Date(key.at.getTime() + 1)),
+  ));
+  const change = foldChanges(siblings).find(c => c.id === auditId);
+  if (!change) throw new ChangeNotFoundError();
+  const steps = change.undo;
+  // A label is a proposal, and Review is where proposals are decided, with their tags.
+  if (steps === null) throw new UndoRefusedError("Claude's labels are proposals: accept or reject them in Review.");
+
+  const model = await assembleModel(db);
+  const names = namesFrom(model);
+  const label = labelsFrom(model, names);
+  const summary = summarise(change, names);
+  const status = (await statuses(db, [change], label, await userNames(db))).get(change.id)!;
+  if (status.state !== "live") throw new UndoRefusedError(status.reason ?? "This change can't be undone now.");
+
+  try {
+    await db.transaction(async t => {
+      const tx = t as unknown as Database;
+      for (const step of steps) await apply(tx, step, actorId, label);
+      await recordAudit(tx, CHANGE_ENTITY, auditId, "undo", actorId, null, { auditIds: change.auditIds, summary });
+    });
+  } catch (err) {
+    // The checks above passed, so these mean someone wrote in the moment between.
+    if (err instanceof VersionConflictError || err instanceof NotFoundError || err instanceof NotDeletedError) {
+      throw new UndoRefusedError("Someone changed this while Undo ran. Look again, then try once more.");
+    }
+    throw err;
+  }
+  return { summary };
 }

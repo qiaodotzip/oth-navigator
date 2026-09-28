@@ -71,3 +71,10 @@ describe("Claude's changes on a floor", () => {
     expect((await send("GET", `/api/levels/oth-L1/claude-changes?since=${epoch}`, undefined, false)).status).toBe(401);
   });
 });
+
+describe("undoing one of Claude's changes", () => {
+  it("answers 404 for an id that isn't one, and only to someone signed in", async () => {
+    expect((await send("POST", "/api/changes/audit_missing/undo")).status).toBe(404);
+    expect((await send("POST", "/api/changes/audit_missing/undo", undefined, false)).status).toBe(401);
+  });
+});

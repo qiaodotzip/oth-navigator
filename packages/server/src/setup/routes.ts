@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
-import { listClaudeChanges } from "./changes";
+import { ChangeNotFoundError, UndoRefusedError, listClaudeChanges, undoChange } from "./changes";
 import { SETUP_STATUSES, UnknownFloorError, getSetup, requireLevel, setStep } from "./service";
 import { isSetupStep } from "./steps";
 
@@ -65,6 +65,21 @@ setupRoutes.get("/:id/claude-changes", requireUser, async c => {
     return c.json({ changes: await listClaudeChanges(db, levelId, since, limit) });
   } catch (err) {
     if (err instanceof UnknownFloorError) return c.json({ error: err.message }, 404);
+    throw err;
+  }
+});
+
+/** Mounted at /api/changes. Undo is a person's: a token reaches /mcp and nothing else. */
+export const changeRoutes = new Hono<AppEnv>();
+changeRoutes.use("*", requireUser);
+
+changeRoutes.post("/:auditId/undo", async c => {
+  try {
+    return c.json(await undoChange(c.get("db"), c.req.param("auditId"), c.get("user").id));
+  } catch (err) {
+    if (err instanceof ChangeNotFoundError) return c.json({ error: err.message }, 404);
+    // 6E's contract: a refusal's body is { reason }, which its check step shows as it stands.
+    if (err instanceof UndoRefusedError) return c.json({ reason: err.message }, 409);
     throw err;
   }
 });

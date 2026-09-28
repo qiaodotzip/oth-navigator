@@ -533,6 +533,12 @@ export function createApi(options: ApiOptions = {}) {
       (await request<{ changes: ClaudeChange[] }>(
         `/api/levels/${levelId}/claude-changes?since=${encodeURIComponent(since)}${limit ? `&limit=${limit}` : ""}`,
       )).changes,
+
+    /**
+     * Takes back one of Claude's changes, as you. A refusal is a
+     * ConflictError whose body is { reason }: why, for the check step to show.
+     */
+    undoChange: (auditId: string) => request<{ summary: string }>(`/api/changes/${auditId}/undo`, { method: "POST" }),
   };
 }
 

@@ -1,11 +1,12 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createUser, type User } from "../auth/users";
-import { captures, keyframes } from "../db/schema";
-import { replaceDrafts } from "../drafts/service";
+import { auditLog, captures, keyframes, placements, places, portalEndpoints, portals, rooms } from "../db/schema";
+import { listDrafts, replaceDrafts } from "../drafts/service";
 import { createEntity, updateEntity } from "../entities/repository";
 import { call, mcpFixture, type McpFixture } from "../mcp/testing";
-import { listClaudeChanges } from "./changes";
+import { ChangeNotFoundError, UndoRefusedError, listClaudeChanges, undoChange } from "./changes";
 
 const sq = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
 const SOURCE = { checksum: "a".repeat(64), page: 1 };
@@ -166,5 +167,98 @@ describe("listClaudeChanges", () => {
     const changes = await listClaudeChanges(f.db, "oth-L1", EPOCH);
     expect(changes.some(c => c.entityType === "level")).toBe(false);
     expect(changes.map(c => c.group).sort()).toEqual(["drafts", "rooms"]);
+  });
+});
+
+const one = async (group: string, levelId = "oth-L1") => (await listClaudeChanges(f.db, levelId, EPOCH)).find(c => c.group === group)!;
+
+describe("undoChange", () => {
+  it("takes back an accepted draft: the room goes, the draft waits again, and the change says undone", async () => {
+    const { shop } = await claudeDecides();
+    const change = await one("rooms");
+    expect(await undoChange(f.db, change.auditId, amy.id)).toEqual({ summary: "Made Starbucks from a draft (the drawing said SHOP 12)" });
+    expect((await f.db.select().from(rooms).where(eq(rooms.id, "L1-starbucks")))[0]?.deletedAt).toBeInstanceOf(Date);
+    expect((await listDrafts(f.db, "oth-L1")).map(d => d.id)).toEqual([shop]);
+    expect(await one("rooms")).toMatchObject({ undone: true });
+    await expect(undoChange(f.db, change.auditId, amy.id)).rejects.toThrow(/^Already undone by Amy at /);
+  });
+
+  it("refuses, with who changed it, when the room changed since", async () => {
+    await claudeDecides();
+    await updateEntity(f.db, "room", "L1-starbucks", 0, { nameEn: "Starbucks Coffee" }, amy.id);
+    await expect(undoChange(f.db, (await one("rooms")).auditId, amy.id))
+      .rejects.toThrow(/^Starbucks Coffee has changed since: Amy changed it at \d\d:\d\d on \d+ \w+\. Change it by hand instead\.$/);
+    expect((await f.db.select().from(rooms).where(eq(rooms.id, "L1-starbucks")))[0]?.deletedAt).toBeNull();
+  });
+
+  it("leaves Claude's labels to Review", async () => {
+    await frameOnL1();
+    await call(client, "tag_frame", { frameId: "kf_1", nameEn: "Gong Cha", category: "retail" });
+    await expect(undoChange(f.db, (await one("labels")).auditId, amy.id))
+      .rejects.toThrow("Claude's labels are proposals: accept or reject them in Review.");
+  });
+
+  it("refuses while a later change depends on the room: a place bound to it", async () => {
+    await claudeDecides();
+    await createEntity(f.db, "place", { id: "pl_sb", nameEn: "Starbucks Coffee", category: "retail", levelId: "oth-L1", roomId: "L1-starbucks" }, amy.id);
+    const refused = undoChange(f.db, (await one("rooms")).auditId, amy.id);
+    await expect(refused).rejects.toBeInstanceOf(UndoRefusedError);
+    await expect(refused).rejects.toThrow("Starbucks has the place Starbucks Coffee on it now. Undo or remove that first.");
+    expect((await f.db.select().from(rooms).where(eq(rooms.id, "L1-starbucks")))[0]?.deletedAt).toBeNull();
+  });
+
+  it("takes back a stop in one go, and refuses once its escalator stops on another floor too", async () => {
+    await createEntity(f.db, "room", { id: "L1-esc", levelId: "oth-L1", kind: "room", footprint: sq(4, 2, 6, 12), heightM: 6, nameEn: "Escalator - 07" }, amy.id);
+    await call(client, "make_stop", { floor: "L1", room: "L1-esc", expectedVersion: 0, kind: "escalator" });
+    await createEntity(f.db, "room", { id: "L2-esc", levelId: "oth-L2", kind: "room", footprint: sq(4, 2, 6, 12), heightM: 4, nameEn: "Escalator - 07" }, amy.id);
+    await call(client, "make_stop", { floor: "L2", room: "L2-esc", expectedVersion: 0, kind: "escalator" });
+    await expect(undoChange(f.db, (await one("stops")).auditId, amy.id)).rejects.toThrow(/^It now also stops on another floor \(oth-L2-portal-\d+\)\. Undo that stop first\.$/);
+
+    await undoChange(f.db, (await one("stops", "oth-L2")).auditId, amy.id);
+    await undoChange(f.db, (await one("stops")).auditId, amy.id);
+    expect((await f.db.select().from(portalEndpoints)).every(e => e.deletedAt !== null)).toBe(true);
+    expect((await f.db.select().from(portals)).every(p => p.deletedAt !== null)).toBe(true);
+    expect((await f.db.select().from(rooms).where(eq(rooms.id, "L1-esc")))[0]).toMatchObject({ kind: "room", walkable: false });
+  });
+
+  it("brings a set-aside draft back, unless Find rooms has run again since", async () => {
+    const { plaza } = await claudeDecides();
+    await undoChange(f.db, (await one("drafts")).auditId, amy.id);
+    expect((await listDrafts(f.db, "oth-L1")).map(d => d.id)).toContain(plaza);
+
+    const [kiosk] = await replaceDrafts(f.db, "oth-L1", SOURCE, [{ nameEn: "Kiosk", kind: "room", footprint: sq(0, 0, 4, 4), labelPoint: [2, 2], areaM2: 16 }], amy.id);
+    await call(client, "decide_drafts", { floor: "L1", items: [{ id: String(kiosk!.id), expectedVersion: 0, decision: "reject" }] });
+    const rejected = (await listClaudeChanges(f.db, "oth-L1", EPOCH)).find(c => c.summary === "Rejected the draft Kiosk")!;
+    await replaceDrafts(f.db, "oth-L1", SOURCE, [{ nameEn: "Cafe", kind: "room", footprint: sq(0, 0, 4, 4), labelPoint: [2, 2], areaM2: 16 }], amy.id);
+    await expect(undoChange(f.db, rejected.auditId, amy.id)).rejects.toThrow(
+      "Find rooms has run again since, so this draft is from an older search. Change the map by hand instead.",
+    );
+  });
+
+  it("unbinds a place and puts the room's photo check back", async () => {
+    await createEntity(f.db, "room", { id: "L1-shop", levelId: "oth-L1", kind: "room", footprint: sq(0, 20, 10, 30), heightM: 4, nameEn: "Shop 12" }, amy.id);
+    await frameOnL1();
+    await createEntity(f.db, "place", { id: "pl_sb", nameEn: "Starbucks", category: "retail" }, amy.id);
+    await createEntity(f.db, "sighting", { id: "sg_1", placeId: "pl_sb", keyframeId: "kf_1" }, amy.id);
+    await call(client, "bind_place", { placeId: "pl_sb", placeVersion: 0, roomId: "L1-shop", roomVersion: 0 });
+    await undoChange(f.db, (await one("places")).auditId, amy.id);
+    expect((await f.db.select().from(places).where(eq(places.id, "pl_sb")))[0]).toMatchObject({ roomId: null, levelId: null });
+    expect((await f.db.select().from(rooms).where(eq(rooms.id, "L1-shop")))[0]?.verification).toMatchObject({ status: "unverified" });
+  });
+
+  it("takes back a placed object", async () => {
+    await corridorWithBins();
+    await call(client, "create", { type: "placement", data: {
+      id: "L1-wastebin-1", levelId: "oth-L1", objectKindId: "bin", position: [10, 5.65, 0], sightingIds: ["sg_1"],
+    } });
+    await undoChange(f.db, (await one("objects")).auditId, amy.id);
+    expect((await f.db.select().from(placements))[0]?.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it("knows no change by an id that isn't one of Claude's", async () => {
+    await createEntity(f.db, "room", { id: "L1-x", levelId: "oth-L1", kind: "room", footprint: sq(0, 0, 4, 4), heightM: 4 }, amy.id);
+    await expect(undoChange(f.db, "audit_missing", amy.id)).rejects.toBeInstanceOf(ChangeNotFoundError);
+    const [mine] = await f.db.select().from(auditLog).where(eq(auditLog.entityId, "L1-x"));
+    await expect(undoChange(f.db, mine!.id, amy.id)).rejects.toBeInstanceOf(ChangeNotFoundError);
   });
 });

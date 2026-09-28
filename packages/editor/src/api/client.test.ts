@@ -257,4 +257,16 @@ describe("floor setup (plan 6C)", () => {
       "/api/levels/oth-L1/claude-changes?since=2026-09-28T06%3A00%3A00.000Z&limit=5",
     ]);
   });
+
+  it("undoes one change, and a refusal is a conflict whose body gives the reason", async () => {
+    const ok = mockFetch(200, { summary: "Made Starbucks from a draft" });
+    expect(await createApi({ fetchImpl: ok }).undoChange("audit_1")).toEqual({ summary: "Made Starbucks from a draft" });
+    expect(ok.mock.calls[0]![0]).toBe("/api/changes/audit_1/undo");
+    expect(ok.mock.calls[0]![1]?.method).toBe("POST");
+
+    const refused = mockFetch(409, { reason: "Starbucks has changed since: Amy changed it at 14:05 on 28 Sep. Change it by hand instead." });
+    const err = await createApi({ fetchImpl: refused }).undoChange("audit_1").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictError);
+    expect((err as ConflictError).body).toEqual({ reason: expect.stringMatching(/^Starbucks has changed since/) });
+  });
 });
