@@ -17,10 +17,11 @@ import { BuildWorkspace } from "./BuildWorkspace";
  * it, and a test can make it fail as a placed model that will not load does.
  * The plan still takes its room colours from the real renderer.
  */
-const scene = vi.hoisted(() => ({ fails: false, children: null as unknown }));
+const scene = vi.hoisted(() => ({ fails: false, children: null as unknown, props: null as Record<string, unknown> | null }));
 vi.mock("@oth/renderer", async importOriginal => ({
   ...(await importOriginal<typeof import("@oth/renderer")>()),
-  MapScene: (props: { children?: unknown }) => {
+  MapScene: (props: Record<string, unknown>) => {
+    scene.props = props;
     if (scene.fails) throw new Error("Could not load /api/assets/asset_1/file: 404");
     // What the page hands the scene to draw with the level: its labels.
     scene.children = props.children;
@@ -76,6 +77,7 @@ beforeEach(() => {
   measureCanvas = null;
   scene.fails = false;
   scene.children = null;
+  scene.props = null;
   localStorage.clear();
   useToasts.getState().clear();
   const s = useEditorStore.getState();
@@ -467,6 +469,15 @@ describe("BuildWorkspace — the 3D preview", () => {
 
   it("says so once under StrictMode, which renders twice as the app does in development", () => {
     failsThenRecovers({ strict: true });
+  });
+
+  it("raises the walls to full height when asked, and remembers it", () => {
+    localStorage.setItem("oth.build.preview", "on");
+    open("/floors/L1/build?step=rooms");
+    expect(scene.props?.fullHeightWalls).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Full-height walls" }));
+    expect(scene.props?.fullHeightWalls).toBe(true);
+    expect(recall("build.preview.walls")).toBe("full");
   });
 });
 

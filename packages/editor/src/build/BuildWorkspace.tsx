@@ -25,7 +25,7 @@ import { BindTools } from "./BindPlaces";
 import { selectionRemovals } from "./deleteSelection";
 import { FloorplanTools, PlanDropZone, patchPlan } from "./FloorplanTools";
 import { LayersDrawer } from "./LayersDrawer";
-import { PreviewPanel, PreviewToggle, usePreview } from "./PreviewToggle";
+import { PreviewPanel, PreviewToggle, usePreview, usePreviewOptions } from "./PreviewToggle";
 import { parseSelectParam, selectParam } from "./selection";
 import { SelectionInspector } from "./SelectionInspector";
 import { StepGuide } from "./StepGuide";
@@ -85,6 +85,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
   const [canvasBox, canvasSize] = useElementSize();
   const [layersOpen, setLayersOpen] = useState(false);
   const [previewOn, togglePreview] = usePreview();
+  const [previewOptions, setPreviewOptions] = usePreviewOptions();
   const [pendingPlaceId, setPendingPlaceId] = useState<string | null>(null);
 
   const todos = useMemo(
@@ -399,13 +400,14 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
 
           {previewOn && model && levelId && (
             <PreviewBoundary onFail={previewFailed}>
-              <PreviewPanel>
+              <PreviewPanel options={previewOptions} onOptions={setPreviewOptions}>
                 <MapScene
                   model={model}
                   activeLevelId={levelId}
                   assetUrl={api.assetFileUrl}
                   selectedId={selection?.type === "room" ? selection.id : null}
                   onSelect={id => useEditorStore.getState().select({ type: "room", id })}
+                  fullHeightWalls={previewOptions.fullHeightWalls}
                 >
                   <SceneRoomLabels labels={labels} elevationM={elevationM} />
                 </MapScene>

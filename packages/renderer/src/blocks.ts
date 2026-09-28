@@ -50,3 +50,16 @@ export function blocksGeometry(blocks: readonly Block[]): THREE.BufferGeometry {
   geometry.computeVertexNormals();
   return geometry;
 }
+
+/** Flat quads at one height, for pathway strips. */
+export function quadsGeometry(quads: readonly (readonly [Vec2, Vec2, Vec2, Vec2])[], heightM: number): THREE.BufferGeometry {
+  const positions: number[] = [];
+  for (const quad of quads) {
+    const [a, b, c, d] = quad.map(([x, y]) => modelToThree(x, y, heightM));
+    positions.push(...a!, ...b!, ...c!, ...a!, ...c!, ...d!);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}

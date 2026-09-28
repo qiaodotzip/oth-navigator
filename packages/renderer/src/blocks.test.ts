@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blocksGeometry, type Block } from "./blocks";
+import { blocksGeometry, quadsGeometry, type Block } from "./blocks";
 
 function bounds(blocks: Block[]) {
   const geometry = blocksGeometry(blocks);
@@ -35,5 +35,16 @@ describe("blocksGeometry", () => {
       { a: [0, 0], b: [4, 0], thicknessM: 0.2, baseM: 1, topM: 1 },
     ]);
     expect(geometry.getAttribute("position").count).toBe(0);
+  });
+});
+
+describe("quadsGeometry", () => {
+  it("lays flat quads at the height asked", () => {
+    const geometry = quadsGeometry([[[0, 0], [10, 0], [10, 2], [0, 2]]], 0.14);
+    expect(geometry.getAttribute("position").count).toBe(6);
+    geometry.computeBoundingBox();
+    expect(geometry.boundingBox!.min.y).toBeCloseTo(0.14);
+    expect(geometry.boundingBox!.max.y).toBeCloseTo(0.14);
+    expect(geometry.boundingBox!.min.z).toBeCloseTo(-2);
   });
 });

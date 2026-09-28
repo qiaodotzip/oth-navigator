@@ -1,6 +1,9 @@
 import { live, type Level, type MapModel, type Room } from "@oth/model";
 import { useCallback, useMemo } from "react";
+import { roomTints } from "./categoryTint";
 import { LevelGroup } from "./LevelGroup";
+import { Markers } from "./MarkerMesh";
+import { Pathways } from "./Pathways";
 import type { RoomExtras } from "./RoomMesh";
 import { levelStructure } from "./structure";
 import { StructureMesh } from "./StructureMesh";
@@ -8,6 +11,9 @@ import { StructureMesh } from "./StructureMesh";
 /**
  * One level as Part D builds it: the rooms' floors from `LevelGroup`, with
  * the level's merged and opened walls in place of each room's own shell.
+ * The active level also shows its pathways, its entrances and lift stops,
+ * and each bound room in its category's tint. The ghosted level below gets
+ * none of these: it is only there for lining up.
  */
 export function StructuredLevel({
   model, level, ghosted = false, fullHeightWalls = false, selectedId, onSelect, assetUrl,
@@ -26,9 +32,14 @@ export function StructuredLevel({
     [model.placements, level.id, ghosted],
   );
   const structure = useMemo(() => levelStructure(model, level.id), [model, level.id]);
+  const tints = useMemo(() => roomTints(model, level.id), [model, level.id]);
   const roomExtras = useCallback(
-    (room: Room): RoomExtras => ({ ownWalls: false, extraHoles: structure.holesByRoom.get(room.id) }),
-    [structure],
+    (room: Room): RoomExtras => ({
+      ownWalls: false,
+      extraHoles: structure.holesByRoom.get(room.id),
+      tint: ghosted ? undefined : tints.get(room.id),
+    }),
+    [structure, tints, ghosted],
   );
 
   return (
@@ -43,6 +54,8 @@ export function StructuredLevel({
       roomExtras={roomExtras}
     >
       <StructureMesh structure={structure} fullHeight={fullHeightWalls} ghosted={ghosted} selectedId={selectedId ?? null} />
+      {!ghosted && <Pathways model={model} levelId={level.id} />}
+      {!ghosted && <Markers model={model} levelId={level.id} />}
     </LevelGroup>
   );
 }

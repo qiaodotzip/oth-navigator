@@ -19,3 +19,6 @@ export * from "./voids";
 export * from "./structure";
 export * from "./blocks";
 export * from "./StructuredLevel";
+export * from "./pathwayStrips";
+export * from "./markers";
+export * from "./categoryTint";
