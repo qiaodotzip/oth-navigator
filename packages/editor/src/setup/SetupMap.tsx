@@ -1,9 +1,10 @@
-import type { BBox } from "@oth/model";
+import type { BBox, Vec2 } from "@oth/model";
 import { useEffect, useMemo } from "react";
 import type { Api } from "../api/client";
 import { parseSelectParam, selectParam } from "../build/selection";
 import { zoomViewportTo, zoomViewportToBox } from "../build/zoomTo";
 import { roomLabels } from "../places/labels";
+import { DraftOutline } from "../plan/DraftLayer";
 import { PlanCanvas } from "../plan/PlanCanvas";
 import { PlanRoomLabels } from "../plan/RoomLabels";
 import { useElementSize } from "../plan/useElementSize";
@@ -11,17 +12,25 @@ import { useEditorStore, type Selection } from "../state/store";
 
 /**
  * A request to frame something on the map: a selectable thing, or (Check's
- * draft rows) a plain box with nothing to select. `seq` makes the same thing
- * asked twice two requests.
+ * draft rows) a plain box with nothing to select, and the draft's outline to
+ * draw in it, which stays drawn until the next request. `seq` makes the same
+ * thing asked twice two requests.
  */
-export type MapFocus = ({ target: NonNullable<Selection> } | { box: BBox }) & { seq: number };
+export type MapFocus = ({ target: NonNullable<Selection> } | { box: BBox; outline?: readonly Vec2[] }) & { seq: number };
 
 /** A stable reference, so passing it does not itself make PlanCanvas re-render. */
 function noSelect(): void {}
 
+/** The outline Show asked for, drawn at the map's zoom. */
+function FocusOutline({ outline }: { outline: readonly Vec2[] }) {
+  const viewport = useEditorStore(s => s.viewport);
+  return <DraftOutline outline={outline} viewport={viewport} />;
+}
+
 /**
  * The floor's plan beside a step (spec §4.2, §8): what Claude has put on it so
- * far, with the rooms' names. It draws nothing itself; a click selects, as on
+ * far, with the rooms' names. It draws nothing itself but the draft outline
+ * a focus carries (Check's Show on a draft row); a click selects, as on
  * Build, but only where `keepSelection` says so (Check, whose Show selects).
  * Elsewhere Claude is at work, and a selection is also the collaboration
  * lock: a room held here would turn Claude's writes to it away. So a click
@@ -40,6 +49,7 @@ export function SetupMap({ api, focus = null, keepSelection = false }: {
   const selection = useEditorStore(s => s.selection);
   const [box, size] = useElementSize();
   const labels = useMemo(() => (model && levelId ? roomLabels(model, levelId) : []), [model, levelId]);
+  const outline = focus && "box" in focus ? focus.outline : undefined;
 
   // Select only: a drawing tool left in hand on Build would draw here on a click.
   useEffect(() => {
@@ -75,7 +85,11 @@ export function SetupMap({ api, focus = null, keepSelection = false }: {
           height={size.height}
           imageUrl={api.levelImageFileUrl}
           showHint={false}
-          overlays={<PlanRoomLabels labels={labels} />}
+          overlays={<>
+            {/* Under the names, so they still read across it. */}
+            {outline && <FocusOutline outline={outline} />}
+            <PlanRoomLabels labels={labels} />
+          </>}
           // Undefined keeps Check's own Show selecting normally; elsewhere a
           // no-op keeps a click from ever taking the collaboration lock.
           onSelect={keepSelection ? undefined : noSelect}

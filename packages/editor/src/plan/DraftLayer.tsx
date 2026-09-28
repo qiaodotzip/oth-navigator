@@ -64,6 +64,37 @@ const NAME_TEXT = {
   pointerEvents: "none",
 } as const;
 
+/** A ring as an SVG path on screen. */
+function ringPath(viewport: Viewport, ring: readonly Vec2[]): string {
+  return `M${ring.map(p => worldToScreen(viewport, p).join(",")).join("L")}Z`;
+}
+
+/**
+ * How a draft's outline is painted: dashed, in the proposed colour; the one
+ * in hand in the selection's colour, thicker and filled more; one already on
+ * the map fainter.
+ */
+function draftPaint(selected: boolean, covered: boolean) {
+  return {
+    fill: PROPOSED_STROKE,
+    fillOpacity: selected ? 0.18 : 0.06,
+    stroke: selected ? SELECTED_STROKE : PROPOSED_STROKE,
+    strokeOpacity: covered ? 0.5 : 1,
+    strokeWidth: selected ? 2.5 : 1.5,
+    strokeDasharray: "6 4",
+  };
+}
+
+/**
+ * One draft's outline alone, painted as the draft in hand is. Check's Show
+ * draws the draft it frames with it (contract v4): a rejected or set-aside
+ * draft isn't on the map to select, and a frame alone doesn't say which of
+ * the shapes there Claude meant. It takes no clicks.
+ */
+export function DraftOutline({ outline, viewport }: { outline: readonly Vec2[]; viewport: Viewport }) {
+  return <path data-testid="draft-outline" d={ringPath(viewport, outline)} pointerEvents="none" {...draftPaint(true, false)} />;
+}
+
 /**
  * Drafts from the drawing on the plan (spec §5.2 step 6). Dashed, in the
  * proposed colour, and named, so a draft differs from a room by more than its
@@ -85,8 +116,7 @@ export function DraftLayer({ drafts, open, selectedId, viewport, clickable, onSe
   clickable: boolean;
   onSelect: (id: string) => void;
 }) {
-  const path = (d: RoomDraft) =>
-    [d.footprint!, ...d.holes].map(ring => `M${ring.map(p => worldToScreen(viewport, p).join(",")).join("L")}Z`).join(" ");
+  const path = (d: RoomDraft) => [d.footprint!, ...d.holes].map(ring => ringPath(viewport, ring)).join(" ");
   const cursor = clickable ? "pointer" : undefined;
   return (
     <g data-testid="draft-layer">
@@ -111,12 +141,7 @@ export function DraftLayer({ drafts, open, selectedId, viewport, clickable, onSe
             <path
               d={d}
               fillRule="evenodd"
-              fill={PROPOSED_STROKE}
-              fillOpacity={selected ? 0.18 : 0.06}
-              stroke={selected ? SELECTED_STROKE : PROPOSED_STROKE}
-              strokeOpacity={covered ? 0.5 : 1}
-              strokeWidth={selected ? 2.5 : 1.5}
-              strokeDasharray="6 4"
+              {...draftPaint(selected, covered)}
               pointerEvents={clickable && !outlineOnly ? "visiblePainted" : "none"}
               style={{ cursor }}
             />

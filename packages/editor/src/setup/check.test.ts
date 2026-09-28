@@ -42,8 +42,19 @@ describe("showTarget", () => {
     expect(on("place", "pl_star")).toEqual({ kind: "select", selection: { type: "room", id: "L1-a" } });
   });
 
-  it("frames a draft row's outline from the floor's own drafts, without selecting", () => {
-    expect(on("roomDraft", "rd_1", [draft("rd_1")])).toEqual({ kind: "frame", box: { minX: 36, minY: -4, maxX: 54, maxY: 14 } });
+  it("frames a draft row's outline from the floor's own drafts, without selecting, and draws that outline", () => {
+    expect(on("roomDraft", "rd_1", [draft("rd_1")]))
+      .toEqual({ kind: "frame", box: { minX: 36, minY: -4, maxX: 54, maxY: 14 }, outline: sq(40) });
+  });
+
+  it("draws a draft row's own outline beside its own box (contract v4), and frames a box with no outline as before", () => {
+    const box = { minX: 40, minY: 0, maxX: 50, maxY: 10 };
+    expect(showTarget(model, { entityType: "roomDraft", entityId: "rd_1", box, outline: sq(40) }, "oth-L1", []))
+      .toEqual({ kind: "frame", box: { minX: 36, minY: -4, maxX: 54, maxY: 14 }, outline: sq(40) });
+    // The row's own box wins over the draft in the store, and brings no outline of the store's.
+    const boxOnly = showTarget(model, { entityType: "roomDraft", entityId: "rd_1", box }, "oth-L1", [draft("rd_1")]);
+    expect(boxOnly).toEqual({ kind: "frame", box: { minX: 36, minY: -4, maxX: 54, maxY: 14 } });
+    expect(boxOnly).not.toHaveProperty("outline");
   });
 
   it("has nothing to show for a draft not in the floor's drafts, an open draft with no outline, or anything the map doesn't select", () => {

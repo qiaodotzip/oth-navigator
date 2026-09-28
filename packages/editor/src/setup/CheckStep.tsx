@@ -67,7 +67,8 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
       useEditorStore.getState().select(target.selection);
       setFocus(f => ({ target: target.selection, seq: (f?.seq ?? 0) + 1 }));
     } else {
-      setFocus(f => ({ box: target.box, seq: (f?.seq ?? 0) + 1 }));
+      // The draft's outline stays drawn until the next Show, or the step is left.
+      setFocus(f => ({ box: target.box, outline: target.outline, seq: (f?.seq ?? 0) + 1 }));
     }
   }
 

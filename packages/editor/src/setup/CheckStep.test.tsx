@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConflictError } from "../api/client";
 import { useDrafts } from "../build/drafts";
+import { worldToScreen } from "../plan/viewport";
 import { useEditorStore } from "../state/store";
 import { useToasts } from "../ui/toast";
 import { CheckStep } from "./CheckStep";
@@ -152,6 +153,21 @@ describe("CheckStep", () => {
     fireEvent.click(show);
     expect(useEditorStore.getState().selection).toBeNull();
     expect(useEditorStore.getState().viewport).not.toEqual(before);
+    // A box with no outline frames only: nothing is drawn.
+    expect(screen.queryByTestId("draft-outline")).toBeNull();
+  });
+
+  it("Show draws a draft row's outline on the map (contract v4), until the next Show", async () => {
+    const outlined = { ...rejected, box: { minX: 30, minY: 0, maxX: 40, maxY: 10 }, outline: sq(30) };
+    open(fakeSetupApi({ listClaudeChanges: vi.fn().mockResolvedValue([made, outlined]) }));
+    expect(screen.queryByTestId("draft-outline")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Show: Rejected the draft Column 12" }));
+    const viewport = useEditorStore.getState().viewport;
+    const drawn = within(screen.getByTestId("setup-map")).getByTestId("draft-outline");
+    expect(drawn.getAttribute("d")).toBe(`M${sq(30).map(p => worldToScreen(viewport, p).join(",")).join("L")}Z`);
+    fireEvent.click(screen.getByRole("button", { name: "Show: Made Starbucks from a draft" }));
+    expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-star" });
+    expect(screen.queryByTestId("draft-outline")).toBeNull();
   });
 
   it("Undo takes a change back, says so, and reloads the map", async () => {

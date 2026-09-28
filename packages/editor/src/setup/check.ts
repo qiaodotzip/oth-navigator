@@ -1,4 +1,4 @@
-import { live, type BBox, type Keyframe, type MapModel } from "@oth/model";
+import { live, type BBox, type Keyframe, type MapModel, type Vec2 } from "@oth/model";
 import { ConflictError, type RoomDraftRow } from "../api/client";
 import { draftBox, padBox } from "../build/drafts";
 import { SELECTABLE_TYPES, parseSelectParam, selectParam, type Selectable } from "../build/selection";
@@ -45,9 +45,12 @@ export function checkSections(changes: readonly ClaudeChange[]): { sections: Che
 
 /**
  * What Show does for a change: selects it, or, for a draft row (not on the
- * map, so nothing to select), frames where its outline sits.
+ * map, so nothing to select), frames where its outline sits, and draws that
+ * outline where it is known (contract v4).
  */
-export type ShowTarget = { kind: "select"; selection: NonNullable<Selection> } | { kind: "frame"; box: BBox };
+export type ShowTarget =
+  | { kind: "select"; selection: NonNullable<Selection> }
+  | { kind: "frame"; box: BBox; outline?: readonly Vec2[] };
 
 /**
  * What Show does for a change, if it can do anything. A stop is shown at its
@@ -59,17 +62,22 @@ export type ShowTarget = { kind: "select"; selection: NonNullable<Selection> } |
  * same 4 m as `draftBox`, so Show frames a draft the same way whichever
  * source it comes from; else the floor's own drafts. Only a draft with an
  * outline can be framed; an open draft (the drawing left it open, no shape
- * traced) has none.
+ * traced) has none. The outline drawn comes from the same source as the
+ * frame: the row's own `outline` beside its box (a row with a box and no
+ * outline frames only), else the draft's footprint.
  */
 export function showTarget(
-  model: MapModel | null, change: Pick<ClaudeChange, "entityType" | "entityId" | "box">, levelId: string,
+  model: MapModel | null, change: Pick<ClaudeChange, "entityType" | "entityId" | "box" | "outline">, levelId: string,
   drafts: readonly RoomDraftRow[] = [],
 ): ShowTarget | null {
   const { entityType: type, entityId: id } = change;
   if (type === "roomDraft") {
-    if (change.box) return { kind: "frame", box: padBox(change.box, 4) };
+    if (change.box) {
+      const box = padBox(change.box, 4);
+      return change.outline ? { kind: "frame", box, outline: change.outline } : { kind: "frame", box };
+    }
     const draft = drafts.find(d => d.id === id);
-    return draft?.footprint ? { kind: "frame", box: draftBox(draft) } : null;
+    return draft?.footprint ? { kind: "frame", box: draftBox(draft), outline: draft.footprint } : null;
   }
   if (!model) return null;
   let wanted: NonNullable<Selection> | null = null;

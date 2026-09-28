@@ -3,7 +3,7 @@ import { LABEL_COLOURS, LABEL_FONT_PX, fitLabel } from "@oth/renderer";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PROPOSED_STROKE, SELECTED_STROKE } from "./colours";
-import { DraftLayer, draftNameSpot, type DraftShape, type ShownDraft } from "./DraftLayer";
+import { DraftLayer, draftNameSpot, DraftOutline, type DraftShape, type ShownDraft } from "./DraftLayer";
 import { worldToScreen } from "./viewport";
 
 const draft = (id: string, nameEn: string, over: Record<string, unknown> = {}): RoomDraft => RoomDraftSchema.parse({
@@ -142,5 +142,20 @@ describe("DraftLayer", () => {
     layer([], { open: [draft("rd_plaza", "Plaza", { footprint: undefined, kind: "area", areaM2: 0 })], viewport: { originX: 0, originY: 0, scale: 1 } });
     expect(screen.getByTestId("open-rd_plaza").querySelector("circle")).toBeTruthy();
     expect(screen.getByTestId("open-rd_plaza").textContent).toBe("");
+  });
+});
+
+describe("DraftOutline", () => {
+  it("draws one outline painted as the draft in hand is, and never in the way of a click", () => {
+    const ring: [number, number][] = [[0, 0], [10, 0], [10, 8], [0, 8]];
+    layer([{ draft: draft("rd_shop", "Shop"), covered: false }], { selectedId: "rd_shop" });
+    render(<svg><DraftOutline outline={ring} viewport={viewport} /></svg>);
+    const drawn = screen.getByTestId("draft-outline");
+    expect(drawn.getAttribute("d")).toBe(`M${ring.map(p => worldToScreen(viewport, p).join(",")).join("L")}Z`);
+    for (const paint of ["fill", "fill-opacity", "stroke", "stroke-opacity", "stroke-width", "stroke-dasharray"]) {
+      expect(drawn.getAttribute(paint)).toBe(shape("rd_shop").getAttribute(paint));
+    }
+    expect(drawn.getAttribute("stroke")).toBe(SELECTED_STROKE);
+    expect(drawn.getAttribute("pointer-events")).toBe("none");
   });
 });
