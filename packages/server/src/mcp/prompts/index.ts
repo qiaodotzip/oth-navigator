@@ -38,9 +38,9 @@ export const FLOOR_ARG = z.string().trim().regex(/^[A-Za-z0-9_-]{1,40}$/, "a flo
 export const FINAL_LINE = "Report what you did in a few lines, then call `finish_step`.";
 
 /**
- * label_survey is reviewed at step 3, Review Claude's labels; the other
- * three run's proposals are reviewed at step 8, Check Claude's work, which
- * is also where Publish lives.
+ * label_survey's proposals are reviewed at step 3, Review Claude's labels;
+ * the other three prompts' changes are reviewed at step 8, Check Claude's
+ * work, which is also where Publish lives.
  */
 function draftMap(p: SetupPrompt): string {
   const reviewStep: SetupStepId = p.step === "label" ? "review" : "check";
