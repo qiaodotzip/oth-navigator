@@ -114,8 +114,24 @@ describe("list_drafts", () => {
     const listing = JSON.parse((await call(client, "list_drafts", { floor: "L1", limit: 1 })).text) as Record<string, unknown>;
     expect(listing.lineUp).toEqual({ dx: 11.5, dy: -4.6, pairs: 5 });
     expect(Object.keys(listing).slice(0, 3)).toEqual(["floor", "counts", "lineUp"]);
+    expect(listing.linedUp).toBeUndefined();
     const { tools } = await client.listTools();
     expect(tools.find(t => t.name === "list_drafts")?.description).toContain("lineUp");
+  });
+
+  it("says when the drawing does line up with the rooms, by shape as well as by name (contract v4)", async () => {
+    // A row of 5 identical shops, named as the survey knows them; the drawing prints other names.
+    for (let i = 0; i < 5; i++) {
+      await createEntity(f.db, "room", { id: `L1-unit-${i}`, levelId: "oth-L1", kind: "room", footprint: sq(i * 6, 50, i * 6 + 6, 58), heightM: 6, nameEn: `Unit ${i + 1}` }, amy.id);
+    }
+    await replaceDrafts(f.db, "oth-L1", SOURCE, [0, 1, 2, 3, 4].map(i => ({
+      nameEn: `SHOP 0${i + 1}`, kind: "room", footprint: sq(i * 6, 50, i * 6 + 6, 58), labelPoint: [i * 6 + 3, 54], areaM2: 48,
+    })), amy.id);
+    const listing = JSON.parse((await call(client, "list_drafts", { floor: "L1", limit: 1 })).text) as Record<string, unknown>;
+    expect(listing.linedUp).toEqual({ pairs: 5 });
+    expect(Object.keys(listing).slice(0, 3)).toEqual(["floor", "counts", "linedUp"]);
+    const { tools } = await client.listTools();
+    expect(tools.find(t => t.name === "list_drafts")?.description).toContain("linedUp is there instead when at least 5 agree within a metre: the drawing lines up with the rooms");
   });
 
   it("leaves out the drafts set aside for a person, and counts them apart", async () => {

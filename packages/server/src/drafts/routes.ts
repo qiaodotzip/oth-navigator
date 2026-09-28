@@ -39,13 +39,16 @@ function failure(err: unknown) {
 export const levelDraftRoutes = new Hono<AppEnv>();
 levelDraftRoutes.use("*", requireUser);
 
-/** The floor's waiting drafts, and lineUp when the drawing doesn't line up with the rooms already on the floor (contract v3). */
+/**
+ * The floor's waiting drafts, and lineUp when the drawing doesn't line up with
+ * the rooms already on the floor (contract v3), or linedUp when it does (v4).
+ */
 levelDraftRoutes.get("/:id/drafts", async c => {
   const db = c.get("db");
   const levelId = c.req.param("id");
   const drafts = await listDrafts(db, levelId);
-  const lineUp = await floorLineUp(db, levelId, drafts);
-  return c.json({ drafts, ...(lineUp ? { lineUp } : {}) });
+  const { lineUp, linedUp } = await floorLineUp(db, levelId, drafts);
+  return c.json({ drafts, ...(lineUp ? { lineUp } : {}), ...(linedUp ? { linedUp } : {}) });
 });
 
 levelDraftRoutes.put(

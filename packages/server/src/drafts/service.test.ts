@@ -192,17 +192,17 @@ describe("a draft set aside", () => {
   });
 });
 
-describe("lineUpOf (contract v3): does the drawing line up with the rooms already on the floor?", () => {
-  /**
-   * Rehearsal 2's L1: Replace plan put the drawing about 11.5 m east and 4.6 m
-   * south of the 228 rooms traced by hand, the same for every room. Each room
-   * here is a 6 m square; its namesake draft's label sits that far off it.
-   */
-  const NAMES = ["Fire Command Centre", "Community Dance Studio 1", "2 (Wet) Team Changing", "Team Changing 3 (Dry)", "Hand Wash Area", "Cleaner's Room"];
-  const roomsOf = (names: readonly string[]) => names.map((nameEn, i) => ({ nameEn, footprint: square(i * 20, 0, 6), holes: [] }));
-  const draftsOff = (names: readonly string[], [ox, oy]: [number, number]) =>
-    names.map((nameEn, i) => ({ nameEn, labelPoint: [i * 20 + 3 + ox, 3 + oy] as [number, number] }));
+/**
+ * Rehearsal 2's L1: Replace plan put the drawing about 11.5 m east and 4.6 m
+ * south of the 228 rooms traced by hand, the same for every room. Each room
+ * here is a 6 m square; its namesake draft's label sits that far off it.
+ */
+const NAMES = ["Fire Command Centre", "Community Dance Studio 1", "2 (Wet) Team Changing", "Team Changing 3 (Dry)", "Hand Wash Area", "Cleaner's Room"];
+const roomsOf = (names: readonly string[]) => names.map((nameEn, i) => ({ nameEn, footprint: square(i * 20, 0, 6), holes: [] }));
+const draftsOff = (names: readonly string[], [ox, oy]: [number, number]) =>
+  names.map((nameEn, i) => ({ nameEn, labelPoint: [i * 20 + 3 + ox, 3 + oy] as [number, number] }));
 
+describe("lineUpOf (contract v3): does the drawing line up with the rooms already on the floor?", () => {
   it("says how far the drawing sits off the rooms (label minus centre) when 5 or more pairs agree on a shift of over a metre", () => {
     const rooms = [...roomsOf(NAMES), { nameEn: "Kitchen", footprint: square(200, 0, 6), holes: [] }];
     const drafts = [
@@ -211,18 +211,70 @@ describe("lineUpOf (contract v3): does the drawing line up with the rooms alread
       { nameEn: "  kitchen ", labelPoint: [203, 3] as [number, number] },
     ];
     // The editor says this as "about 11.5 m east and 4.6 m south of the rooms" (LineUpWarning).
-    expect(lineUpOf(drafts, rooms)).toEqual({ dx: 11.5, dy: -4.6, pairs: 6 });
+    expect(lineUpOf(drafts, rooms).lineUp).toEqual({ dx: 11.5, dy: -4.6, pairs: 6 });
   });
 
   it("pairs a draft only with a name exactly one room on the floor has", () => {
     const shops = [{ nameEn: "Shop", footprint: square(300, 0, 6), holes: [] }, { nameEn: "shop", footprint: square(320, 0, 6), holes: [] }];
     const drafts = [...draftsOff(NAMES.slice(0, 4), [11.5, -4.6]), { nameEn: "Shop", labelPoint: [303 + 11.5, 3 - 4.6] as [number, number] }];
-    expect(lineUpOf(drafts, [...roomsOf(NAMES.slice(0, 4)), ...shops])).toBeNull();
+    expect(lineUpOf(drafts, [...roomsOf(NAMES.slice(0, 4)), ...shops]).lineUp).toBeUndefined();
   });
 
-  it("says nothing when the pairs line up, or disagree by more than half a metre", () => {
-    expect(lineUpOf(draftsOff(NAMES, [0.4, -0.3]), roomsOf(NAMES))).toBeNull();
+  it("gives no lineUp when the pairs line up, or disagree by more than half a metre", () => {
+    expect(lineUpOf(draftsOff(NAMES, [0.4, -0.3]), roomsOf(NAMES)).lineUp).toBeUndefined();
     const scattered = NAMES.map((nameEn, i) => ({ nameEn, labelPoint: [i * 20 + 3 + 5 + i, 3] as [number, number] }));
-    expect(lineUpOf(scattered, roomsOf(NAMES))).toBeNull();
+    expect(lineUpOf(scattered, roomsOf(NAMES)).lineUp).toBeUndefined();
+  });
+});
+
+describe("lineUpOf by shape too (contract v4)", () => {
+  /** A w × h rectangle with its south-west corner at (x, y). */
+  const rect = (x: number, y: number, w: number, h: number): [number, number][] => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+  /**
+   * Rehearsal 3 fired on 5 name pairs, the bare minimum. A row of 8 identical
+   * shops, 6 by 8 m side by side, the rooms named as the survey knows them and
+   * the drafts as the drawing prints them: no name pairs at all.
+   */
+  type Shape = { size?: [number, number]; step?: number };
+  const row = (n: number, { size: [w, h] = [6, 8], step = 6 }: Shape = {}) =>
+    Array.from({ length: n }, (_, i) => ({ nameEn: `Unit ${i + 1}`, footprint: rect(i * step, 0, w, h), holes: [] }));
+  const drawn = (n: number, [ox, oy]: [number, number], { size: [w, h] = [6, 8], step = 6 }: Shape = {}) => Array.from({ length: n }, (_, i) => ({
+    nameEn: `SHOP ${String(i + 1).padStart(2, "0")}`, footprint: rect(i * step + ox, oy, w, h), labelPoint: [i * step + w / 2 + ox, h / 2 + oy] as [number, number],
+  }));
+
+  it("finds a row of identical shops drawn 11.5 m east and 4.6 m south of their rooms, with no name to go by", () => {
+    // Every draft is the same shape as every shop within 40 m, so each votes several shifts; the true one gets all 8.
+    expect(lineUpOf(drawn(8, [11.5, -4.6]), row(8))).toEqual({ lineUp: { dx: 11.5, dy: -4.6, pairs: 8 } });
+  });
+
+  it("says the same row drawn where the rooms are lines up: linedUp, and no lineUp", () => {
+    expect(lineUpOf(drawn(8, [0, 0]), row(8))).toEqual({ linedUp: { pairs: 8 } });
+    expect(lineUpOf(drawn(8, [0.4, -0.3]), row(8))).toEqual({ linedUp: { pairs: 8 } });
+  });
+
+  it("gives neither on a floor with too few shapes or names to tell", () => {
+    expect(lineUpOf(drawn(4, [11.5, -4.6]), row(4))).toEqual({});
+    expect(lineUpOf(drawn(4, [0, 0]), row(4))).toEqual({});
+    expect(lineUpOf(draftsOff(NAMES.slice(0, 4), [0, 0]), roomsOf(NAMES.slice(0, 4)))).toEqual({});
+    // Columns: identical, but under 4 m², so they never pair by shape.
+    expect(lineUpOf(drawn(8, [11.5, -4.6], { size: [1.5, 1.5] }), row(8, { size: [1.5, 1.5] }))).toEqual({});
+  });
+
+  it("counts a draft once, though its name and its shape both pair it", () => {
+    const rooms = row(4).map((r, i) => ({ ...r, nameEn: NAMES[i]! }));
+    const drafts = drawn(4, [11.5, -4.6]).map((d, i) => ({ ...d, nameEn: NAMES[i]! }));
+    expect(lineUpOf(drafts, rooms)).toEqual({});
+  });
+
+  it("pairs by shape only a room of the same size, within 40 m: area within 3%, width and height within 0.3 m", () => {
+    // 6.2 × 7.8: 48.36 m² against 48 (0.75%), 0.2 m wider and 0.2 m shorter.
+    expect(lineUpOf(drawn(8, [11.5, -4.6], { size: [6.2, 7.8] }), row(8)).lineUp?.pairs).toBe(8);
+    // 6.4 × 7.5: 48 m², but 0.4 m wider.
+    expect(lineUpOf(drawn(8, [11.5, -4.6], { size: [6.4, 7.5] }), row(8))).toEqual({});
+    // 6 × 8.25: 0.25 m taller, but 3.1% larger.
+    expect(lineUpOf(drawn(8, [11.5, -4.6], { size: [6, 8.25] }), row(8))).toEqual({});
+    // Shops 50 m apart, so each draft has one shop of its shape near: 39 m off it pairs, 41 m off it doesn't.
+    expect(lineUpOf(drawn(8, [0, 39], { step: 50 }), row(8, { step: 50 }))).toEqual({ lineUp: { dx: 0, dy: 39, pairs: 8 } });
+    expect(lineUpOf(drawn(8, [0, 41], { step: 50 }), row(8, { step: 50 }))).toEqual({});
   });
 });

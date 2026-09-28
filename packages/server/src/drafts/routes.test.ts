@@ -116,15 +116,18 @@ describe("a floor's drafts", () => {
     await db.insert(rooms).values(names.map((nameEn, i) => ({
       id: `L2-room-${i}`, levelId: "oth-L2", kind: "room", footprint: square(i * 20, 0, 6), heightM: 4.5, nameEn,
     })));
-    const read = async () => json<{ drafts: Draft[]; lineUp?: unknown }>(await app.request("/api/levels/oth-L2/drafts", { headers: { cookie } }));
-    // Drawn where the rooms are: nothing to say.
+    const read = async () => json<{ drafts: Draft[]; lineUp?: unknown; linedUp?: unknown }>(await app.request("/api/levels/oth-L2/drafts", { headers: { cookie } }));
+    // Drawn where the rooms are: linedUp says the drawing lines up with them (contract v4).
     await replace(names.map((n, i) => found(n, { footprint: square(i * 20, 0, 6), labelPoint: [i * 20 + 3, 3] })));
-    expect(Object.keys(await read())).toEqual(["drafts"]);
+    const aligned = await read();
+    expect(Object.keys(aligned)).toEqual(["drafts", "linedUp"]);
+    expect(aligned.linedUp).toEqual({ pairs: 5 });
     // Rehearsal 2's L1: the new plan about 11.5 m east and 4.6 m south of every room.
     await replace(names.map((n, i) => found(n, { footprint: square(i * 20 + 11.5, -4.6, 6), labelPoint: [i * 20 + 3 + 11.5, 3 - 4.6] })));
     const body = await read();
     expect(body.drafts).toHaveLength(5);
     expect(body.lineUp).toEqual({ dx: 11.5, dy: -4.6, pairs: 5 });
+    expect(body.linedUp).toBeUndefined();
   });
 
   it("never puts drafts in the map", async () => {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { RoomDraftInputSchema, labelPoint, type DraftSource, type Ring, type RoomKind, type Vec2 } from "@oth/model";
+import { RoomDraftInputSchema, bboxOfRing, labelPoint, ringArea, type DraftSource, type Ring, type RoomKind, type Vec2 } from "@oth/model";
 import type { Database } from "../db/client";
 import { toModelRow, type Row } from "../db/rows";
 import { auditLog, levels, roomDrafts, rooms } from "../db/schema";
@@ -135,12 +135,26 @@ export async function listDrafts(db: Database, levelId: string): Promise<Row[]> 
  * rooms, and map_rooms made about 160 rooms twice.
  */
 export type LineUp = { dx: number; dy: number; pairs: number };
+/** Contract v4: the drawing does line up with the rooms, and this many pairs say so. */
+export type LinedUp = { pairs: number };
+/** What the line-up check says: at most one of the two, and neither on a floor with too little to tell by. */
+export type LineCheck = { lineUp?: LineUp; linedUp?: LinedUp };
 /** At least this many pairs must agree, */
 export const LINE_UP_PAIRS = 5;
 /** each within this of the others, */
 export const LINE_UP_AGREE_M = 0.5;
-/** on a shift longer than this. */
+/** on a shift longer than this for lineUp, or this long or less for linedUp. */
 export const LINE_UP_SHIFT_M = 1;
+/**
+ * Contract v4: a draft pairs by shape with a room at least SHAPE_MIN_M2 (not a
+ * column), whose centre is within SHAPE_NEAR_M of its own, whose area agrees
+ * within SHAPE_AREA_SHARE, and whose bbox's width and height each agree within
+ * SHAPE_SIZE_M.
+ */
+export const SHAPE_MIN_M2 = 4;
+export const SHAPE_NEAR_M = 40;
+export const SHAPE_AREA_SHARE = 0.03;
+export const SHAPE_SIZE_M = 0.3;
 
 /** Names compared the way people mean them (editor/src/survey/suggest.ts normalName): case, inner spacing and the ends ignored. */
 function normalName(name: string): string {
@@ -149,46 +163,109 @@ function normalName(name: string): string {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+type LineDraft = { nameEn: string; labelPoint: Vec2; footprint?: Ring; holes?: readonly Ring[] };
+type LineRoom = { nameEn: string; footprint: Ring; holes: readonly Ring[] };
+/** A draft (by its index) and a room it may be, and how far the draft sits off that room. */
+type Pair = { draft: number; shift: Vec2 };
+
+/** An outline's size: its area less its holes', its bbox's width and height, and the bbox's centre. */
+function sizeOf(footprint: Ring, holes: readonly Ring[]) {
+  const box = bboxOfRing(footprint);
+  return {
+    area: Math.abs(ringArea(footprint)) - holes.reduce((sum, h) => sum + Math.abs(ringArea(h)), 0),
+    w: box.maxX - box.minX, h: box.maxY - box.minY, centre: [(box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2] as Vec2,
+  };
+}
+
 /**
- * Whether waiting drafts sit off the rooms already on the floor (contract
- * v3). A draft is paired with a room when exactly one room on the floor has
- * its name, capitals and spacing aside, and each pair gives the offset
- * between the draft's label and the room's centre (where get_floor puts its
- * name); the answer is the label's side of it, where the drawing sits.
- * The largest group of shifts within LINE_UP_AGREE_M of one of them decides:
- * at least LINE_UP_PAIRS of them, on a mean shift over LINE_UP_SHIFT_M, is a
- * drawing that doesn't line up. A floor that does line up, or has too few
- * named rooms to tell, gives null.
+ * Every pair a draft makes with a room. By name (contract v3): exactly one
+ * room on the floor has its name, capitals and spacing aside, and the shift
+ * is the draft's label less the room's centre, where get_floor puts its name.
+ * By shape (contract v4): a room its size near it, and the shift is between
+ * their bboxes' centres, which a drawing moved whole moves by exactly its
+ * shift. A row of identical shops gives each draft a pair with every shop
+ * near it; only the true shift has them all.
  */
-export function lineUpOf(
-  drafts: readonly { nameEn: string; labelPoint: Vec2 }[],
-  rooms: readonly { nameEn: string; footprint: Ring; holes: readonly Ring[] }[],
-): LineUp | null {
-  const named = new Map<string, (typeof rooms)[number][]>();
+function pairsOf(drafts: readonly LineDraft[], rooms: readonly LineRoom[]): Pair[] {
+  const named = new Map<string, LineRoom[]>();
   for (const r of rooms) {
     const name = normalName(r.nameEn);
     if (name) named.set(name, [...(named.get(name) ?? []), r]);
   }
-  const centres = new Map<(typeof rooms)[number], Vec2>();
-  const shifts: Vec2[] = [];
-  for (const d of drafts) {
+  const centres = new Map<LineRoom, Vec2>();
+  const shapes = rooms.map(r => sizeOf(r.footprint, r.holes)).filter(s => s.area >= SHAPE_MIN_M2);
+  const pairs: Pair[] = [];
+  drafts.forEach((d, i) => {
     const same = named.get(normalName(d.nameEn));
-    if (same?.length !== 1) continue;
-    const room = same[0]!;
-    const centre = centres.get(room) ?? labelPoint(room.footprint, room.holes, 0.5).point;
-    centres.set(room, centre);
-    shifts.push([d.labelPoint[0] - centre[0], d.labelPoint[1] - centre[1]]);
+    if (same?.length === 1) {
+      const room = same[0]!;
+      const centre = centres.get(room) ?? labelPoint(room.footprint, room.holes, 0.5).point;
+      centres.set(room, centre);
+      pairs.push({ draft: i, shift: [d.labelPoint[0] - centre[0], d.labelPoint[1] - centre[1]] });
+    }
+    if (!d.footprint) return;
+    const own = sizeOf(d.footprint, d.holes ?? []);
+    for (const s of shapes) {
+      const shift: Vec2 = [own.centre[0] - s.centre[0], own.centre[1] - s.centre[1]];
+      if (Math.hypot(shift[0], shift[1]) > SHAPE_NEAR_M) continue;
+      if (Math.abs(own.area - s.area) > SHAPE_AREA_SHARE * s.area) continue;
+      if (Math.abs(own.w - s.w) > SHAPE_SIZE_M || Math.abs(own.h - s.h) > SHAPE_SIZE_M) continue;
+      pairs.push({ draft: i, shift });
+    }
+  });
+  return pairs;
+}
+
+/**
+ * The largest group of pairs whose shifts lie within LINE_UP_AGREE_M of one
+ * of them, a draft counted once: its pair nearest that one. Shifts are
+ * bucketed by LINE_UP_AGREE_M, so each pair looks only at its own and the
+ * eight buckets round it.
+ */
+function largestAgreeing(pairs: readonly Pair[]): Pair[] {
+  const key = (col: number, row: number) => `${col},${row}`;
+  const cell = (v: number) => Math.floor(v / LINE_UP_AGREE_M);
+  const buckets = new Map<string, Pair[]>();
+  for (const p of pairs) {
+    const k = key(cell(p.shift[0]), cell(p.shift[1]));
+    buckets.set(k, [...(buckets.get(k) ?? []), p]);
   }
-  let agreeing: Vec2[] = [];
-  for (const s of shifts) {
-    const near = shifts.filter(t => Math.hypot(t[0] - s[0], t[1] - s[1]) <= LINE_UP_AGREE_M);
-    if (near.length > agreeing.length) agreeing = near;
+  let best: Pair[] = [];
+  for (const seed of pairs) {
+    const nearest = new Map<number, { pair: Pair; d: number }>();
+    const [col, row] = [cell(seed.shift[0]), cell(seed.shift[1])];
+    for (let dc = -1; dc <= 1; dc++) {
+      for (const p of [-1, 0, 1].flatMap(dr => buckets.get(key(col + dc, row + dr)) ?? [])) {
+        const d = Math.hypot(p.shift[0] - seed.shift[0], p.shift[1] - seed.shift[1]);
+        if (d > LINE_UP_AGREE_M) continue;
+        const had = nearest.get(p.draft);
+        if (!had || d < had.d) nearest.set(p.draft, { pair: p, d });
+      }
+    }
+    if (nearest.size > best.length) best = [...nearest.values()].map(n => n.pair);
   }
-  if (agreeing.length < LINE_UP_PAIRS) return null;
-  const dx = agreeing.reduce((sum, s) => sum + s[0], 0) / agreeing.length;
-  const dy = agreeing.reduce((sum, s) => sum + s[1], 0) / agreeing.length;
-  if (Math.hypot(dx, dy) <= LINE_UP_SHIFT_M) return null;
-  return { dx: round1(dx), dy: round1(dy), pairs: agreeing.length };
+  return best;
+}
+
+/**
+ * Whether waiting drafts line up with the rooms already on the floor
+ * (contracts v3 and v4). Each draft pairs with the rooms it may be, by name
+ * and by shape (pairsOf); the largest group of pairs agreeing on a shift
+ * decides, when it has at least LINE_UP_PAIRS drafts. Its mean shift over
+ * LINE_UP_SHIFT_M is a drawing that doesn't line up, lineUp: dx and dy are
+ * where the drawing sits off the rooms, as the editor says it ("about 11.5 m
+ * east and 4.6 m south of the rooms"). A mean shift of LINE_UP_SHIFT_M or
+ * less is a drawing that does, linedUp. A floor with too few named or shaped
+ * rooms to tell gives neither.
+ */
+export function lineUpOf(drafts: readonly LineDraft[], rooms: readonly LineRoom[]): LineCheck {
+  const agreeing = largestAgreeing(pairsOf(drafts, rooms));
+  if (agreeing.length < LINE_UP_PAIRS) return {};
+  const dx = agreeing.reduce((sum, p) => sum + p.shift[0], 0) / agreeing.length;
+  const dy = agreeing.reduce((sum, p) => sum + p.shift[1], 0) / agreeing.length;
+  return Math.hypot(dx, dy) > LINE_UP_SHIFT_M
+    ? { lineUp: { dx: round1(dx), dy: round1(dy), pairs: agreeing.length } }
+    : { linedUp: { pairs: agreeing.length } };
 }
 
 /**
@@ -196,12 +273,15 @@ export function lineUpOf(
  * listDrafts gives them, set-aside ones included) against the floor's live
  * rooms.
  */
-export async function floorLineUp(db: Database, levelId: string, waiting: readonly Row[]): Promise<LineUp | null> {
-  if (waiting.length < LINE_UP_PAIRS) return null;
+export async function floorLineUp(db: Database, levelId: string, waiting: readonly Row[]): Promise<LineCheck> {
+  if (waiting.length < LINE_UP_PAIRS) return {};
   const here = await db.select({ nameEn: rooms.nameEn, footprint: rooms.footprint, holes: rooms.holes }).from(rooms)
     .where(and(eq(rooms.levelId, levelId), isNull(rooms.deletedAt)));
   return lineUpOf(
-    waiting.map(d => ({ nameEn: String(d.nameEn), labelPoint: d.labelPoint as Vec2 })),
+    waiting.map(d => ({
+      nameEn: String(d.nameEn), labelPoint: d.labelPoint as Vec2,
+      ...(d.footprint ? { footprint: d.footprint as Ring } : {}), holes: (d.holes ?? []) as Ring[],
+    })),
     here.map(r => ({ nameEn: r.nameEn, footprint: r.footprint as Ring, holes: (r.holes ?? []) as Ring[] })),
   );
 }

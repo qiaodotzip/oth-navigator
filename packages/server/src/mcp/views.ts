@@ -2,7 +2,7 @@ import {
   coverage, draftMatch, labelPoint, live, namedLikeAStop, placeLevels, pointInPolygon, ringArea,
   type Level, type MapModel, type Ring, type Room, type RoomDraft, type ValidationReport, type Vec2,
 } from "@oth/model";
-import type { DraftTally, LineUp } from "../drafts/service";
+import type { DraftTally, LineCheck } from "../drafts/service";
 import type { SpotReport } from "../objects/spots";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -324,19 +324,21 @@ export function draftOverlaps(draft: RoomDraft, rooms: readonly Room[]): { roomI
 /**
  * list_drafts: a floor's drafts waiting for a decision, largest first, a page
  * at a time, with how the floor's drafts stand, and lineUp when the drawing
- * doesn't line up with the rooms already on the floor (contract v3). The
- * caller leaves out the drafts set aside for a person. onMapAs is the room a
- * draft copies, by Build's own rule (draftMatch); overlaps are the rooms it
- * lies over, with the share of it over each.
+ * doesn't line up with the rooms already on the floor (contract v3), or
+ * linedUp when it does (v4). The caller leaves out the drafts set aside for
+ * a person. onMapAs is the room a draft copies, by Build's own rule
+ * (draftMatch); overlaps are the rooms it lies over, with the share of it
+ * over each.
  */
 export function draftList(
   code: string, waiting: readonly RoomDraft[], tally: DraftTally, rooms: readonly Room[], limit: number, offset: number,
-  lineUp: LineUp | null = null,
+  { lineUp, linedUp }: LineCheck = {},
 ) {
   return {
     floor: code,
     counts: tally,
     ...(lineUp ? { lineUp } : {}),
+    ...(linedUp ? { linedUp } : {}),
     total: waiting.length,
     offset,
     drafts: waiting.slice(offset, offset + limit).map(d => ({

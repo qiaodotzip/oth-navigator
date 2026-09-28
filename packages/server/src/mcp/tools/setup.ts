@@ -109,8 +109,9 @@ function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       "and whether it is named like a lift, escalator or stairs. Drafts set aside for a person are not listed. counts " +
       "says how the floor's drafts stand: waiting, setAside (waiting for a person), accepted and rejected. " +
       "lineUp is there only when the drawing doesn't line up with the rooms already on the floor: at least 5 drafts " +
-      "sit the same way off the rooms named as they are. Its dx and dy are how far the drawing sits from those rooms, " +
-      "in metres (a draft's label less its room's centre), and pairs how many agree. " +
+      "sit the same way off the rooms named or shaped as they are. Its dx and dy are how far the drawing sits from those " +
+      "rooms, in metres, and pairs how many agree. linedUp is there instead when at least 5 agree within a metre: the " +
+      "drawing lines up with the rooms. " +
       "decide_drafts takes decided drafts off this list, so after deciding some, read again from offset 0 rather " +
       "than carrying on from where you left off.",
     inputSchema: {
@@ -126,8 +127,8 @@ function registerDraftTools(server: McpServer, ctx: ToolContext): void {
     const all = (await listDrafts(ctx.db, level.id)).map(row => ({ row, draft: RoomDraftSchema.parse(row) }));
     const waiting = all.filter(d => !d.row.setAside).map(d => d.draft);
     const rooms = live(model.rooms).filter(r => r.levelId === level.id);
-    const lineUp = lineUpOf(all.map(d => d.draft), rooms);
-    return replyJson(draftList(level.code, waiting, tallyDrafts(await floorDrafts(ctx.db, level.id)), rooms, limit, offset, lineUp));
+    const check = lineUpOf(all.map(d => d.draft), rooms);
+    return replyJson(draftList(level.code, waiting, tallyDrafts(await floorDrafts(ctx.db, level.id)), rooms, limit, offset, check));
   }));
 
   server.registerTool("decide_drafts", {
