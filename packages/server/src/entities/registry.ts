@@ -1,5 +1,5 @@
 import {
-  CaptureSchema, DoorwaySchema, EntranceSchema, LevelSchema, NavHintSchema,
+  CaptureSchema, DoorwaySchema, EntranceSchema, LevelSchema, NavHintSchema, ObjectKindSchema,
   PathwayKindSchema, PathwaySchema, PlaceSchema, PlacementSchema, PortalEndpointSchema, PortalSchema,
   RoomDraftSchema, RoomSchema, SightingSchema, TenantSchema,
 } from "@oth/model";
@@ -14,6 +14,8 @@ export const ENTITY_TYPES = [
   // generic CRUD would be a way to create one with no image behind it.
   "capture", "place", "sighting", "pathwayKind",
   "roomDraft",
+  // Plan 6A: a kind of object. Its objects are placements.
+  "objectKind",
 ] as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[number];
@@ -48,6 +50,7 @@ export const entityRegistry: Record<EntityType, { table: EntityTable; schema: Zo
   sighting: { table: schema.sightings as EntityTable, schema: SightingSchema },
   pathwayKind: { table: schema.pathwayKinds as EntityTable, schema: PathwayKindSchema },
   roomDraft: { table: schema.roomDrafts as EntityTable, schema: RoomDraftSchema },
+  objectKind: { table: schema.objectKinds as EntityTable, schema: ObjectKindSchema },
 };
 
 export function isEntityType(v: string): v is EntityType {

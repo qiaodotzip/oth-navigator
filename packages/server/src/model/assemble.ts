@@ -36,6 +36,7 @@ export async function assembleModel(db: Database): Promise<MapModel> {
     pathwayKinds: await liveRows(db, schema.pathwayKinds as EntityTable),
     assets: await liveRows(db, schema.assets as EntityTable),
     placements: await liveRows(db, schema.placements as EntityTable),
+    objectKinds: await liveRows(db, schema.objectKinds as EntityTable),
     tenants: await liveRows(db, schema.tenants as EntityTable),
 
     // The survey layer. Assembled so validation can check it against the

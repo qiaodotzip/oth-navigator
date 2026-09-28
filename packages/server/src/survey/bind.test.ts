@@ -60,6 +60,12 @@ describe("bindPlace", () => {
     await expect(bind({ placeId: "pl_nope" })).rejects.toBeInstanceOf(BindRefusal);
   });
 
+  it("refuses a kind of object, which is placed on the map, not bound", async () => {
+    await createEntity(db, "place", { id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "ok_bin" }, "u_sc");
+    await expect(bind({ placeId: "pl_bin" }))
+      .rejects.toThrow("wastebin is an object, which is placed on the map, not bound to a room.");
+  });
+
   it("rolls the place back too when the room has moved on", async () => {
     await expect(bind({ roomVersion: 5 })).rejects.toBeInstanceOf(VersionConflictError);
     const [place] = await db.select().from(places).where(eq(places.id, "pl_sb"));

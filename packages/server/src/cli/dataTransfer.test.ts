@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { readAsset, storeAsset } from "../assets/storage";
 import { createSession } from "../auth/sessions";
 import {
-  auditLog, captures, keyframes, levelImages, places, planPdfs, publishedVersions, roomDrafts, sessions, sightings, users,
+  auditLog, captures, floorSetup, keyframes, levelImages, objectKinds, places, placements, planPdfs,
+  publishedVersions, roomDrafts, sessions, sightings, users,
 } from "../db/schema";
 import { createTestDb } from "../testing/harness";
 import { exportData, ExportRefused } from "./dataExport";
@@ -321,6 +322,28 @@ describe("data:export and data:import", () => {
     const [kf] = await src.db.select().from(keyframes).where(eq(keyframes.id, "kf_1"));
     await rm(join(src.dataDir, kf!.storagePath));
     await expect(exportData(src.db, src.dataDir, join(await tmp("out"), "export"))).rejects.toThrow(/not in/);
+  }, 60_000);
+
+  it("carries kinds of object, objects drawn from their kind, and each floor's setup", async () => {
+    const src = await source();
+    await src.db.insert(objectKinds).values({ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } });
+    await src.db.insert(placements).values({
+      id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [1, 2, 0], sightingIds: ["sg_1"],
+    });
+    await src.db.insert(floorSetup).values({
+      levelId: "oth-L1", step: 2, status: "done", note: "Tagged 417 frames", finishedBy: src.user.id,
+      finishedAt: new Date("2026-09-28T10:00:00.000Z"),
+    });
+    const out = join(await tmp("out"), "export");
+    const result = await exportData(src.db, src.dataDir, out);
+    expect(result.counts).toMatchObject({ object_kinds: 1, placements: 1, floor_setup: 1 });
+
+    const dst = await target();
+    await importData(dst.db, dst.dataDir, out);
+    const [placed] = await dst.db.select().from(placements);
+    expect(placed).toMatchObject({ assetId: null, objectKindId: "ok_bin", sightingIds: ["sg_1"] });
+    const [step] = await dst.db.select().from(floorSetup);
+    expect(step).toMatchObject({ levelId: "oth-L1", step: 2, status: "done", note: "Tagged 417 frames" });
   }, 60_000);
 
   it("knows every table in the schema, carried or left behind", async () => {

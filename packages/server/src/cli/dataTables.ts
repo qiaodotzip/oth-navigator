@@ -11,7 +11,8 @@ import type { Database } from "../db/client";
 export const CARRIED_TABLES = [
   "users",
   "buildings", "levels", "rooms", "doorways", "entrances", "portals", "portal_endpoints", "nav_hints",
-  "pathway_kinds", "pathways", "assets", "placements", "tenants", "level_images", "plan_pdfs", "room_drafts",
+  "pathway_kinds", "pathways", "assets", "object_kinds", "placements", "tenants", "level_images", "plan_pdfs", "room_drafts",
+  "floor_setup",
   "captures", "keyframes", "places", "sightings",
   "published_versions", "audit_log",
 ] as const;

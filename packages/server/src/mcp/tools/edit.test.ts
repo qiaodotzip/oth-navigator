@@ -263,3 +263,24 @@ describe("delete and restore", () => {
       .toBe("Remove a place with review_place reject, which takes its tags with it and can be restored.");
   });
 });
+
+describe("objects", () => {
+  it("makes a kind and places one of it with the same tools as anything else", async () => {
+    expect((await call(client, "create", {
+      type: "objectKind", data: { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } },
+    })).text).toBe("Created objectKind ok_bin, at version 0.");
+    expect((await call(client, "create", {
+      type: "placement", data: { id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [2, 2, 0] },
+    })).text).toBe("Created placement L1-bin-1, at version 0.");
+  });
+
+  it("refuses a placement with neither its own model nor a kind, and says why", async () => {
+    const { text, isError } = await call(client, "create", {
+      type: "placement", data: { id: "L1-x", levelId: "oth-L1", position: [2, 2, 0] },
+    });
+    expect({ text, isError }).toEqual({
+      text: "Not saved: assetId: a placement needs its own model or an object kind (objectKindId).",
+      isError: true,
+    });
+  });
+});

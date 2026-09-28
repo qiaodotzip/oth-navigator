@@ -228,3 +228,35 @@ describe("restore", () => {
     expect(list.items.find(c => c.id === "cap_r")).toBeUndefined();
   });
 });
+
+describe("objects", () => {
+  const bin = { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } };
+  const object = { id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [3, 4, 0] };
+
+  it("makes a kind and an object of it through the same routes as anything else", async () => {
+    expect((await post("/api/entities/objectKind", { data: bin })).status).toBe(201);
+    expect((await post("/api/entities/placement", { data: object })).status).toBe(201);
+  });
+
+  it("422s a placement with neither its own model nor a kind, before the database's check can 500 it", async () => {
+    const res = await post("/api/entities/placement", { data: { id: "L1-x", levelId: "oth-L1", position: [3, 4, 0] } });
+    expect(res.status).toBe(422);
+    expect((await json<{ detail: string }>(res)).detail).toContain("a placement needs its own model or an object kind");
+  });
+
+  it("422s clearing an object's kind while it has no model of its own", async () => {
+    await post("/api/entities/objectKind", { data: bin });
+    await post("/api/entities/placement", { data: object });
+    expect((await patch("/api/entities/placement/L1-bin-1", { expectedVersion: 0, data: { objectKindId: null } })).status)
+      .toBe(422);
+  });
+
+  it("lets an object take a model of its own, and then let go of its kind", async () => {
+    await post("/api/entities/objectKind", { data: bin });
+    await post("/api/entities/placement", { data: object });
+    expect((await patch("/api/entities/placement/L1-bin-1", { expectedVersion: 0, data: { assetId: "asset_own" } })).status)
+      .toBe(200);
+    expect((await patch("/api/entities/placement/L1-bin-1", { expectedVersion: 1, data: { objectKindId: null } })).status)
+      .toBe(200);
+  });
+});

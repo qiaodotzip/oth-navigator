@@ -95,3 +95,24 @@ describe("the survey layer", () => {
     expect(model.keyframes).toEqual([]);
   });
 });
+
+describe("objects", () => {
+  const bin = { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } };
+
+  it("assembles kinds of object, and an object with no model of its own", async () => {
+    await createEntity(db, "objectKind", bin, "user_1");
+    await createEntity(db, "placement", {
+      id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [2, 3, 0], sightingIds: ["sg_1", "sg_2"],
+    }, "user_1");
+    const model = await assembleModel(db);
+    expect(model.objectKinds).toEqual([expect.objectContaining({ id: "ok_bin", size: { w: 0.5, d: 0.5, h: 1 } })]);
+    expect(model.placements[0]).toMatchObject({ objectKindId: "ok_bin", sightingIds: ["sg_1", "sg_2"] });
+    expect(model.placements[0]?.assetId).toBeUndefined();
+  });
+
+  it("omits a deleted kind", async () => {
+    await createEntity(db, "objectKind", bin, "user_1");
+    await softDeleteEntity(db, "objectKind", "ok_bin", 0, "user_1");
+    expect((await assembleModel(db)).objectKinds).toEqual([]);
+  });
+});

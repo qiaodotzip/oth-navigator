@@ -2,8 +2,9 @@ import { mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
+import { storeAsset } from "../assets/storage";
 import type { Database } from "../db/client";
-import { buildings, levels, publishedVersions } from "../db/schema";
+import { assets, buildings, levels, publishedVersions } from "../db/schema";
 import { createEntity } from "../entities/repository";
 import { createTestDb } from "../testing/harness";
 import { PublishBlockedError, publish } from "./service";
@@ -96,5 +97,18 @@ describe("publish", () => {
     await seedPublishable();
     const result = await publish(db, dir, { createdBy: "user_1" });
     expect(await readdir(join(dir, "published", result.version, "levels"))).toEqual(["L1.json"]);
+  });
+
+  it("copies a kind's model for the objects that show it", async () => {
+    await seedPublishable();
+    const stored = await storeAsset(dir, new Uint8Array([7, 7, 7]));
+    await db.insert(assets).values({
+      id: "asset_bin", filename: "wastebin.glb", storagePath: stored.storagePath, checksum: stored.checksum,
+      sizeBytes: 3, triangleCount: 12, bbox: { minX: -0.25, minY: -0.25, minZ: 0, maxX: 0.25, maxY: 0.25, maxZ: 1 },
+    });
+    await createEntity(db, "objectKind", { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 }, assetId: "asset_bin" }, "user_1");
+    await createEntity(db, "placement", { id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [5, 5, 0] }, "user_1");
+    const result = await publish(db, dir, { createdBy: "user_1" });
+    expect(await readdir(join(dir, "published", result.version, "assets"))).toEqual([`${stored.checksum}.glb`]);
   });
 });

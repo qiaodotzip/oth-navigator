@@ -23,6 +23,22 @@ export class NotFoundError extends Error {
 }
 
 /**
+ * Rules a plain object schema can't carry, checked on the whole row about to
+ * be written. A placement shows its own model or its kind's (spec §5.3), so it
+ * needs one of the two. The database's check says the same, but as a server
+ * error; this says it before the write, as a refusal the caller can read.
+ */
+function refuseIncomplete(type: EntityType, row: Row): void {
+  if (type === "placement" && row.assetId == null && row.objectKindId == null) {
+    throw new ZodError([{
+      code: "custom" as const,
+      path: ["assetId"],
+      message: "a placement needs its own model or an object kind (objectKindId)",
+    }]);
+  }
+}
+
+/**
  * One row of the audit log. Exported for the writes that are not generic
  * entities — a keyframe arrives as bytes and has its own routes — so they are
  * on the record like everything else.
@@ -60,6 +76,7 @@ export async function createEntity(
 ): Promise<Row> {
   const { table, schema } = entityRegistry[type];
   const parsed = schema.parse(data) as Row;
+  refuseIncomplete(type, parsed);
   const id = String(parsed.id);
 
   await db.insert(table).values({
@@ -96,6 +113,7 @@ export async function updateEntity(
   const input: Row = { ...toModelRow(before), ...patch, id };
   for (const key of cleared) delete input[key];
   const merged = schema.parse(input) as Row;
+  refuseIncomplete(type, merged);
   // A field with a default can't be emptied either: the model puts the
   // default back, and the null would then meet the column's NOT NULL as a
   // server error rather than a refusal. `{ flipped: null }` is the case.

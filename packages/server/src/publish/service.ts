@@ -1,6 +1,6 @@
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { validateModel, type ValidationReport } from "@oth/model";
+import { placementModelAsset, validateModel, type ValidationReport } from "@oth/model";
 import { buildBundle } from "@oth/model/bundle";
 import { isNull } from "drizzle-orm";
 import { assetFile } from "../assets/storage";
@@ -53,7 +53,8 @@ export async function publish(db: Database, dataDir: string, input: PublishInput
   // Copy the referenced .glb files alongside. The bundle builder is I/O-free,
   // so this is the server's half of the contract.
   const assetRows = await db.select().from(assets).where(isNull(assets.deletedAt));
-  const referenced = new Set(model.placements.map(p => p.assetId));
+  // An object shows its kind's model unless it names its own (spec §5.3).
+  const referenced = new Set(model.placements.map(p => placementModelAsset(model, p)));
   for (const asset of assetRows) {
     if (!referenced.has(asset.id)) continue;
     const dest = join(root, "assets", `${asset.checksum}.glb`);

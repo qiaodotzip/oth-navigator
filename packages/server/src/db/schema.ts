@@ -1,7 +1,8 @@
 import type { DraftSource, PlanSource } from "@oth/model";
+import { sql } from "drizzle-orm";
 import {
-  boolean, doublePrecision, index, integer, jsonb,
-  pgTable, text, timestamp, uniqueIndex,
+  boolean, check, doublePrecision, index, integer, jsonb,
+  pgTable, primaryKey, text, timestamp, uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -140,11 +141,32 @@ export const assets = pgTable("assets", {
 export const placements = pgTable("placements", {
   id: text("id").primaryKey(),
   levelId: text("level_id").notNull(),
-  assetId: text("asset_id").notNull(),
+  /** Its own model. Null for an object that shows its kind's (spec §5.3). */
+  assetId: text("asset_id"),
   roomId: text("room_id"),
   position: jsonb("position").$type<[number, number, number]>().notNull(),
   rotationDeg: doublePrecision("rotation_deg").notNull().default(0),
   scale: doublePrecision("scale").notNull().default(1),
+  /** Set when this is an object on the map: one of this kind. */
+  objectKindId: text("object_kind_id"),
+  /** The survey tags it was placed from, so a check can show its photos. */
+  sightingIds: jsonb("sighting_ids").$type<string[]>().notNull().default([]),
+  ...auditColumns,
+}, () => ({
+  // The model's validation rule, kept by the database too, for any write
+  // that goes round the repository. Plain column names: a check reads the
+  // row being written.
+  assetOrKind: check("placements_asset_or_kind", sql`asset_id is not null or object_kind_id is not null`),
+}));
+
+/** Kinds of object (ObjectKindSchema): a wastebin, a water cooler. Each object on the map is a placement of one. */
+export const objectKinds = pgTable("object_kinds", {
+  id: text("id").primaryKey(),
+  nameEn: text("name_en").notNull(),
+  nameZh: text("name_zh").notNull().default(""),
+  size: jsonb("size").$type<{ w: number; d: number; h: number }>().notNull(),
+  assetId: text("asset_id"),
+  notes: text("notes").notNull().default(""),
   ...auditColumns,
 });
 
@@ -293,6 +315,7 @@ export const places = pgTable("places", {
   levelId: text("level_id"),
   roomId: text("room_id"),
   pathwayKindId: text("pathway_kind_id"),
+  objectKindId: text("object_kind_id"),
   notes: text("notes").notNull().default(""),
   status: text("status").notNull().default("confirmed"),
   proposedBy: text("proposed_by").notNull().default(""),
@@ -364,3 +387,22 @@ export const roomDrafts = pgTable("room_drafts", {
   acceptedRoomId: text("accepted_room_id"),
   ...auditColumns,
 }, t => ({ levelIdx: index("room_drafts_level_idx").on(t.levelId) }));
+
+/**
+ * How far each floor's guided setup has got (spec §4, §9): a row per step
+ * that someone marked, or that Claude finished. Plan 6C's setup service reads
+ * and writes it. It is made here so Plan 6 has one migration.
+ */
+export const floorSetup = pgTable("floor_setup", {
+  levelId: text("level_id").notNull(),
+  /** 1–9, in the order the wizard shows the steps. */
+  step: integer("step").notNull(),
+  /** open | done | skipped */
+  status: text("status").notNull().default("open"),
+  /** Claude's one line from finish_step, shown in the wizard. */
+  note: text("note").notNull().default(""),
+  finishedBy: text("finished_by"),
+  /** The Claude Code token it came through; null for a person's Mark done. */
+  finishedVia: text("finished_via"),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+}, t => ({ pk: primaryKey({ columns: [t.levelId, t.step] }) }));

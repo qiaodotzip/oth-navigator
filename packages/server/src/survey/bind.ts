@@ -25,7 +25,7 @@ export type Bound = { verified: boolean; evidence: string[]; levelId: string };
  *
  * Which places may be bound, and where, is the editor's rule (`floorUnits`
  * in editor/src/flow/buildSteps.ts), so the two cannot disagree: a confirmed
- * place that is not a walkway, bound only while its room is on the map (one
+ * place that is not a walkway or an object, bound only while its room is on the map (one
  * whose room was deleted is waiting for a room again), and only to a room on
  * its own floor (`placeLevels`), or any floor when none claims it.
  */
@@ -42,6 +42,7 @@ export async function bindPlace(db: Database, input: BindInput, actorId: string,
     if (!room) throw new BindRefusal(`There is no room ${input.roomId}.`);
     if (place.status !== "confirmed") throw new BindRefusal(`${place.nameEn} is still a proposal. Accept it with review_place first.`);
     if (place.pathwayKindId) throw new BindRefusal(`${place.nameEn} is a walkway, which is built as a path, not bound to a room.`);
+    if (place.objectKindId) throw new BindRefusal(`${place.nameEn} is an object, which is placed on the map, not bound to a room.`);
     if (room.deletedAt) {
       throw new BindRefusal(`Room ${room.id} is deleted. Bind ${place.nameEn} to a room on the map, or restore this one first.`);
     }
