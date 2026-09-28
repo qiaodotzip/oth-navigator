@@ -3,7 +3,7 @@ import { useGLTF } from "@react-three/drei";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useCurrentRoute } from "../route";
+import { navigate, useCurrentRoute } from "../route";
 import { createSaver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
@@ -130,6 +130,28 @@ describe("BuildWorkspace — steps", () => {
     expect(useEditorStore.getState().tool).toBe("select");
   });
 
+  it("puts down another step's tool when a link changes the step too", () => {
+    // A Publish item, a floor link, Back: none of them goes through the stepper.
+    open("/floors/L1/build?step=floorplan");
+    act(() => {
+      useEditorStore.getState().setTool("calibrate");
+      useEditorStore.getState().pushCalibrationPoint([1, 1]);
+    });
+    act(() => navigate("/floors/L1/build?step=rooms"));
+    expect(useEditorStore.getState().tool).toBe("select");
+    expect(useEditorStore.getState().calibrationDraft).toBeNull();
+    expect(screen.getByRole("region", { name: "Areas & rooms guide" }).textContent).not.toMatch(/known distance/i);
+  });
+
+  it("keeps a tool that belongs to the step a link opens, so a new lift's next stop is one floor away", () => {
+    const l1 = open("/floors/L1/build?step=entrances");
+    act(() => useEditorStore.getState().setTool("place-portal"));
+    l1.unmount();
+    act(() => useEditorStore.getState().setActiveLevel("oth-L2"));
+    open("/floors/L2/build?step=entrances");
+    expect(useEditorStore.getState().tool).toBe("place-portal");
+  });
+
   it("keeps its layout when the session has ended, so the page survives the sign-in dialog", () => {
     act(() => useEditorStore.getState().endSession("expired"));
     open("/floors/L1/build?step=rooms");
@@ -188,6 +210,20 @@ describe("BuildWorkspace — the to-do list", () => {
     fireEvent.click(screen.getByRole("button", { name: /Festive Mall/ }));
     expect(screen.getByRole("region", { name: "Bind places guide" }).textContent)
       .toMatch(/click the room where you see Festive Mall/i);
+  });
+
+  it("says why a click placed nothing as an error, which stays until you dismiss it", async () => {
+    open("/floors/L1/build?step=entrances");
+    measure();
+    act(() => {
+      const s = useEditorStore.getState();
+      s.setTool("place-entrance");
+      s.setViewport({ originX: 0, originY: 600, scale: 10 });
+    });
+    // 90 m east: past every area on L1.
+    fireEvent.click(screen.getByTestId("plan-surface"), { clientX: 900, clientY: 550 });
+    await waitFor(() => expect(useToasts.getState().toasts.at(-1)?.message).toMatch(/An entrance goes inside an area/));
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({ tone: "error", durationMs: null });
   });
 
   it("deletes a lift with no stops from its item, with Undo", async () => {
@@ -255,11 +291,28 @@ describe("BuildWorkspace — links", () => {
     expect(param("step")).toBe("rooms");
   });
 
+  it("keeps what is selected in the address after a link to this floor that names nothing", () => {
+    // A Publish item or the Build tab: the selection stays, so the address says so.
+    open("/floors/L1/build?step=rooms&select=room:L1-a");
+    act(() => navigate("/floors/L1/build?step=pathways"));
+    expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-a" });
+    expect(param("select")).toBe("room:L1-a");
+  });
+
+  it("lets go of the selection when you leave Build, so teammates stop seeing you editing it", () => {
+    const build = open("/floors/L1/build?step=rooms&select=room:L1-a");
+    expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-a" });
+    build.unmount();
+    expect(useEditorStore.getState().selection).toBeNull();
+  });
+
   it("drops a link to something since deleted, and lets go of what was selected before it", async () => {
     const before = open("/floors/L1/build?step=rooms&select=room:L1-a");
     expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-a" });
-    // Off to another tab: Build goes, and the selection stays in the store.
+    // Off to another tab and back. Build lets go of its selection as it goes;
+    // one left in the store by anything else must not be written over the link either.
     before.unmount();
+    act(() => useEditorStore.getState().select({ type: "room", id: "L1-a" }));
     const gone = { ...model.rooms[0]!, id: "L1-old", deletedAt: "2026-09-27T10:00:00.000Z" };
     act(() => useEditorStore.getState().setModel({ ...model, rooms: [...model.rooms, gone] }));
     open("/floors/L1/build?step=rooms&select=room:L1-old");
@@ -314,6 +367,23 @@ describe("BuildWorkspace — the plan", () => {
     await waitFor(() => expect(useToasts.getState().toasts.some(t => /reload the map/.test(t.message))).toBe(true));
     expect(useEditorStore.getState().selection).toBeNull();
     expect(param("select")).toBeNull();
+  });
+
+  it("keeps a file let go outside the drop box from opening in place of the editor", async () => {
+    const { api, unmount } = open("/floors/L1/build?step=floorplan", {
+      uploadLevelImage: vi.fn(async (levelId: string, file: File) => ({ ...plan, levelId, filename: file.name })),
+    });
+    // Refused, so the browser does not open it...
+    expect(fireEvent.dragOver(document.body)).toBe(false);
+    expect(fireEvent.drop(document.body)).toBe(false);
+    // ...while the box still takes one.
+    const sheet = new File([new Uint8Array([1])], "L1.png", { type: "image/png" });
+    fireEvent.drop(screen.getByTestId("plan-drop-zone"), { dataTransfer: { files: [sheet] } });
+    await waitFor(() => expect(api.uploadLevelImage).toHaveBeenCalledWith("oth-L1", sheet));
+    await waitFor(() => expect(useEditorStore.getState().levelImages.map(i => i.id)).toEqual(["img_1"]));
+    // Only while Build is open.
+    unmount();
+    expect(fireEvent.drop(document.body)).toBe(true);
   });
 
   it("lets go of a selection a teammate deletes", () => {

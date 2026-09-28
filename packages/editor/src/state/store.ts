@@ -140,8 +140,16 @@ export const useEditorStore = create<EditorState>(set => ({
 
   setReport: report => set({ report }),
 
-  // Changing level clears the selection: a selected room on another floor is a confusing state.
-  setActiveLevel: id => set({ activeLevelId: id, selection: null, draft: null }),
+  // Changing level clears the selection: a selected room on another floor is a
+  // confusing state. And any measurement: its points were taken on the other
+  // floor's plan. Measuring stays in hand, starting again from no points.
+  setActiveLevel: id =>
+    set(state => ({
+      activeLevelId: id,
+      selection: null,
+      draft: null,
+      calibrationDraft: state.tool === "calibrate" ? [] : null,
+    })),
 
   select: selection => set({ selection }),
 

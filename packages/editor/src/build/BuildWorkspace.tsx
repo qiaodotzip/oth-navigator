@@ -143,6 +143,37 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
     if (model && levelId && route.params.step !== step) setParams({ step });
   }, [model, levelId, route.params.step, step]);
 
+  // A tool from another step would leave the guide explaining one thing while
+  // the canvas does another. Here rather than in `chooseStep`, as the stepper
+  // is not the only way the step changes: a floor or Publish link, or Back.
+  useEffect(() => {
+    const s = useEditorStore.getState();
+    if (s.tool !== "select" && !STEP_GUIDES[step].tools.includes(s.tool)) s.setTool("select");
+    setPendingPlaceId(null);
+  }, [step]);
+
+  // Leaving Build lets go of the selection. It is also the collaboration lock,
+  // which would otherwise show you to teammates as editing that room from
+  // Survey, Review or the floors home until it timed out.
+  useEffect(() => () => useEditorStore.getState().select(null), []);
+
+  // Only the plan's drop box takes a file. One let go anywhere else would be
+  // opened by the browser in place of the editor, and what you had half done
+  // with it; so it is refused, with the cursor saying so.
+  useEffect(() => {
+    const refuse = (event: DragEvent) => {
+      if (event.defaultPrevented) return; // The drop box took it.
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+    };
+    window.addEventListener("dragover", refuse);
+    window.addEventListener("drop", refuse);
+    return () => {
+      window.removeEventListener("dragover", refuse);
+      window.removeEventListener("drop", refuse);
+    };
+  }, []);
+
   function zoomTo(target: NonNullable<Selection>) {
     if (!canvasSize) return;
     const vp = zoomViewportTo(useEditorStore.getState().model, target, canvasSize.width, canvasSize.height);
@@ -199,17 +230,16 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
     },
   }), [saver]);
 
-  // The selection → the address, so what you are looking at can be sent to a teammate.
+  // The selection → the address, so what you are looking at can be sent to a
+  // teammate. Also when the address changes: a link to this floor that names
+  // nothing (a Publish item, the Build tab) keeps the selection, so it is
+  // written back rather than left out of the address.
   useEffect(() => {
     const value = selectParam(useEditorStore.getState().selection);
     if (levelId && value !== selectInAddress()) setParams({ select: value || null });
-  }, [selection, levelId]);
+  }, [selection, levelId, selectValue]);
 
   function chooseStep(next: BuildStepId) {
-    const s = useEditorStore.getState();
-    // A tool from another step would leave the guide explaining one thing while the canvas does another.
-    if (s.tool !== "select" && !STEP_GUIDES[next].tools.includes(s.tool)) s.setTool("select");
-    setPendingPlaceId(null);
     setParams({ step: next });
   }
 
@@ -324,7 +354,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
               onCommitPoint={point => {
                 const s = useEditorStore.getState();
                 if (!s.model || !levelId) return;
-                void commitPoint({ saver, model: s.model, tool: s.tool, levelId, point, say: message => toast({ message }) });
+                void commitPoint({ saver, model: s.model, tool: s.tool, levelId, point, say: (message, tone) => toast({ message, tone }) });
               }}
             />
           )}

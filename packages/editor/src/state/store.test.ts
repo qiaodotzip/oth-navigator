@@ -57,6 +57,23 @@ describe("editor store", () => {
     expect(useEditorStore.getState().selection).toBeNull();
   });
 
+  it("forgets a measurement when the level changes, as its points were taken on the other floor's plan", () => {
+    useEditorStore.getState().setModel(model);
+    useEditorStore.getState().setTool("calibrate");
+    useEditorStore.getState().pushCalibrationPoint([1, 1]);
+    useEditorStore.getState().setActiveLevel("oth-L2");
+    // Still measuring, from nothing: the tool in hand is kept.
+    expect(useEditorStore.getState().tool).toBe("calibrate");
+    expect(useEditorStore.getState().calibrationDraft).toEqual([]);
+  });
+
+  it("keeps no measurement at all when the level changes with another tool in hand", () => {
+    useEditorStore.getState().setModel(model);
+    useEditorStore.getState().pushCalibrationPoint([1, 1]);
+    useEditorStore.getState().setActiveLevel("oth-L2");
+    expect(useEditorStore.getState().calibrationDraft).toBeNull();
+  });
+
   it("accumulates draft points while drawing", () => {
     useEditorStore.getState().setTool("draw-room");
     useEditorStore.getState().beginDraft();
