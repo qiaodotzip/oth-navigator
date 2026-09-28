@@ -38,6 +38,15 @@ export const FLOOR_ARG = z.string().trim().regex(/^[A-Za-z0-9_-]{1,40}$/, "a flo
 export const FINAL_LINE = "Report what you did in a few lines. Then call `finish_step`, but only if you reached the stop rule above.";
 
 /**
+ * Every prompt says this, so every prompt lists `view_plan` and `check_floor`.
+ * Rehearsal 2's Claude met the token's write limit and tried to sleep in Bash
+ * and PowerShell; a teammate's Claude Code would have asked them to allow a
+ * shell. Reads have their own limit, so looking over the work fills the wait.
+ */
+export const SLOW_DOWN =
+  "If a tool says to slow down, look over your work with `view_plan` or `check_floor` until the wait is over; never try to sleep or use a shell.";
+
+/**
  * label_survey's tags are proposals, accepted or rejected at step 3, Review
  * Claude's labels; the frames it bins and the kinds it makes have Undo at
  * step 8, with the other three prompts' changes. Step 8, Check Claude's
@@ -66,6 +75,8 @@ export function promptText(p: SetupPrompt, floor: string): string {
     `Work on floor ${floor} only. If a tool says there is no floor ${floor}, stop and tell your person; don't choose another floor.`,
     "",
     ...p.steps(floor),
+    "",
+    SLOW_DOWN,
     "",
     draftMap(p),
     "",

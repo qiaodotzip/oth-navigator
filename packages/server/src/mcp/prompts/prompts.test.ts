@@ -7,7 +7,7 @@ import { CLAUDE_STEPS, stepNumber } from "../../setup/steps";
 import type { ToolContext } from "../context";
 import { buildMcpServer } from "../server";
 import { drawPaths } from "./drawPaths";
-import { FINAL_LINE, PROMPTS, promptText, toolsNamed } from "./index";
+import { FINAL_LINE, PROMPTS, SLOW_DOWN, promptText, toolsNamed } from "./index";
 import { labelSurvey } from "./labelSurvey";
 import { mapRooms } from "./mapRooms";
 import { placeThings } from "./placeThings";
@@ -81,7 +81,9 @@ describe("the four setup prompts", () => {
     expect(promptText(labelSurvey, "L1")).toContain(
       "A batch is one `list_frames` page of up to 40 frames: look at and decide every frame on it before you call `list_frames` again. At most 3 batches a run, then report what is left and stop.",
     );
-    expect(promptText(mapRooms, "L1")).toContain("At most 3 `decide_drafts` calls a run, then report what is left and stop.");
+    expect(promptText(mapRooms, "L1")).toContain(
+      "At most 3 `decide_drafts` calls a run (a refused call decides nothing, so it doesn't count), then report what is left and stop.",
+    );
     expect(promptText(placeThings, "L1")).toContain("At most 60 binds and 40 objects a run, then report what is left and stop.");
     expect(promptText(drawPaths, "L1")).toContain(
       "Draw the whole first pass in this run. If you do have to stop, running this again carries on: `suggest_paths` marks drawn the lines the floor has pathways along.",
@@ -89,9 +91,12 @@ describe("the four setup prompts", () => {
   });
 
   it("use every tool they list in their instructions, and name no tool they don't list", () => {
+    // finish_step and the slow-down line's tools are named in the text every prompt shares.
+    const shared = new Set(["finish_step", ...toolsNamed(SLOW_DOWN)]);
     for (const p of PROMPTS) {
-      const body = [...p.steps("L1"), p.stop("L1")].join("\n");
-      expect(new Set(toolsNamed(body)), p.name).toEqual(new Set(p.tools.filter(t => t !== "finish_step")));
+      const body = new Set(toolsNamed([...p.steps("L1"), p.stop("L1")].join("\n")));
+      for (const tool of p.tools) if (!shared.has(tool)) expect(body.has(tool), `${p.name}: ${tool}`).toBe(true);
+      for (const tool of body) expect(p.tools, p.name).toContain(tool);
       expect(new Set(toolsNamed(promptText(p, "L1"))), p.name).toEqual(new Set(p.tools));
     }
   });
@@ -159,7 +164,7 @@ describe("the four setup prompts", () => {
 describe("what the rehearsal and the final review taught each prompt", () => {
   it("label_survey stops on a floor with no footage, uses only ids it was given, and doesn't make a second kind", () => {
     const text = promptText(labelSurvey, "L1");
-    expect(text).toContain("If its label counts are all 0, no footage has been filmed on L1 yet: stop and say so.");
+    expect(text).toContain("If its label counts are all 0, no footage has been filmed on L1 yet: stop and say so, and don't mark the step done.");
     expect(text).toContain("Use only ids a tool has given you in this run; never type one from memory.");
     expect(text).toContain("first look in `get_floor`'s places for one already named for it");
     expect(text).toContain("A proposal (status proposed) that turns out to be an object is tagged with its placeId and object true, which makes it the kind's place; say which in your report.");
@@ -197,6 +202,80 @@ describe("what the rehearsal and the final review taught each prompt", () => {
     expect(text).toContain("one box (in metres) for every ten lines or so");
     expect(text).toContain("`check_floor` lists at most 100 problems and says the total");
     expect(toolsNamed(text)).not.toContain("drawn");
+  });
+});
+
+describe("what the re-review and rehearsal 2 taught each prompt (Task 10)", () => {
+  it("every prompt looks over its work while a tool says to slow down, and never sleeps or uses a shell", () => {
+    expect(SLOW_DOWN).toBe(
+      "If a tool says to slow down, look over your work with `view_plan` or `check_floor` until the wait is over; never try to sleep or use a shell.",
+    );
+    for (const p of PROMPTS) {
+      expect(promptText(p, "L1"), p.name).toContain(`\n${SLOW_DOWN}\n`);
+      expect(p.tools, p.name).toEqual(expect.arrayContaining(["view_plan", "check_floor"]));
+    }
+  });
+
+  it("label_survey and map_rooms stop on an empty floor and don't mark the step done", () => {
+    expect(promptText(labelSurvey, "L1")).toContain("no footage has been filmed on L1 yet: stop and say so, and don't mark the step done.");
+    expect(promptText(mapRooms, "L1")).toContain("nobody has run Find rooms on L1 yet: stop and say so, and don't mark the step done.");
+  });
+
+  it("label_survey names a kind by what it is, never by where it was seen", () => {
+    expect(promptText(labelSurvey, "L1")).toContain(
+      'Name a kind by what it is ("fire extinguisher"), never by where you saw it; the frames already say where.',
+    );
+  });
+
+  it("map_rooms decides nothing when list_drafts says the drawing doesn't line up with the rooms", () => {
+    expect(promptText(mapRooms, "L1")).toContain(
+      "If `list_drafts` gives lineUp, the drawing doesn't line up with the rooms already on the floor, by about dx, dy metres. " +
+      "Decide nothing: stop, say so, and ask a person to line the plan up with the rooms (Build's Floorplan step, Align) and run Find rooms again. " +
+      "Don't mark the step done.",
+    );
+  });
+
+  it("map_rooms never accepts a draft whose specific name a room already has, and reads share for what it measures", () => {
+    const text = promptText(mapRooms, "L1");
+    expect(text).toContain("check its name against `get_floor`'s rooms. Never accept a draft whose specific name a room on the floor already has");
+    expect(text).toContain("reject it as a copy when that room is where the draft is, or set it aside when the room is elsewhere");
+    // The re-review's replacement: share near 1 is both a copy and a smaller space inside, so share alone rejects nothing.
+    expect(text).toContain(
+      "share is how much of the draft lies over a room, so it is near 1 both for a copy and for a smaller space inside one; a copy is onMapAs already.",
+    );
+    expect(text).toContain(
+      "reject the draft when it is the same space as that room (the room's name, or the same outline on the drawing); " +
+      "accept it when it is a smaller space inside an open area (the room beneath is kind area)",
+    );
+    expect(text).not.toContain("or a share near 1 over it");
+    expect(text).toContain("Before each `decide_drafts`, look at the drafts in it over the drawing with `view_plan`");
+  });
+
+  it("place_things matches names, looks with view_plan, and opens a place's frames where names don't settle it", () => {
+    const text = promptText(placeThings, "L1");
+    expect(text).toContain("match the survey's name against the rooms' names, and look with `view_plan` around the room.");
+    expect(text).toContain("Where the names alone don't settle it, look at the place's frames with `view_frame` (`get_floor`'s places give up to 3 for each).");
+    expect(text).toContain("Bind when they agree: `bind_place`");
+    expect(text).not.toContain("the place's frames with `view_frame` when the names don't agree");
+  });
+
+  it("place_things may finish a run again that finds nothing left, when step_status shows nothing unbound", () => {
+    expect(promptText(placeThings, "L1")).toContain(
+      "On a run again that finds nothing left to do, finishing is fine when `step_status` shows nothing unbound (things.unbound 0).",
+    );
+  });
+
+  it("draw_paths looks along the edge for a gate in a large open area, draws no link twice, and stops by check_floor's codes", () => {
+    const text = promptText(drawPaths, "L1");
+    expect(text).toContain(
+      "If a gate's room is a large open area, you can't tell where the gate is from the room alone: look along the building's edge in that room with `view_plan`. " +
+      "If you still can't place it, name it for a person.",
+    );
+    expect(text).toContain("Create each link as a short pathway too, unless `get_floor`'s pathways already has one between the same two points.");
+    expect(text).toContain(
+      'Stop when `check_floor` with floor "L1" and codes ["area.unreachable", "room.noAccess"] gives none, or only ones a person must fix: ' +
+      "give how many, and name up to 20.",
+    );
   });
 });
 
