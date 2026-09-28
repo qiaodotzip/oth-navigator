@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { RoomDraftInputSchema, type DraftSource, type RoomKind } from "@oth/model";
 import type { Database } from "../db/client";
 import { toModelRow, type Row } from "../db/rows";
@@ -68,16 +68,62 @@ export function roomIdFor(code: string, name: string, taken: Set<string>): strin
 }
 
 /**
+ * The audit actions that mark a draft set aside for a person (decide_drafts)
+ * and take the mark back (Undo in the setup's check step). A set-aside draft
+ * stays waiting: only the mark says a person should decide it.
+ */
+export const SET_ASIDE = "set-aside";
+export const UNSET_ASIDE = "unset-aside";
+
+/** Who set a draft aside (a user id), why, and when (ISO). */
+export type SetAside = { by: string; reason: string; at: string };
+
+/**
+ * The drafts on a floor set aside now, by id. A draft is set aside while its
+ * latest set-aside or unset-aside mark is a set-aside, and nobody has decided
+ * it since: an accept or a reject soft-deletes it, so a delete after the mark
+ * ends it, even when that reject is later undone. The caller checks the draft
+ * still waits.
+ */
+async function setAsideMarks(db: Database, levelId: string): Promise<Map<string, SetAside>> {
+  const rows = await db.select({
+    id: auditLog.entityId, action: auditLog.action, actorId: auditLog.actorId, after: auditLog.after, at: auditLog.at,
+  })
+    .from(auditLog)
+    .innerJoin(roomDrafts, eq(roomDrafts.id, auditLog.entityId))
+    .where(and(
+      eq(auditLog.entityType, "roomDraft"), eq(roomDrafts.levelId, levelId),
+      inArray(auditLog.action, [SET_ASIDE, UNSET_ASIDE, "delete"]),
+    ))
+    .orderBy(asc(auditLog.at));
+  const marks = new Map<string, SetAside | null>();
+  for (const r of rows) {
+    const reason = (r.after as { reason?: unknown } | null)?.reason;
+    marks.set(r.id, r.action === SET_ASIDE
+      ? { by: r.actorId ?? "", reason: typeof reason === "string" ? reason : "", at: r.at.toISOString() }
+      : null);
+  }
+  const out = new Map<string, SetAside>();
+  for (const [id, mark] of marks) if (mark) out.set(id, mark);
+  return out;
+}
+
+/**
  * A floor's drafts still waiting for review, largest first, as the script
  * ordered them, then by id: a tiebreaker, so a page stays stable when two
  * drafts share an area and decide_drafts has just taken others off the list.
+ * One Claude set aside for a person carries `setAside`.
  */
 export async function listDrafts(db: Database, levelId: string): Promise<Row[]> {
   const rows = await db.select().from(roomDrafts).where(and(
     eq(roomDrafts.levelId, levelId), isNull(roomDrafts.deletedAt), isNull(roomDrafts.acceptedRoomId),
   ));
-  return rows.map(r => toModelRow(r as unknown as Row))
-    .sort((a, b) => Number(b.areaM2) - Number(a.areaM2) || String(a.id).localeCompare(String(b.id)));
+  const marks = await setAsideMarks(db, levelId);
+  return rows.map(r => {
+    const row = toModelRow(r as unknown as Row);
+    const mark = marks.get(r.id);
+    return mark ? { ...row, setAside: mark } : row;
+  }).sort((a, b) => Number(b.areaM2) - Number(a.areaM2) || String(a.id).localeCompare(String(b.id)));
 }
 
 /**
@@ -134,15 +180,16 @@ export async function acceptDrafts(db: Database, items: readonly AcceptItem[], a
 }
 
 /**
- * A draft is fit for a decision: not already a room, not already rejected or
- * set aside, and at the version the caller expects. Shared by acceptInOne and
- * decideDrafts's reject/set-aside, so accept and the other two decisions
- * refuse the same way, in the same words.
+ * A draft is fit for a decision: not already a room, not already rejected,
+ * and at the version the caller expects. Shared by acceptInOne and
+ * decideDrafts, so every decision refuses the same way, in the same words.
+ * `who` names the draft: its name for a person in Build, its id and name for
+ * Claude, who decides a hundred at once.
  */
-function waitingDraft(draft: typeof roomDrafts.$inferSelect, expectedVersion: number): void {
-  if (draft.acceptedRoomId) throw new DraftRefusedError(`${draft.nameEn} is on the map already.`);
+function waitingDraft(draft: typeof roomDrafts.$inferSelect, expectedVersion: number, who = draft.nameEn): void {
+  if (draft.acceptedRoomId) throw new DraftRefusedError(`${who} is on the map already.`);
   if (draft.deletedAt) {
-    throw new DraftRefusedError(`${draft.nameEn} is no longer waiting for review: it was rejected, or the drawing was searched again.`);
+    throw new DraftRefusedError(`${who} is no longer waiting for review: it was rejected, or the drawing was searched again.`);
   }
   // The draft's version is the check that matters, so it comes before anything is written.
   if (draft.version !== expectedVersion) throw new VersionConflictError(toModelRow(draft as unknown as Row));
@@ -219,8 +266,13 @@ export type DraftRow = {
   deletedAt: string | null;
   /** A later Find rooms retired it while it waited: neither accepted nor rejected. */
   retired: boolean;
+  /** Set while it waits for a person, as Claude set it aside; null otherwise. */
+  setAside: SetAside | null;
 };
-export type DraftTally = { waiting: number; accepted: number; rejectedOrSetAside: number };
+/** A draft of the floor's latest search, as the Undo guard reads it. */
+export type SearchDraft = Pick<DraftRow, "id" | "nameEn" | "acceptedRoomId" | "deletedAt">;
+/** Contract v2: waiting counts only the drafts nobody has set aside. */
+export type DraftTally = { waiting: number; setAside: number; accepted: number; rejected: number };
 
 /*
  * How a search is told apart. One search is one transaction (replaceDrafts),
@@ -256,7 +308,13 @@ export async function floorDrafts(db: Database, levelId: string): Promise<DraftR
         and del.at in ${SEARCH_MOMENTS(levelId)}
     )`,
   }).from(roomDrafts).where(eq(roomDrafts.levelId, levelId));
-  return rows.map(r => ({ ...r, deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null, retired: Boolean(r.retired) }));
+  const marks = await setAsideMarks(db, levelId);
+  return rows.map(r => ({
+    ...r,
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+    retired: Boolean(r.retired),
+    setAside: r.deletedAt === null && r.acceptedRoomId === null ? marks.get(r.id) ?? null : null,
+  }));
 }
 
 /**
@@ -264,7 +322,7 @@ export async function floorDrafts(db: Database, levelId: string): Promise<DraftR
  * has the newest search moment (over every search, empty ones included, so
  * an empty latest search correctly gives none of the search before it).
  */
-export async function latestSearch(db: Database, levelId: string): Promise<DraftRow[]> {
+export async function latestSearch(db: Database, levelId: string): Promise<SearchDraft[]> {
   const rows = await db.select({
     id: roomDrafts.id, nameEn: roomDrafts.nameEn, acceptedRoomId: roomDrafts.acceptedRoomId, deletedAt: roomDrafts.deletedAt,
   })
@@ -274,21 +332,21 @@ export async function latestSearch(db: Database, levelId: string): Promise<Draft
       eq(roomDrafts.levelId, levelId),
       sql`${auditLog.at} = (select max(m.at) from ${SEARCH_MOMENTS(levelId)} as m)`,
     ));
-  // Nothing has searched after the latest search, so none of its drafts is retired.
-  return rows.map(r => ({ ...r, deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null, retired: false }));
+  return rows.map(r => ({ ...r, deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null }));
 }
 
-/** Waiting, accepted, and rejected or set aside. A draft a search retired is none of those, and isn't counted. */
+/**
+ * Waiting (for anyone), set aside (waiting for a person), accepted and
+ * rejected. A draft a search retired is none of those, and isn't counted.
+ */
 export function tallyDrafts(rows: readonly DraftRow[]): DraftTally {
   return {
-    waiting: rows.filter(r => r.deletedAt === null).length,
+    waiting: rows.filter(r => r.deletedAt === null && r.setAside === null).length,
+    setAside: rows.filter(r => r.deletedAt === null && r.setAside !== null).length,
     accepted: rows.filter(r => r.acceptedRoomId !== null).length,
-    rejectedOrSetAside: rows.filter(r => r.deletedAt !== null && r.acceptedRoomId === null && !r.retired).length,
+    rejected: rows.filter(r => r.deletedAt !== null && r.acceptedRoomId === null && !r.retired).length,
   };
 }
-
-/** The audit action that marks a draft set aside for a person, beside its delete (spec §8's check step reads it). */
-export const SET_ASIDE = "set-aside";
 
 /** decide_drafts's most per call (spec §7.2). */
 export const MAX_DECISIONS = 100;
@@ -301,38 +359,68 @@ export type DraftDecision = {
   nameEn?: string;
   /** accept only. */
   kind?: RoomKind;
+  /** set_aside only, and needed there: why a person should decide it, in one line. */
+  reason?: string;
 };
-export type Decided = { accepted: (Accepted & { nameEn: string })[]; rejected: string[]; setAside: string[] };
+export type Decided = {
+  accepted: (Accepted & { nameEn: string })[];
+  rejected: string[];
+  setAside: string[];
+  /** Ids no draft has: skipped, so one mistyped id doesn't cost the rest. */
+  unknown: string[];
+};
+
+/** One line, as the Build list and the check step show it beside the draft. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim().slice(0, 200);
+}
 
 /**
- * Claude's decide_drafts (spec §7.2): one floor's accepts, rejects and
- * set-asides, all or none. Accepts go through acceptDrafts, as the Accept
- * button's do, so their Undo is the same. A reject and a set-aside are both
- * the soft delete Build's Reject and Done make; a set-aside also leaves a
- * SET_ASIDE row in the audit log, so the check step can say a person should
- * decide it. Every draft is checked to be on this floor before anything is
- * written: a tool touches only the floor it is given.
+ * Claude's decide_drafts (spec §7.2, contract v2): one floor's accepts,
+ * rejects and set-asides. An id no draft has is skipped and reported; every
+ * other refusal leaves the whole call unwritten. Accepts go through
+ * acceptDrafts, as the Accept button's do, so their Undo is the same. A
+ * reject is the soft delete Build's Reject makes. A set-aside writes nothing
+ * to the draft, which keeps waiting: a SET_ASIDE row with the reason marks
+ * it for a person, in Build and in the check step. Every draft is checked,
+ * named by its id, before anything is written: a tool touches only the floor
+ * it is given.
  */
 export async function decideDrafts(db: Database, levelId: string, items: readonly DraftDecision[], actor: string): Promise<Decided> {
   const seen = new Set<string>();
   for (const item of items) {
     if (seen.has(item.id)) throw new DraftRefusedError(`Draft ${item.id} is in the list twice. Decide each draft once.`);
     seen.add(item.id);
+    if (item.decision === "set_aside" && !oneLine(item.reason ?? "")) {
+      throw new DraftRefusedError(`Setting aside draft ${item.id} needs a reason: one line on why a person should decide it.`);
+    }
   }
   return db.transaction(async t => {
     const tx = t as unknown as Database;
     const level = await liveLevel(tx, levelId);
+    const marks = await setAsideMarks(tx, levelId);
     const drafts = new Map<string, typeof roomDrafts.$inferSelect>();
+    const unknown: string[] = [];
     for (const item of items) {
       const [draft] = await tx.select().from(roomDrafts).where(eq(roomDrafts.id, item.id));
-      if (!draft) throw new DraftRefusedError(`There is no draft ${item.id}. list_drafts gives ${level.code}'s.`);
+      if (!draft) {
+        unknown.push(item.id);
+        continue;
+      }
       if (draft.levelId !== levelId) {
         throw new DraftRefusedError(`Draft ${item.id} is not on ${level.code}. decide_drafts decides one floor's drafts at a time.`);
       }
+      const who = `Draft ${draft.id} (${draft.nameEn})`;
+      waitingDraft(draft, item.expectedVersion, who);
+      if (item.decision === "accept" && !draft.footprint) {
+        throw new DraftRefusedError(`${who} is left open on the drawing, so it has no shape to add. Set it aside for a person instead.`);
+      }
+      if (item.decision === "set_aside" && marks.has(draft.id)) throw new DraftRefusedError(`${who} is set aside already.`);
       drafts.set(draft.id, draft);
     }
+    const known = items.filter(i => drafts.has(i.id));
 
-    const accepts = items.filter(i => i.decision === "accept");
+    const accepts = known.filter(i => i.decision === "accept");
     // A savepoint inside this transaction: its refusal takes the rejects back too.
     const made = accepts.length === 0 ? [] : await acceptDrafts(tx, accepts.map(({ id, expectedVersion, nameEn, kind }) => ({
       id, expectedVersion, ...(nameEn ? { nameEn } : {}), ...(kind ? { kind } : {}),
@@ -342,18 +430,39 @@ export async function decideDrafts(db: Database, levelId: string, items: readonl
     const at = new Date();
     const rejected: string[] = [];
     const setAside: string[] = [];
-    for (const item of items) {
-      if (item.decision === "accept") continue;
+    for (const item of known) {
       const draft = drafts.get(item.id)!;
-      waitingDraft(draft, item.expectedVersion);
-      await softDeleteEntity(tx, "roomDraft", draft.id, draft.version, actor, at);
-      if (item.decision === "set_aside") {
-        await recordAudit(tx, "roomDraft", draft.id, SET_ASIDE, actor, null, { id: draft.id, levelId, nameEn: draft.nameEn });
-        setAside.push(draft.nameEn);
-      } else {
+      if (item.decision === "reject") {
+        await softDeleteEntity(tx, "roomDraft", draft.id, draft.version, actor, at);
         rejected.push(draft.nameEn);
+      } else if (item.decision === "set_aside") {
+        await recordAudit(tx, "roomDraft", draft.id, SET_ASIDE, actor, null, {
+          id: draft.id, levelId, nameEn: draft.nameEn, version: draft.version, areaM2: draft.areaM2, reason: oneLine(item.reason ?? ""),
+        });
+        setAside.push(draft.nameEn);
       }
     }
-    return { accepted: made.map(a => ({ ...a, nameEn: nameOf.get(a.draftId)! })), rejected, setAside };
+    return { accepted: made.map(a => ({ ...a, nameEn: nameOf.get(a.draftId)! })), rejected, setAside, unknown };
+  });
+}
+
+/**
+ * The Undo of a set-aside (the setup's check step): the draft stays where it
+ * is, waiting, and an UNSET_ASIDE row takes the mark back. Refused unless the
+ * draft is at the version the set-aside left, still waiting, and still set
+ * aside.
+ */
+export async function unsetAside(db: Database, draftId: string, expectedVersion: number, actor: string): Promise<void> {
+  await db.transaction(async t => {
+    const tx = t as unknown as Database;
+    const [draft] = await tx.select().from(roomDrafts).where(eq(roomDrafts.id, draftId));
+    if (!draft) throw new NotFoundError();
+    waitingDraft(draft, expectedVersion);
+    if (!(await setAsideMarks(tx, draft.levelId)).has(draft.id)) {
+      throw new DraftRefusedError(`${draft.nameEn} isn't set aside now, so there is nothing to take back.`);
+    }
+    await recordAudit(tx, "roomDraft", draft.id, UNSET_ASIDE, actor, null, {
+      id: draft.id, levelId: draft.levelId, nameEn: draft.nameEn, version: draft.version,
+    });
   });
 }

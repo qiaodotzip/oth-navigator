@@ -6,9 +6,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { createUser } from "../auth/users";
 import type { Database } from "../db/client";
-import { buildings, levels, roomDrafts, rooms } from "../db/schema";
+import { buildings, levels, roomDrafts, rooms, users } from "../db/schema";
 import { createTestDb, json } from "../testing/harness";
-import { roomIdFor } from "./service";
+import { decideDrafts, roomIdFor } from "./service";
 
 let db: Database;
 let app: ReturnType<typeof createApp>;
@@ -98,6 +98,17 @@ describe("a floor's drafts", () => {
     await replace([found("Shop")]);
     expect((await replace([found("Bad", { footprint: [[0, 0], [1, 1]] })])).status).toBe(422);
     expect((await listed()).map(d => d.nameEn)).toEqual(["Shop"]);
+  });
+
+  it("lists a draft Claude set aside with who set it aside, why and when, still waiting (contract v2)", async () => {
+    await replace([found("Shop"), found("Plaza", { kind: "area", footprint: undefined, areaM2: 0 })]);
+    const plaza = await named("Plaza");
+    const [who] = await db.select({ id: users.id }).from(users);
+    await decideDrafts(db, "oth-L2", [{ id: plaza.id, expectedVersion: 0, decision: "set_aside", reason: "Open on the drawing" }], who!.id);
+    const drafts = await listed() as (Draft & { setAside?: { by: string; reason: string; at: string } })[];
+    expect(drafts.map(d => d.nameEn)).toEqual(["Shop", "Plaza"]);
+    expect(drafts[0]!.setAside).toBeUndefined();
+    expect(drafts[1]!.setAside).toEqual({ by: who!.id, reason: "Open on the drawing", at: expect.stringMatching(/^\d{4}-\d\d-\d\dT/) });
   });
 
   it("never puts drafts in the map", async () => {

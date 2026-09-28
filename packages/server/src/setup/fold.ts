@@ -1,4 +1,4 @@
-import type { Vec2 } from "@oth/model";
+import { insidePoint, type Ring, type Vec2 } from "@oth/model";
 import type { Row } from "../db/rows";
 import type { auditLog } from "../db/schema";
 import { SET_ASIDE } from "../drafts/service";
@@ -8,34 +8,45 @@ import { count } from "../mcp/results";
 export type AuditRow = typeof auditLog.$inferSelect;
 
 /**
- * The check step's groups, in the order it shows them: spec §8's eight, then
- * Claude's survey labels, which Review decides, and anything else. Plan 6E's
+ * The check step's groups, in the order it shows them: contract v2's nine
+ * (spec §8's eight, then the frames Claude binned), then Claude's survey
+ * labels, which Review decides, and anything else. Plan 6E's
  * ClaudeChangeGroup, word for word.
  */
-export const CHANGE_GROUPS = ["rooms", "drafts", "names", "stops", "places", "objects", "pathways", "entrances", "labels", "other"] as const;
+export const CHANGE_GROUPS = [
+  "rooms", "drafts", "names", "stops", "places", "objects", "pathways", "entrances", "frames", "labels", "other",
+] as const;
 export type ChangeGroup = (typeof CHANGE_GROUPS)[number];
 
+/** What a change can write: the map's entities, and a survey frame, which a bin soft-deletes. */
+export type TouchType = EntityType | "keyframe";
+
 /** An entity a change wrote, at the version it left it: Undo is offered only while it still is. */
-export type Touch = { type: EntityType; id: string; version: number };
+export type Touch = { type: TouchType; id: string; version: number };
 
 /** One write that takes a change back, version-checked like any other. */
 export type UndoStep =
   | { do: "delete" | "restore"; type: EntityType; id: string; version: number }
   | { do: "patch"; type: EntityType; id: string; version: number; patch: Row }
-  | { do: "unaccept"; draftId: string; draftVersion: number; roomId: string; roomVersion: number };
+  | { do: "unaccept"; draftId: string; draftVersion: number; roomId: string; roomVersion: number }
+  | { do: "unsetAside"; draftId: string; version: number }
+  | { do: "unbin"; frameId: string; version: number };
 
 /** What a change's plain line is made from. */
 export type Facts =
-  | { kind: "fromDraft"; name: string; drawingName: string; roomKind: string }
-  | { kind: "draftOff"; name: string; setAside: boolean }
+  | { kind: "fromDraft"; roomId: string; name: string; drawingName: string; roomKind: string; areaM2: number | null; at: Vec2 | null }
+  | { kind: "draftOff"; name: string }
+  | { kind: "setAside"; draftId: string; name: string; reason: string }
   | { kind: "renamed"; from: string; to: string; kindFrom: string; kindTo: string }
   | { kind: "stop"; roomId: string; roomName: string; portalId: string; stopKind: string | null; joined: boolean }
   | { kind: "stopOpened"; roomId: string; roomName: string }
-  | { kind: "bound"; placeName: string; roomId: string; photos: number }
+  | { kind: "bound"; placeId: string; placeName: string; roomId: string; photos: number }
   | { kind: "object"; objectKindId: string; sightingIds: string[]; at: Vec2 }
-  | { kind: "pathway"; name: string; lengthM: number }
-  | { kind: "entrance"; name: string; roomId: string }
+  | { kind: "kindMade"; kindId: string; name: string; size: { w: number; d: number; h: number }; frameId: string | null }
+  | { kind: "pathway"; pathwayId: string; name: string; lengthM: number; mid: Vec2 | null }
+  | { kind: "entrance"; entranceId: string; name: string; roomId: string }
   | { kind: "label"; placeId: string; placeName: string; frameId: string; newPlace: boolean; object: boolean }
+  | { kind: "binned"; frameId: string; tags: number }
   | { kind: "generic"; action: string; type: string; name: string };
 
 /** One of Claude's changes: the audit rows one tool call wrote for one thing, as one row of the check step. */
@@ -47,7 +58,11 @@ export type Folded = {
   at: Date;
   actorId: string | null;
   via: string;
-  /** Its floor; null for a label, whose floor is its frame's (changes.ts reads it off the map). */
+  /**
+   * Its floor; null for what is on no floor by itself: a label or a binned
+   * frame is on its frame's floor, and a kind of object on the floor of the
+   * frame it was made for (changes.ts reads both off the frames).
+   */
   levelId: string | null;
   /** The key row's entity and action, as the list reports them. */
   entityType: string;
@@ -59,21 +74,27 @@ export type Folded = {
   facts: Facts;
 };
 
-/** Names the plain lines need from the map as it is now. */
+/** Names the plain lines need, from the map as it is now. */
 export type Names = {
+  /** A room's name now, or its id once it has none. */
   room: (id: string) => string;
+  /** A live entity's name now ("" when it has none), or null when it is gone: the line then keeps the name it had. */
+  current: (type: string, id: string) => string | null;
   place: (id: string) => string;
   objectKind: (id: string) => string;
   portalKind: (id: string) => string | null;
-  near: (levelId: string, at: Vec2) => string | null;
+  /** The nearest named room to a point on a floor, leaving out `except` (the room the point is in, for a room's own line). */
+  near: (levelId: string, at: Vec2, except?: string) => string | null;
+  /** A frame as people find it: "frame 12 of L1 walk.mp4". */
+  frame: (id: string) => string;
 };
 
 export const TYPE_WORDS: Record<string, string> = {
   room: "room", doorway: "doorway", entrance: "entrance", portal: "lift or stair", portalEndpoint: "stop",
-  navHint: "route hint", pathway: "pathway", placement: "placement", tenant: "tenant",
+  navHint: "route hint", pathway: "pathway", placement: "placement", tenant: "tenant", objectKind: "kind of object",
 };
 /** The map's own types: a change to one of these can be a row on its own. */
-const MAP_TYPES = new Set(Object.keys(TYPE_WORDS));
+const MAP_TYPES = new Set(Object.keys(TYPE_WORDS).filter(type => type !== "objectKind"));
 const AUDIT_KEYS = new Set(["id", "version", "updatedAt", "updatedBy", "deletedAt"]);
 
 type Json = Record<string, unknown>;
@@ -81,6 +102,8 @@ const obj = (v: unknown): Json => (v && typeof v === "object" && !Array.isArray(
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const num = (v: unknown): number => (typeof v === "number" ? v : 0);
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((s): s is string => typeof s === "string") : []);
+const points = (v: unknown): Vec2[] =>
+  Array.isArray(v) ? v.filter((p): p is [number, number] => Array.isArray(p) && typeof p[0] === "number" && typeof p[1] === "number") : [];
 
 /** The update that puts an update back: each field it changed, as it was; null clears one it added. */
 export function patchBack(before: Json, after: Json): Row {
@@ -97,21 +120,39 @@ const version = (r: AuditRow) => num(obj(r.after).version);
 const ref = (r: AuditRow) => ({ type: r.entityType as EntityType, id: r.entityId, version: version(r) });
 const patchStep = (r: AuditRow): UndoStep => ({ do: "patch", ...ref(r), patch: patchBack(obj(r.before), obj(r.after)) });
 
-function polylineLength(v: unknown): number {
-  const points = Array.isArray(v) ? v.filter((p): p is [number, number] => Array.isArray(p) && p.length >= 2) : [];
+export function polylineLength(line: readonly Vec2[]): number {
   let total = 0;
-  for (let i = 1; i < points.length; i++) total += Math.hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1]);
+  for (let i = 1; i < line.length; i++) total += Math.hypot(line[i]![0] - line[i - 1]![0], line[i]![1] - line[i - 1]![1]);
   return total;
 }
 
+/** The point halfway along a line, where "near" is judged for a pathway. */
+export function midpoint(line: readonly Vec2[]): Vec2 | null {
+  if (line.length === 0) return null;
+  let left = polylineLength(line) / 2;
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len >= left && len > 0) return [a[0] + ((b[0] - a[0]) * left) / len, a[1] + ((b[1] - a[1]) * left) / len];
+    left -= len;
+  }
+  return line[line.length - 1]!;
+}
+
+/** A point inside an outline, where "near" is judged for a room. */
+function inside(footprint: unknown): Vec2 | null {
+  const ring = points(footprint);
+  return ring.length >= 3 ? insidePoint(ring as Ring) : null;
+}
+
 function made(key: AuditRow, group: ChangeGroup, rows: readonly (AuditRow | undefined)[], parts: {
-  levelId: string | null; undo: UndoStep[] | null; facts: Facts;
+  levelId: string | null; undo: UndoStep[] | null; facts: Facts; touches?: Touch[];
 }): Folded {
   const all = rows.filter((r): r is AuditRow => r !== undefined);
   // One entity written twice in a call is left at its last write's version.
   const touches = new Map<string, Touch>();
-  for (const r of all) {
-    const t = ref(r);
+  for (const t of parts.touches ?? all.map(ref)) {
     const was = touches.get(`${t.type}:${t.id}`);
     if (!was || t.version > was.version) touches.set(`${t.type}:${t.id}`, t);
   }
@@ -140,10 +181,14 @@ function foldGroup(rows: readonly AuditRow[]): Folded[] {
     const retired = mine.find(r => r.action === "delete");
     if (!renamed || !retired) continue;
     const after = obj(room.after);
+    const area = obj(renamed.after).areaM2;
     out.push(made(room, "rooms", use(room, renamed, retired), {
       levelId: str(after.levelId) || null,
       undo: [{ do: "unaccept", draftId: retired.entityId, draftVersion: version(retired), roomId: room.entityId, roomVersion: version(room) }],
-      facts: { kind: "fromDraft", name: str(after.nameEn), drawingName: str(obj(renamed.before).nameEn), roomKind: str(after.kind) },
+      facts: {
+        kind: "fromDraft", roomId: room.entityId, name: str(after.nameEn), drawingName: str(obj(renamed.before).nameEn),
+        roomKind: str(after.kind), areaM2: typeof area === "number" ? area : null, at: inside(after.footprint),
+      },
     }));
   }
 
@@ -184,21 +229,32 @@ function foldGroup(rows: readonly AuditRow[]): Folded[] {
     out.push(made(place, "places", use(place, seen), {
       levelId: str(after.levelId) || null,
       undo: [...(seen ? [patchStep(seen)] : []), patchStep(place)],
-      facts: { kind: "bound", placeName: str(after.nameEn), roomId, photos: seen ? strings(obj(obj(seen.after).verification).evidence).length : 0 },
+      facts: {
+        kind: "bound", placeId: place.entityId, placeName: str(after.nameEn), roomId,
+        photos: seen ? strings(obj(obj(seen.after).verification).evidence).length : 0,
+      },
     }));
   }
 
-  // Labels (survey/tag.ts tagFrame): the tag, with the place and the kind it may have made. Review decides them.
+  // Frames binned (survey/frames.ts binFrame): the frame, and the tags binned with it at the same moment.
+  for (const frame of rows.filter(r => r.entityType === "keyframe" && r.action === "delete")) {
+    const tags = rows.filter(r => r.entityType === "sighting" && r.action === "delete" && str(obj(r.after).keyframeId) === frame.entityId);
+    out.push(made(frame, "frames", use(frame, ...tags), {
+      levelId: null,
+      undo: [{ do: "unbin", frameId: frame.entityId, version: version(frame) }],
+      facts: { kind: "binned", frameId: frame.entityId, tags: tags.length },
+      touches: [{ type: "keyframe", id: frame.entityId, version: version(frame) }],
+    }));
+  }
+
+  // Labels (survey/tag.ts tagFrame): the tag, with the place it may have made or made an object. Review decides them.
   for (const tag of rows.filter(r => r.entityType === "sighting" && r.action === "create" && !used.has(r.id))) {
     const after = obj(tag.after);
     const placeId = str(after.placeId);
     const placeMade = free("place", placeId, "create");
     const madeObject = free("place", placeId, "update");
-    // The kind this tag's own place points at — not any objectKind create
-    // sitting elsewhere in the same call.
     const objectKindId = str(obj(placeMade?.after).objectKindId) || str(obj(madeObject?.after).objectKindId);
-    const kindMade = objectKindId ? free("objectKind", objectKindId, "create") : undefined;
-    out.push(made(tag, "labels", use(tag, placeMade, madeObject, kindMade), {
+    out.push(made(tag, "labels", use(tag, placeMade, madeObject), {
       levelId: null,
       undo: null,
       facts: {
@@ -209,16 +265,18 @@ function foldGroup(rows: readonly AuditRow[]): Folded[] {
     }));
   }
 
+  // A kind is on no floor: one made for a tag goes with the tag's frame.
+  const frameOfCall = rows.find(r => r.entityType === "sighting" && r.action === "create")?.after;
   for (const r of rows) {
     if (used.has(r.id)) continue;
-    const single = alone(r, rows);
+    const single = alone(r, str(obj(frameOfCall).keyframeId) || null);
     if (single) out.push(single);
   }
   return out;
 }
 
 /** A row that is a change by itself, or null for one the check step doesn't list. */
-function alone(r: AuditRow, rows: readonly AuditRow[]): Folded | null {
+function alone(r: AuditRow, frameOfCall: string | null): Folded | null {
   const after = obj(r.after);
   const before = obj(r.before);
   const levelId = str(after.levelId) || str(before.levelId) || null;
@@ -226,9 +284,24 @@ function alone(r: AuditRow, rows: readonly AuditRow[]): Folded | null {
   const one = (group: ChangeGroup, facts: Facts, undo: UndoStep[]) => made(r, group, [r], { levelId, undo, facts });
 
   if (r.entityType === "roomDraft") {
+    // A set-aside writes nothing to the draft: its mark is the change, and Undo takes the mark back.
+    if (r.action === SET_ASIDE) {
+      return one("drafts", { kind: "setAside", draftId: r.entityId, name: str(after.nameEn), reason: str(after.reason) },
+        [{ do: "unsetAside", draftId: r.entityId, version: version(r) }]);
+    }
     if (r.action !== "delete" || str(after.acceptedRoomId)) return null;
-    const setAside = rows.some(s => s.entityType === "roomDraft" && s.entityId === r.entityId && s.action === SET_ASIDE);
-    return one("drafts", { kind: "draftOff", name: str(after.nameEn), setAside }, [{ do: "restore", ...ref(r) }]);
+    return one("drafts", { kind: "draftOff", name: str(after.nameEn) }, [{ do: "restore", ...ref(r) }]);
+  }
+  if (r.entityType === "objectKind" && r.action === "create") {
+    const size = obj(after.size);
+    return made(r, "objects", [r], {
+      levelId: null,
+      undo: [{ do: "delete", ...ref(r) }],
+      facts: {
+        kind: "kindMade", kindId: r.entityId, name: str(after.nameEn),
+        size: { w: num(size.w), d: num(size.d), h: num(size.h) }, frameId: frameOfCall,
+      },
+    });
   }
   if (!MAP_TYPES.has(r.entityType)) return null;
   if (r.action === "create" && r.entityType === "placement" && str(after.objectKindId)) {
@@ -237,10 +310,12 @@ function alone(r: AuditRow, rows: readonly AuditRow[]): Folded | null {
       [{ do: "delete", ...ref(r) }]);
   }
   if (r.action === "create" && r.entityType === "pathway") {
-    return one("pathways", { kind: "pathway", name: str(after.nameEn), lengthM: polylineLength(after.polyline) }, [{ do: "delete", ...ref(r) }]);
+    const line = points(after.polyline);
+    return one("pathways", { kind: "pathway", pathwayId: r.entityId, name: str(after.nameEn), lengthM: polylineLength(line), mid: midpoint(line) },
+      [{ do: "delete", ...ref(r) }]);
   }
   if (r.action === "create" && r.entityType === "entrance") {
-    return one("entrances", { kind: "entrance", name: str(after.nameEn), roomId: str(after.roomId) }, [{ do: "delete", ...ref(r) }]);
+    return one("entrances", { kind: "entrance", entranceId: r.entityId, name: str(after.nameEn), roomId: str(after.roomId) }, [{ do: "delete", ...ref(r) }]);
   }
   if (r.action === "update") {
     const patch = patchBack(before, after);
@@ -285,23 +360,43 @@ export function foldChanges(rows: readonly AuditRow[]): Folded[] {
       || a.entityId.localeCompare(b.entityId) || a.action.localeCompare(b.action));
 }
 
+/** The frame a change is filmed on, for the ones whose floor is their frame's. */
+export function frameOf(facts: Facts): string | null {
+  if (facts.kind === "label" || facts.kind === "binned") return facts.frameId;
+  if (facts.kind === "kindMade") return facts.frameId;
+  return null;
+}
+
 const A: Record<string, string> = {
   room: "a room", area: "an area", detail: "a detail", service: "a service space", void: "a void",
   lift: "a lift", escalator: "an escalator", stair: "a stair", ramp: "a ramp",
 };
 const VERBS: Record<string, string> = { create: "Added", update: "Changed", delete: "Deleted", restore: "Restored" };
 
+/** An area as the check list says it: 40 m², or 2.5 m² under ten. */
+function squareMetres(area: number): string {
+  return `${area < 10 ? Math.round(area * 10) / 10 : Math.round(area)} m²`;
+}
+
+/** A length or size in metres, to the centimetre, with no trailing zeros. */
+const metres = (n: number) => String(Math.round(n * 100) / 100);
+
 /** The change's one plain line (spec §8): "Made Starbucks from a draft", "Placed wastebin by Gate 4, from 2 frames". */
 export function summarise(change: Folded, names: Names): string {
   const f = change.facts;
   switch (f.kind) {
     case "fromDraft": {
-      const said = f.drawingName && f.drawingName !== f.name ? ` (the drawing said ${f.drawingName})` : "";
+      const name = names.current("room", f.roomId) || f.name;
+      const said = f.drawingName && f.drawingName !== name ? ` (the drawing said ${f.drawingName})` : "";
       const as = f.roomKind && f.roomKind !== "room" ? `, as ${A[f.roomKind] ?? f.roomKind}` : "";
-      return `Made ${f.name} from a draft${said}${as}`;
+      const near = change.levelId && f.at ? names.near(change.levelId, f.at, f.roomId) : null;
+      const where = [f.areaM2 !== null ? squareMetres(f.areaM2) : "", near ? `near ${near}` : ""].filter(Boolean).join(" ");
+      return `Made ${name} from a draft${said}${as}${where ? `, ${where}` : ""}`;
     }
     case "draftOff":
-      return f.setAside ? `Set aside the draft ${f.name} for a person to decide` : `Rejected the draft ${f.name}`;
+      return `Rejected the draft ${f.name}`;
+    case "setAside":
+      return `Set aside ${f.name} for you: ${f.reason}`;
     case "renamed": {
       const kinds = `${A[f.kindTo] ?? f.kindTo} (was ${A[f.kindFrom] ?? f.kindFrom})`;
       if (f.from !== f.to && f.kindFrom !== f.kindTo) return `Renamed ${f.from || "a space"} to ${f.to}, and made it ${kinds}`;
@@ -311,26 +406,39 @@ export function summarise(change: Folded, names: Names): string {
     case "stop": {
       const kind = f.stopKind ?? names.portalKind(f.portalId);
       const what = kind ? A[kind] ?? kind : "a lift or stair";
-      return `Made ${f.roomName || names.room(f.roomId)} ${what} stop${f.joined ? ", joining the one on another floor" : ""}`;
+      const room = names.current("room", f.roomId) || f.roomName || names.room(f.roomId);
+      return `Made ${room} ${what} stop${f.joined ? ", joining the one on another floor" : ""}`;
     }
     case "stopOpened":
-      return `Finished opening ${f.roomName || names.room(f.roomId)} as a stop`;
-    case "bound":
-      return `Bound ${f.placeName} to ${names.room(f.roomId)}${f.photos > 0 ? `, seen in ${count(f.photos, "photo")}` : ""}`;
+      return `Finished opening ${names.current("room", f.roomId) || f.roomName || names.room(f.roomId)} as a stop`;
+    case "bound": {
+      const place = names.current("place", f.placeId) || f.placeName;
+      return `Bound ${place} to ${names.room(f.roomId)}${f.photos > 0 ? `, seen in ${count(f.photos, "photo")}` : ""}`;
+    }
     case "object": {
       const near = change.levelId ? names.near(change.levelId, f.at) : null;
       const frames = f.sightingIds.length > 0 ? `, from ${count(f.sightingIds.length, "frame")}` : "";
       return `Placed ${names.objectKind(f.objectKindId)}${near ? ` by ${near}` : ""}${frames}`;
     }
-    case "pathway":
-      return `Drew ${f.name || "a pathway"}, ${Math.round(f.lengthM)} m`;
-    case "entrance":
-      return f.name ? `Added the entrance ${f.name}, in ${names.room(f.roomId)}` : `Added an entrance in ${names.room(f.roomId)}`;
-    case "label": {
-      const name = f.placeName || names.place(f.placeId);
-      if (f.object) return `Tagged ${name} as an object on frame ${f.frameId}`;
-      return f.newPlace ? `Proposed ${name}, seen on frame ${f.frameId}` : `Tagged ${name} on frame ${f.frameId}`;
+    case "kindMade":
+      return `Made the kind ${names.current("objectKind", f.kindId) || f.name}, ${metres(f.size.w)} × ${metres(f.size.d)} × ${metres(f.size.h)} m`;
+    case "pathway": {
+      const name = names.current("pathway", f.pathwayId) ?? f.name;
+      const near = change.levelId && f.mid ? names.near(change.levelId, f.mid) : null;
+      return `Drew ${name || "a pathway"}, ${Math.round(f.lengthM)} m${near ? `, near ${near}` : ""}`;
     }
+    case "entrance": {
+      const name = names.current("entrance", f.entranceId) ?? f.name;
+      return name ? `Added the entrance ${name}, in ${names.room(f.roomId)}` : `Added an entrance in ${names.room(f.roomId)}`;
+    }
+    case "label": {
+      const name = names.current("place", f.placeId) || f.placeName || names.place(f.placeId);
+      const frame = names.frame(f.frameId);
+      if (f.object) return `Tagged ${name} as an object on ${frame}`;
+      return f.newPlace ? `Proposed ${name}, seen on ${frame}` : `Tagged ${name} on ${frame}`;
+    }
+    case "binned":
+      return `Binned ${names.frame(f.frameId)}`;
     case "generic":
       return `${VERBS[f.action] ?? "Changed"} ${TYPE_WORDS[f.type] ?? f.type} ${f.name}`;
   }

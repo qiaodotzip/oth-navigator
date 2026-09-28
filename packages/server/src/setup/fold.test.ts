@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { foldChanges, patchBack, type AuditRow } from "./fold";
+import { foldChanges, patchBack, summarise, type AuditRow, type Names } from "./fold";
 
 const AT = new Date("2026-09-28T06:00:00.000Z");
 const row = (over: Partial<AuditRow>): AuditRow => ({
@@ -82,11 +82,53 @@ describe("foldChanges", () => {
     ]);
   });
 
-  it("says Rejected for a plain draft delete, apart from Set aside", () => {
+  it("says Rejected for a plain draft delete", () => {
     const folded = foldChanges([
       row({ id: "rj1", entityType: "roomDraft", entityId: "rd_2", action: "delete", after: { nameEn: "Old Shop", version: 1, levelId: "oth-L1" } }),
     ]);
-    expect(folded).toMatchObject([{ group: "drafts", facts: { kind: "draftOff", name: "Old Shop", setAside: false } }]);
+    expect(folded).toMatchObject([{ group: "drafts", facts: { kind: "draftOff", name: "Old Shop" } }]);
+  });
+
+  it("gives a set-aside its own row, with its reason, and an Undo that takes the mark back", () => {
+    const folded = foldChanges([
+      row({
+        id: "sa1", entityType: "roomDraft", entityId: "rd_3", action: "set-aside",
+        after: { id: "rd_3", levelId: "oth-L1", nameEn: "Plaza", version: 0, areaM2: 0, reason: "Open on the drawing" },
+      }),
+    ]);
+    expect(folded).toMatchObject([{
+      group: "drafts", levelId: "oth-L1", entityType: "roomDraft", action: "set-aside",
+      facts: { kind: "setAside", draftId: "rd_3", name: "Plaza", reason: "Open on the drawing" },
+      touches: [{ type: "roomDraft", id: "rd_3", version: 0 }],
+      undo: [{ do: "unsetAside", draftId: "rd_3", version: 0 }],
+    }]);
+  });
+
+  it("folds a binned frame and its tags into one row of frames, whose Undo unbins it", () => {
+    const folded = foldChanges([
+      row({ id: "f1", entityType: "keyframe", entityId: "kf_7", action: "delete", after: { id: "kf_7", captureId: "cap_1", version: 1 } }),
+      row({ id: "f2", entityType: "sighting", entityId: "sg_1", action: "delete", after: { id: "sg_1", keyframeId: "kf_7", version: 1 } }),
+      row({ id: "f3", entityType: "sighting", entityId: "sg_2", action: "delete", after: { id: "sg_2", keyframeId: "kf_7", version: 1 } }),
+    ]);
+    expect(folded).toHaveLength(1);
+    expect(folded[0]).toMatchObject({
+      group: "frames", levelId: null, entityType: "keyframe", entityId: "kf_7", action: "delete",
+      facts: { kind: "binned", frameId: "kf_7", tags: 2 },
+      touches: [{ type: "keyframe", id: "kf_7", version: 1 }],
+      undo: [{ do: "unbin", frameId: "kf_7", version: 1 }],
+    });
+    expect(folded[0]!.auditIds.slice().sort()).toEqual(["f1", "f2", "f3"]);
+  });
+
+  it("keeps where a room from a draft is: the draft's area and a point inside it", () => {
+    const [made] = foldChanges([
+      row({ id: "w1", entityType: "room", entityId: "L1-corridor", action: "create", after: {
+        id: "L1-corridor", version: 0, levelId: "oth-L1", nameEn: "Corridor", kind: "area", footprint: [[0, 0], [10, 0], [10, 4], [0, 4]],
+      } }),
+      row({ id: "w2", entityType: "roomDraft", entityId: "rd_c", action: "update", before: { nameEn: "Corridor", version: 0 }, after: { nameEn: "Corridor", acceptedRoomId: "L1-corridor", areaM2: 40, version: 1 } }),
+      row({ id: "w3", entityType: "roomDraft", entityId: "rd_c", action: "delete", after: { nameEn: "Corridor", acceptedRoomId: "L1-corridor", areaM2: 40, version: 2 } }),
+    ]);
+    expect(made?.facts).toMatchObject({ kind: "fromDraft", roomId: "L1-corridor", areaM2: 40, at: [5, 2] });
   });
 
   it("gives pathways, entrances and other their own rows", () => {
@@ -96,7 +138,7 @@ describe("foldChanges", () => {
       row({ id: "e3", entityType: "doorway", entityId: "dw_1", action: "create", after: { id: "dw_1", nameEn: "Door 1" } }),
     ]);
     const byId = new Map(folded.map(f => [f.entityId, f]));
-    expect(byId.get("pw_1")).toMatchObject({ group: "pathways", facts: { kind: "pathway", name: "Main Corridor", lengthM: 5 } });
+    expect(byId.get("pw_1")).toMatchObject({ group: "pathways", facts: { kind: "pathway", pathwayId: "pw_1", name: "Main Corridor", lengthM: 5, mid: [1.5, 2] } });
     expect(byId.get("en_1")).toMatchObject({ group: "entrances", facts: { kind: "entrance", name: "Gate 4", roomId: "L1-lobby" } });
     expect(byId.get("dw_1")).toMatchObject({ group: "other", facts: { kind: "generic", action: "create", type: "doorway", name: "Door 1" } });
   });
@@ -173,18 +215,27 @@ describe("foldChanges", () => {
     expect(deleted[0]?.undo).toEqual([{ do: "restore", type: "doorway", id: "dw_9", version: 2 }]);
   });
 
-  it("matches a label's kind by the place's own objectKindId, not any create in the call", () => {
+  it("lists a kind a tag made under objects, on the tag's frame, apart from the label, with an Undo that deletes the kind", () => {
     const folded = foldChanges([
       row({ id: "l1", entityType: "sighting", entityId: "sg_9", action: "create", after: { id: "sg_9", placeId: "pl_9", keyframeId: "kf_9", version: 0 } }),
       row({ id: "l2", entityType: "place", entityId: "pl_9", action: "create", after: { id: "pl_9", nameEn: "Wastebin", objectKindId: "ok_real", version: 0 } }),
-      // An unrelated kind, made earlier in the same call: the old code's bare
-      // rows.find(objectKind create) would grab this one first.
-      row({ id: "l4", entityType: "objectKind", entityId: "ok_other", action: "create", after: { id: "ok_other", nameEn: "planter", version: 0 } }),
-      row({ id: "l3", entityType: "objectKind", entityId: "ok_real", action: "create", after: { id: "ok_real", nameEn: "wastebin", version: 0 } }),
+      row({ id: "l3", entityType: "objectKind", entityId: "ok_real", action: "create", after: { id: "ok_real", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 }, version: 0 } }),
     ]);
-    expect(folded).toHaveLength(1);
-    expect(folded[0]).toMatchObject({ group: "labels", facts: { kind: "label", object: true } });
-    expect(folded[0]?.auditIds.slice().sort()).toEqual(["l1", "l2", "l3"]);
+    expect(folded).toHaveLength(2);
+    const byGroup = new Map(folded.map(f => [f.group, f]));
+    expect(byGroup.get("labels")).toMatchObject({ facts: { kind: "label", object: true, frameId: "kf_9" }, auditIds: ["l1", "l2"] });
+    expect(byGroup.get("objects")).toMatchObject({
+      levelId: null, entityType: "objectKind", entityId: "ok_real", action: "create",
+      facts: { kind: "kindMade", kindId: "ok_real", name: "wastebin", size: { w: 0.5, d: 0.5, h: 1 }, frameId: "kf_9" },
+      undo: [{ do: "delete", type: "objectKind", id: "ok_real", version: 0 }],
+    });
+  });
+
+  it("lists a kind made with no frame in the call, with no frame to place it by", () => {
+    const folded = foldChanges([
+      row({ id: "k1", entityType: "objectKind", entityId: "ok_bin", action: "create", after: { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 }, version: 0 } }),
+    ]);
+    expect(folded).toMatchObject([{ group: "objects", facts: { kind: "kindMade", frameId: null } }]);
   });
 
   it("breaks a sort tie by entity id, then action, never by the (random) audit id", () => {
@@ -200,5 +251,53 @@ describe("foldChanges", () => {
       row({ id: "x1", entityType: "doorway", entityId: "dw_1", action: "create", after: { id: "dw_1", nameEn: "Door" } }),
     ]);
     expect(byAction.map(f => f.action)).toEqual(["create", "delete"]);
+  });
+});
+
+describe("summarise", () => {
+  /** The map as it is now: pw_1 renamed by hand since Claude drew it, pw_2 gone, and one frame. */
+  const names: Names = {
+    room: id => id,
+    current: (type, id) => (type === "pathway" ? ({ pw_1: "Main Corridor", pw_3: "" } as Record<string, string>)[id] ?? null : null),
+    place: id => (id === "pl_gc" ? "Gong Cha" : id),
+    objectKind: id => (id === "ok_bin" ? "wastebin" : "an object"),
+    portalKind: () => null,
+    near: (_levelId, _at, except) => (except === "L1-starbucks" ? null : "Starbucks"),
+    frame: id => (id === "kf_3" ? "frame 3 of L1 walk.mp4" : id),
+  };
+  const line = (rows: AuditRow[]) => foldChanges(rows).map(c => summarise(c, names));
+
+  it("says a set-aside with its reason, a binned frame by its footage, and a kind with its size", () => {
+    expect(line([row({ entityType: "roomDraft", entityId: "rd_3", action: "set-aside", after: { levelId: "oth-L1", nameEn: "Plaza", version: 0, reason: "Open on the drawing" } })]))
+      .toEqual(["Set aside Plaza for you: Open on the drawing"]);
+    expect(line([row({ entityType: "keyframe", entityId: "kf_3", action: "delete", after: { id: "kf_3", version: 1 } })]))
+      .toEqual(["Binned frame 3 of L1 walk.mp4"]);
+    expect(line([row({ entityType: "objectKind", entityId: "ok_bin", action: "create", after: { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 }, version: 0 } })]))
+      .toEqual(["Made the kind wastebin, 0.5 × 0.5 × 1 m"]);
+  });
+
+  it("names a label's frame by its footage, never its id", () => {
+    expect(line([
+      row({ id: "p1", entityType: "place", entityId: "pl_gc", action: "create", after: { id: "pl_gc", nameEn: "Gong Cha", version: 0 } }),
+      row({ id: "p2", entityType: "sighting", entityId: "sg_1", action: "create", after: { id: "sg_1", placeId: "pl_gc", keyframeId: "kf_3", version: 0 } }),
+    ])).toEqual(["Proposed Gong Cha, seen on frame 3 of L1 walk.mp4"]);
+  });
+
+  it("says where a room from a draft is, and a pathway by its name now, or its length and where", () => {
+    const fromDraft = (roomId: string) => [
+      row({ id: `${roomId}-1`, entityType: "room", entityId: roomId, action: "create", after: {
+        id: roomId, version: 0, levelId: "oth-L1", nameEn: "Corridor", kind: "area", footprint: [[0, 0], [10, 0], [10, 4], [0, 4]],
+      } }),
+      row({ id: `${roomId}-2`, entityType: "roomDraft", entityId: `rd-${roomId}`, action: "update", before: { nameEn: "Corridor" }, after: { acceptedRoomId: roomId, areaM2: 40.4, version: 1 } }),
+      row({ id: `${roomId}-3`, entityType: "roomDraft", entityId: `rd-${roomId}`, action: "delete", after: { acceptedRoomId: roomId, areaM2: 40.4, version: 2 } }),
+    ];
+    expect(line(fromDraft("L1-corridor"))).toEqual(["Made Corridor from a draft, as an area, 40 m² near Starbucks"]);
+    expect(line(fromDraft("L1-starbucks"))).toEqual(["Made Corridor from a draft, as an area, 40 m²"]);
+    const drew = (id: string) => line([row({
+      entityType: "pathway", entityId: id, action: "create", after: { id, levelId: "oth-L1", nameEn: "", polyline: [[0, 0], [184, 0]], version: 0 },
+    })]);
+    expect(drew("pw_1")).toEqual(["Drew Main Corridor, 184 m, near Starbucks"]);
+    expect(drew("pw_2")).toEqual(["Drew a pathway, 184 m, near Starbucks"]);
+    expect(drew("pw_3")).toEqual(["Drew a pathway, 184 m, near Starbucks"]);
   });
 });

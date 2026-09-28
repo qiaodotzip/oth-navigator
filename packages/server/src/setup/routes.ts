@@ -24,7 +24,8 @@ export const setupRoutes = new Hono<AppEnv>();
 
 setupRoutes.get("/:id/setup", requireUser, async c => {
   try {
-    return c.json(await getSetup(c.get("db"), c.req.param("id")));
+    // ?light=1: the same shape, without validating the model (paths.unreachable is null).
+    return c.json(await getSetup(c.get("db"), c.req.param("id"), { light: c.req.query("light") === "1" }));
   } catch (err) {
     if (err instanceof UnknownFloorError) return c.json({ error: err.message }, 404);
     throw err;

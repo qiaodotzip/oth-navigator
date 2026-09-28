@@ -93,25 +93,41 @@ const world = (extraRooms: unknown[] = []) => parseModel({
   entrances: [{ id: "L1-gate", levelId: "oth-L1", roomId: "L1-hall", point: [1, 5] }],
 });
 const drafts: DraftRow[] = [
-  { id: "rd_1", nameEn: "Shop", acceptedRoomId: "L1-shop", deletedAt: "2026-09-28T06:00:00.000Z", retired: false },
-  { id: "rd_2", nameEn: "Store", acceptedRoomId: null, deletedAt: null, retired: false },
-  { id: "rd_3", nameEn: "Sliver", acceptedRoomId: null, deletedAt: "2026-09-28T06:00:00.000Z", retired: false },
-  { id: "rd_4", nameEn: "Old", acceptedRoomId: null, deletedAt: "2026-09-28T05:00:00.000Z", retired: true },
+  { id: "rd_1", nameEn: "Shop", acceptedRoomId: "L1-shop", deletedAt: "2026-09-28T06:00:00.000Z", retired: false, setAside: null },
+  { id: "rd_2", nameEn: "Store", acceptedRoomId: null, deletedAt: null, retired: false, setAside: null },
+  { id: "rd_3", nameEn: "Sliver", acceptedRoomId: null, deletedAt: "2026-09-28T06:00:00.000Z", retired: false, setAside: null },
+  { id: "rd_4", nameEn: "Old", acceptedRoomId: null, deletedAt: "2026-09-28T05:00:00.000Z", retired: true, setAside: null },
+  {
+    id: "rd_5", nameEn: "Plaza", acceptedRoomId: null, deletedAt: null, retired: false,
+    setAside: { by: "u_wei", reason: "Open on the drawing", at: "2026-09-28T06:00:00.000Z" },
+  },
 ];
 
 describe("setupCounts", () => {
-  it("counts each step's work on this floor alone, in 6E's fields", () => {
+  it("counts each step's work on this floor alone, in contract v2's fields", () => {
     expect(setupCounts(world(), "oth-L1", drafts, 4)).toEqual({
       label: { tagged: 2, binned: 4, left: 1 },
       review: { left: 1 },
-      rooms: { waiting: 1, accepted: 1, rejectedOrSetAside: 1, stops: 1 },
+      rooms: { waiting: 1, setAside: 1, accepted: 1, rejected: 1, stops: 1 },
       things: { bound: 1, unbound: 1, objects: [{ kindId: "bin", name: "wastebin", count: 1 }] },
       paths: { pathways: 1, entrances: 1, unreachable: 0 },
     });
   });
 
-  it("counts a room nobody can reach", () => {
+  it("counts a room with a door that no route reaches, and not one with no door", () => {
     const far = { id: "L1-far", levelId: "oth-L1", kind: "room", footprint: sq(60, 60, 70, 70), heightM: 6, nameEn: "Far" };
-    expect(setupCounts(world([far]), "oth-L1", []).paths.unreachable).toBe(1);
+    const doorless = { id: "L1-shut", levelId: "oth-L1", kind: "room", footprint: sq(80, 60, 90, 70), heightM: 6, nameEn: "Shut" };
+    const door = { id: "L1-far-door", levelId: "oth-L1", roomA: "L1-far", roomB: "L1-hall", segment: [[60, 62], [60, 64]], widthM: 1 };
+    const model = parseModel({ ...world([far, doorless]), doorways: [door] });
+    expect(setupCounts(model, "oth-L1", []).paths.unreachable).toBe(1);
+    expect(setupCounts(world([far, doorless]), "oth-L1", []).paths.unreachable).toBe(0);
+  });
+
+  it("leaves unreachable out in light mode, and validates nothing to count it", () => {
+    const far = { id: "L1-far", levelId: "oth-L1", kind: "room", footprint: sq(60, 60, 70, 70), heightM: 6, nameEn: "Far" };
+    const door = { id: "L1-far-door", levelId: "oth-L1", roomA: "L1-far", roomB: "L1-hall", segment: [[60, 62], [60, 64]], widthM: 1 };
+    const counts = setupCounts(parseModel({ ...world([far]), doorways: [door] }), "oth-L1", drafts, 0, { light: true });
+    expect(counts.paths).toEqual({ pathways: 1, entrances: 1, unreachable: null });
+    expect(counts.rooms).toEqual({ waiting: 1, setAside: 1, accepted: 1, rejected: 1, stops: 1 });
   });
 });

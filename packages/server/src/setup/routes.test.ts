@@ -1,11 +1,14 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { createUser, type User } from "../auth/users";
 import type { Database } from "../db/client";
-import { buildings, levels } from "../db/schema";
+import { auditLog, buildings, levels, rooms } from "../db/schema";
+import { replaceDrafts } from "../drafts/service";
+import { createEntity, updateEntity } from "../entities/repository";
 import { createTestDb, json } from "../testing/harness";
 import type { SetupState } from "./service";
 
@@ -40,6 +43,16 @@ describe("a floor's setup", () => {
     expect(state.steps).toHaveLength(9);
     expect(state.steps[0]).toEqual({ step: "footage", status: "open", note: "", finishedBy: null, finishedVia: null, finishedAt: null });
     expect(state.counts.label).toEqual({ tagged: 0, binned: 0, left: 0 });
+    expect(state.counts.rooms).toEqual({ waiting: 0, setAside: 0, accepted: 0, rejected: 0, stops: 0 });
+    expect(state.counts.paths.unreachable).toBe(0);
+  });
+
+  it("answers the same shape in light mode, with unreachable left out", async () => {
+    const res = await send("GET", "/api/levels/oth-L1/setup?light=1");
+    expect(res.status).toBe(200);
+    const state = await json<SetupState>(res);
+    expect(state.steps).toHaveLength(9);
+    expect(state.counts.paths).toEqual({ pathways: 0, entrances: 0, unreachable: null });
   });
 
   it("marks a step as a person, with no token, and answers the whole setup again", async () => {
@@ -76,5 +89,29 @@ describe("undoing one of Claude's changes", () => {
   it("answers 404 for an id that isn't one, and only to someone signed in", async () => {
     expect((await send("POST", "/api/changes/audit_missing/undo")).status).toBe(404);
     expect((await send("POST", "/api/changes/audit_missing/undo", undefined, false)).status).toBe(401);
+  });
+
+  it("answers a draft's own refusal 409 with its reason, and writes nothing", async () => {
+    // An accept whose trail says the draft became L1-x, while the draft in fact still waits:
+    // every version matches, so only unacceptDrafts itself can refuse.
+    const footprint = [[0, 0], [4, 0], [4, 4], [0, 4]];
+    await createEntity(db, "room", { id: "L1-x", levelId: "oth-L1", kind: "room", footprint, heightM: 6, nameEn: "X" }, wei.id);
+    const [draft] = await replaceDrafts(db, "oth-L1", { checksum: "a".repeat(64), page: 1 }, [
+      { nameEn: "X", kind: "room", footprint, labelPoint: [2, 2], areaM2: 16 },
+    ], wei.id);
+    const draftId = String(draft!.id);
+    await updateEntity(db, "roomDraft", draftId, 0, { nameEn: "X again" }, wei.id);
+    const at = new Date();
+    const trail = (id: string, entityType: string, entityId: string, action: string, after: Record<string, unknown>) =>
+      ({ id, entityType, entityId, action, actorId: wei.id, at, before: null, after, via: "tok_x" });
+    await db.insert(auditLog).values([
+      trail("audit_room", "room", "L1-x", "create", { id: "L1-x", version: 0, levelId: "oth-L1", nameEn: "X", kind: "room", footprint }),
+      trail("audit_rename", "roomDraft", draftId, "update", { acceptedRoomId: "L1-x", version: 1 }),
+      trail("audit_retire", "roomDraft", draftId, "delete", { acceptedRoomId: "L1-x", version: 1 }),
+    ]);
+    const res = await send("POST", "/api/changes/audit_room/undo");
+    expect(res.status).toBe(409);
+    expect(await json<{ reason: string }>(res)).toEqual({ reason: "X again isn't on the map, so there is nothing to take back." });
+    expect((await db.select().from(rooms).where(eq(rooms.id, "L1-x")))[0]?.deletedAt).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import {
-  draftMatch, live, namedLikeAStop, placeLevels, pointInPolygon,
-  type Level, type MapModel, type Room, type RoomDraft, type ValidationReport,
+  coverage, draftMatch, live, namedLikeAStop, placeLevels, pointInPolygon, ringArea,
+  type Level, type MapModel, type Ring, type Room, type RoomDraft, type ValidationReport,
 } from "@oth/model";
 import type { DraftTally } from "../drafts/service";
 import type { SpotReport } from "../objects/spots";
@@ -143,10 +143,42 @@ export function frameTags(model: MapModel, frameId: string) {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+/** An outline's area in square metres, its holes taken out. */
+function areaOf(footprint: Ring, holes: readonly Ring[]): number {
+  return Math.abs(ringArea(footprint)) - holes.reduce((sum, h) => sum + Math.abs(ringArea(h)), 0);
+}
+
+/** At most this many rooms under one draft: a corridor's draft can run past dozens. */
+const MAX_OVERLAPS = 5;
+
 /**
- * list_drafts: a floor's drafts waiting, largest first, a page at a time,
- * with how the floor's drafts stand. onMapAs is the room a draft copies, by
- * Build's own rule (draftMatch); overlaps says it lies over rooms.
+ * The rooms a draft lies over, most first, each with its share: how much of
+ * the draft's area is over that room, 0 to 1. A draft that is the same space
+ * as a room has a share near 1 over it; a shop drawn inside a concourse has
+ * the concourse's. The smaller of the two outlines is sampled, so a small
+ * room is never stepped over by a large draft's grid.
+ */
+export function draftOverlaps(draft: RoomDraft, rooms: readonly Room[]): { roomId: string; name: string; share: number }[] {
+  if (!draft.footprint) return [];
+  const outline = { footprint: draft.footprint, holes: draft.holes };
+  const draftArea = areaOf(draft.footprint, draft.holes);
+  if (!(draftArea > 0)) return [];
+  const out: { roomId: string; name: string; share: number }[] = [];
+  for (const r of rooms) {
+    const roomArea = areaOf(r.footprint, r.holes);
+    const overlap = roomArea <= draftArea ? coverage(outline, r) * roomArea : coverage(r, outline) * draftArea;
+    const share = Math.min(1, round2(overlap / draftArea));
+    if (share > 0) out.push({ roomId: r.id, name: r.nameEn, share });
+  }
+  return out.sort((a, b) => b.share - a.share || a.roomId.localeCompare(b.roomId)).slice(0, MAX_OVERLAPS);
+}
+
+/**
+ * list_drafts: a floor's drafts waiting for a decision, largest first, a page
+ * at a time, with how the floor's drafts stand. The caller leaves out the
+ * drafts set aside for a person. onMapAs is the room a draft copies, by
+ * Build's own rule (draftMatch); overlaps are the rooms it lies over, with
+ * the share of it over each.
  */
 export function draftList(
   code: string, waiting: readonly RoomDraft[], tally: DraftTally, rooms: readonly Room[], limit: number, offset: number,
@@ -156,14 +188,11 @@ export function draftList(
     counts: tally,
     total: waiting.length,
     offset,
-    drafts: waiting.slice(offset, offset + limit).map(d => {
-      const match = draftMatch(d, rooms);
-      return {
-        id: d.id, version: d.version, name: d.nameEn, kind: d.kind, areaM2: round1(d.areaM2),
-        labelPoint: [round1(d.labelPoint[0]), round1(d.labelPoint[1])],
-        open: !d.footprint, onMapAs: match.copyOf?.id ?? null, overlaps: match.overRooms, likeAStop: namedLikeAStop(d.nameEn),
-      };
-    }),
+    drafts: waiting.slice(offset, offset + limit).map(d => ({
+      id: d.id, version: d.version, name: d.nameEn, kind: d.kind, areaM2: round1(d.areaM2),
+      labelPoint: [round1(d.labelPoint[0]), round1(d.labelPoint[1])],
+      open: !d.footprint, onMapAs: draftMatch(d, rooms).copyOf?.id ?? null, overlaps: draftOverlaps(d, rooms), likeAStop: namedLikeAStop(d.nameEn),
+    })),
   };
 }
 

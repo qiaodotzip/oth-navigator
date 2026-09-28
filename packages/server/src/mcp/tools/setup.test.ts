@@ -35,6 +35,12 @@ describe("make_stop", () => {
     expect(trail.map(r => `${r.entityType} ${r.action}`).sort()).toEqual(["portal create", "portalEndpoint create", "room update"]);
   });
 
+  it("says the floor above has a space over the stop, without sending Claude there", async () => {
+    await createEntity(f.db, "room", { ...ESC, id: "L2-esc", levelId: "oth-L2", heightM: 4 }, amy.id);
+    const { text } = await call(client, "make_stop", { floor: "L1", room: "L1-esc", expectedVersion: 0, kind: "escalator" });
+    expect(text).toMatch(/L2 has a space traced over this spot too\. Its stop is made when L2 is set up; stay on L1\.$/);
+  });
+
   it("says whose change it met when the space changed since it was read, and writes nothing", async () => {
     await updateEntity(f.db, "room", "L1-esc", 0, { nameEn: "Escalator 7" }, amy.id);
     const { text, isError } = await call(client, "make_stop", { floor: "L1", room: "L1-esc", expectedVersion: 0, kind: "escalator" });
@@ -71,14 +77,15 @@ describe("list_drafts", () => {
     expect(isError).toBe(false);
     const listing = JSON.parse(text) as {
       counts: unknown; total: number;
-      drafts: { name: string; open: boolean; onMapAs: string | null; overlaps: boolean; likeAStop: boolean }[];
+      drafts: { name: string; open: boolean; onMapAs: string | null; overlaps: { roomId: string; name: string; share: number }[]; likeAStop: boolean }[];
     };
-    expect(listing.counts).toEqual({ waiting: 4, accepted: 0, rejectedOrSetAside: 0 });
+    expect(listing.counts).toEqual({ waiting: 4, setAside: 0, accepted: 0, rejected: 0 });
+    // share: how much of the draft lies over that room. The escalator's draft runs 38 m; the room it covers, 10 m of it.
     expect(listing.drafts.map(d => [d.name, d.open, d.onMapAs, d.overlaps, d.likeAStop])).toEqual([
-      ["Hall", false, null, false, false],
-      ["Kiosk", false, "L1-kiosk", true, false],
-      ["Escalator - 07", false, null, true, true],
-      ["Plaza", true, null, false, false],
+      ["Hall", false, null, [], false],
+      ["Kiosk", false, "L1-kiosk", [{ roomId: "L1-kiosk", name: "Kiosk", share: 1 }], false],
+      ["Escalator - 07", false, null, [{ roomId: "L1-esc", name: "Escalator - 07", share: 0.26 }], true],
+      ["Plaza", true, null, [], false],
     ]);
   });
 
@@ -88,8 +95,17 @@ describe("list_drafts", () => {
     const listing = JSON.parse((await call(client, "list_drafts", { floor: "L1", limit: 1, offset: 1 })).text) as {
       counts: unknown; total: number; offset: number; drafts: { name: string }[];
     };
-    expect(listing).toMatchObject({ counts: { waiting: 2, accepted: 0, rejectedOrSetAside: 0 }, total: 2, offset: 1 });
+    expect(listing).toMatchObject({ counts: { waiting: 2, setAside: 0, accepted: 0, rejected: 0 }, total: 2, offset: 1 });
     expect(listing.drafts.map(d => d.name)).toEqual(["B"]);
+  });
+
+  it("leaves out the drafts set aside for a person, and counts them apart", async () => {
+    const drafts = await replaceDrafts(f.db, "oth-L1", SOURCE, [drafted("Plaza", undefined, 0), drafted("Hall", sq(0, 50, 30, 80), 900)], amy.id);
+    const plaza = String(drafts.find(d => d.nameEn === "Plaza")!.id);
+    await call(client, "decide_drafts", { floor: "L1", items: [{ id: plaza, expectedVersion: 0, decision: "set_aside", reason: "Open on the drawing" }] });
+    const listing = JSON.parse((await call(client, "list_drafts", { floor: "L1" })).text) as { counts: unknown; total: number; drafts: { name: string }[] };
+    expect(listing).toMatchObject({ counts: { waiting: 1, setAside: 1, accepted: 0, rejected: 0 }, total: 1 });
+    expect(listing.drafts.map(d => d.name)).toEqual(["Hall"]);
   });
 });
 
@@ -107,19 +123,55 @@ describe("decide_drafts", () => {
     const { text, isError } = await call(client, "decide_drafts", { floor: "L1", items: [
       { id: id("SHOP 12"), expectedVersion: 0, decision: "accept", nameEn: "Starbucks" },
       { id: id("Sliver"), expectedVersion: 0, decision: "reject" },
-      { id: id("Plaza"), expectedVersion: 0, decision: "set_aside" },
+      { id: id("Plaza"), expectedVersion: 0, decision: "set_aside", reason: "Open on the drawing" },
       { id: id("Escalator - 08"), expectedVersion: 0, decision: "accept" },
     ] });
     expect(isError).toBe(false);
     expect(text).toBe(
       "Accepted 2 drafts as rooms: Starbucks (L1-starbucks), Escalator - 08 (L1-escalator-08). Rejected 1. " +
-      "Set aside 1 for a person: Plaza.\n" +
+      "Set aside 1 for a person, who sees your reason in Build: Plaza.\n" +
       "Named like a lift, escalator or stairs, so make_stop may be next: Escalator - 08 (L1-escalator-08, version 0).\n" +
       "Each is on the setup's check step, with Undo.",
     );
     const trail = await f.db.select().from(auditLog).where(eq(auditLog.via, f.tokenId));
     expect(trail.some(r => r.entityType === "room" && r.action === "create" && r.entityId === "L1-starbucks")).toBe(true);
-    expect(trail.filter(r => r.action === "set-aside").map(r => r.entityId)).toEqual([id("Plaza")]);
+    // The reject and the set-aside are on the token's trail too.
+    expect(trail.filter(r => r.entityType === "roomDraft" && r.action === "delete" && !(r.after as { acceptedRoomId?: string }).acceptedRoomId)
+      .map(r => r.entityId)).toEqual([id("Sliver")]);
+    expect(trail.filter(r => r.action === "set-aside").map(r => [r.entityId, (r.after as { reason: string }).reason]))
+      .toEqual([[id("Plaza"), "Open on the drawing"]]);
+  });
+
+  it("skips an id no draft has, says which, and decides the rest", async () => {
+    const id = await four();
+    const { text, isError } = await call(client, "decide_drafts", { floor: "L1", items: [
+      { id: id("Sliver"), expectedVersion: 0, decision: "reject" },
+      { id: "rd_typo", expectedVersion: 0, decision: "reject" },
+    ] });
+    expect(isError).toBe(false);
+    expect(text).toBe("Rejected 1.\nSkipped 1 id no draft has: rd_typo. Copy ids exactly as list_drafts gives them.\nEach is on the setup's check step, with Undo.");
+    expect(await call(client, "decide_drafts", { floor: "L1", items: [{ id: "rd_typo", expectedVersion: 0, decision: "reject" }] }))
+      .toMatchObject({ isError: true, text: "Decided nothing: no draft has the id rd_typo. list_drafts gives L1's." });
+  });
+
+  it("needs a reason to set a draft aside, and takes one with set_aside only", async () => {
+    const id = await four();
+    expect(await call(client, "decide_drafts", { floor: "L1", items: [{ id: id("Plaza"), expectedVersion: 0, decision: "set_aside" }] }))
+      .toMatchObject({ isError: true, text: `Setting aside draft ${id("Plaza")} needs a reason: one line on why a person should decide it.` });
+    expect(await call(client, "decide_drafts", { floor: "L1", items: [{ id: id("Sliver"), expectedVersion: 0, decision: "reject", reason: "Junk" }] }))
+      .toMatchObject({ isError: true, text: `reason goes with set_aside only: draft ${id("Sliver")} is a reject.` });
+    expect(await listDrafts(f.db, "oth-L1")).toHaveLength(4);
+  });
+
+  it("decides nothing when the drafts are on two floors", async () => {
+    const id = await four();
+    const [kiosk] = await replaceDrafts(f.db, "oth-L2", SOURCE, [drafted("Kiosk", sq(0, 0, 4, 4), 16)], amy.id);
+    expect((await call(client, "decide_drafts", { floor: "L1", items: [
+      { id: id("Sliver"), expectedVersion: 0, decision: "reject" },
+      { id: String(kiosk!.id), expectedVersion: 0, decision: "reject" },
+    ] })).isError).toBe(true);
+    expect(await listDrafts(f.db, "oth-L1")).toHaveLength(4);
+    expect(await listDrafts(f.db, "oth-L2")).toHaveLength(1);
   });
 
   it("decides all or none, and names the draft that stopped it", async () => {
@@ -164,19 +216,39 @@ describe("step_status and finish_step", () => {
     expect(status.floor).toBe("L1");
     expect(status.steps[0]).toMatchObject({ n: 1, step: "footage", who: "you", status: "open" });
     expect(status.steps[4]).toMatchObject({ n: 5, step: "rooms", who: "claude", status: "done", note: "Accepted 3, rejected 1", by: "Wei via Claude Code" });
-    expect(status.counts).toMatchObject({ rooms: { waiting: 0, accepted: 0, rejectedOrSetAside: 0, stops: 0 } });
+    expect(status.counts).toMatchObject({ rooms: { waiting: 0, setAside: 0, accepted: 0, rejected: 0, stops: 0 } });
   });
 
   it("says what is still left, without refusing", async () => {
-    await replaceDrafts(f.db, "oth-L1", SOURCE, [drafted("Kiosk", sq(0, 20, 4, 24), 16)], amy.id);
-    expect((await call(client, "finish_step", { floor: "L1", step: "rooms", note: "Stopped early" })).text)
-      .toBe("Marked step 5, Rooms from the PDF, done on L1, with your note. Still left: 1 draft waiting.");
+    await createEntity(f.db, "place", { id: "pl_cafe", nameEn: "Cafe", category: "retail", levelId: "oth-L1" }, amy.id);
+    expect((await call(client, "finish_step", { floor: "L1", step: "things", note: "Stopped early" })).text)
+      .toBe("Marked step 6, Places and objects, done on L1, with your note. Still left: 1 place not bound to a room.");
+  });
+
+  it("won't finish the rooms while drafts nobody has decided still wait, and says the set-asides are a person's", async () => {
+    const drafts = await replaceDrafts(f.db, "oth-L1", SOURCE, [drafted("Kiosk", sq(0, 20, 4, 24), 16), drafted("Plaza", undefined, 0)], amy.id);
+    const idOf = (name: string) => String(drafts.find(d => d.nameEn === name)!.id);
+    expect(await call(client, "finish_step", { floor: "L1", step: "rooms", note: "Done" })).toMatchObject({
+      isError: true,
+      text: "Not marked: 2 drafts on L1 still wait for a decision. Decide them with decide_drafts, setting aside with a reason any a person should decide, then finish.",
+    });
+    await call(client, "decide_drafts", { floor: "L1", items: [
+      { id: idOf("Kiosk"), expectedVersion: 0, decision: "accept" },
+      { id: idOf("Plaza"), expectedVersion: 0, decision: "set_aside", reason: "Open on the drawing" },
+    ] });
+    expect((await call(client, "finish_step", { floor: "L1", step: "rooms", note: "Accepted 1, set aside 1" })).text)
+      .toBe("Marked step 5, Rooms from the PDF, done on L1, with your note. 1 draft is set aside for a person.");
   });
 
   it("leaves a person's step to a person, and needs a floor that exists", async () => {
-    expect(await call(client, "finish_step", { floor: "L1", step: "floorplan", note: "Done" })).toMatchObject({
-      isError: true, text: "Step 4, Floorplan, is a person's: they mark it in the app.",
-    });
+    for (const [step, words] of [
+      ["floorplan", "Step 4, Floorplan"], ["review", "Step 3, Review Claude's labels"],
+      ["check", "Step 8, Check Claude's work"], ["finish", "Step 9, Finish"],
+    ] as const) {
+      expect(await call(client, "finish_step", { floor: "L1", step, note: "Done" }), step).toMatchObject({
+        isError: true, text: `${words}, is a person's: they mark it in the app.`,
+      });
+    }
     expect(await call(client, "finish_step", { floor: "L9", step: "rooms", note: "Done" })).toMatchObject({
       isError: true, text: "There is no floor L9. list_floors gives every floor.",
     });
