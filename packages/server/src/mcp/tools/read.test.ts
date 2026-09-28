@@ -38,13 +38,23 @@ beforeEach(async () => {
 });
 
 describe("get_floor", () => {
-  it("lists a floor's rooms with their places, and the places surveyed on it", async () => {
+  it("gives the floor's summary by default, and each part when asked, a page at a time", async () => {
     const { text, isError } = await call(client, "get_floor", { floor: "L1" });
     expect(isError).toBe(false);
-    const outline = JSON.parse(text);
-    expect(outline.rooms).toEqual([{ id: "L1-shop-12", name: "Shop 12", kind: "room", version: 0, walkable: false, verification: "unverified", place: { id: "pl_sb", name: "Starbucks" } }]);
-    expect(outline.places.map((p: { id: string }) => p.id)).toEqual(["pl_sb", "pl_gc"]);
+    expect(JSON.parse(text)).toMatchObject({
+      floor: { id: "oth-L1", code: "L1" }, counts: { rooms: 1, places: { confirmed: 1, proposed: 1 } },
+    });
+    const rooms = JSON.parse((await call(client, "get_floor", { floor: "L1", part: "rooms" })).text);
+    expect(rooms.rooms).toEqual([{ id: "L1-shop-12", name: "Shop 12", kind: "room", centre: [15, 35], place: { id: "pl_sb", name: "Starbucks" } }]);
+    const places = JSON.parse((await call(client, "get_floor", { floor: "L1", part: "places", offset: 1, limit: 1 })).text);
+    expect(places).toMatchObject({ total: 2, offset: 1, places: [{ id: "pl_gc", status: "proposed", proposedBy: "claude-code" }] });
     expect(presence.list()).toContainEqual(expect.objectContaining({ displayName: "Wei (Claude)", levelId: "oth-L1" }));
+  });
+
+  it("tells Claude a big floor comes in parts", async () => {
+    const { tools } = await client.listTools();
+    const description = tools.find(t => t.name === "get_floor")?.description ?? "";
+    for (const words of ["in parts", "summary", "offset", "next", "version 0"]) expect(description).toContain(words);
   });
 
   it("says which floors exist when asked for one that does not", async () => {
@@ -96,8 +106,11 @@ describe("check_floor", () => {
     await createEntity(f.db, "doorway", { id: "d2", levelId: "oth-L2", roomA: "L2-hall", roomB: "L2-hall", segment: [[0, 1], [0, 2]], widthM: 1 }, f.wei.id);
     const report = JSON.parse((await call(client, "check_floor", { floor: "L1" })).text);
     expect(report.errors).toBeGreaterThan(0);
+    expect(report.total).toBe(report.errors + report.warnings);
     expect(report.issues).toContainEqual(expect.objectContaining({ code: "doorway.room.selfJoin", entityId: "d1" }));
     expect(report.issues.some((i: { entityId: string }) => i.entityId === "d2")).toBe(false);
+    const only = JSON.parse((await call(client, "check_floor", { floor: "L1", codes: ["doorway.room.selfJoin"] })).text);
+    expect(only).toMatchObject({ codes: ["doorway.room.selfJoin"], total: 1, issues: [{ code: "doorway.room.selfJoin", entityId: "d1" }] });
   });
 });
 

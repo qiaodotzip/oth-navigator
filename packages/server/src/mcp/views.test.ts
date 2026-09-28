@@ -1,6 +1,6 @@
 import { parseModel, type ValidationReport } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { findLevel, floorIssues, floorOutline, frameList, frameTags, summariseFloors } from "./views";
+import { findLevel, floorIssues, floorPart, frameList, frameTags, summariseFloors } from "./views";
 
 const square = [[0, 0], [4, 0], [4, 4], [0, 4]];
 
@@ -74,26 +74,98 @@ describe("findLevel", () => {
   });
 });
 
-describe("floorOutline", () => {
-  it("lists one floor's things as ids, names, kinds and versions, with the place bound to each room", () => {
-    const outline = floorOutline(survey, findLevel(survey, "L1")!, new Map([["u_wei", "Wei"]]));
-    expect(outline).toEqual({
-      floor: { id: "oth-L1", code: "L1", name: "Level 1", version: 0, owners: ["Wei"] },
-      rooms: [{ id: "L1-shop-12", name: "Shop 12", kind: "room", version: 0, walkable: false, verification: "unverified", place: { id: "pl_sb", name: "Starbucks" } }],
-      pathways: [{ id: "pw_1", name: "Mall street", kindId: null, version: 0 }],
-      entrances: [{ id: "e_1", name: "Main", roomId: "L1-shop-12", version: 0 }],
-      lifts: [{ id: "lift_a-L1", portalId: "lift_a", kind: "lift", name: "Lift A", roomId: "L1-shop-12", version: 0 }],
-      places: [
-        { id: "pl_sb", name: "Starbucks", category: "retail", status: "confirmed", roomId: "L1-shop-12", version: 0 },
-        { id: "pl_gc", name: "Gong Cha", category: "retail", status: "proposed", roomId: null, version: 0 },
-      ],
-      objectKinds: [],
-      objects: [],
+describe("floorPart", () => {
+  const L1 = () => findLevel(survey, "L1")!;
+  const names = new Map([["u_wei", "Wei"]]);
+
+  it("gives the floor's id and code and how many of each part by default", () => {
+    expect(floorPart(survey, L1(), names, "summary", 0, 100)).toEqual({
+      floor: { id: "oth-L1", code: "L1", name: "Level 1", owners: ["Wei"] },
+      counts: {
+        rooms: 1, stops: 1, pathways: 1, entrances: 1,
+        places: { confirmed: 1, proposed: 1, unbound: 0 }, objectKinds: 0, objects: 0,
+      },
+      parts: ["rooms", "places", "pathways", "entrances", "objects"],
     });
+  });
+
+  it("lists each part a page at a time, leaving out what is at its default", () => {
+    expect(floorPart(survey, L1(), names, "rooms", 0, 100)).toEqual({
+      floor: "L1", part: "rooms", total: 1, offset: 0,
+      rooms: [{ id: "L1-shop-12", name: "Shop 12", kind: "room", centre: [2, 2], place: { id: "pl_sb", name: "Starbucks" }, stop: "lift" }],
+    });
+    expect(floorPart(survey, L1(), names, "places", 0, 100)).toEqual({
+      floor: "L1", part: "places", total: 2, offset: 0,
+      places: [
+        { id: "pl_sb", name: "Starbucks", category: "retail", status: "confirmed", roomId: "L1-shop-12" },
+        { id: "pl_gc", name: "Gong Cha", category: "retail", status: "proposed" },
+      ],
+    });
+    expect(floorPart(survey, L1(), names, "pathways", 0, 100)).toMatchObject({
+      pathways: [{ id: "pw_1", name: "Mall street", widthM: 2.4, lengthM: 5, from: [0, 0], to: [5, 0] }],
+    });
+    expect(floorPart(survey, L1(), names, "entrances", 0, 100)).toMatchObject({
+      entrances: [{ id: "e_1", name: "Main", roomId: "L1-shop-12", point: [1, 1] }],
+    });
+    expect(floorPart(survey, L1(), names, "places", 1, 1)).toEqual({
+      floor: "L1", part: "places", total: 2, offset: 1,
+      places: [{ id: "pl_gc", name: "Gong Cha", category: "retail", status: "proposed" }],
+    });
+    expect(floorPart(survey, L1(), names, "places", 0, 1)).toMatchObject({ next: 1 });
+  });
+
+  it("says who proposed a place, its version once it has one, and a walkway's kind", () => {
+    const model = parseModel({
+      ...survey,
+      places: [
+        { id: "pl_gc", nameEn: "Gong Cha", category: "retail", levelId: "oth-L1", status: "proposed", proposedBy: "Claude Code (Wei)", version: 3 },
+        { id: "pl_walk", nameEn: "Festive Walk", category: "facility", levelId: "oth-L1", pathwayKindId: "walkway" },
+      ],
+    });
+    expect(floorPart(model, findLevel(model, "L1")!, names, "places", 0, 100)).toMatchObject({
+      places: [
+        { id: "pl_gc", status: "proposed", proposedBy: "Claude Code (Wei)", version: 3 },
+        { id: "pl_walk", status: "confirmed", pathwayKindId: "walkway" },
+      ],
+    });
+  });
+
+  it("keeps every page of an L1-sized floor under 40,000 characters, and pages through all of it", () => {
+    const long = "Some Rather Long Shop Name, Festive Walk";
+    const big = parseModel({
+      ...survey,
+      rooms: Array.from({ length: 260 }, (_, i) => ({
+        id: `L1-unit-${String(i).padStart(3, "0")}-${long.toLowerCase().replace(/[^a-z]+/g, "-")}`, levelId: "oth-L1",
+        kind: i % 5 === 0 ? "area" : "room", walkable: i % 5 === 0, heightM: 6, nameEn: `Unit ${i}: ${long}`, version: i % 7,
+        footprint: [[i * 10, 0], [i * 10 + 8, 0], [i * 10 + 8, 12], [i * 10, 12]],
+        ...(i % 3 === 0 ? { verification: { status: "cad", evidence: [`pdf:${"a".repeat(64)}`] } } : {}),
+      })),
+      places: Array.from({ length: 200 }, (_, i) => ({
+        id: `pl_${String(i).padStart(3, "0")}${"x".repeat(30)}`, nameEn: `${long} ${i}`, category: "retail", levelId: "oth-L1",
+        status: i % 2 ? "proposed" : "confirmed", proposedBy: i % 2 ? "Claude Code (Demo Author)" : "",
+        ...(i % 4 === 0 ? { roomId: `L1-unit-${String(i).padStart(3, "0")}-${long.toLowerCase().replace(/[^a-z]+/g, "-")}` } : {}),
+        version: i % 5,
+      })),
+    });
+    const level = findLevel(big, "L1")!;
+    expect(JSON.stringify(floorPart(big, level, names, "summary", 0, 100)).length).toBeLessThan(40_000);
+    for (const [part, total] of [["rooms", 260], ["places", 200]] as const) {
+      for (const limit of [100, 200]) {
+        const seen: { id: string }[] = [];
+        let offset: number | undefined = 0;
+        while (offset !== undefined) {
+          const reply = floorPart(big, level, names, part, offset, limit) as Record<string, unknown> & { next?: number };
+          expect(JSON.stringify(reply).length, `${part} from ${offset}`).toBeLessThan(40_000);
+          seen.push(...(reply[part] as { id: string }[]));
+          offset = reply.next;
+        }
+        expect(new Set(seen.map(s => s.id)).size, `${part}, ${limit} a page`).toBe(total);
+      }
+    }
   });
 });
 
-describe("floorOutline and objects", () => {
+describe("floorPart's objects", () => {
   it("lists every kind of object with its places, this floor's objects, and marks an object's place", () => {
     const withObjects = parseModel({
       building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
@@ -111,16 +183,15 @@ describe("floorOutline and objects", () => {
         { id: "L2-wastebin-1", levelId: "oth-L2", objectKindId: "ok_bin", position: [1, 1, 0], sightingIds: [] },
       ],
     });
-    const outline = floorOutline(withObjects, findLevel(withObjects, "L1")!, new Map());
-    expect(outline.objectKinds).toEqual([
-      { id: "ok_bin", name: "wastebin", size: { w: 0.5, d: 0.5, h: 1 }, look: "Box", placeIds: ["pl_bin"], version: 0 },
-    ]);
-    expect(outline.objects).toEqual([
-      { id: "L1-wastebin-1", kindId: "ok_bin", position: [10, 5.65], rotationDeg: 90, sightings: 1, version: 0 },
-    ]);
-    expect(outline.places).toEqual([
-      { id: "pl_bin", name: "wastebin", category: "facility", status: "confirmed", roomId: null, version: 0, objectKindId: "ok_bin" },
-    ]);
+    const level = findLevel(withObjects, "L1")!;
+    expect(floorPart(withObjects, level, new Map(), "objects", 0, 100)).toEqual({
+      floor: "L1", part: "objects", total: 1, offset: 0,
+      kinds: [{ id: "ok_bin", name: "wastebin", size: { w: 0.5, d: 0.5, h: 1 }, look: "Box", placeIds: ["pl_bin"] }],
+      objects: [{ id: "L1-wastebin-1", kindId: "ok_bin", position: [10, 5.65], rotationDeg: 90, sightings: 1 }],
+    });
+    expect(floorPart(withObjects, level, new Map(), "places", 0, 100)).toMatchObject({
+      places: [{ id: "pl_bin", name: "wastebin", category: "facility", status: "confirmed", objectKindId: "ok_bin" }],
+    });
   });
 });
 
@@ -133,6 +204,7 @@ describe("floorIssues", () => {
       errorCount: 2, warningCount: 2, ok: false,
     };
     expect(floorIssues(report, "oth-L1", 2)).toEqual({
+      total: 3,
       errors: 1,
       warnings: 2,
       issues: [
@@ -140,6 +212,11 @@ describe("floorIssues", () => {
         { severity: "warning", code: "x.c", message: "c", entityType: "room", entityId: "c" },
       ],
       more: 1,
+    });
+    // Only the codes asked for, counted and listed alone.
+    expect(floorIssues(report, "oth-L1", 100, ["x.d", "x.b"])).toEqual({
+      codes: ["x.d", "x.b"], total: 1, errors: 0, warnings: 1,
+      issues: [{ severity: "warning", code: "x.d", message: "d", entityType: "room", entityId: "d" }],
     });
   });
 });

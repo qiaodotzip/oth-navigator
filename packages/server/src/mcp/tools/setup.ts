@@ -17,7 +17,7 @@ import { draftList, spotsView } from "../views";
 import { FLOOR, READ_ONLY, levelFor, teamNames } from "./read";
 
 const ID = z.string().min(1).max(120);
-const VERSION = z.number().int().min(0).describe("The version you last read, from get or get_floor.");
+const VERSION = z.number().int().min(0).describe("The version you last read, from get or get_floor, where a version left out is 0.");
 /**
  * Plan 6's writes are not destructive: a stop comes off, a draft comes back,
  * and every change has Undo in the setup's check step. security.test.ts

@@ -12,7 +12,7 @@ import { refuseIfLocked } from "../guards";
 import { Refusal, count, reply, runTool } from "../results";
 
 const ID = z.string().min(1).max(120);
-const VERSION = z.number().int().min(0).describe("The version you last read, from get or get_floor.");
+const VERSION = z.number().int().min(0).describe("The version you last read, from get or get_floor, where a version left out is 0.");
 const REMOVABLE = [...ENTITY_TYPES, "keyframe"] as const;
 /**
  * The types create's description offers: every entity type but a room draft.

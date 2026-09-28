@@ -1,6 +1,6 @@
 import {
-  coverage, draftMatch, live, namedLikeAStop, placeLevels, pointInPolygon, ringArea,
-  type Level, type MapModel, type Ring, type Room, type RoomDraft, type ValidationReport,
+  coverage, draftMatch, labelPoint, live, namedLikeAStop, placeLevels, pointInPolygon, ringArea,
+  type Level, type MapModel, type Ring, type Room, type RoomDraft, type ValidationReport, type Vec2,
 } from "@oth/model";
 import type { DraftTally } from "../drafts/service";
 import type { SpotReport } from "../objects/spots";
@@ -50,53 +50,152 @@ export function findLevel(model: MapModel, floor: string): Level | null {
   return live(model.levels).find(l => l.id.toLowerCase() === wanted || l.code.toLowerCase() === wanted) ?? null;
 }
 
-/** get_floor: one floor as ids, names, kinds and versions (spec §6.3); get gives any one in full. */
-export function floorOutline(model: MapModel, level: Level, names: ReadonlyMap<string, string>) {
-  const floorOf = placeLevels(model);
-  const places = live(model.places);
-  const boundTo = new Map(places.filter(p => p.roomId).map(p => [p.roomId!, p]));
-  const portals = new Map(live(model.portals).map(p => [p.id, p]));
-  return {
-    floor: {
-      id: level.id, code: level.code, name: level.nameEn, version: level.version,
-      owners: level.ownerIds.map(id => names.get(id) ?? id),
-    },
-    rooms: live(model.rooms).filter(r => r.levelId === level.id).map(r => {
-      const place = boundTo.get(r.id);
-      return {
-        id: r.id, name: r.nameEn, kind: r.kind, version: r.version, walkable: r.walkable,
-        verification: r.verification.status,
-        ...(place ? { place: { id: place.id, name: place.nameEn } } : {}),
-      };
-    }),
-    pathways: live(model.pathways).filter(p => p.levelId === level.id)
-      .map(p => ({ id: p.id, name: p.nameEn, kindId: p.kindId ?? null, version: p.version })),
-    entrances: live(model.entrances).filter(e => e.levelId === level.id)
-      .map(e => ({ id: e.id, name: e.nameEn, roomId: e.roomId, version: e.version })),
-    lifts: live(model.portalEndpoints).filter(e => e.levelId === level.id).map(e => {
-      const portal = portals.get(e.portalId);
-      return { id: e.id, portalId: e.portalId, kind: portal?.kind ?? "unknown", name: portal?.nameEn ?? "", roomId: e.roomId, version: e.version };
-    }),
-    places: places.filter(p => floorOf.get(p.id) === level.id).map(p => ({
-      id: p.id, name: p.nameEn, category: p.category, status: p.status, roomId: p.roomId ?? null, version: p.version,
-      ...(p.objectKindId ? { objectKindId: p.objectKindId } : {}),
-    })),
-    // Kinds are the same on every floor (Plan 6A), so each is listed with its places, wherever they were filmed.
-    objectKinds: live(model.objectKinds).map(k => ({
-      id: k.id, name: k.nameEn, size: k.size, look: k.assetId ? "Model" : "Box",
-      placeIds: places.filter(p => p.objectKindId === k.id).map(p => p.id), version: k.version,
-    })),
-    objects: live(model.placements).filter(p => p.levelId === level.id && p.objectKindId).map(p => ({
-      id: p.id, kindId: p.objectKindId!, position: [round2(p.position[0]), round2(p.position[1])],
-      rotationDeg: p.rotationDeg, sightings: p.sightingIds.length, version: p.version,
-    })),
-  };
+/** get_floor's parts: the summary, then each list that comes a page at a time (contract v2). */
+export const FLOOR_PARTS = ["summary", "rooms", "places", "pathways", "entrances", "objects"] as const;
+export type FloorPart = (typeof FLOOR_PARTS)[number];
+
+/**
+ * Every get_floor reply stays under this: Claude Code sets a longer tool
+ * result aside in a file it then struggles to read (the rehearsal's L1 was
+ * 58,722 characters), so a page is cut short to fit and says where the next
+ * one starts.
+ */
+export const MAX_REPLY_CHARS = 40_000;
+
+const at1 = (p: Vec2): [number, number] => [round1(p[0]), round1(p[1])];
+
+function lineLength(line: readonly Vec2[]): number {
+  let total = 0;
+  for (let i = 1; i < line.length; i++) total += Math.hypot(line[i]![0] - line[i - 1]![0], line[i]![1] - line[i - 1]![1]);
+  return total;
 }
 
-/** check_floor: the issues on one floor that the publish gate runs, errors first. */
-export function floorIssues(report: ValidationReport, levelId: string, max = 100) {
-  const here = report.issues.filter(i => i.levelId === levelId || (i.entityType === "level" && i.entityId === levelId));
+/**
+ * One part's items on one floor, each leaving out what is at its default (a
+ * version 0, no name, not walkable, unverified, no room), so L1's 260 rooms
+ * fit a page. A room's centre is where its name goes on the plan, in metres.
+ */
+function partItems(model: MapModel, level: Level, part: Exclude<FloorPart, "summary" | "objects">): Record<string, unknown>[] {
+  const version = (v: number) => (v ? { version: v } : {});
+  const named = (name: string) => (name.trim() ? { name: name.trim() } : {});
+  switch (part) {
+    case "rooms": {
+      const boundTo = new Map(live(model.places).filter(p => p.roomId && !p.objectKindId).map(p => [p.roomId!, p]));
+      const portalKind = new Map(live(model.portals).map(p => [p.id, p.kind]));
+      const stopIn = new Map(live(model.portalEndpoints).filter(e => e.levelId === level.id)
+        .map(e => [e.roomId, portalKind.get(e.portalId) ?? "stop"]));
+      return live(model.rooms).filter(r => r.levelId === level.id).map(r => {
+        const place = boundTo.get(r.id);
+        const stop = stopIn.get(r.id);
+        return {
+          id: r.id, ...named(r.nameEn), kind: r.kind,
+          ...(r.walkable ? { walkable: true } : {}),
+          ...(r.verification.status !== "unverified" ? { verification: r.verification.status } : {}),
+          ...version(r.version),
+          centre: at1(labelPoint(r.footprint, r.holes, 0.5).point),
+          ...(place ? { place: { id: place.id, name: place.nameEn } } : {}),
+          ...(stop ? { stop } : {}),
+        };
+      });
+    }
+    case "places": {
+      const floorOf = placeLevels(model);
+      return live(model.places).filter(p => floorOf.get(p.id) === level.id).map(p => ({
+        id: p.id, name: p.nameEn, category: p.category, status: p.status,
+        ...(p.proposedBy ? { proposedBy: p.proposedBy } : {}),
+        ...(p.roomId ? { roomId: p.roomId } : {}),
+        ...(p.objectKindId ? { objectKindId: p.objectKindId } : {}),
+        ...(p.pathwayKindId ? { pathwayKindId: p.pathwayKindId } : {}),
+        ...version(p.version),
+      }));
+    }
+    case "pathways":
+      return live(model.pathways).filter(p => p.levelId === level.id).map(p => ({
+        id: p.id, ...named(p.nameEn), ...(p.kindId ? { kindId: p.kindId } : {}), ...version(p.version),
+        widthM: p.widthM, lengthM: round1(lineLength(p.polyline)), from: at1(p.polyline[0]!), to: at1(p.polyline[p.polyline.length - 1]!),
+      }));
+    case "entrances":
+      return live(model.entrances).filter(e => e.levelId === level.id).map(e => ({
+        id: e.id, ...named(e.nameEn), roomId: e.roomId, point: at1(e.point), ...version(e.version),
+      }));
+  }
+}
+
+/** A page of items, cut short when the reply would pass MAX_REPLY_CHARS, with `next` when there is more. */
+function page(head: Record<string, unknown>, key: string, all: readonly Record<string, unknown>[], offset: number, limit: number) {
+  const build = (items: readonly Record<string, unknown>[]) => ({
+    ...head, total: all.length, offset, [key]: items, ...(offset + items.length < all.length ? { next: offset + items.length } : {}),
+  });
+  let items = all.slice(offset, offset + limit);
+  let reply = build(items);
+  for (let size = JSON.stringify(reply).length; size >= MAX_REPLY_CHARS && items.length > 1; size = JSON.stringify(reply).length) {
+    items = items.slice(0, Math.max(1, Math.floor((items.length * MAX_REPLY_CHARS * 0.95) / size)));
+    reply = build(items);
+  }
+  return reply;
+}
+
+/**
+ * get_floor (contract v2): a floor's summary, the default, or one part a page
+ * at a time, as list_frames pages. get gives any one thing in full.
+ */
+export function floorPart(
+  model: MapModel, level: Level, names: ReadonlyMap<string, string>, part: FloorPart, offset: number, limit: number,
+) {
+  if (part === "summary") {
+    const floorOf = placeLevels(model);
+    const here = live(model.places).filter(p => floorOf.get(p.id) === level.id);
+    const confirmed = here.filter(p => p.status === "confirmed");
+    return {
+      floor: {
+        id: level.id, code: level.code, name: level.nameEn, ...(level.version ? { version: level.version } : {}),
+        owners: level.ownerIds.map(id => names.get(id) ?? id),
+      },
+      counts: {
+        rooms: live(model.rooms).filter(r => r.levelId === level.id).length,
+        stops: live(model.portalEndpoints).filter(e => e.levelId === level.id).length,
+        pathways: live(model.pathways).filter(p => p.levelId === level.id).length,
+        entrances: live(model.entrances).filter(e => e.levelId === level.id).length,
+        places: {
+          confirmed: confirmed.length,
+          proposed: here.length - confirmed.length,
+          unbound: confirmed.filter(p => !p.roomId && !p.objectKindId && !p.pathwayKindId).length,
+        },
+        objectKinds: live(model.objectKinds).length,
+        objects: live(model.placements).filter(p => p.levelId === level.id && p.objectKindId).length,
+      },
+      parts: FLOOR_PARTS.filter(p => p !== "summary"),
+    };
+  }
+  const head = { floor: level.code, part };
+  if (part === "objects") {
+    const places = live(model.places);
+    // Kinds are the same on every floor (Plan 6A), so each is listed with its places, wherever they were filmed.
+    const kinds = live(model.objectKinds).map(k => ({
+      id: k.id, name: k.nameEn, size: k.size, look: k.assetId ? "Model" : "Box",
+      placeIds: places.filter(p => p.objectKindId === k.id).map(p => p.id), ...(k.version ? { version: k.version } : {}),
+    }));
+    const objects = live(model.placements).filter(p => p.levelId === level.id && p.objectKindId).map(p => ({
+      id: p.id, kindId: p.objectKindId!, position: [round2(p.position[0]), round2(p.position[1])],
+      rotationDeg: p.rotationDeg, sightings: p.sightingIds.length, ...(p.version ? { version: p.version } : {}),
+    }));
+    return page({ ...head, kinds }, "objects", objects, offset, limit);
+  }
+  return page(head, part, partItems(model, level, part), offset, limit);
+}
+
+/**
+ * check_floor: the issues on one floor that the publish gate runs, errors
+ * first, at most `max` of them, of the codes asked for when `codes` is given.
+ * total counts every one that matched.
+ */
+export function floorIssues(report: ValidationReport, levelId: string, max = 100, codes?: readonly string[]) {
+  const wanted = codes && codes.length > 0 ? new Set(codes) : null;
+  const here = report.issues.filter(i =>
+    (i.levelId === levelId || (i.entityType === "level" && i.entityId === levelId)) && (!wanted || wanted.has(i.code)));
   return {
+    ...(wanted ? { codes: [...codes!] } : {}),
+    total: here.length,
     errors: here.filter(i => i.severity === "error").length,
     warnings: here.filter(i => i.severity === "warning").length,
     issues: here.slice(0, max).map(({ severity, code, message, entityType, entityId }) => ({ severity, code, message, entityType, entityId })),

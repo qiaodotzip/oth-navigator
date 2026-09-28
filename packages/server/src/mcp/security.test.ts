@@ -1,14 +1,14 @@
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
 import { storeAsset } from "../assets/storage";
 import { createUser } from "../auth/users";
 import {
-  apiTokens, auditLog, buildings, captures, floorSetup, keyframes, levels, portals, publishedVersions, roomDrafts, rooms, users,
+  apiTokens, auditLog, buildings, captures, floorSetup, keyframes, levelImages, levels, portals, publishedVersions, roomDrafts, rooms, users,
 } from "../db/schema";
 import { listDrafts, replaceDrafts } from "../drafts/service";
 import { createEntity, updateEntity } from "../entities/repository";
@@ -259,6 +259,48 @@ describe("§6.5 prompt injection: the mitigations hold", () => {
     expect(await f.db.select().from(publishedVersions)).toEqual([]);
   });
 
+  it("counts exactly these tools as reads: any other, a new one included, is a write", () => {
+    expect([...READ_TOOLS].sort()).toEqual([
+      "check_floor", "get", "get_floor", "list_drafts", "list_floors", "list_frames", "step_status",
+      "suggest_object_spots", "suggest_paths", "view_frame", "view_plan",
+    ]);
+  });
+
+  it("writes nothing through any read tool: the audit log is the same after each", async () => {
+    const f = await mcpFixture();
+    await createEntity(f.db, "room", { ...ROOM, kind: "area", walkable: true }, f.wei.id);
+    await replaceDrafts(f.db, "oth-L1", { checksum: "a".repeat(64), page: 1 }, [
+      { nameEn: "Kiosk", kind: "room", footprint: [[12, 32], [14, 32], [14, 34], [12, 34]], labelPoint: [13, 33], areaM2: 4 },
+    ], f.wei.id);
+    const picture = await sharp({ create: { width: 400, height: 200, channels: 3, background: "#ffffff" } }).png().toBuffer();
+    const stored = await storeAsset(f.dataDir, new Uint8Array(picture), "png");
+    await f.db.insert(levelImages).values({
+      id: "li_1", levelId: "oth-L1", filename: "L1.png", storagePath: stored.storagePath, checksum: stored.checksum,
+      widthPx: 400, heightPx: 200, sizeBytes: picture.length, metresPerPixel: 0.25, offsetX: 0, offsetY: 50,
+    });
+    await f.db.insert(captures).values({ id: "cap_1", kind: "video", filename: "walk.mp4", levelId: "oth-L1" });
+    await f.db.insert(keyframes).values({
+      id: "kf_1", captureId: "cap_1", timeMs: 0, imageId: "kf_1", storagePath: stored.storagePath, checksum: stored.checksum,
+      widthPx: 400, heightPx: 200, sizeBytes: picture.length,
+    });
+    const client = await f.connect();
+    const reads: [string, Record<string, unknown>][] = [
+      ["list_floors", {}], ["get", { type: "room", id: ROOM.id }], ["check_floor", { floor: "L1" }],
+      ["list_frames", { floor: "L1" }], ["view_frame", { frameId: "kf_1" }], ["view_plan", { floor: "L1" }],
+      ["list_drafts", { floor: "L1" }], ["step_status", { floor: "L1" }], ["suggest_object_spots", { floor: "L1" }],
+      ["suggest_paths", { floor: "L1" }],
+      ...["summary", "rooms", "places", "pathways", "entrances", "objects"].map(part => ["get_floor", { floor: "L1", part }] as [string, Record<string, unknown>]),
+    ];
+    expect(new Set(reads.map(([name]) => name))).toEqual(READ_TOOLS);
+    const trail = async () => (await f.db.select().from(auditLog)).map(r => r.id).sort();
+    const before = await trail();
+    for (const [name, args] of reads) {
+      const { isError, text } = await call(client, name, args);
+      expect(isError, `${name}: ${text}`).toBe(false);
+      expect(await trail(), name).toEqual(before);
+    }
+  });
+
   it("marks delete and publish destructive, reads read-only, and no other write either", async () => {
     const f = await mcpFixture();
     const { tools } = await (await f.connect()).listTools();
@@ -435,7 +477,7 @@ describe("MCP end to end", () => {
     expect(names).toEqual(expect.arrayContaining([
       "list_floors", "get_floor", "get", "check_floor", "list_frames", "view_frame", "view_plan",
       "tag_frame", "review_place", "bind_place", "create", "update", "delete", "restore",
-      "list_drafts", "decide_drafts", "make_stop", "suggest_object_spots", "step_status", "finish_step",
+      "list_drafts", "decide_drafts", "make_stop", "suggest_object_spots", "step_status", "finish_step", "suggest_paths",
     ]));
     await createEntity(f.db, "room", ROOM, f.wei.id);
     await updateEntity(f.db, "room", ROOM.id, 0, { nameEn: "Starbucks" }, f.wei.id);
@@ -491,6 +533,21 @@ describe("§7.4 Plan 6's tools keep the Plan 5C guards", () => {
       "floorSetup set", "portal create", "portalEndpoint create", "room create", "room update", "roomDraft delete", "roomDraft update",
     ]);
     expect(byTools.every(r => r.via === f.tokenId)).toBe(true);
+  });
+
+  it("leave a via trail on the kind, place and tag tag_frame makes for an object", async () => {
+    const f = await mcpFixture();
+    await f.db.insert(captures).values({ id: "cap_1", kind: "video", filename: "walk.mp4", levelId: "oth-L1" });
+    await f.db.insert(keyframes).values({
+      id: "kf_1", captureId: "cap_1", timeMs: 0, imageId: "kf_1", storagePath: "assets/aa/x.jpg", checksum: "x", widthPx: 640, heightPx: 480, sizeBytes: 1,
+    });
+    const tagged = await call(await f.connect(), "tag_frame", {
+      frameId: "kf_1", nameEn: "wastebin", category: "facility", object: true, box: { x: 0.1, y: 0.1, w: 0.1, h: 0.2 }, size: { w: 0.4, d: 0.4, h: 0.9 },
+    });
+    expect(tagged.isError).toBe(false);
+    const rows = await f.db.select().from(auditLog).where(inArray(auditLog.entityType, ["objectKind", "place", "sighting"]));
+    expect(rows.map(r => `${r.entityType} ${r.action}`).sort()).toEqual(["objectKind create", "place create", "sighting create"]);
+    expect(rows.every(r => r.via === f.tokenId)).toBe(true);
   });
 
   it("publish nothing: publish stays the one tool that does, and still needs May publish", async () => {

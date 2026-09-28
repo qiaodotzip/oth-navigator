@@ -13,7 +13,7 @@ import { wrapTools } from "./wrapTools";
 export function instructions(name: string): string {
   return [
     `You are connected to the OTH map editor as ${name}. Everything you change is saved under ${name}'s name and marked as coming through Claude Code.`,
-    "Start with list_floors, then get_floor for the floor you are working on. get gives one thing in full.",
+    "Start with list_floors, then get_floor for the floor you are working on: its summary first, then the parts you need, a page at a time. get gives one thing in full.",
     "Every change to something that exists takes expectedVersion, the version you last read. If someone changed it since, nothing is saved and you are told who changed it and what it is now: read it again and decide. Never resend the same change blindly.",
     "What you read off frames goes in as proposals for a person to review. Accept, reject or merge proposals with review_place only when asked to.",
     "If you are told someone is editing something now, leave it and come back to it later.",

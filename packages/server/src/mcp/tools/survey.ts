@@ -12,7 +12,7 @@ import { refuseIfLocked } from "../guards";
 import { Refusal, count, reply, runTool } from "../results";
 
 const ID = z.string().min(1).max(120);
-const VERSION = z.number().int().min(0).describe("The version you last read, from get or get_floor.");
+const VERSION = z.number().int().min(0).describe("The version you last read, from get or get_floor, where a version left out is 0.");
 const FRACTION = z.number().min(0).max(1);
 const BOX = z.object({ x: FRACTION, y: FRACTION, w: FRACTION, h: FRACTION })
   .describe("Which part of the frame, in fractions of it: x and y from the top left, then w and h.");
@@ -47,9 +47,10 @@ export function registerSurveyTools(server: McpServer, ctx: ToolContext): void {
       `with review_place when ${name} asks you to. Review lists only proposed places, so a tag on a place ` +
       "already confirmed is not shown there: it stays a proposal until review_place with decision accept runs " +
       `on that place, which confirms its proposed tags. ${name} can ask you to do that.` +
-      " Objects, such as a wastebin or a water cooler: set object true and box each one. By name, the kind of that name " +
-      "is found whatever its spelling, or made at size; by the placeId of your own proposal, the proposal becomes the " +
-      "kind's place. Two of an object in one frame are two tags, each with its own box.",
+      " Objects, such as a wastebin or a water cooler: set object true and box each one. By name, a kind with the " +
+      "same name is found (capitals and spacing aside, so \"Wastebin\" finds \"wastebin\" but \"waste bin\" does not), " +
+      "or one is made at size; by the placeId of a proposal (status proposed), the proposal becomes the kind's place. " +
+      "Two of an object in one frame are two tags, each with its own box.",
     inputSchema: {
       frameId: ID,
       placeId: ID.optional(),

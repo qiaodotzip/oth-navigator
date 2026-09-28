@@ -11,7 +11,7 @@ import { assembleModel } from "../../model/assemble";
 import type { ToolContext } from "../context";
 import { PLAN_MARGIN_M, padded, planView, renderPlan } from "../plan";
 import { Refusal, replyJson, runTool } from "../results";
-import { FRAME_FILTERS, findLevel, floorIssues, floorOutline, frameList, frameTags, summariseFloors } from "../views";
+import { FLOOR_PARTS, FRAME_FILTERS, findLevel, floorIssues, floorPart, frameList, frameTags, summariseFloors } from "../views";
 
 /** Read tools carry readOnlyHint, so Claude Code need not ask before each (spec §6.3). */
 export const READ_ONLY = { readOnlyHint: true } as const;
@@ -61,14 +61,24 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool("get_floor", {
     title: "Get a floor",
     description:
-      "One floor as ids, names, kinds and versions: its rooms (with the surveyed place bound to each), " +
-      "walkways, entrances, lift and escalator stops, and the places surveyed on it, and the kinds of object with " +
-      "the objects on this floor. get gives any one of them in full.",
-    inputSchema: { floor: FLOOR },
+      "One floor, in parts, since a big floor is too much for one reply. part summary, the default, gives the " +
+      "floor's id and code and how many of each thing it has. The other parts come a page at a time, as list_frames " +
+      "does: offset and limit, and next when there is more. rooms: each one's id, name, kind, centre [x, y] in " +
+      "metres (where its name goes on the plan), the surveyed place bound to it, and stop when it is a lift, " +
+      "escalator or stair stop. places: those surveyed on the floor, with status, proposedBy for a proposal, the " +
+      "roomId it is bound to, and objectKindId or pathwayKindId when it is an object or a walkway. pathways, " +
+      "entrances, and objects (the kinds of object, with the objects on this floor). A field left out has its " +
+      "default: version 0, not walkable, unverified, bound to no room. get gives any one thing in full.",
+    inputSchema: {
+      floor: FLOOR,
+      part: z.enum(FLOOR_PARTS).default("summary"),
+      offset: z.number().int().min(0).default(0),
+      limit: z.number().int().min(1).max(200).default(100),
+    },
     annotations: READ_ONLY,
-  }, ({ floor }) => runTool(ctx, async () => {
+  }, ({ floor, part, offset, limit }) => runTool(ctx, async () => {
     const model = await assembleModel(ctx.db);
-    return replyJson(floorOutline(model, levelFor(ctx, model, floor), await teamNames(ctx)));
+    return replyJson(floorPart(model, levelFor(ctx, model, floor), await teamNames(ctx), part, offset, limit));
   }));
 
   server.registerTool("get", {
@@ -89,13 +99,14 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
     title: "Check a floor",
     description:
       "The problems on one floor that the publish check finds: errors block publishing, warnings do not. " +
-      "Each names the thing it is about.",
-    inputSchema: { floor: FLOOR },
+      "Each names the thing it is about. It lists at most 100, and total says how many there are. codes keeps only " +
+      "the problems with those codes, such as [\"area.unreachable\", \"entrance.offFloor\"].",
+    inputSchema: { floor: FLOOR, codes: z.array(z.string().min(1).max(80)).max(20).optional() },
     annotations: READ_ONLY,
-  }, ({ floor }) => runTool(ctx, async () => {
+  }, ({ floor, codes }) => runTool(ctx, async () => {
     const model = await assembleModel(ctx.db);
     const level = levelFor(ctx, model, floor);
-    return replyJson(floorIssues(validateModel(model), level.id));
+    return replyJson(floorIssues(validateModel(model), level.id, 100, codes));
   }));
 
   server.registerTool("list_frames", {
