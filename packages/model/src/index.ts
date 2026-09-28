@@ -8,6 +8,7 @@ export * from "./schema/dressing";
 export * from "./schema/semantics";
 export * from "./schema/survey";
 export * from "./schema/model";
+export * from "./schema/pdfPlan";
 
 export * from "./geometry/ring";
 export * from "./geometry/segment";

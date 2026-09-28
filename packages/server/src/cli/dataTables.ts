@@ -11,7 +11,7 @@ import type { Database } from "../db/client";
 export const CARRIED_TABLES = [
   "users",
   "buildings", "levels", "rooms", "doorways", "entrances", "portals", "portal_endpoints", "nav_hints",
-  "pathway_kinds", "pathways", "assets", "placements", "tenants", "level_images",
+  "pathway_kinds", "pathways", "assets", "placements", "tenants", "level_images", "plan_pdfs", "room_drafts",
   "captures", "keyframes", "places", "sightings",
   "published_versions", "audit_log",
 ] as const;
@@ -24,7 +24,7 @@ export const CARRIED_TABLES = [
 export const LEFT_BEHIND = ["sessions", "entity_locks", "api_tokens"] as const;
 
 /** Tables whose rows name a file under the data folder, in `storage_path`, with its `size_bytes`. */
-export const FILE_TABLES = ["assets", "level_images", "keyframes"] as const;
+export const FILE_TABLES = ["assets", "level_images", "keyframes", "plan_pdfs"] as const;
 
 export type TableName = (typeof CARRIED_TABLES)[number];
 export type Counts = Record<TableName, number>;

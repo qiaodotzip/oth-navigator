@@ -1,3 +1,4 @@
+import type { DraftSource, PlanSource } from "@oth/model";
 import {
   boolean, doublePrecision, index, integer, jsonb,
   pgTable, text, timestamp, uniqueIndex,
@@ -218,6 +219,8 @@ export const levelImages = pgTable("level_images", {
   offsetX: doublePrecision("offset_x").notNull().default(0),
   offsetY: doublePrecision("offset_y").notNull().default(0),
   opacity: doublePrecision("opacity").notNull().default(0.6),
+  /** Set when the plan was drawn from a PDF: which sheet, and where on it (PlanSourceSchema in @oth/model). */
+  source: jsonb("source").$type<PlanSource>(),
   uploadedBy: text("uploaded_by"),
   ...auditColumns,
 }, t => ({ levelIdx: index("level_images_level_idx").on(t.levelId) }));
@@ -325,3 +328,35 @@ export const apiTokens = pgTable("api_tokens", {
   hashIdx: uniqueIndex("api_tokens_hash_idx").on(t.tokenHash),
   userIdx: index("api_tokens_user_idx").on(t.userId),
 }));
+
+/**
+ * A floor's PDF, kept so anyone can find rooms in it later (spec §5.3). Stored
+ * and served back, never parsed here. A table of its own, with the
+ * `storage_path` and `size_bytes` that data:export carries files by, so the
+ * PDFs move to another server with everything else.
+ */
+export const planPdfs = pgTable("plan_pdfs", {
+  id: text("id").primaryKey(),
+  filename: text("filename").notNull(),
+  storagePath: text("storage_path").notNull(),
+  checksum: text("checksum").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  uploadedBy: text("uploaded_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Spaces found in a floor's PDF, waiting for a person (RoomDraftSchema). Never part of the map. */
+export const roomDrafts = pgTable("room_drafts", {
+  id: text("id").primaryKey(),
+  levelId: text("level_id").notNull(),
+  nameEn: text("name_en").notNull(),
+  kind: text("kind").notNull(),
+  /** Null for a space the drawing leaves open. */
+  footprint: jsonb("footprint").$type<[number, number][]>(),
+  holes: jsonb("holes").$type<[number, number][][]>().notNull().default([]),
+  labelPoint: jsonb("label_point").$type<[number, number]>().notNull(),
+  areaM2: doublePrecision("area_m2").notNull(),
+  source: jsonb("source").$type<DraftSource>().notNull(),
+  acceptedRoomId: text("accepted_room_id"),
+  ...auditColumns,
+}, t => ({ levelIdx: index("room_drafts_level_idx").on(t.levelId) }));

@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
+import { PlanSheetSchema } from "@oth/model";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import type { AppEnv } from "../app";
 import { readAsset, storeAsset } from "../assets/storage";
 import { requireUser } from "../auth/middleware";
-import { levelImages, levels } from "../db/schema";
+import { levelImages, levels, planPdfs } from "../db/schema";
 import { IMAGE_MAX_BYTES, InvalidImageError, readImageSize } from "./inspect";
+import { PDF_MAX_BYTES, attachmentName, looksLikePdf } from "./pdf";
 
 const PatchBody = z.object({
   expectedVersion: z.number().int().nonnegative(),
@@ -130,5 +133,86 @@ levelImageRoutes.get("/:id/file", async c => {
   return c.body(bytes.buffer as ArrayBuffer, 200, {
     "content-type": row.storagePath.endsWith(".png") ? "image/png" : "image/jpeg",
     "cache-control": "public, max-age=31536000, immutable",
+  });
+});
+
+/**
+ * The PDF a plan was drawn from, kept beside it so any teammate can find rooms
+ * in it later (spec §5.3). Checked by its header and its size, and nothing
+ * else.
+ */
+levelImageRoutes.post(
+  "/:id/source",
+  bodyLimit({ maxSize: PDF_MAX_BYTES + 1024 * 1024, onError: c => c.json({ error: "The PDF is over 50 MB." }, 413) }),
+  async c => {
+    const db = c.get("db");
+    const id = c.req.param("id");
+    const form = await c.req.formData().catch(() => null);
+    const file = form?.get("file");
+    const sheetText = form?.get("sheet");
+    const expectedVersion = Number(form?.get("expectedVersion"));
+    if (!(file instanceof File) || typeof sheetText !== "string" || !Number.isInteger(expectedVersion) || expectedVersion < 0) {
+      return c.json({ error: "expected multipart fields 'file', 'sheet' and 'expectedVersion'" }, 400);
+    }
+    let sheetJson: unknown = null;
+    try {
+      sheetJson = JSON.parse(sheetText);
+    } catch {
+      // Refused just below, as any other sheet the schema will not take.
+    }
+    const sheet = PlanSheetSchema.safeParse(sheetJson);
+    if (!sheet.success) return c.json({ error: "invalid sheet", detail: String(sheet.error) }, 422);
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (bytes.byteLength > PDF_MAX_BYTES) return c.json({ error: "The PDF is over 50 MB." }, 422);
+    if (!looksLikePdf(bytes)) return c.json({ error: "not a PDF file" }, 422);
+
+    // A retired plan is no one's to change, as PATCH says; and a stale version
+    // is answered before the file is written, so a refused send stores nothing.
+    const [image] = await db.select().from(levelImages).where(eq(levelImages.id, id));
+    if (!image || image.deletedAt) return c.json({ error: "not found" }, 404);
+    if (image.version !== expectedVersion) return c.json({ error: "version conflict", current: image }, 409);
+
+    const stored = await storeAsset(c.get("dataDir"), bytes, "pdf");
+    const pdfId = `pdf_${stored.checksum.slice(0, 16)}`;
+    // Content-addressed like every stored file: the same PDF sent for two floors is kept once.
+    await db.insert(planPdfs).values({
+      id: pdfId, filename: file.name, storagePath: stored.storagePath, checksum: stored.checksum,
+      sizeBytes: bytes.byteLength, uploadedBy: c.get("user").id,
+    }).onConflictDoNothing();
+
+    const [row] = await db.update(levelImages)
+      .set({
+        source: { ...sheet.data, pdfId, checksum: stored.checksum, filename: file.name },
+        version: expectedVersion + 1,
+        updatedBy: c.get("user").id,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(levelImages.id, id), eq(levelImages.version, expectedVersion), isNull(levelImages.deletedAt)))
+      .returning();
+    if (!row) {
+      // Someone saved or replaced the plan in the moment since it was read.
+      const [current] = await db.select().from(levelImages).where(eq(levelImages.id, id));
+      if (!current || current.deletedAt) return c.json({ error: "not found" }, 404);
+      return c.json({ error: "version conflict", current }, 409);
+    }
+    return c.json({ image: row });
+  },
+);
+
+levelImageRoutes.get("/:id/source", async c => {
+  const db = c.get("db");
+  const [row] = await db.select().from(levelImages).where(eq(levelImages.id, c.req.param("id")));
+  const pdfId = row?.source?.pdfId;
+  if (!pdfId) return c.json({ error: "this plan did not come from a PDF" }, 404);
+  const [pdf] = await db.select().from(planPdfs).where(eq(planPdfs.id, pdfId));
+  if (!pdf) return c.json({ error: "not found" }, 404);
+  const bytes = await readAsset(c.get("dataDir"), pdf.storagePath);
+  return c.body(bytes.buffer as ArrayBuffer, 200, {
+    "content-type": "application/pdf",
+    // A download, never a page: a PDF shown on the app's own origin would run whatever it carries there.
+    "content-disposition": `attachment; filename="${attachmentName(pdf.filename)}"`,
+    "x-content-type-options": "nosniff",
+    "cache-control": "private, no-cache",
   });
 });

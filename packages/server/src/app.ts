@@ -5,6 +5,7 @@ import { authRoutes } from "./auth/routes";
 import type { User } from "./auth/users";
 import { isDeployed, loadConfig } from "./config";
 import type { Database } from "./db/client";
+import { levelDraftRoutes, roomDraftRoutes } from "./drafts/routes";
 import { entityRoutes } from "./entities/routes";
 import { teamGate } from "./gate/gate";
 import { levelImageRoutes } from "./images/routes";
@@ -105,6 +106,8 @@ export function createApp(deps: AppDeps) {
   app.route("/api/places", placeReviewRoutes);
   app.route("/api/assets", assetRoutes);
   app.route("/api/level-images", levelImageRoutes);
+  app.route("/api/levels", levelDraftRoutes);
+  app.route("/api/room-drafts", roomDraftRoutes);
   app.route("/api", publishRoutes);
 
   // One tracker for the app and for Claude Code, so "Wei (Claude)" shows where people look.
