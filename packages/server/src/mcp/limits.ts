@@ -99,6 +99,8 @@ export class RefusedTokens {
  */
 export const READ_TOOLS: ReadonlySet<string> = new Set([
   "list_floors", "get_floor", "get", "check_floor", "list_frames", "view_frame", "view_plan",
+  // Plan 6C.
+  "list_drafts",
 ]);
 
 export type CallKind = "read" | "write" | "publish";

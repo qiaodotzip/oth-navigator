@@ -1,4 +1,8 @@
-import { live, placeLevels, type Level, type MapModel, type ValidationReport } from "@oth/model";
+import {
+  draftMatch, live, namedLikeAStop, placeLevels,
+  type Level, type MapModel, type Room, type RoomDraft, type ValidationReport,
+} from "@oth/model";
+import type { DraftTally } from "../drafts/service";
 
 export type FloorSummary = {
   id: string;
@@ -122,4 +126,30 @@ export function frameTags(model: MapModel, frameId: string) {
       status: s.status, ...(s.box ? { box: s.box } : {}),
     };
   });
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * list_drafts: a floor's drafts waiting, largest first, a page at a time,
+ * with how the floor's drafts stand. onMapAs is the room a draft copies, by
+ * Build's own rule (draftMatch); overlaps says it lies over rooms.
+ */
+export function draftList(
+  code: string, waiting: readonly RoomDraft[], tally: DraftTally, rooms: readonly Room[], limit: number, offset: number,
+) {
+  return {
+    floor: code,
+    counts: tally,
+    total: waiting.length,
+    offset,
+    drafts: waiting.slice(offset, offset + limit).map(d => {
+      const match = draftMatch(d, rooms);
+      return {
+        id: d.id, version: d.version, name: d.nameEn, kind: d.kind, areaM2: round1(d.areaM2),
+        labelPoint: [round1(d.labelPoint[0]), round1(d.labelPoint[1])],
+        open: !d.footprint, onMapAs: match.copyOf?.id ?? null, overlaps: match.overRooms, likeAStop: namedLikeAStop(d.nameEn),
+      };
+    }),
+  };
 }

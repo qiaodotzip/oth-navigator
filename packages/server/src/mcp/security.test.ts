@@ -291,9 +291,10 @@ describe("§6.5 prompt injection: the mitigations hold", () => {
   });
 });
 
-// Owner: mcp/tools/edit.ts (Ruling 14). Part B's roomDraft is an entity type,
-// so the generic tools reach it, but only a person accepts a draft, in Build.
-describe("§6.5 prompt injection: a room draft becomes a room only when a person accepts it", () => {
+// Owner: mcp/tools/edit.ts (Ruling 14), mcp/tools/setup.ts. Claude may decide a
+// draft (decide_drafts, spec §7.2), but its shape and PDF checksum only ever
+// come from Find rooms in a person's browser.
+describe("§6.5 prompt injection: a draft's shape comes only from Find rooms", () => {
   const SOURCE = { checksum: "a".repeat(64), page: 1 };
   const SHOP = { nameEn: "Shop 12", kind: "room", footprint: ROOM.footprint, labelPoint: [15, 35], areaM2: 100 };
   const waitingDraft = async (f: McpFixture) => String((await replaceDrafts(f.db, "oth-L1", SOURCE, [SHOP], f.wei.id))[0]!.id);

@@ -30,7 +30,7 @@ const STATUS = "A place's or a tag's status changes only through review_place, w
  * acceptedRoomId that hides it from review and points the accept's undo at
  * any room. get, delete (a reject) and restore still take drafts.
  */
-export const DRAFTS = "Drafts come from Find rooms in the drawing; a person reviews them in Build.";
+export const DRAFTS = "Drafts come from Find rooms in the drawing, and aren't changed here: list_drafts gives a floor's, and decide_drafts decides them.";
 
 /** The row as it stands, deleted or not. */
 async function find(ctx: ToolContext, type: EntityType, id: string): Promise<Row | undefined> {
@@ -55,8 +55,8 @@ export function registerEditTools(server: McpServer, ctx: ToolContext): void {
     description:
       `Adds one thing to the map. type is one of: ${DRAWN.join(", ")}. data is the whole thing as the model ` +
       "defines it, with an id you choose (letters, digits, hyphen and underscore), such as the room L1-shop-12. " +
-      "Places and tags you add arrive as proposals. Room drafts are not made here: they come from Find rooms in " +
-      "the drawing, and a person reviews them in Build.",
+      "Places and tags you add arrive as proposals. " +
+      "Room drafts are not made here: they come from Find rooms in the drawing, and decide_drafts decides them.",
     inputSchema: { type: z.enum(ENTITY_TYPES), data: z.record(z.unknown()) },
     annotations: { readOnlyHint: false, destructiveHint: false },
   }, ({ type, data }) => runTool(ctx, async () => {
@@ -88,8 +88,8 @@ export function registerEditTools(server: McpServer, ctx: ToolContext): void {
     description:
       "Changes some fields of one thing. expectedVersion is its version when you read it: if someone changed it " +
       "since, nothing is saved and you are told what it is now. A field set to null is cleared. A floor's owners " +
-      "can't be changed from here, a place's or tag's status changes only through review_place, and room drafts " +
-      "are not changed here: a person reviews them in Build.",
+      "can't be changed from here, a place's or tag's status changes only through review_place, " +
+      "and room drafts are decided with decide_drafts, not changed here.",
     inputSchema: { type: z.enum(ENTITY_TYPES), id: ID, expectedVersion: VERSION, data: z.record(z.unknown()) },
     annotations: { readOnlyHint: false, destructiveHint: false },
   }, ({ type, id, expectedVersion, data }) => runTool(ctx, async () => {
