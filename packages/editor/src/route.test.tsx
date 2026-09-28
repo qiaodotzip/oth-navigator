@@ -81,6 +81,17 @@ describe("parseRoute", () => {
     // never need escaping, so this is always a stray link.
     expect(parseRoute("/floors/%E0%A4%A")).toEqual({ name: "not-found", path: "/floors/%E0%A4%A" });
   });
+
+  it("reads a floor's setup, with or without its step, and leaves a step that isn't one of the nine to the wizard", () => {
+    expect(parseRoute("/floors/l1/setup")).toEqual({ name: "setup", code: "L1", params: {} });
+    expect(parseRoute("/floors/L1/setup/5", "?place=pl_1")).toEqual({
+      name: "setup", code: "L1", step: 5, params: { place: "pl_1" },
+    });
+    for (const junk of ["0", "10", "12", "x", "2.5", "-1"]) {
+      expect(parseRoute(`/floors/L1/setup/${junk}`)).toEqual({ name: "setup", code: "L1", params: {} });
+    }
+    expect(parseRoute("/floors/L1/setup/5/more")).toEqual({ name: "not-found", path: "/floors/L1/setup/5/more" });
+  });
 });
 
 describe("href", () => {
@@ -96,6 +107,11 @@ describe("href", () => {
 
   it("writes a floor with no tab without a trailing slash", () => {
     expect(href({ name: "floor", code: "L1", tab: null, params: {} })).toBe("/floors/L1");
+  });
+
+  it("writes a floor's setup, its step and its parameters", () => {
+    expect(href({ name: "setup", code: "L1", params: {} })).toBe("/floors/L1/setup");
+    expect(href({ name: "setup", code: "L1", step: 3, params: { place: "pl_1" } })).toBe("/floors/L1/setup/3?place=pl_1");
   });
 });
 

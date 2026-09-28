@@ -42,11 +42,18 @@ export type Route =
   | { name: "home" }
   | { name: "floors" }
   | { name: "floor"; code: string; tab: FloorTab | null; params: Record<string, string> }
+  /**
+   * A floor's setup wizard (Plan 6E). `step` is 1–9, or absent for the wizard
+   * to choose. `params` carries what a step's own tool keeps in the address,
+   * such as Review's `?place=`.
+   */
+  | { name: "setup"; code: string; step?: number; params: Record<string, string> }
   | { name: "team" }
   | { name: "legacy-survey" }
   | { name: "not-found"; path: string };
 
 export type FloorRoute = Extract<Route, { name: "floor" }>;
+export type SetupRoute = Extract<Route, { name: "setup" }>;
 
 /**
  * What a URL means. Floor codes are upper-cased, since "l1" typed by hand means
@@ -66,6 +73,12 @@ export function parseRoute(pathname: string, search = ""): Route {
   if (parts.length === 1 && parts[0] === "team") return { name: "team" };
   if (parts[0] === "floors") {
     if (parts.length === 1) return { name: "floors" };
+    if (parts[2] === "setup" && parts.length <= 4) {
+      const params = Object.fromEntries(new URLSearchParams(search).entries());
+      // Steps 1–9 (setup/types.ts). Anything else is left for the wizard to choose.
+      const step = /^[1-9]$/.test(parts[3] ?? "") ? Number(parts[3]) : undefined;
+      return { name: "setup", code: parts[1]!.toUpperCase(), step, params };
+    }
     if (parts.length <= 3) {
       const tab = (FLOOR_TABS as readonly string[]).includes(parts[2] ?? "")
         ? (parts[2] as FloorTab)
@@ -99,6 +112,8 @@ export function href(route: Route): string {
       return route.path;
     case "floor":
       return `/floors/${encodeURIComponent(route.code)}${route.tab ? `/${route.tab}` : ""}${query(route.params)}`;
+    case "setup":
+      return `/floors/${encodeURIComponent(route.code)}/setup${route.step ? `/${route.step}` : ""}${query(route.params)}`;
   }
 }
 
