@@ -1,15 +1,25 @@
 import {
-  TenantCategorySchema, type Box, type PathwayKind, type Place, type TenantCategory,
+  OBJECT_SIZE_GUESS, TenantCategorySchema, type Box, type PathwayKind, type Place, type TenantCategory,
 } from "@oth/model";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Button } from "../ui/Button";
 import { exactPlace, suggestPlaces } from "./suggest";
-import { drawnBox, type Tag } from "./tagging";
+import { drawnBox, sizeText, type Tag } from "./tagging";
 
 const CATEGORIES = TenantCategorySchema.options;
 
 /** A browser's own suggestion list slows down beyond this, and nobody scrolls that far in it. */
 const MAX_SUGGESTIONS = 60;
+
+type What = "place" | "walkway" | "object";
+
+const WHAT_LABEL: Record<What, string> = { place: "Place", walkway: "Walkway", object: "Object" };
+
+const PLACEHOLDER: Record<What, string> = {
+  place: "What is this? Type a name…",
+  walkway: "Name this walkway…",
+  object: "Which object? Like wastebin…",
+};
 
 export type TagBarHandle = { focus: () => void; submit: () => void };
 
@@ -40,12 +50,17 @@ export const TagBar = forwardRef<TagBarHandle, {
   const [name, setName] = useState("");
   const [category, setCategory] = useState<TenantCategory>("retail");
   // What is being boxed: a unit you go into, or a stretch of floor you cross.
-  const [what, setWhat] = useState<"place" | "walkway">("place");
+  const [what, setWhat] = useState<What>("place");
   const [kindId, setKindId] = useState("");
   const [newKind, setNewKind] = useState<string | null>(null);
 
-  const exact = exactPlace(candidates, levels, levelId, name);
-  const suggestions = suggestPlaces(candidates, levels, levelId, name, counts).slice(0, MAX_SUGGESTIONS);
+  // An object is never a walkway: a walkway of the same name is a different thing.
+  const pool = what === "object" ? candidates.filter(p => !p.pathwayKindId) : candidates;
+  const exact = exactPlace(pool, levels, levelId, name);
+  const suggestions = suggestPlaces(pool, levels, levelId, name, counts).slice(0, MAX_SUGGESTIONS);
+  const objectNote = what !== "object" || name.trim() === "" || exact?.objectKindId ? null
+    : exact ? `${exact.nameEn} becomes a kind of object.`
+    : `A new kind of object. It shows as a ${sizeText(OBJECT_SIZE_GUESS)} box until you set its size in Places.`;
 
   function submit() {
     const trimmed = name.trim();
@@ -57,9 +72,10 @@ export const TagBar = forwardRef<TagBarHandle, {
     const taken = onTag({
       placeId: exact?.id ?? null,
       nameEn: trimmed,
-      // A walkway is a piece of the building, not a tenant.
-      category: what === "walkway" ? "facility" : exact?.category ?? category,
+      // A walkway or an object is a piece of the building, not a tenant.
+      category: what === "place" ? exact?.category ?? category : "facility",
       ...(what === "walkway" && kindId ? { pathwayKindId: kindId } : {}),
+      ...(what === "object" ? { object: true } : {}),
       ...(drawn ? { box: drawn } : {}),
     });
     if (taken) setName("");
@@ -81,7 +97,7 @@ export const TagBar = forwardRef<TagBarHandle, {
     <div className="border-t border-stone-200 bg-white px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <div role="group" aria-label="What is being tagged" className="flex overflow-hidden rounded border border-stone-300">
-          {(["place", "walkway"] as const).map(option => (
+          {(["place", "walkway", "object"] as const).map(option => (
             <button
               key={option}
               type="button"
@@ -90,7 +106,7 @@ export const TagBar = forwardRef<TagBarHandle, {
               className={`px-3 py-1.5 text-sm ${what === option ? "bg-stone-900 text-white" : "bg-white hover:bg-stone-100"}`}
               onClick={() => setWhat(option)}
             >
-              {option === "place" ? "Place" : "Walkway"}
+              {WHAT_LABEL[option]}
             </button>
           ))}
         </div>
@@ -100,7 +116,7 @@ export const TagBar = forwardRef<TagBarHandle, {
           aria-label="Place name"
           list="place-suggestions"
           className="h-9 min-w-48 flex-1 rounded border border-stone-300 px-3 text-sm"
-          placeholder={what === "place" ? "What is this? Type a name…" : "Name this walkway…"}
+          placeholder={PLACEHOLDER[what]}
           value={name}
           onChange={event => setName(event.target.value)}
           onKeyDown={event => {
@@ -117,7 +133,9 @@ export const TagBar = forwardRef<TagBarHandle, {
             <option
               key={s.place.id}
               value={s.place.nameEn}
-              label={`${s.count} frame${s.count === 1 ? "" : "s"}${s.onFloor ? "" : " · no floor yet"}`}
+              label={`${s.count} frame${s.count === 1 ? "" : "s"}${
+                s.place.objectKindId ? " · object" : s.onFloor ? "" : " · no floor yet"
+              }`}
             />
           ))}
         </datalist>
@@ -134,7 +152,7 @@ export const TagBar = forwardRef<TagBarHandle, {
           >
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-        ) : newKind === null ? (
+        ) : what === "object" ? null : newKind === null ? (
           <>
             <select
               aria-label="Walkway type"
@@ -175,6 +193,7 @@ export const TagBar = forwardRef<TagBarHandle, {
       <p className="mt-1.5 text-xs text-stone-500">
         {drawnBox(box) ? "Tagging the boxed area." : "Tagging the whole frame — drag on it to box something."}
       </p>
+      {objectNote && <p className="mt-1 text-xs text-stone-600">{objectNote}</p>}
     </div>
   );
 });

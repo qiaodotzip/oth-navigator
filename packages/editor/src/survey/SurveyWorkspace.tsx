@@ -160,8 +160,21 @@ export function SurveyWorkspace({ api, saver, level, params }: {
           await saver.refresh();
           placeId = placeId ?? placeNamed(t.nameEn);
         }
-        const writes = tagWrites({ ...t, placeId }, frameId, level.id);
+        // What the server has now: a kind or a place the first try made is
+        // reused, never made twice.
+        const now = useEditorStore.getState().model;
+        const writes = tagWrites({ ...t, placeId }, frameId, level.id, newId, {
+          places: live(now?.places ?? []),
+          kinds: live(now?.objectKinds ?? []),
+        });
+        // The kind first: a place naming a kind not yet made would be an object of nothing.
+        if (writes.objectKind) await api.createEntity("objectKind", writes.objectKind);
         if (writes.place) await api.createEntity("place", writes.place);
+        if (writes.makeObject) {
+          const { placeId: id, objectKindId } = writes.makeObject;
+          const place = now?.places.find(p => p.id === id);
+          if (place) await api.updateEntity("place", id, place.version, { objectKindId });
+        }
         await api.createEntity("sighting", writes.sighting);
         landed = true;
         setDraft(d => (d === drawn ? null : d));

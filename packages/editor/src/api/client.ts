@@ -49,7 +49,7 @@ export function wasWrite(request: { method: string; path: string }): boolean {
 export type EntityType =
   | "level" | "room" | "pathway" | "doorway" | "entrance"
   | "portal" | "portalEndpoint" | "navHint" | "placement" | "tenant"
-  | "capture" | "place" | "sighting" | "pathwayKind";
+  | "capture" | "place" | "sighting" | "pathwayKind" | "objectKind";
 
 export type SessionUser = {
   id: string;

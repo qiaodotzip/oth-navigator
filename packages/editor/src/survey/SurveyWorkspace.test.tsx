@@ -299,6 +299,66 @@ describe("SurveyWorkspace", () => {
     expect(useToasts.getState().toasts.filter(t => t.tone === "error")).toHaveLength(1);
   });
 
+  it("tags an object: makes its kind, a place for it on no floor, then the tag", async () => {
+    const api = at();
+    fireEvent.click(screen.getByTestId("what-object"));
+    const name = screen.getByLabelText("Place name");
+    fireEvent.change(name, { target: { value: "wastebin" } });
+    key("Enter", name);
+    await waitFor(() => expect(api.createEntity).toHaveBeenCalledTimes(3));
+    const calls = api.createEntity!.mock.calls as [string, Record<string, unknown>][];
+    expect(calls.map(c => c[0])).toEqual(["objectKind", "place", "sighting"]);
+    expect(calls[0]![1]).toMatchObject({ nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } });
+    expect(calls[1]![1]).toMatchObject({ nameEn: "wastebin", category: "facility", objectKindId: calls[0]![1].id });
+    expect(calls[1]![1]).not.toHaveProperty("levelId");
+    expect(calls[2]![1]).toMatchObject({ placeId: calls[1]![1].id, keyframeId: "kf_3" });
+  });
+
+  it("turns a place already surveyed into an object when it is tagged as one", async () => {
+    const withCooler = parseModel({ ...model, places: [...model.places, { id: "p_cool", nameEn: "water cooler", category: "facility" }] });
+    useEditorStore.getState().setModel(withCooler);
+    const api = at("", fakeApi({ getModel: vi.fn().mockResolvedValue(withCooler) }));
+    fireEvent.click(screen.getByTestId("what-object"));
+    const name = screen.getByLabelText("Place name");
+    fireEvent.change(name, { target: { value: "water cooler" } });
+    key("Enter", name);
+    await waitFor(() => expect(api.createEntity).toHaveBeenCalledTimes(2));
+    const calls = api.createEntity!.mock.calls as [string, Record<string, unknown>][];
+    expect(calls.map(c => c[0])).toEqual(["objectKind", "sighting"]);
+    expect(api.updateEntity).toHaveBeenCalledWith("place", "p_cool", 0, { objectKindId: calls[0]![1].id });
+    expect(calls[1]![1]).toMatchObject({ placeId: "p_cool" });
+  });
+
+  it("sends an object tag whose place failed again on Retry, reusing the kind the first try made", async () => {
+    const saved = {
+      objectKinds: [] as unknown[], places: [...model.places] as unknown[], sightings: [...model.sightings] as unknown[],
+    };
+    let refuse = true;
+    const createEntity = vi.fn(async (type: string, data: Record<string, unknown>) => {
+      if (type === "place" && refuse) {
+        refuse = false;
+        throw new TypeError("Failed to fetch");
+      }
+      (type === "objectKind" ? saved.objectKinds : type === "place" ? saved.places : saved.sightings).push(data);
+      return data;
+    });
+    const getModel = vi.fn(async () => parseModel({ ...model, ...saved }));
+    at("", fakeApi({ getModel, createEntity }));
+    fireEvent.click(screen.getByTestId("what-object"));
+    const name = screen.getByLabelText("Place name");
+    fireEvent.change(name, { target: { value: "wastebin" } });
+    key("Enter", name);
+    await waitFor(() => expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(true));
+    const failed = useToasts.getState().toasts.find(t => t.tone === "error")!;
+
+    await act(async () => { await failed.action!.run(); });
+    expect(saved.objectKinds).toHaveLength(1);
+    const kindId = (saved.objectKinds[0] as { id: string }).id;
+    const bins = (saved.places as { id: string; nameEn: string; objectKindId?: string }[]).filter(p => p.nameEn === "wastebin");
+    expect(bins).toEqual([expect.objectContaining({ objectKindId: kindId })]);
+    expect((saved.sightings as { placeId: string }[]).filter(s => s.placeId === bins[0]!.id)).toHaveLength(1);
+  });
+
   it("keeps the drawn box when a tag fails, and lets it go once Retry saves it", async () => {
     // Ruling 9: the frame reports a real size; jsdom gives every element zero.
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({

@@ -68,3 +68,12 @@ describe("exactPlace", () => {
     expect(exactPlace(candidates, levels, "oth-L1", "   ")).toBeNull();
   });
 });
+
+describe("an object's place", () => {
+  it("is linkable on every floor, wherever it was filmed: a wastebin on L2 is another of L1's kind", () => {
+    const bin = PlaceSchema.parse({ id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "ok_bin" });
+    const shop = PlaceSchema.parse({ id: "pl_shop", nameEn: "Shop", category: "retail" });
+    const filmed = new Map<string, string | undefined>([["pl_bin", "oth-L1"], ["pl_shop", "oth-L1"]]);
+    expect(linkablePlaces([bin, shop], filmed, "oth-L2").map(p => p.id)).toEqual(["pl_bin"]);
+  });
+});

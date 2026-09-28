@@ -9,12 +9,14 @@ export function normalName(name: string): string {
 /**
  * The places a tag on one floor may link to: that floor's, and those with no
  * floor yet. Another floor's "Toilets" is a different place, and linking to it
- * would put L2's toilets in L1's footage.
+ * would put L2's toilets in L1's footage. A kind of object is the exception:
+ * it is the same on every floor, and a wastebin on L2 is another of L1's kind.
  */
 export function linkablePlaces(
   places: readonly Place[], levels: ReadonlyMap<string, string | undefined>, levelId: string,
 ): Place[] {
   return places.filter(p => {
+    if (p.objectKindId) return true;
     const on = levels.get(p.id);
     return on === levelId || on === undefined;
   });

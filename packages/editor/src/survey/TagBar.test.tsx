@@ -15,14 +15,14 @@ const levels = new Map<string, string | undefined>([["p1", L1], ["p2", L1], ["p3
 const counts = new Map([["p1", 7], ["p3", 1]]);
 const kinds = [PathwayKindSchema.parse({ id: "pk-1", nameEn: "Covered link", colorHex: "#38bdf8" })];
 
-function setup(box: Box | null = null) {
+function setup(box: Box | null = null, candidates = places) {
   // Every tag is taken, unless a test says otherwise.
   const onTag = vi.fn<[Tag], boolean>(() => true);
   const onAddWalkwayKind = vi.fn(async () => "pk-2");
   const ref = createRef<TagBarHandle>();
   render(
     <TagBar
-      ref={ref} candidates={places} levels={levels} levelId={L1} counts={counts}
+      ref={ref} candidates={candidates} levels={levels} levelId={L1} counts={counts}
       walkwayKinds={kinds} box={box} onTag={onTag} onAddWalkwayKind={onAddWalkwayKind}
     />,
   );
@@ -164,5 +164,44 @@ describe("tagging a walkway", () => {
     fireEvent.change(name, { target: { value: "Kopitiam" } });
     fireEvent.click(screen.getByRole("button", { name: "Tag" }));
     expect(onTag.mock.calls[0]![0].pathwayKindId).toBeUndefined();
+  });
+});
+
+describe("tagging an object", () => {
+  const binPlace = PlaceSchema.parse({ id: "p_bin", nameEn: "Wastebin", category: "facility", objectKindId: "ok_bin" });
+  const cooler = PlaceSchema.parse({ id: "p_cool", nameEn: "Water cooler", category: "facility" });
+  const withObjects = [...places, binPlace, cooler];
+
+  it("tags a new name as a kind of object, with no category to choose, and says its size is a guess", () => {
+    const { onTag, name } = setup(null, withObjects);
+    fireEvent.click(screen.getByTestId("what-object"));
+    expect(screen.queryByLabelText("Category")).toBeNull();
+    fireEvent.change(name, { target: { value: "Recycling bin" } });
+    expect(screen.getByText("A new kind of object. It shows as a 0.5 × 0.5 × 1 m box until you set its size in Places.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Tag" }));
+    expect(onTag.mock.calls[0]![0]).toEqual({ placeId: null, nameEn: "Recycling bin", category: "facility", object: true });
+  });
+
+  it("tags another of a kind already known", () => {
+    const { onTag, name } = setup(null, withObjects);
+    fireEvent.click(screen.getByTestId("what-object"));
+    fireEvent.change(name, { target: { value: "wastebin" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tag as Wastebin" }));
+    expect(onTag.mock.calls[0]![0]).toMatchObject({ placeId: "p_bin", object: true });
+  });
+
+  it("says a place already surveyed becomes a kind of object, and tags that place", () => {
+    const { onTag, name } = setup(null, withObjects);
+    fireEvent.click(screen.getByTestId("what-object"));
+    fireEvent.change(name, { target: { value: "water cooler" } });
+    expect(screen.getByText("Water cooler becomes a kind of object.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Tag as Water cooler" }));
+    expect(onTag.mock.calls[0]![0]).toMatchObject({ placeId: "p_cool", object: true });
+  });
+
+  it("marks a kind of object among the name's suggestions", () => {
+    setup(null, withObjects);
+    const options = [...document.querySelectorAll("#place-suggestions option")] as HTMLOptionElement[];
+    expect(options.find(o => o.value === "Wastebin")?.label).toBe("0 frames · object");
   });
 });
