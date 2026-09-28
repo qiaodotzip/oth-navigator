@@ -22,6 +22,8 @@
     "survey:export": "npm run start --workspace @oth/server -- survey:export",
     "survey:import": "npm run start --workspace @oth/server -- survey:import",
     "survey:tidy": "npm run start --workspace @oth/server -- survey:tidy",
+    "data:export": "npm run start --workspace @oth/server -- data:export",
+    "data:import": "npm run start --workspace @oth/server -- data:import",
     "plan:l1": "npm run start --workspace @oth/server -- plan:l1"
   },
   "devDependencies": {

@@ -7,6 +7,8 @@ import { exportCaptureForLabelling } from "./cli/surveyExport";
 import { importProposals } from "./cli/surveyImport";
 import { importL1Plan } from "./cli/planL1";
 import { tidySurvey } from "./cli/surveyTidy";
+import { exportData, ExportRefused } from "./cli/dataExport";
+import { importData, ImportRefused } from "./cli/dataImport";
 import { loadConfig, teamCodeProblem } from "./config";
 import { loadGateKey } from "./gate/gate";
 import { createPostgresDb } from "./db/client";
@@ -83,6 +85,46 @@ if (command === "survey:tidy") {
   if (dryRun) console.log("Run it again without --dry-run to apply.");
   for (const s of r.suspects) {
     console.log(`  ! "${s}" is still a walkway but sounds vertical — decide it by hand`);
+  }
+  process.exit(0);
+}
+
+if (command === "data:export") {
+  const outDir = process.argv[3];
+  if (!outDir) throw new Error("usage: data:export <empty folder>");
+  try {
+    const r = await exportData(db, config.DATA_DIR, outDir);
+    console.log(`exported to ${r.dir}:`);
+    for (const [table, n] of Object.entries(r.counts)) console.log(`  ${table.padEnd(20)}${n}`);
+    console.log(`  ${"files".padEnd(20)}${r.files} (${(r.bytes / 1e6).toFixed(1)} MB)`);
+  } catch (err) {
+    if (!(err instanceof ExportRefused)) throw err;
+    console.error(err.message);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+if (command === "data:import") {
+  const [fromDir, flag, fileUnder] = process.argv.slice(3);
+  if (!fromDir || (flag !== undefined && (flag !== "--file-under" || !fileUnder))) {
+    throw new Error("usage: data:import <export folder> [--file-under <floor code>]");
+  }
+  try {
+    const r = await importData(db, config.DATA_DIR, fromDir, { fileUnder });
+    console.log("imported into an empty database:");
+    for (const [table, n] of Object.entries(r.counts)) console.log(`  ${table.padEnd(20)}${n}`);
+    console.log(`  ${"files".padEnd(20)}${r.files.copied} copied, ${r.files.alreadyThere} already there`);
+    if (r.filed.length) console.log(`filed ${r.filed.length} piece(s) of footage under ${fileUnder}: ${r.filed.join(", ")}`);
+    // Said outright, so a run with nothing to file isn't read as one that failed to.
+    else if (fileUnder) console.log(`all the footage already had a floor; nothing needed filing under ${fileUnder}`);
+    if (r.unfiled.length) {
+      console.log(`on no floor yet: ${r.unfiled.join(", ")}. Open Survey on the floor it was filmed on and press File under.`);
+    }
+  } catch (err) {
+    if (!(err instanceof ImportRefused)) throw err;
+    console.error(err.message);
+    process.exit(1);
   }
   process.exit(0);
 }

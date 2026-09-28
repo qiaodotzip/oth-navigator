@@ -78,6 +78,10 @@ with the export's. `--file-under` files footage that has no floor. If the
 files are already in the data folder, for instance uploaded straight into the
 volume, import leaves them where they are.
 
+The files go into the data folder before that transaction, so an import that
+stops part-way leaves them there with the database still empty. Put right
+what it names and run it again: it finds them already there and carries on.
+
 On Railway, upload the export's contents into the volume, so `/data` holds
 `export.json`, `assets/` and `published/`, then import there:
 
