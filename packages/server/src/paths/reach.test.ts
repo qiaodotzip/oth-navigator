@@ -52,6 +52,12 @@ describe("reachesOf leaves out the rooms a line runs within (contract v4, amende
     expect(reachesOf(LINE, ["fork", "end"], rooms(corridor, shop))).toEqual(["L1-shop"]);
   });
 
+  it("counts a room whose hole holds the midpoint: the line runs across the hole, not within the room", () => {
+    // A hall round an atrium: the line's midpoint (10, 2) is over the atrium, its east end (20, 2) in the hall.
+    const hall = { id: "L1-hall", footprint: rect(-2, -2, 30, 6), holes: [rect(5, 0, 15, 4)], kind: "area" as const };
+    expect(reachesOf(LINE, ["fork", "end"], rooms(hall))).toEqual(["L1-hall"]);
+  });
+
   it("finds the midpoint half the line's length along, not at its middle vertex", () => {
     // 2 m east, then 18 m north: half of 20 m is (2, 8), in the lobby; the first bend, (2, 0), is not.
     const lobby = { id: "L1-lobby", footprint: rect(0, 5, 4, 30), kind: "area" as const };

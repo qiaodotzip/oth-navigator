@@ -12,8 +12,15 @@ export const GUESS_INSET_M = 0.5;
  * L1's West Concourses: the Stadium's rectangle is traced right over them.
  */
 export const OUTWARD_M = 1;
-/** A place whose name has one of these words, case aside, is a way in (contract v4). "Gateway" is not. */
-const WAY_IN = /\b(gate|entrance|exit|way in)\b/;
+/**
+ * A place whose name has one of these words, case aside, is a way in
+ * (contract v4, amended): plurals count, and so does a number run on ("Gate1"),
+ * but not "Gateway" or "Northgate", and never a word in parentheses:
+ * "Stairs to library (Gate 6 Concourse)" is stairs, named by where they are.
+ */
+const WAY_IN = /\b(gates?|entrances?|exits?|way in)(?![a-z])/;
+/** A name less what it says in parentheses; an unclosed one runs to the end. */
+const unbracketed = (name: string) => name.replace(/\([^)]*\)?/g, " ");
 /** An outline is walked in pieces this long, or a little shorter, to find where it is outside. */
 const STEP_M = 0.25;
 /** How far off an edge to look for which side the room is on. */
@@ -125,7 +132,7 @@ export function entranceGuesses(model: MapModel, levelId: string): EntranceGuess
   const inRoom = new Map<string, { id: string; nameEn: string }[]>();
   for (const p of live(model.places)) {
     const name = normalName(p.nameEn);
-    if (p.status !== "confirmed" || !p.roomId || !byId.has(p.roomId) || !WAY_IN.test(name) || named.has(name)) continue;
+    if (p.status !== "confirmed" || !p.roomId || !byId.has(p.roomId) || !WAY_IN.test(normalName(unbracketed(p.nameEn))) || named.has(name)) continue;
     inRoom.set(p.roomId, [...(inRoom.get(p.roomId) ?? []), p]);
   }
   const out: EntranceGuess[] = [];

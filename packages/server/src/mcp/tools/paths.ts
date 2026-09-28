@@ -32,7 +32,7 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       "links join each doorway, lift, escalator or stair stop, and entrance to the nearest point on a line it can " +
       `reach in a straight line, within ${MAX_LINK_M} m. Links have no width. unconnected lists the ones that could ` +
       "not be joined, and why. Only entrances that exist are linked, so call it again after creating them. " +
-      "entranceGuesses gives each confirmed place named as a gate, entrance, exit or way in, bound to a room and with " +
+      "entranceGuesses gives each confirmed place named as a gate, entrance, exit or way in (not in parentheses), bound to a room and with " +
       `no entrance of its name yet, a point ${GUESS_INSET_M} m inside that room on its longest stretch of outline with ` +
       `no room ${OUTWARD_M} m beyond it, the building's outside: a guess a person moves in Check when the drawing shows ` +
       "nothing better. " +

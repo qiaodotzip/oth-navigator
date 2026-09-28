@@ -64,6 +64,16 @@ describe("entranceGuesses (contract v4)", () => {
       .toEqual(["Main Entrance", "WAY IN from the MRT", "exit B"]);
   });
 
+  it("reads the words outside any parentheses only, plurals and a number run on too (contract v4, amended)", () => {
+    const names = ["Stairs to library (Gate 6 Concourse)", "staircase (gate 1 concourse)", "Gates 5 & 6", "Gate1", "North exits"];
+    expect(guesses(names.map((n, i) => place(`pl-${i}`, n))).map(g => g.name).sort()).toEqual(["Gate1", "Gates 5 & 6", "North exits"]);
+  });
+
+  it("finds the same outside whichever way the room's outline runs", () => {
+    const clockwise: TestRoom[] = [{ id: "L1-west-concourse", footprint: [[0, 0], [0, 40], [10, 40], [10, 0]] }, ...CONCOURSE.slice(1)];
+    expect(guesses([place("pl-gate-5", "Gate 5")], {}, clockwise).map(g => g.point)).toEqual([[0.5, 20]]);
+  });
+
   it("gives no guess for a place whose room has no outside run: a metre out from every side of it is in another room", () => {
     const inner = { id: "L1-kiosk-court", footprint: rect(14, 14, 20, 20) };
     expect(guesses([place("pl-gate-9", "Gate 9", { roomId: "L1-kiosk-court" })], {}, [...CONCOURSE, inner])).toEqual([]);
