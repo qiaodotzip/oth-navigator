@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -46,6 +46,9 @@ const PAGE_HEADERS = {
   "x-frame-options": "DENY",
 };
 
+/** Deployed, the page also tells the browser to come back only over HTTPS for a year, before any code is typed. */
+const DEPLOYED_PAGE_HEADERS = { ...PAGE_HEADERS, "strict-transport-security": "max-age=31536000" };
+
 /** Where in DATA_DIR the gate's key is kept. On Railway that is the volume, so it outlives a deploy. */
 export const GATE_KEY_FILE = "gate.key";
 const GATE_KEY_BYTES = 32;
@@ -68,12 +71,23 @@ export async function loadGateKey(dataDir: string): Promise<Buffer> {
       if (err.code === "ENOENT") return null;
       throw err;
     });
-    if (kept?.length === GATE_KEY_BYTES) return kept;
+    if (kept?.length === GATE_KEY_BYTES) {
+      // Closed up on every boot: a key copied in by hand, or left by an older
+      // server, may be readable by others.
+      await chmod(path, 0o600);
+      return kept;
+    }
     const key = randomBytes(GATE_KEY_BYTES);
     await mkdir(dataDir, { recursive: true });
-    await writeFile(path, key, { mode: 0o600 });
-    // The mode above applies only to a new file; a replaced one keeps its own.
-    await chmod(path, 0o600);
+    // Written whole to a new private file, then renamed over: never readable by
+    // others even for a moment, and a crash mid-write leaves no part of a key.
+    const temp = `${path}.${randomBytes(6).toString("hex")}.tmp`;
+    try {
+      await writeFile(temp, key, { mode: 0o600, flag: "wx" });
+      await rename(temp, path);
+    } finally {
+      await rm(temp, { force: true });
+    }
     return key;
   } catch (err) {
     const reason = (err as NodeJS.ErrnoException).code ?? "unknown error";
@@ -157,6 +171,8 @@ export function teamGate(code: string, options: { key: Buffer; secure: boolean; 
   const wrong = new WrongCodes();
   const now = options.now ?? Date.now;
   const noStore = { "cache-control": "no-store" };
+  // Secure means served over HTTPS, which is what HSTS pins the browser to.
+  const pageHeaders = options.secure ? DEPLOYED_PAGE_HEADERS : PAGE_HEADERS;
 
   const guard = createMiddleware<AppEnv>(async (c, next) => {
     const path = c.req.path;
@@ -165,7 +181,7 @@ export function teamGate(code: string, options: { key: Buffer; secure: boolean; 
     if (!holdsPass(getCookie(c, GATE_COOKIE), tokenBytes)) {
       if (path.startsWith("/api/")) return c.json(GATE_REFUSAL, 401, noStore);
       const url = new URL(c.req.url);
-      return c.html(gatePage({ next: safeNext(url.pathname + url.search) }), 401, PAGE_HEADERS);
+      return c.html(gatePage({ next: safeNext(url.pathname + url.search) }), 401, pageHeaders);
     }
     await next();
     // Behind the gate is for the team alone. A cache between here and the
@@ -181,7 +197,7 @@ export function teamGate(code: string, options: { key: Buffer; secure: boolean; 
 
   const formLimit = bodyLimit({
     maxSize: GATE_FORM_MAX_BYTES,
-    onError: c => c.html(gatePage({ next: "/", error: TOO_LARGE }), 413, PAGE_HEADERS),
+    onError: c => c.html(gatePage({ next: "/", error: TOO_LARGE }), 413, pageHeaders),
   });
 
   routes.post("/", formLimit, async c => {
@@ -191,10 +207,10 @@ export function teamGate(code: string, options: { key: Buffer; secure: boolean; 
     const at = now();
     // Refused unchecked while blocked, the right code too: otherwise a guess
     // that redirected would still say it was right.
-    if (wrong.blocked(at)) return c.html(gatePage({ next, error: TOO_MANY }), 429, PAGE_HEADERS);
+    if (wrong.blocked(at)) return c.html(gatePage({ next, error: TOO_MANY }), 429, pageHeaders);
     if (!codeMatches(typed, code)) {
       wrong.record(at);
-      return c.html(gatePage({ next, error: WRONG_CODE }), 401, PAGE_HEADERS);
+      return c.html(gatePage({ next, error: WRONG_CODE }), 401, pageHeaders);
     }
     setCookie(c, GATE_COOKIE, token, {
       httpOnly: true,

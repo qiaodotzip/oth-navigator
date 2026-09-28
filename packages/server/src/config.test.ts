@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDeployed, loadConfig, teamCodeProblem } from "./config";
+import { isDeployed, loadConfig, teamCodeProblem, volumeProblem } from "./config";
 
 describe("TEAM_CODE", () => {
   it("reads a blank value as unset, and trims what is there", () => {
@@ -41,5 +41,47 @@ describe("TEAM_CODE", () => {
 
   it("reads a blank Railway variable as not on Railway", () => {
     expect(isDeployed(loadConfig({ RAILWAY_ENVIRONMENT_NAME: " ", RAILWAY_PROJECT_ID: "" }))).toBe(false);
+  });
+});
+
+describe("the volume on Railway", () => {
+  const railway = { RAILWAY_ENVIRONMENT_NAME: "production", NODE_ENV: "production" };
+
+  it("is not asked for off Railway, production or not", () => {
+    expect(volumeProblem(loadConfig({}))).toBeNull();
+    expect(volumeProblem(loadConfig({ NODE_ENV: "production", DATA_DIR: "/data" }))).toBeNull();
+  });
+
+  it("is required on Railway, where DATA_DIR without one is the container's disk, gone on the next deploy", () => {
+    for (const env of [railway, { RAILWAY_PROJECT_ID: "a1b2c3" }]) {
+      const said = volumeProblem(loadConfig({ ...env, DATA_DIR: "/data" }));
+      expect(said).toMatch(/No volume is attached/);
+      expect(said).toMatch(/Attach a volume at \/data to this service/);
+    }
+    // Railway will save an empty value; it is no volume either.
+    expect(volumeProblem(loadConfig({ ...railway, DATA_DIR: "/data", RAILWAY_VOLUME_MOUNT_PATH: " " })))
+      .toMatch(/No volume is attached/);
+  });
+
+  it("is satisfied when DATA_DIR is the volume, or a folder on it", () => {
+    for (const dataDir of ["/data", "/data/", "/data/oth", "/data/./oth"]) {
+      expect(volumeProblem(loadConfig({ ...railway, DATA_DIR: dataDir, RAILWAY_VOLUME_MOUNT_PATH: "/data" })), dataDir)
+        .toBeNull();
+    }
+  });
+
+  it("refuses a DATA_DIR that is not on the volume, saying where each is", () => {
+    for (const dataDir of ["/tmp/oth", "/database", "/data/../etc", "./data", "/"]) {
+      const said = volumeProblem(loadConfig({ ...railway, DATA_DIR: dataDir, RAILWAY_VOLUME_MOUNT_PATH: "/data" }));
+      expect(said, dataDir).toMatch(/is not on the volume mounted at \/data/);
+      expect(said, dataDir).toMatch(/Attach a volume at \/data to this service/);
+    }
+  });
+
+  it("never repeats the team code in what it says", () => {
+    const code = "red kite hill";
+    for (const extra of [{}, { RAILWAY_VOLUME_MOUNT_PATH: "/data", DATA_DIR: "/tmp" }]) {
+      expect(volumeProblem(loadConfig({ ...railway, TEAM_CODE: code, ...extra })) ?? "").not.toContain(code);
+    }
   });
 });

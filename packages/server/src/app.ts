@@ -97,9 +97,13 @@ export function createApp(deps: AppDeps) {
 
   app.notFound(c => c.json({ error: "not found" }, 404));
   app.onError((err, c) => {
-    // The whole error goes to the log, which Railway keeps; tests stay quiet.
-    if (config.NODE_ENV !== "test") console.error(err);
-    return c.json({ error: exposeErrors ? err.message : "Something went wrong on the server." }, 500);
+    // The whole error goes to the log, which Railway keeps, with the request
+    // it came from; tests stay quiet, but never a deployed app, whatever
+    // NODE_ENV says there.
+    if (deployed || config.NODE_ENV !== "test") console.error(`${c.req.method} ${c.req.path}`, err);
+    return c.json({
+      error: exposeErrors ? err.message : "Something went wrong on the server. Try again in a moment.",
+    }, 500);
   });
 
   return app;

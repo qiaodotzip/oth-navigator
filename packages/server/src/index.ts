@@ -9,7 +9,7 @@ import { importL1Plan } from "./cli/planL1";
 import { tidySurvey } from "./cli/surveyTidy";
 import { exportData, ExportRefused } from "./cli/dataExport";
 import { importData, ImportRefused } from "./cli/dataImport";
-import { loadConfig, teamCodeProblem } from "./config";
+import { isDeployed, loadConfig, teamCodeProblem, volumeProblem } from "./config";
 import { loadGateKey } from "./gate/gate";
 import { createPostgresDb } from "./db/client";
 import { createDevDb } from "./db/dev";
@@ -18,13 +18,19 @@ import { runMigrations } from "./db/migrate";
 const config = loadConfig();
 const command = process.argv[2];
 
-if (config.NODE_ENV === "production" && !config.DATABASE_URL) {
+// Deployed, not only by NODE_ENV: on Railway without it, the fallback below
+// would be a PGlite database on the container's own disk.
+if (isDeployed(config) && !config.DATABASE_URL) {
   throw new Error("DATABASE_URL is required in production");
 }
 
-/** Serving needs the team code in production (spec §13): without it, stop rather than serve the app open. */
-function refuseToServeWithoutTeamCode(): void {
-  const refusal = teamCodeProblem(config);
+/**
+ * Serving needs, when deployed, the team code (spec §13), and on Railway a
+ * volume under DATA_DIR: without either, stop and say why rather than serve
+ * the app open, or serve work that vanishes on the next deploy.
+ */
+function refuseToServeUnlessReady(): void {
+  const refusal = teamCodeProblem(config) ?? volumeProblem(config);
   if (refusal) {
     console.error(refusal);
     process.exit(1);
@@ -33,7 +39,7 @@ function refuseToServeWithoutTeamCode(): void {
 
 // Refused before anything else happens, the database included. A CLI command,
 // such as data:import over railway ssh, serves nothing, so it runs without one.
-if (!command) refuseToServeWithoutTeamCode();
+if (!command) refuseToServeUnlessReady();
 
 // Local development falls back to file-backed PGlite so a fresh clone runs with
 // nothing installed. Production always uses the real Postgres.
@@ -163,9 +169,9 @@ if (command === "seed") {
 
 // Every CLI command's branch (data:import too) goes above this line: below it, the server serves.
 // A command this file does not know falls through to here and serves all the
-// same, so the code is checked again rather than trusted to the check above,
-// which any command at all lets by.
-refuseToServeWithoutTeamCode();
+// same, so it is checked again rather than trusted to the check above, which
+// any command at all lets by.
+refuseToServeUnlessReady();
 
 // The gate cookie's key, kept on the volume so a deploy keeps everyone
 // through the gate. If it cannot be kept, stop and say so: a key made up

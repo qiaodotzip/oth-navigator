@@ -42,7 +42,8 @@ a Postgres database and a volume.
    image already sets `DATA_DIR=/data`, so the service needn't. If you set it
    anyway, do it in the dashboard, or in Git Bash put `MSYS_NO_PATHCONV=1` in
    front of the `railway` command, which otherwise turns `/data` into a
-   Windows path.
+   Windows path. The volume must be mounted at `/data`: on Railway the server
+   refuses to start without one, or with `DATA_DIR` off it.
 3. Set `PORT=3000`, and give the service a domain on port 3000.
 4. Set **`TEAM_CODE`** by hand: at least 8 characters (a few words is best),
    and never committed. Everyone types it once per browser, before the
@@ -59,7 +60,11 @@ Never enable Railway's CDN (`railway cdn`) for this service. The built editor
 and published bundles are served `public, immutable`, so the edge would cache
 the gated files and hand them to anyone, code or not.
 
-A wrong-code lockout clears on a restart: `railway restart --service oth-map`.
+A restart clears the gate's wrong-code count: `railway restart --service oth-map`.
+
+To sign every browser out without changing the code, delete `/data/gate.key`
+and restart: `MSYS_NO_PATHCONV=1 railway ssh --service oth-map -- rm /data/gate.key`,
+then `railway restart --service oth-map`.
 
 ## Moving the data
 

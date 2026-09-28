@@ -1,5 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -270,6 +270,25 @@ describe("what the gate stands in front of", () => {
       expect(page.headers.get("cache-control")).toBe("no-store");
     }
   });
+
+  it("tells a browser to use HTTPS for a year when deployed, and not locally, where there is none", async () => {
+    const pagesOf = async (app: ReturnType<typeof createApp>) => [
+      await app.request("/"),
+      await app.request("/api/gate", form({ code: "wrong", next: "/" })),
+      await app.request("/api/gate", form({ code: "x".repeat(GATE_FORM_MAX_BYTES), next: "/" })),
+    ];
+    for (const page of await pagesOf(await gatedApp())) {
+      expect(page.headers.get("strict-transport-security")).toBeNull();
+    }
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      for (const page of await pagesOf(await gatedApp())) {
+        expect(page.headers.get("strict-transport-security")).toBe("max-age=31536000");
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 describe("the gate's key", () => {
@@ -293,6 +312,14 @@ describe("the gate's key", () => {
     expect(await loadGateKey(dataDir)).toEqual(key);
   });
 
+  it("is written whole and renamed into place, leaving no temp file beside it", async () => {
+    const dataDir = await tempDir();
+    await loadGateKey(dataDir);
+    await writeFile(join(dataDir, GATE_KEY_FILE), "short");
+    await loadGateKey(dataDir);
+    expect(await readdir(dataDir)).toEqual([GATE_KEY_FILE]);
+  });
+
   // Windows has no owner-only file mode to check; Railway runs Linux.
   it.skipIf(process.platform === "win32")("is readable by the server's own user alone", async () => {
     const dataDir = await tempDir();
@@ -304,6 +331,14 @@ describe("the gate's key", () => {
     await chmod(join(replaced, GATE_KEY_FILE), 0o644);
     await loadGateKey(replaced);
     expect((await stat(join(replaced, GATE_KEY_FILE))).mode & 0o777).toBe(0o600);
+
+    // A whole key left readable, say copied in by hand, is kept but closed up on the next boot.
+    const loosened = await tempDir();
+    const whole = randomBytes(32);
+    await writeFile(join(loosened, GATE_KEY_FILE), whole);
+    await chmod(join(loosened, GATE_KEY_FILE), 0o644);
+    expect(await loadGateKey(loosened)).toEqual(whole);
+    expect((await stat(join(loosened, GATE_KEY_FILE))).mode & 0o777).toBe(0o600);
   });
 
   it("stops, saying what to check, when DATA_DIR cannot hold it", async () => {

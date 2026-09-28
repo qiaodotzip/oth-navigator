@@ -1,3 +1,4 @@
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 
 /** Shorter than this, a code is a guess away even at the gate's pace (see gate/gate.ts). */
@@ -31,6 +32,8 @@ const ConfigSchema = z.object({
   /** Set by Railway on every service it runs; see isDeployed. */
   RAILWAY_ENVIRONMENT_NAME: optionalSetting,
   RAILWAY_PROJECT_ID: optionalSetting,
+  /** Set by Railway only when a volume is attached, to where it is mounted; see volumeProblem. */
+  RAILWAY_VOLUME_MOUNT_PATH: optionalSetting,
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -45,9 +48,33 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
  * or overridden on the service can never serve the app open.
  */
 export function isDeployed(config: Config): boolean {
-  return config.NODE_ENV === "production" ||
-    config.RAILWAY_ENVIRONMENT_NAME !== undefined ||
-    config.RAILWAY_PROJECT_ID !== undefined;
+  return config.NODE_ENV === "production" || onRailway(config);
+}
+
+function onRailway(config: Config): boolean {
+  return config.RAILWAY_ENVIRONMENT_NAME !== undefined || config.RAILWAY_PROJECT_ID !== undefined;
+}
+
+const ATTACH_VOLUME = "Attach a volume at /data to this service";
+
+/**
+ * Why this server must not start serving on Railway, or null when it may.
+ * Without a volume under DATA_DIR, the gate's key and every uploaded photo,
+ * plan and model land on the container's own disk and vanish on the next
+ * deploy, signing everyone out and losing the work, with nothing to say so.
+ * Off Railway there is no volume to ask about.
+ */
+export function volumeProblem(config: Config): string | null {
+  if (!onRailway(config)) return null;
+  const lost = "so the team gate's key and every uploaded photo, plan and model would be lost on the next deploy.";
+  const mount = config.RAILWAY_VOLUME_MOUNT_PATH;
+  if (!mount) return `No volume is attached to this service, ${lost} ${ATTACH_VOLUME}, then redeploy.`;
+  const within = relative(resolve(mount), resolve(config.DATA_DIR));
+  if (within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)) {
+    return `DATA_DIR (${config.DATA_DIR}) is not on the volume mounted at ${mount}, ${lost} ` +
+      `${ATTACH_VOLUME} and leave DATA_DIR at /data, then redeploy.`;
+  }
+  return null;
 }
 
 /**

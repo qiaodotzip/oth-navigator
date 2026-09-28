@@ -26,19 +26,40 @@ describe("app", () => {
     expect(res.status).toBe(500);
     const body = await res.text();
     expect(body).not.toContain("hunter2");
-    expect(JSON.parse(body)).toEqual({ error: "Something went wrong on the server." });
+    expect(JSON.parse(body)).toEqual({ error: "Something went wrong on the server. Try again in a moment." });
   });
 
   it("says only that something went wrong on Railway, even with NODE_ENV overridden there", async () => {
     vi.stubEnv("RAILWAY_ENVIRONMENT_NAME", "production");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const broken = {
         select: () => { throw new Error("connect ECONNREFUSED postgres://oth:hunter2@db.internal:5432/oth"); },
       } as unknown as Database;
       const res = await createApp({ db: broken }).request("/api/auth/people");
       expect(res.status).toBe(500);
-      expect(await res.json()).toEqual({ error: "Something went wrong on the server." });
+      expect(await res.json()).toEqual({ error: "Something went wrong on the server. Try again in a moment." });
     } finally {
+      logged.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("logs a 500 with its method and path when deployed, even under NODE_ENV=test", async () => {
+    const failure = new Error("relation \"users\" does not exist");
+    const broken = { select: () => { throw failure; } } as unknown as Database;
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      // Not deployed, under test: quiet.
+      await createApp({ db: broken }).request("/api/auth/people");
+      expect(logged).not.toHaveBeenCalled();
+
+      // Deployed by Railway's variable, though NODE_ENV still says test: the log gets it.
+      vi.stubEnv("RAILWAY_ENVIRONMENT_NAME", "production");
+      await createApp({ db: broken }).request("/api/auth/people");
+      expect(logged).toHaveBeenCalledWith("GET /api/auth/people", failure);
+    } finally {
+      logged.mockRestore();
       vi.unstubAllEnvs();
     }
   });
