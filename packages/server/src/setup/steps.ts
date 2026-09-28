@@ -1,7 +1,8 @@
 /**
  * A floor's guided setup, in order (spec §4.1). Plain data with no table
- * behind it, so the slash commands can name their steps and the wizard's
- * state (setup/service.ts) can number them from one list.
+ * behind it, so the slash commands can name their steps, and so the setup
+ * wizard's own state — once setup/service.ts is written — can number them
+ * from one list.
  */
 export const SETUP_STEPS = ["footage", "label", "review", "floorplan", "rooms", "things", "paths", "check", "finish"] as const;
 export type SetupStepId = (typeof SETUP_STEPS)[number];

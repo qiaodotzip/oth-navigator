@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { SETUP_STEPS, STEP_NAMES, stepNumber, type ClaudeStepId } from "../../setup/steps";
+import { SETUP_STEPS, STEP_NAMES, stepNumber, type ClaudeStepId, type SetupStepId } from "../../setup/steps";
 import { drawPaths } from "./drawPaths";
 import { labelSurvey } from "./labelSurvey";
 import { mapRooms } from "./mapRooms";
@@ -37,9 +37,19 @@ export const FLOOR_ARG = z.string().trim().regex(/^[A-Za-z0-9_-]{1,40}$/, "a flo
 
 export const FINAL_LINE = "Report what you did in a few lines, then call `finish_step`.";
 
-const DRAFT_MAP =
-  "Everything you change goes straight onto the draft map, in your person's name and marked as Claude's. " +
-  "A person checks it in step 8, Check Claude's work, where each change has Undo. Nothing is published until someone presses Publish.";
+/**
+ * label_survey is reviewed at step 3, Review Claude's labels; the other
+ * three run's proposals are reviewed at step 8, Check Claude's work, which
+ * is also where Publish lives.
+ */
+function draftMap(p: SetupPrompt): string {
+  const reviewStep: SetupStepId = p.step === "label" ? "review" : "check";
+  return [
+    "Everything you change goes straight onto the draft map, saved under your person's name and marked as Claude's.",
+    `A person checks it in step ${stepNumber(reviewStep)}, ${STEP_NAMES[reviewStep]}, where each change has Undo.`,
+    `Don't publish: a person does, after step ${stepNumber("check")}.`,
+  ].join(" ");
+}
 
 export function promptText(p: SetupPrompt, floor: string): string {
   return [
@@ -49,9 +59,11 @@ export function promptText(p: SetupPrompt, floor: string): string {
     "",
     `Your tools for this step: ${p.tools.map(t => `\`${t}\``).join(", ")}.`,
     "",
+    `Work on floor ${floor} only. If a tool says there is no floor ${floor}, stop and tell your person; don't choose another floor.`,
+    "",
     ...p.steps(floor),
     "",
-    DRAFT_MAP,
+    draftMap(p),
     "",
     `Stop when ${p.stop(floor)}. If you have to stop before that, say what is left and don't call \`finish_step\`: ` +
       `running /mcp__oth__${p.name} ${floor} again carries on from there.`,
