@@ -17,6 +17,12 @@ export const NEAR_FRAMES = 3;
 /** Two sightings this close, and this few frames apart, are one object (spec §5.4 step 3). */
 export const MERGE_M = 3;
 export const MERGE_FRAMES = 10;
+/**
+ * A frame with a placed frame on one side only takes that frame's point, but
+ * only this many frames from it: further on, the walk has moved somewhere
+ * nothing fixes, and every object filmed there would stand on that one point.
+ */
+export const ONE_SIDE_FRAMES = 20;
 /** An object stands this far in from the edge, beyond half its depth. */
 const EDGE_GAP_M = 0.1;
 /** How far to step off an edge to see which side the floor is on. */
@@ -105,7 +111,12 @@ function framesOn(model: MapModel, levelId: string): Map<string, Frame[]> {
   return byCapture;
 }
 
-/** Where each frame was taken (spec §5.4 step 1): among its anchors' fronts, else between its neighbours'. */
+/**
+ * Where each frame was taken (spec §5.4 step 1): among its anchors' fronts,
+ * else halfway between the placed frames before and after it, else at the
+ * one placed frame on one side when it is within ONE_SIDE_FRAMES; otherwise
+ * nowhere.
+ */
 function fixes(model: MapModel, levelId: string, byCapture: Map<string, Frame[]>, walkable: readonly Room[]): Map<string, Fix | null> {
   const rooms = new Map(live(model.rooms).filter(r => r.levelId === levelId).map(r => [r.id, r]));
   const anchorOf = new Map<string, string>();
@@ -146,13 +157,14 @@ function fixes(model: MapModel, levelId: string, byCapture: Map<string, Frame[]>
         out.set(frame.id, direct[i]!);
         return;
       }
-      let before: Fix | null = null;
-      for (let j = i - 1; j >= 0 && !before; j--) before = direct[j] ?? null;
-      let after: Fix | null = null;
-      for (let j = i + 1; j < frames.length && !after; j++) after = direct[j] ?? null;
+      let before: { fix: Fix; at: number } | null = null;
+      for (let j = i - 1; j >= 0 && !before; j--) before = direct[j] ? { fix: direct[j]!, at: j } : null;
+      let after: { fix: Fix; at: number } | null = null;
+      for (let j = i + 1; j < frames.length && !after; j++) after = direct[j] ? { fix: direct[j]!, at: j } : null;
+      const one = before ?? after;
       const point = before && after
-        ? ontoWalkable([(before.point[0] + after.point[0]) / 2, (before.point[1] + after.point[1]) / 2], walkable)
-        : (before ?? after)?.point ?? null;
+        ? ontoWalkable([(before.fix.point[0] + after.fix.point[0]) / 2, (before.fix.point[1] + after.fix.point[1]) / 2], walkable)
+        : one && Math.abs(one.at - i) <= ONE_SIDE_FRAMES ? one.fix.point : null;
       out.set(frame.id, point ? { point, anchors: [] } : null);
     });
   }

@@ -88,6 +88,38 @@ describe("suggestObjectSpots", () => {
   });
 });
 
+describe("a frame placed from one side only", () => {
+  /**
+   * The rehearsal's L1: a walk of 60 frames whose bound places are all filmed
+   * in its first half (the last fix is frame 31, from Popular at 28). Every bin
+   * filmed late would copy that one far-off point, so all stood in one spot.
+   */
+  const late = (frame: number, id = `sg_${frame}`) => seen(id, "pl_bin", `cap_1-${frame}`);
+  const longWalk = (sightings: ReturnType<typeof seen>[]) => corridor(sightings, { keyframes: [...frames("cap_1", 60), ...frames("cap_2", 3)] });
+
+  it("takes the one neighbour's point within 20 frames of it, as a guess with no anchors", () => {
+    const report = objectSpotReport(longWalk([late(45)]), "oth-L1");
+    expect(report.unplaced).toEqual([]);
+    expect(report.spots.map(s => ({ position: at(s.position), confidence: s.confidence, anchors: s.anchors })))
+      .toEqual([{ position: [25, 0.35], confidence: "low", anchors: [] }]);
+  });
+
+  it("leaves a sighting further than 20 frames from it unplaced, with why, rather than stacking them on one point", () => {
+    const report = objectSpotReport(longWalk([late(52), late(55), late(59)]), "oth-L1");
+    expect(report.spots).toEqual([]);
+    expect(report.unplaced.map(u => [u.sightingId, u.reason])).toEqual([
+      ["sg_52", "nothing filmed near it is bound to a room on this floor"],
+      ["sg_55", "nothing filmed near it is bound to a room on this floor"],
+      ["sg_59", "nothing filmed near it is bound to a room on this floor"],
+    ]);
+  });
+
+  it("still places one between two neighbours however far apart they are", () => {
+    const [spot] = suggestObjectSpots(corridor([seen("sg_bin", "pl_bin", "cap_1-13")]), "oth-L1");
+    expect(at(spot!.position)).toEqual([30, 5.65]);
+  });
+});
+
 describe("objectSpotReport", () => {
   it("skips a sighting already on a placement, so a second run gives only what is left", () => {
     const model = corridor([seen("sg_1", "pl_bin", "cap_1-5"), seen("sg_2", "pl_bin", "cap_1-28")], {
