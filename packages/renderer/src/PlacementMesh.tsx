@@ -1,4 +1,4 @@
-import type { Placement } from "@oth/model";
+import { placementModelAsset, type ObjectKind, type Placement } from "@oth/model";
 import { useGLTF } from "@react-three/drei";
 import { Component, type ReactNode } from "react";
 import { modelToThree } from "./coords";
@@ -29,13 +29,20 @@ export function PlacementMesh({ placement, url }: { placement: Placement; url: s
 /**
  * Forgets the placed models' loads, failed ones included. The loader keeps a
  * failure for the page's whole life, so without this, showing the scene again
- * throws the same error at once instead of trying the file again.
+ * throws the same error at once instead of trying the file again. An object
+ * shows its kind's model, so that is the one to forget.
  */
 export function forgetPlacementModels(
-  placements: readonly Pick<Placement, "assetId">[],
+  placements: readonly Pick<Placement, "assetId" | "objectKindId">[],
   assetUrl: (assetId: string) => string,
+  objectKinds: readonly ObjectKind[] = [],
 ): void {
-  for (const url of new Set(placements.map(p => assetUrl(p.assetId)))) useGLTF.clear(url);
+  const urls = new Set<string>();
+  for (const p of placements) {
+    const assetId = placementModelAsset({ objectKinds }, p);
+    if (assetId) urls.add(assetUrl(assetId));
+  }
+  for (const url of urls) useGLTF.clear(url);
 }
 
 /**

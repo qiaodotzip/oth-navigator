@@ -68,6 +68,13 @@ export const PlaceSchema = AuditFieldsSchema.extend({
    * kind of path.
    */
   pathwayKindId: SlugSchema.optional(),
+  /**
+   * Set when this place is a kind of object: a wastebin, a water cooler
+   * (spec §5.1), the way `pathwayKindId` marks a walkway. The place stands for
+   * the kind in the survey, so its sightings, Review and the survey tools work
+   * unchanged. Each object on the map is a placement of the kind.
+   */
+  objectKindId: SlugSchema.optional(),
   notes: z.string().default(""),
   // Defaults to confirmed: anything a person typed in the survey tool is theirs
   // already. The importer is the only thing that writes "proposed".

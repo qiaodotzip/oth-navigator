@@ -10,10 +10,14 @@ import type { Rule, ValidationIssue } from "../types";
  */
 export const CO_VISIBLE_MAX_M = 40;
 
-/** A named place no room claims — either the trace is missing a unit, or this was a duplicate. */
+/**
+ * A named place no room claims — either the trace is missing a unit, or this
+ * was a duplicate. A kind of object is placed on the map as markers, never
+ * bound, so it is never unbound either.
+ */
 const placeUnbound: Rule = model =>
   live(model.places)
-    .filter(p => !p.roomId)
+    .filter(p => !p.roomId && !p.objectKindId)
     .map<ValidationIssue>(p => ({
       severity: "warning",
       code: "place.unbound",

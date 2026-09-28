@@ -5,6 +5,7 @@
  * WebGL still cannot run here, and the boundary does not care what it wraps,
  * so it is tested round plain children.
  */
+import { ObjectKindSchema } from "@oth/model";
 import { useGLTF } from "@react-three/drei";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -24,6 +25,13 @@ describe("forgetPlacementModels", () => {
     const clear = vi.spyOn(useGLTF, "clear").mockImplementation(() => {});
     forgetPlacementModels([{ assetId: "a_1" }, { assetId: "a_2" }, { assetId: "a_1" }], url);
     expect(clear.mock.calls).toEqual([[url("a_1")], [url("a_2")]]);
+  });
+
+  it("forgets a kind's model for the objects that show it", () => {
+    const clear = vi.spyOn(useGLTF, "clear").mockImplementation(() => {});
+    const bin = ObjectKindSchema.parse({ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 }, assetId: "a_bin" });
+    forgetPlacementModels([{ objectKindId: "ok_bin" }, { assetId: "a_1" }, { objectKindId: "ok_none" }], url, [bin]);
+    expect(clear.mock.calls).toEqual([[url("a_bin")], [url("a_1")]]);
   });
 });
 

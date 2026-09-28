@@ -136,11 +136,13 @@ function allLayers(model: MapModel | null, levelId: string | null): LayerGroup[]
   }
 
   for (const p of model.placements.filter(x => x.levelId === levelId)) {
+    const kind = p.objectKindId ? model.objectKinds.find(k => k.id === p.objectKindId) : undefined;
     const asset = model.assets.find(a => a.id === p.assetId);
     byType.get("placement")!.push({
       type: "placement",
       id: p.id,
-      label: asset?.filename ?? p.assetId,
+      // An object reads as its kind, a placed model as its file.
+      label: kind?.nameEn ?? asset?.filename ?? p.assetId ?? p.id,
       version: p.version,
       renamable: false,
     });

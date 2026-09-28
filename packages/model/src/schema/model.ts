@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BuildingSchema, LevelSchema } from "./building";
-import { AssetSchema, PlacementSchema } from "./dressing";
+import { AssetSchema, ObjectKindSchema, PlacementSchema } from "./dressing";
 import {
   DoorwaySchema,
   EntranceSchema,
@@ -28,6 +28,8 @@ export const MapModelSchema = z.object({
   pathwayKinds: z.array(PathwayKindSchema).default([]),
   assets: z.array(AssetSchema).default([]),
   placements: z.array(PlacementSchema).default([]),
+  /** Kinds of object: the size and model each object on the map is drawn with (spec §5.2). */
+  objectKinds: z.array(ObjectKindSchema).default([]),
   tenants: z.array(TenantSchema).default([]),
 
   // The evidence layer. Deliberately absent from the published bundle, which

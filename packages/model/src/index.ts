@@ -24,3 +24,6 @@ export * from "./survey/levels";
 
 // Part D: 3D fidelity.
 export * from "./geometry/rect";
+
+// Plan 6A: objects.
+export * from "./objects";

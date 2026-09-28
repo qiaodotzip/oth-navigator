@@ -35,6 +35,11 @@ describe("place.unbound", () => {
     const report = validateModel(parseModel({ building, levels: [level], places: [place] }), surveyRules);
     expect(report.issues[0]?.message).toContain("NTUC");
   });
+
+  it("says nothing of a kind of object, which is placed on the map, not bound", () => {
+    expect(codes({ places: [{ ...place, nameEn: "wastebin", category: "facility", objectKindId: "ok_bin" }] }))
+      .not.toContain("place.unbound");
+  });
 });
 
 describe("room.unsurveyed", () => {

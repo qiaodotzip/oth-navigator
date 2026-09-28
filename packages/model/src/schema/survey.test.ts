@@ -39,6 +39,11 @@ describe("place", () => {
     const place = PlaceSchema.parse({ id: "pl_1", nameEn: "X", category: "retail" });
     expect(place).not.toHaveProperty("position");
   });
+
+  it("marks a place that is a kind of object, as pathwayKindId marks a walkway", () => {
+    expect(PlaceSchema.parse({ id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "ok_bin" }).objectKindId)
+      .toBe("ok_bin");
+  });
 });
 
 describe("sighting", () => {

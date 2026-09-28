@@ -1,4 +1,5 @@
 import { bboxContains, bboxOfRing } from "../../geometry/point";
+import { placementModelAsset } from "../../objects";
 import { live } from "../../primitives";
 import type { Rule, ValidationIssue } from "../types";
 
@@ -55,7 +56,9 @@ const placementsOutsideAnchor: Rule = model => {
   for (const p of live(model.placements)) {
     if (!p.roomId) continue;
     const room = rooms.get(p.roomId);
-    const asset = assets.get(p.assetId);
+    // An object is measured by the model it shows, its own or its kind's.
+    const assetId = placementModelAsset(model, p);
+    const asset = assetId ? assets.get(assetId) : undefined;
     if (!room || !asset) continue;
 
     const placed = {

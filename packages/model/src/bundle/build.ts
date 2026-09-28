@@ -94,7 +94,10 @@ export function buildBundle(model: MapModel, meta: BundleMeta): BundleFile[] {
     path: "placements.json",
     contents: stableStringify({
       assets: byId(live(model.assets)),
-      placements: byId(live(model.placements)),
+      // The size and model every object of a kind is drawn with (spec §5.3).
+      objectKinds: byId(live(model.objectKinds)),
+      // The tags an object was placed from point into the survey layer, which stays server-side.
+      placements: byId(live(model.placements)).map(({ sightingIds: _tags, ...placement }) => placement),
     }),
   });
 

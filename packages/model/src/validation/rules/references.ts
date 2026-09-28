@@ -157,15 +157,44 @@ const semanticRefs: Rule = model => {
     }
   }
 
+  const kinds = new Set(live(model.objectKinds).map(k => k.id));
   for (const p of live(model.placements)) {
-    if (!assets.has(p.assetId)) {
+    const where = { entityType: "placement" as const, entityId: p.id, levelId: p.levelId };
+    // Spec §5.3: an object is drawn from its kind; anything else needs its own model.
+    if (!p.assetId && !p.objectKindId) {
+      issues.push({
+        severity: "error",
+        code: "placement.assetOrKind.missing",
+        message: `Placement "${p.id}" has neither a model nor an object kind, so there is nothing to show.`,
+        ...where,
+      });
+    }
+    if (p.assetId && !assets.has(p.assetId)) {
       issues.push({
         severity: "error",
         code: "placement.asset.missing",
         message: `Placement "${p.id}" references asset "${p.assetId}", which does not exist.`,
-        entityType: "placement",
-        entityId: p.id,
-        levelId: p.levelId,
+        ...where,
+      });
+    }
+    if (p.objectKindId && !kinds.has(p.objectKindId)) {
+      issues.push({
+        severity: "error",
+        code: "placement.objectKind.missing",
+        message: `Placement "${p.id}" is an object of kind "${p.objectKindId}", which does not exist.`,
+        ...where,
+      });
+    }
+  }
+
+  for (const k of live(model.objectKinds)) {
+    if (k.assetId && !assets.has(k.assetId)) {
+      issues.push({
+        severity: "error",
+        code: "objectKind.asset.missing",
+        message: `Object kind "${k.nameEn}" references asset "${k.assetId}", which does not exist.`,
+        entityType: "objectKind",
+        entityId: k.id,
       });
     }
   }

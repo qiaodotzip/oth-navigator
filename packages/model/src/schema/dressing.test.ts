@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AssetSchema, PlacementSchema } from "./dressing";
+import { AssetSchema, ObjectKindSchema, PlacementSchema } from "./dressing";
 
 describe("AssetSchema", () => {
   const asset = {
@@ -42,5 +42,37 @@ describe("PlacementSchema", () => {
 
   it("rejects a non-positive scale", () => {
     expect(() => PlacementSchema.parse({ ...placement, scale: 0 })).toThrow();
+  });
+
+  it("accepts an object: a kind and no model of its own, and no survey tags yet", () => {
+    const p = PlacementSchema.parse({ id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_wastebin", position: [3, 4, 0] });
+    expect(p.assetId).toBeUndefined();
+    expect(p.objectKindId).toBe("ok_wastebin");
+    expect(p.sightingIds).toEqual([]);
+  });
+
+  it("leaves 'an asset or a kind' to validation, so a partial update still parses", () => {
+    // The entity registry and updateEntity need a plain object schema (interfaces.md).
+    expect(() => PlacementSchema.parse({ id: "L1-x", levelId: "oth-L1", position: [0, 0, 0] })).not.toThrow();
+  });
+});
+
+describe("ObjectKindSchema", () => {
+  const bin = { id: "ok_wastebin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } };
+
+  it("needs only a name and a size, and has no model until one is made", () => {
+    const kind = ObjectKindSchema.parse(bin);
+    expect(kind).toMatchObject({ nameZh: "", notes: "", version: 0 });
+    expect(kind.assetId).toBeUndefined();
+  });
+
+  it("refuses a side that is zero, negative or not a number", () => {
+    for (const size of [{ ...bin.size, w: 0 }, { ...bin.size, d: -0.5 }, { ...bin.size, h: Number.POSITIVE_INFINITY }]) {
+      expect(() => ObjectKindSchema.parse({ ...bin, size })).toThrow();
+    }
+  });
+
+  it("refuses a kind with no name", () => {
+    expect(() => ObjectKindSchema.parse({ ...bin, nameEn: "" })).toThrow();
   });
 });

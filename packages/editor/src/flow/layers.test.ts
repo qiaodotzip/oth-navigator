@@ -92,6 +92,16 @@ describe("levelLayers", () => {
   it("scopes portal endpoints to the level, not the portal", () => {
     expect(groups("oth-L1").portalEndpoint?.items.map(i => i.id)).toEqual(["p1-L1"]);
   });
+
+  it("labels an object by its kind", () => {
+    const withObject = parseModel({
+      ...model,
+      objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+      placements: [...model.placements, { id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [2, 2, 0] }],
+    });
+    const items = levelLayers(withObject, "oth-L1").find(g => g.type === "placement")?.items ?? [];
+    expect(items.map(i => i.label)).toEqual(["arch.glb", "wastebin"]);
+  });
 });
 
 describe("areas and pathways", () => {

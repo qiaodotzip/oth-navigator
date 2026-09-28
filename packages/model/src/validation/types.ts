@@ -15,6 +15,7 @@ export type EntityType =
   | "place"
   | "asset"
   | "placement"
+  | "objectKind"
   | "tenant";
 
 export type ValidationIssue = {

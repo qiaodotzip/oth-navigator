@@ -98,6 +98,17 @@ describe("buildBundle", () => {
     const l1 = buildBundle(withDeleted, meta).find(f => f.path === "levels/L1.json")?.contents ?? "";
     expect(l1).not.toContain("L1-old");
   });
+
+  it("ships the kinds of object with the placements, and an object drawn from its kind", () => {
+    const withObjects = parseModel({
+      building, levels: [level], rooms: [lobby], entrances: [entrance],
+      objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+      placements: [{ id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [5, 5, 0] }],
+    });
+    const file = JSON.parse(buildBundle(withObjects, meta).find(f => f.path === "placements.json")?.contents ?? "{}");
+    expect(file.objectKinds.map((k: { id: string }) => k.id)).toEqual(["ok_bin"]);
+    expect(file.placements[0]).toMatchObject({ id: "L1-bin-1", objectKindId: "ok_bin" });
+  });
 });
 
 describe("what the bundle deliberately omits", () => {
@@ -107,6 +118,9 @@ describe("what the bundle deliberately omits", () => {
     keyframes: [{ id: "kf_1", captureId: "cap_1", timeMs: 100, imageId: "kf_1", widthPx: 640, heightPx: 480 }],
     places: [{ id: "pl_1", nameEn: "NTUC", category: "retail", roomId: "L1-lobby" }],
     sightings: [{ id: "sg_1", placeId: "pl_1", keyframeId: "kf_1" }],
+    // An object placed from that frame: its tags stay with the survey.
+    objectKinds: [{ id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+    placements: [{ id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [5, 5, 0], sightingIds: ["sg_1"] }],
   });
 
   it("never ships survey evidence to visitors", () => {
@@ -116,6 +130,12 @@ describe("what the bundle deliberately omits", () => {
     expect(all).not.toContain("kf_1");
     expect(all).not.toContain("cap_1");
     expect(all).not.toContain("sighting");
+  });
+
+  it("keeps the survey tags an object was placed from out of the bundle", () => {
+    const all = buildBundle(surveyed, meta).map(f => f.contents).join("");
+    expect(all).toContain("L1-bin-1");
+    expect(all).not.toContain("sg_1");
   });
 
   it("still ships the rooms the survey confirmed", () => {

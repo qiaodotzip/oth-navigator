@@ -93,4 +93,26 @@ describe("reference rules", () => {
       placements: [{ id: "pl1", levelId: "oth-L1", assetId: "missing-asset", position: [1, 1, 0] }],
     })).toContain("placement.asset.missing");
   });
+
+  const kind = { id: "ok_bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } };
+  const object = { id: "L1-bin-1", levelId: "oth-L1", objectKindId: "ok_bin", position: [1, 1, 0] };
+
+  it("accepts an object with a kind and no model of its own", () => {
+    expect(codes({ objectKinds: [kind], placements: [object] })).toEqual([]);
+  });
+
+  it("rejects a placement with neither a model nor a kind: there is nothing to show", () => {
+    expect(codes({ placements: [{ id: "pl1", levelId: "oth-L1", position: [1, 1, 0] }] }))
+      .toContain("placement.assetOrKind.missing");
+  });
+
+  it("rejects an object whose kind does not exist, or was deleted", () => {
+    expect(codes({ placements: [object] })).toContain("placement.objectKind.missing");
+    expect(codes({ objectKinds: [{ ...kind, deletedAt: "2026-09-28T00:00:00.000Z" }], placements: [object] }))
+      .toContain("placement.objectKind.missing");
+  });
+
+  it("rejects a kind whose model does not exist", () => {
+    expect(codes({ objectKinds: [{ ...kind, assetId: "missing-asset" }] })).toContain("objectKind.asset.missing");
+  });
 });

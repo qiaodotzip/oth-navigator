@@ -49,14 +49,14 @@ export function LevelGroup({
           {...(roomExtras ? roomExtras(room) : {})}
         />
       ))}
-      {!ghosted && assetUrl && placements.map(p => (
+      {!ghosted && assetUrl && placements.map(p => (p.assetId ? (
         // Suspended and caught per placement: one asset failing to load must not blank the level.
         <PlacementBoundary key={p.id} url={assetUrl(p.assetId)}>
           <Suspense fallback={null}>
             <PlacementMesh placement={p} url={assetUrl(p.assetId)} />
           </Suspense>
         </PlacementBoundary>
-      ))}
+      ) : null))}
       {children}
     </group>
   );
