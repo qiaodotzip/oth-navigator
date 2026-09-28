@@ -172,6 +172,14 @@ describe("SelectionInspector", () => {
   it("does not offer Bind one on Bind places, where the list is just below", () => {
     setup({ type: "room", id: "L1-a" }, "bind");
     expect(screen.queryByRole("button", { name: "Bind one" })).toBeNull();
+    expect(screen.getByRole("region", { name: "Surveyed place" }).textContent).toContain("Pick it below.");
+  });
+
+  it("points at no picker on Bind places when no place is waiting for a room", () => {
+    useEditorStore.getState().setModel({ ...model, places: [] });
+    setup({ type: "room", id: "L1-a" }, "bind");
+    expect(screen.getByText(/No confirmed places are waiting for a room/)).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Surveyed place" }).textContent).not.toContain("Pick it below");
   });
 
   it("shows no place card for a detail", () => {

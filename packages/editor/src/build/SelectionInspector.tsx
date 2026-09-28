@@ -97,6 +97,8 @@ export function SelectionInspector({
                 room={room}
                 // On Bind places the picker is just below; elsewhere this is the way there.
                 onBindOne={step === "bind" ? undefined : () => setParams({ step: "bind" })}
+                // Only while there is a picker: with no place waiting, Bind places says so instead.
+                pickerBelow={picking}
               />
             )}
             <div className={picking ? "max-h-[30%] min-h-0 overflow-y-auto" : undefined}>
