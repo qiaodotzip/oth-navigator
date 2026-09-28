@@ -9,7 +9,7 @@ import {
 export const NO_COUNTS: SetupCounts = {
   label: { tagged: 0, binned: 0, left: 0 },
   review: { left: 0 },
-  rooms: { waiting: 0, accepted: 0, rejectedOrSetAside: 0, stops: 0 },
+  rooms: { waiting: 0, setAside: 0, accepted: 0, rejected: 0, stops: 0 },
   things: { bound: 0, unbound: 0, objects: [] },
   paths: { pathways: 0, entrances: 0, unreachable: 0 },
 };
@@ -43,7 +43,7 @@ export function fakeSetupApi(overrides: Partial<Record<keyof (Api & SetupApi), u
   return {
     ...fakeApi(),
     getSetup: vi.fn().mockResolvedValue(setupState()),
-    setSetupStep: vi.fn().mockResolvedValue({}),
+    setSetupStep: vi.fn().mockResolvedValue(setupState()),
     listClaudeChanges: vi.fn().mockResolvedValue([]),
     undoChange: vi.fn().mockResolvedValue({}),
     ...overrides,

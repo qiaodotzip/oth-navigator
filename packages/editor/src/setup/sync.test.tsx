@@ -2,7 +2,7 @@ import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import { useEditorStore } from "../state/store";
-import { POLL_MS, loadSetup, useSetupPoll, useSetupStore } from "./sync";
+import { POLL_MS, loadSetup, putSetup, useSetupPoll, useSetupStore } from "./sync";
 import { setupState } from "./testing";
 import type { SetupApi, SetupState } from "./types";
 
@@ -48,6 +48,27 @@ describe("loadSetup", () => {
     answerFirst(left(9));
     expect(await first).toBeNull();
     expect(stored().byLevel["oth-L1"]?.counts.label.left).toBe(3);
+  });
+
+  it("asks for the cheap setup when told light", async () => {
+    const getSetup = vi.fn().mockResolvedValue(left(3));
+    await loadSetup({ getSetup }, "oth-L1", { light: true });
+    expect(getSetup).toHaveBeenCalledWith("oth-L1", { light: true });
+  });
+});
+
+describe("putSetup", () => {
+  it("keeps a setup a PUT answered with, over a load asked before it that answers after", async () => {
+    let answerLoad: (state: SetupState) => void = () => {};
+    const getSetup = vi.fn(() => new Promise<SetupState>(resolve => {
+      answerLoad = resolve;
+    }));
+    const load = loadSetup({ getSetup }, "oth-L1");
+    putSetup("oth-L1", left(1));
+    expect(stored().byLevel["oth-L1"]?.counts.label.left).toBe(1);
+    answerLoad(left(9));
+    expect(await load).toBeNull();
+    expect(stored().byLevel["oth-L1"]?.counts.label.left).toBe(1);
   });
 });
 

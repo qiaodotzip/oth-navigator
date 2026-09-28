@@ -17,8 +17,12 @@ import { useDrafts } from "./drafts";
 
 const STOPPING = "Stopping…";
 
-/** A search: its floor, its place in line among that floor's searches, and its Cancel. */
-type Search = { n: number; levelId: string; stop: AbortController };
+/**
+ * A search: its floor, its place in line among that floor's searches, its
+ * Cancel, and whether it was started in the setup wizard, whose toast words
+ * what was left out differently.
+ */
+type Search = { n: number; levelId: string; stop: AbortController; inSetup: boolean };
 
 /**
  * The search under way. It lives out here, as its words live in the drafts
@@ -58,7 +62,7 @@ function samePlace(was: LevelImage, now: LevelImage | null): boolean {
  * a click, a Retry and Find again all come here, so none of them searches a
  * plan that has moved since.
  */
-async function findRoomsOn(api: Api, levelId: string): Promise<void> {
+async function findRoomsOn(api: Api, levelId: string, inSetup: boolean): Promise<void> {
   if (useDrafts.getState().finding) return;
   const image = planNow(levelId);
   const why = whyNot(image);
@@ -67,7 +71,7 @@ async function findRoomsOn(api: Api, levelId: string): Promise<void> {
     if (why) toast({ message: why });
     return;
   }
-  const search: Search = { n: ++searches, levelId, stop: new AbortController() };
+  const search: Search = { n: ++searches, levelId, stop: new AbortController(), inSetup };
   newest.set(levelId, search.n);
   await run(api, search, "Fetching the drawing…", say => findRoomsInDrawing({
     api, image, levelId, stage: say, signal: search.stop.signal,
@@ -94,7 +98,7 @@ async function run(
   try {
     const found = await work(say);
     useDrafts.getState().setDrafts(search.levelId, found.drafts);
-    toast({ tone: "success", message: describeFind(found) });
+    toast({ tone: "success", message: describeFind(found, { inSetup: search.inSetup }) });
   } catch (err) {
     sayWhy(api, search, err);
   } finally {
@@ -105,7 +109,7 @@ async function run(
 
 /** A search that didn't save, said by whose it is, with the next step. */
 function sayWhy(api: Api, search: Search, err: unknown): void {
-  const again = () => findRoomsOn(api, search.levelId);
+  const again = () => findRoomsOn(api, search.levelId, search.inSetup);
   if (search.stop.signal.aborted) {
     toast({ message: "Stopped finding rooms. The floor's drafts are as they were." });
   } else if (err instanceof PlanMovedError) {
@@ -153,9 +157,10 @@ function againQuestion(waiting: number, roomsFromDrawing: boolean): string | nul
  * run, it says why, and where to go. On a floor already searched it asks
  * first, as Replace plan does. While it runs it says what it is doing, and can
  * be cancelled until the drafts are on their way to the server. A search of
- * another floor shows here as that floor's.
+ * another floor shows here as that floor's. `inSetup` is the setup wizard's
+ * Floorplan step, where Claude makes the stops left out.
  */
-export function DraftsFind({ api }: { api: Api }) {
+export function DraftsFind({ api, inSetup = false }: { api: Api; inSetup?: boolean }) {
   const levelId = useEditorStore(s => s.activeLevelId);
   const image = useEditorStore(s => imageForLevel(s.levelImages, s.activeLevelId));
   const finding = useDrafts(s => s.finding);
@@ -179,12 +184,12 @@ export function DraftsFind({ api }: { api: Api }) {
   function find(): void {
     if (!levelId) return;
     if (againQuestion(waiting, roomsFromDrawing)) setAskingFor(levelId);
-    else void findRoomsOn(api, levelId);
+    else void findRoomsOn(api, levelId, inSetup);
   }
 
   function findAgain(): void {
     setAskingFor(null);
-    if (levelId) void findRoomsOn(api, levelId);
+    if (levelId) void findRoomsOn(api, levelId, inSetup);
   }
 
   function cancel(): void {

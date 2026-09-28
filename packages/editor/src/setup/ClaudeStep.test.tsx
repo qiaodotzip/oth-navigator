@@ -1,3 +1,4 @@
+import { parseModel } from "@oth/model";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiToken } from "../api/client";
@@ -18,7 +19,7 @@ const liveToken: ApiToken = {
   createdAt: "2026-09-01T12:00:00Z", lastUsedAt: null, expiresAt: "2099-01-01T12:00:00Z",
 };
 const tokens = (list: ApiToken[]) => vi.fn().mockResolvedValue({ tokens: list, mayPublishByDefault: false });
-const rooms = (waiting: number, accepted: number) => ({ waiting, accepted, rejectedOrSetAside: 0, stops: 0 });
+const rooms = (waiting: number, accepted: number) => ({ waiting, setAside: 0, accepted, rejected: 0, stops: 0 });
 
 beforeEach(() => {
   useSetupStore.getState().reset();
@@ -57,30 +58,73 @@ describe("ClaudeStep", () => {
     expect(useToasts.getState().toasts.at(-1)?.message).toBe("Copied. Paste it into Claude Code.");
   });
 
-  it("shows the step's live counts", () => {
-    open({ state: setupState({}, { rooms: { waiting: 12, accepted: 150, rejectedOrSetAside: 53, stops: 8 } }) });
+  it("shows the step's live counts: what Claude set aside for you apart from what it rejected", () => {
+    open({ state: setupState({}, { rooms: { waiting: 12, setAside: 184, accepted: 150, rejected: 1, stops: 8 } }) });
     expect(count("Drafts waiting")).toBe("12");
     expect(count("Made rooms")).toBe("150");
-    expect(count("Rejected or set aside")).toBe("53");
+    expect(count("Set aside for you")).toBe("184");
+    expect(count("Rejected")).toBe("1");
     expect(count("Stops made")).toBe("8");
   });
 
-  it("lists Claude's last five changes on the floor, from when this setup began", async () => {
-    const listClaudeChanges = vi.fn().mockResolvedValue(
-      Array.from({ length: 7 }, (_, i) => change({ auditId: `a${i}`, summary: `Made room ${i} from a draft` })));
+  it("counts the rooms with a door no route reaches, and shows a dash while that isn't known", () => {
+    open({ stepId: "paths", state: setupState({}, { paths: { pathways: 38, entrances: 0, unreachable: 167 } }) });
+    expect(count("Rooms with a door no route reaches")).toBe("167");
+    cleanup();
+    open({ stepId: "paths", state: setupState({}, { paths: { pathways: 38, entrances: 0, unreachable: null } }) });
+    expect(count("Rooms with a door no route reaches")).toBe("–");
+  });
+
+  it("lists Claude's last five changes for this step, from when this setup began", async () => {
+    const listClaudeChanges = vi.fn().mockResolvedValue([
+      change({ auditId: "p", group: "pathways", summary: "Drew a pathway, 1 m" }),
+      change({ auditId: "t", group: "labels", summary: "Tagged Festive Walk seating" }),
+      ...Array.from({ length: 6 }, (_, i) => change({ auditId: `a${i}`, summary: `Made room ${i} from a draft` })),
+      change({ auditId: "s", group: "stops", summary: "Made Escalator - 03 an escalator stop" }),
+    ]);
     open({
       api: fakeSetupApi({ listClaudeChanges }),
       state: setupState({ footage: { status: "done", finishedAt: "2026-09-28T09:00:00.000Z" } }),
     });
     const list = within(screen.getByRole("region", { name: "Claude's last changes" }));
     await waitFor(() => expect(list.getAllByRole("listitem")).toHaveLength(5));
-    expect(list.getAllByRole("listitem")[0]!.textContent).toContain("Made room 0 from a draft");
-    expect(listClaudeChanges).toHaveBeenCalledWith("oth-L1", "2026-09-28T09:00:00.000Z", 5);
+    expect(list.getAllByRole("listitem").map(li => li.textContent)).toEqual(
+      [0, 1, 2, 3, 4].map(i => expect.stringContaining(`Made room ${i} from a draft`)),
+    );
+    // Enough of Claude's last changes on the floor to find five of this step's among them.
+    expect(listClaudeChanges).toHaveBeenCalledWith("oth-L1", "2026-09-28T09:00:00.000Z", 100);
   });
 
-  it("says so while Claude has done nothing here", async () => {
+  it("says so while Claude has done nothing for this step here", async () => {
+    open({ api: fakeSetupApi({ listClaudeChanges: vi.fn().mockResolvedValue([change({ auditId: "p", group: "pathways" })]) }) });
+    expect(await screen.findByText("Nothing from Claude for this step on L1 yet.")).toBeTruthy();
+  });
+
+  it("says so in one line when Claude's changes can't be loaded", async () => {
+    open({ api: fakeSetupApi({ listClaudeChanges: vi.fn().mockRejectedValue(new TypeError("Failed to fetch")) }) });
+    expect(await screen.findByText("Couldn't load Claude's last changes. They load again when the counts move.")).toBeTruthy();
+  });
+
+  it("says what to watch for at each step, and to run the command again if Claude stops", () => {
+    open({ stepId: "label" });
+    expect(screen.getByText(/watch the counts below as it labels the survey's frames/)).toBeTruthy();
+    expect(screen.queryByText(/watch the map fill in/)).toBeNull();
+    expect(screen.getByText("If Claude stops, run the same command again: it carries on.")).toBeTruthy();
+    cleanup();
+    open({ stepId: "rooms" });
+    expect(screen.getByText(/watch the rooms fill in on the map/)).toBeTruthy();
+  });
+
+  it("lets go of anything picked on the map at once, so no lock of yours stops Claude's writes", () => {
+    useEditorStore.getState().setModel(parseModel({
+      ...sampleModel,
+      rooms: [{ id: "L1-a", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 4 }],
+    }));
+    useEditorStore.getState().select({ type: "room", id: "L1-a" });
     open();
-    expect(await screen.findByText("Nothing from Claude on L1 yet.")).toBeTruthy();
+    expect(useEditorStore.getState().selection).toBeNull();
+    act(() => useEditorStore.getState().select({ type: "room", id: "L1-a" }));
+    expect(useEditorStore.getState().selection).toBeNull();
   });
 
   it("leads to the Claude Code panel when you have no live token: an expired one is none", async () => {
@@ -115,6 +159,29 @@ describe("ClaudeStep", () => {
     });
     expect(screen.getByRole("status").textContent)
       .toBe("✓ Done by Claude, just now: Made 150 rooms; 12 drafts set aside for a person");
+  });
+
+  it("says, as a warning, that Claude stopped with work left when the counts still show some", () => {
+    open({
+      stepId: "things",
+      state: setupState(
+        { things: { status: "done", finishedBy: "u_sc", finishedVia: "tok_1", finishedAt: new Date().toISOString(), note: "" } },
+        { things: { bound: 6, unbound: 13, objects: [] } },
+      ),
+    });
+    expect(screen.getByRole("status").textContent).toBe("! Claude stopped with 13 places not bound, just now");
+    expect(screen.queryByText(/Done by Claude/)).toBeNull();
+  });
+
+  it("keeps its status line in place, so a screen reader hears the line when it changes", () => {
+    open();
+    const line = screen.getByRole("status");
+    expect(line.textContent).toBe("");
+    act(() => useSetupStore.getState().put("oth-L1", setupState({
+      rooms: { status: "done", finishedBy: "u_sc", finishedVia: "tok_1", finishedAt: new Date().toISOString(), note: "" },
+    })));
+    expect(screen.getByRole("status")).toBe(line);
+    expect(line.textContent).toBe("✓ Done by Claude, just now");
   });
 
   it("links to the step's own tool, to do it yourself", () => {

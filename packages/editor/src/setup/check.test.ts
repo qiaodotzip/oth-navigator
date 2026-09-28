@@ -62,6 +62,14 @@ describe("checkSections", () => {
     expect(labels).toBe(1);
   });
 
+  it("lists the frames Claude binned, after entrances, where Undo can put them back", () => {
+    const { sections } = checkSections([
+      change({ auditId: "f", group: "frames", entityType: "keyframe", entityId: "kf_1", action: "delete" }),
+      change({ auditId: "e", group: "entrances" }),
+    ]);
+    expect(sections.map(s => [s.label, s.rows.map(r => r.auditId)])).toEqual([["Entrances", ["e"]], ["Frames binned", ["f"]]]);
+  });
+
   it("puts a group it doesn't know under Other changes", () => {
     const { sections } = checkSections([change({ auditId: "n", group: "navHints" as never })]);
     expect(sections.map(s => s.label)).toEqual(["Other changes"]);

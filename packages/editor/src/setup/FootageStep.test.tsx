@@ -64,7 +64,9 @@ describe("FootageStep", () => {
   it("offers a floorless capture for filing, so it is never simply missing", () => {
     useEditorStore.getState().setModel(modelWithUnfiled);
     open();
-    expect(screen.getByRole("status").textContent).toMatch(/level 1.*1 frame.*isn't filed under a floor/);
+    expect(screen.getByTestId("unfiled-cap_u").textContent).toMatch(/level 1.*1 frame.*isn't filed under a floor/);
+    // A list item, not a live region: nothing about it changes while you look.
+    expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByRole("button", { name: "File under L1" })).toBeTruthy();
   });
 

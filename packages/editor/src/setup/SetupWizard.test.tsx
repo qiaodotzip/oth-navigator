@@ -1,3 +1,4 @@
+import { parseModel } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Api } from "../api/client";
@@ -76,19 +77,82 @@ describe("SetupWizard", () => {
     expect((await screen.findByLabelText("Command for Claude Code")).textContent).toBe("/mcp__oth__map_rooms L1");
   });
 
-  it("records who marked a step done", async () => {
+  it("records who marked a step done, from the setup the server answers with: no second load", async () => {
     let labelDone = false;
-    const getSetup = vi.fn(async () => setupState(labelDone
-      ? { label: { status: "done", finishedBy: "u_sc", finishedVia: null, finishedAt: new Date().toISOString() } }
-      : {}));
+    const now = () => setupState({
+      footage: { status: "done", finishedAt: "2026-09-28T09:00:00.000Z" },
+      ...(labelDone ? { label: { status: "done", finishedBy: "u_sc", finishedVia: null, finishedAt: new Date().toISOString() } } : {}),
+    });
+    const getSetup = vi.fn(async () => now());
     const setSetupStep = vi.fn(async (_levelId: string, step: string) => {
       if (step === "label") labelDone = true;
-      return {};
+      return now();
     });
     at("/floors/L1/setup/2", fakeSetupApi({ getSetup, setSetupStep }));
     fireEvent.click(await screen.findByRole("button", { name: "Mark done" }));
     expect(await bar().findByText("Done by Stef Chan, just now")).toBeTruthy();
     expect(setSetupStep).toHaveBeenCalledWith("oth-L1", "label", { status: "done" });
+    expect(getSetup).toHaveBeenCalledTimes(1);
+  });
+
+  it("reloads the map on arriving at each step, without validating it", async () => {
+    const api = at("/floors/L2/setup/1");
+    await waitFor(() => expect(api.getModel).toHaveBeenCalledTimes(1));
+    fireEvent.click(bar().getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(api.getModel).toHaveBeenCalledTimes(2));
+    expect(api.validate).not.toHaveBeenCalled();
+  });
+
+  it("asks for the cheap setup again as Review's decisions reload the map, so its tick follows them", async () => {
+    const api = at("/floors/L1/setup/3");
+    await waitFor(() => expect(api.getSetup).toHaveBeenCalledWith("oth-L1"));
+    await act(async () => {});
+    act(() => useEditorStore.getState().setModel(parseModel({ ...sampleModel, places: [], sightings: [] })));
+    await waitFor(() => expect(api.getSetup).toHaveBeenCalledWith("oth-L1", { light: true }));
+  });
+
+  it("puts the focus on where you are as the step changes", async () => {
+    at("/floors/L2/setup/1");
+    expect(await screen.findByRole("heading", { name: "Add footage" })).toBeTruthy();
+    fireEvent.click(bar().getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(document.activeElement?.textContent).toBe("Step 2 of 9: Label the survey"));
+  });
+
+  it("keeps the bar's warning in one live region whose words change", async () => {
+    // L1's footage is filed, so step 1 has nothing to warn of; step 2 has.
+    at("/floors/L1/setup/1");
+    expect(await screen.findByRole("heading", { name: "Add footage" })).toBeTruthy();
+    const line = bar().getByRole("status");
+    expect(line.textContent).toBe("");
+    fireEvent.click(bar().getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(line.textContent).toBe("! Claude hasn't finished labelling yet."));
+    expect(bar().getByRole("status")).toBe(line);
+  });
+
+  it("tries the footage stamp again at the next step when it failed", async () => {
+    const setSetupStep = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue(setupState({ footage: { status: "done", finishedAt: "2026-09-28T09:00:00.000Z" } }));
+    at("/floors/L1/setup/2", fakeSetupApi({ setSetupStep }));
+    await waitFor(() => expect(setSetupStep).toHaveBeenCalledTimes(1));
+    fireEvent.click(bar().getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(setSetupStep).toHaveBeenCalledTimes(2));
+    expect(setSetupStep).toHaveBeenLastCalledWith("oth-L1", "footage", { status: "done" });
+  });
+
+  it("gives Check one main button, Looks right: Next is plain there", async () => {
+    at("/floors/L1/setup/7");
+    expect(bar().getByRole("button", { name: "Next" }).className).toContain("bg-accent");
+    fireEvent.click(bar().getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("button", { name: "Looks right" })).toBeTruthy();
+    expect(bar().getByRole("button", { name: "Next" }).className).not.toContain("bg-accent");
+  });
+
+  it("says a floor is set up at Finish only once every step is done or skipped", async () => {
+    at("/floors/L1/setup/9");
+    expect(await screen.findByRole("heading", { name: "Finish" })).toBeTruthy();
+    expect(screen.queryByText(/L1 is set up\./)).toBeNull();
+    expect(screen.getByText(/Steps 2, 3, 4, 5, 6, 7 and 8 aren't done yet\./)).toBeTruthy();
   });
 
   it("shows the floor's Review queue at step 3, and Skip skips it", async () => {
@@ -96,6 +160,23 @@ describe("SetupWizard", () => {
     expect(await screen.findByDisplayValue("Festive Mall")).toBeTruthy();
     fireEvent.click(bar().getByRole("button", { name: "Skip" }));
     await waitFor(() => expect(api.setSetupStep).toHaveBeenCalledWith("oth-L1", "review", { status: "skipped" }));
+  });
+
+  it("lets go of the map's selection on a Claude step, and keeps Show's on Check", async () => {
+    const withRoom = parseModel({
+      ...sampleModel,
+      rooms: [{ id: "L1-a", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 4 }],
+    });
+    useEditorStore.getState().setModel(withRoom);
+    const api = fakeSetupApi({ getModel: vi.fn().mockResolvedValue(withRoom) });
+    at("/floors/L1/setup/8", api);
+    expect(await screen.findByRole("button", { name: "Looks right" })).toBeTruthy();
+    act(() => useEditorStore.getState().select({ type: "room", id: "L1-a" }));
+    expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L1-a" });
+    fireEvent.click(bar().getByRole("button", { name: "Back" }));
+    expect(await screen.findByLabelText("Command for Claude Code")).toBeTruthy();
+    act(() => useEditorStore.getState().select({ type: "room", id: "L1-a" }));
+    expect(useEditorStore.getState().selection).toBeNull();
   });
 
   it("goes on to Finish once Claude's work looks right", async () => {

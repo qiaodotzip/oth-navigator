@@ -1,5 +1,5 @@
 import { href, type FloorTab } from "../route";
-import { SETUP_STEP_IDS, type SetupStepId } from "./types";
+import { SETUP_STEP_IDS, type ClaudeChangeGroup, type SetupStepId } from "./types";
 
 /** The steps Claude does, each run with its own slash command. */
 export type ClaudeStepId = Extract<SetupStepId, "label" | "rooms" | "things" | "paths">;
@@ -50,6 +50,22 @@ const PROMPTS: Record<ClaudeStepId, string> = {
 export function slashCommand(id: ClaudeStepId, levelCode: string): string {
   return `/mcp__oth__${PROMPTS[id]} ${levelCode}`;
 }
+
+/** The groups of Claude's changes each Claude step makes: its "last changes" lists only these. */
+export const STEP_GROUPS: Record<ClaudeStepId, readonly ClaudeChangeGroup[]> = {
+  label: ["labels", "frames"],
+  rooms: ["rooms", "drafts", "names", "stops"],
+  things: ["places", "objects"],
+  paths: ["pathways", "entrances"],
+};
+
+/** What to watch while Claude works: labels show in the counts only, the rest on the map too. */
+export const WATCH: Record<ClaudeStepId, string> = {
+  label: "watch the counts below as it labels the survey's frames",
+  rooms: "watch the rooms fill in on the map",
+  things: "watch places and objects appear on the map",
+  paths: "watch the pathways appear on the map",
+};
 
 /** The step's own tool, for doing it by hand (spec §4.2). */
 export function doItMyself(id: ClaudeStepId, levelCode: string): { label: string; to: string } {

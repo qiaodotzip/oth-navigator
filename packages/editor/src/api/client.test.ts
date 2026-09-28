@@ -247,6 +247,14 @@ describe("floor setup (plan 6C)", () => {
     ]);
   });
 
+  it("asks for the cheap setup, with no routes counted, when told light", async () => {
+    const fetchImpl = mockFetch(200, { steps: [], counts: {} });
+    const api = createApi({ fetchImpl });
+    await api.getSetup("oth-L1", { light: true });
+    await api.getSetup("oth-L1", { light: false });
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual(["/api/levels/oth-L1/setup?light=1", "/api/levels/oth-L1/setup"]);
+  });
+
   it("lists Claude's changes on a floor since a moment, the epoch for every change, with a limit", async () => {
     const fetchImpl = mockFetch(200, { changes: [{ auditId: "audit_1", summary: "Made Starbucks from a draft" }] });
     const api = createApi({ fetchImpl });

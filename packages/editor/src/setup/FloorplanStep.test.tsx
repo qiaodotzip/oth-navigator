@@ -1,11 +1,18 @@
 import { parseModel, type Level, type PlanSource } from "@oth/model";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { LevelImage } from "../api/client";
 import { useDrafts } from "../build/drafts";
+import { findRoomsInDrawing } from "../pdf/findInDrawing";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
+import { useToasts } from "../ui/toast";
 import { FloorplanStep } from "./FloorplanStep";
+
+vi.mock("../pdf/findInDrawing", async importOriginal => ({
+  ...(await importOriginal<typeof import("../pdf/findInDrawing")>()),
+  findRoomsInDrawing: vi.fn(),
+}));
 
 type Measure = (entries: { contentRect: { width: number; height: number } }[]) => void;
 let measure: Measure | null = null;
@@ -48,9 +55,9 @@ beforeEach(() => {
   s.setActiveLevel("oth-L2");
 });
 
-function open(images: LevelImage[] = []) {
+function open(images: LevelImage[] = [], api = fakeApi()) {
   useEditorStore.getState().setLevelImages(images);
-  const view = render(<FloorplanStep api={fakeApi()} level={L2} />);
+  const view = render(<FloorplanStep api={api} level={L2} />);
   act(() => measure?.([{ contentRect: { width: 900, height: 600 } }]));
   return view;
 }
@@ -78,6 +85,26 @@ describe("FloorplanStep", () => {
     open([plan({ metresPerPixel: null })]);
     expect(guide().getByText("Set the plan's scale on the Floorplan step first.")).toBeTruthy();
     expect(guide().getByRole("button", { name: "Find rooms in the drawing" })).toBeDisabled();
+  });
+
+  it("loads the floor's drafts afresh each time it opens, as Back and Next bring you here", async () => {
+    const api = fakeApi();
+    const { unmount } = open([plan()], api);
+    expect(api.listRoomDrafts).toHaveBeenCalledWith("oth-L2");
+    unmount();
+    open([plan()], api);
+    expect(api.listRoomDrafts).toHaveBeenCalledTimes(2);
+    await act(async () => {});
+  });
+
+  it("says Claude makes the stops Find rooms leaves out, in step 5", async () => {
+    useToasts.getState().clear();
+    (findRoomsInDrawing as unknown as Mock).mockResolvedValue({ drafts: [], rooms: 199, open: 0, skipped: ["Escalator 7", "Escalator 8"] });
+    open([plan()]);
+    fireEvent.click(guide().getByRole("button", { name: "Find rooms in the drawing" }));
+    await waitFor(() => expect(useToasts.getState().toasts.at(-1)?.message).toBe(
+      "Found 199 rooms in the drawing. 2 escalators and stairs left out: Claude makes lifts, escalators and stairs into stops in step 5.",
+    ));
   });
 
   it("puts Select back in hand when you move on", () => {

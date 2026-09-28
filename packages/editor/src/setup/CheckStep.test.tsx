@@ -85,7 +85,9 @@ describe("CheckStep", () => {
       "Rooms made from drafts 1", "Drafts rejected or set aside 1", "Objects placed 2", "Pathways 1",
     ]);
     expect(screen.queryByTestId("change-a_tag")).toBeNull();
-    expect(screen.getByText("Claude's 1 survey label isn't listed here: Review is where they're checked.")).toBeTruthy();
+    expect(screen.getByText(/survey label isn't listed here/).textContent)
+      .toBe("Claude's 1 survey label isn't listed here: they're checked at step 3, Review Claude's labels.");
+    expect(screen.getByRole("link", { name: "step 3, Review Claude's labels" }).getAttribute("href")).toBe("/floors/L1/setup/3");
   });
 
   it("asks for every change there is, and says so, on a floor never set up", async () => {

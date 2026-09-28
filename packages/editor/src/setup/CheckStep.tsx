@@ -1,6 +1,7 @@
 import type { Level, MapModel } from "@oth/model";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isUnauthorized, type Api } from "../api/client";
+import { followLink, href } from "../route";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
@@ -10,6 +11,7 @@ import { toast } from "../ui/toast";
 import { checkSections, objectFrames, showTarget, undoRefusal } from "./check";
 import { EPOCH } from "./progress";
 import { SetupMap, type MapFocus } from "./SetupMap";
+import { stepNumber, wizardStep } from "./steps";
 import type { ClaudeChange, SetupApi } from "./types";
 
 /** Frame thumbnails are 64 px wide; 160 covers a 2x screen. */
@@ -54,6 +56,7 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
   }, [load]);
 
   const { sections, labels } = useMemo(() => checkSections(changes ?? []), [changes]);
+  const review = href({ name: "setup", code: level.code, step: stepNumber("review"), params: {} });
 
   function show(change: ClaudeChange): void {
     const target = showTarget(useEditorStore.getState().model, change, level.id);
@@ -142,7 +145,11 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
           {labels > 0 && (
             <p className="text-xs text-stone-600">
               {labels === 1 ? "Claude's 1 survey label isn't listed here" : `Claude's ${labels} survey labels aren't listed here`}
-              : Review is where they're checked.
+              : they're checked at{" "}
+              <a href={review} onClick={followLink(review)} className="font-medium text-accent underline">
+                step {stepNumber("review")}, {wizardStep("review").title}
+              </a>
+              .
             </p>
           )}
         </div>
@@ -151,7 +158,7 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
           <p className="text-xs text-stone-600">Anything still in the list stays on the map.</p>
         </footer>
       </section>
-      <SetupMap api={api} focus={focus} />
+      <SetupMap api={api} focus={focus} keepSelection />
     </div>
   );
 }

@@ -14,9 +14,16 @@ export type MapFocus = { target: NonNullable<Selection>; seq: number };
 /**
  * The floor's plan beside a step (spec §4.2, §8): what Claude has put on it so
  * far, with the rooms' names. It draws nothing itself; a click selects, as on
- * Build.
+ * Build, but only where `keepSelection` says so (Check, whose Show selects).
+ * Elsewhere Claude is at work, and a selection is also the collaboration
+ * lock: a room held here would turn Claude's writes to it away. So any
+ * selection is let go at once, one brought from Build included.
  */
-export function SetupMap({ api, focus = null }: { api: Pick<Api, "levelImageFileUrl">; focus?: MapFocus | null }) {
+export function SetupMap({ api, focus = null, keepSelection = false }: {
+  api: Pick<Api, "levelImageFileUrl">;
+  focus?: MapFocus | null;
+  keepSelection?: boolean;
+}) {
   const model = useEditorStore(s => s.model);
   const levelId = useEditorStore(s => s.activeLevelId);
   const selection = useEditorStore(s => s.selection);
@@ -27,6 +34,10 @@ export function SetupMap({ api, focus = null }: { api: Pick<Api, "levelImageFile
   useEffect(() => {
     useEditorStore.getState().setTool("select");
   }, []);
+
+  useEffect(() => {
+    if (!keepSelection && selection) useEditorStore.getState().select(null);
+  }, [keepSelection, selection]);
 
   // Leaving lets go of the selection, which is also the collaboration lock.
   useEffect(() => () => useEditorStore.getState().select(null), []);

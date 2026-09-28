@@ -102,12 +102,7 @@ export function FootageStep({ api, saver, level }: {
           <h2 className="text-sm font-semibold text-stone-700">Not filed under a floor yet</h2>
           <ul className="divide-y divide-stone-200 rounded border border-yours/30 bg-yours-soft">
             {unfiled.map(({ capture, frames }) => (
-              <li
-                key={capture.id}
-                role="status"
-                data-testid={`unfiled-${capture.id}`}
-                className="flex items-center gap-3 p-3 text-sm"
-              >
+              <li key={capture.id} data-testid={`unfiled-${capture.id}`} className="flex items-center gap-3 p-3 text-sm">
                 <span className="min-w-0 flex-1">
                   <strong>{capture.filename}</strong> ({frames === 1 ? "1 frame" : `${frames} frames`}) isn't filed
                   under a floor, so nothing in it counts toward one yet.

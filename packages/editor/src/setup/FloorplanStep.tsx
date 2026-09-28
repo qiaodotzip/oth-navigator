@@ -1,6 +1,7 @@
 import type { Level } from "@oth/model";
 import { useEffect, useMemo } from "react";
 import type { Api } from "../api/client";
+import { loadDrafts } from "../build/drafts";
 import { DraftsFind } from "../build/DraftsFind";
 import { DraftsOnPlan } from "../build/DraftsOnPlan";
 import { FloorplanTools, PlanDropZone, patchPlan } from "../build/FloorplanTools";
@@ -32,6 +33,12 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
   // Measure and Align are this step's tools. Moving on puts Select back in hand.
   useEffect(() => () => useEditorStore.getState().setTool("select"), []);
 
+  // The floor's drafts as they are now: Claude may have decided some at step
+  // 5 since they were loaded, and Back brings you here after it.
+  useEffect(() => {
+    void loadDrafts(api, level.id);
+  }, [api, level.id]);
+
   // Only the drop box takes a file, as on Build. A file let go anywhere else
   // would be opened by the browser in place of the editor.
   useRefuseWindowFileDrop();
@@ -57,7 +64,7 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
         extras={<>
           <FloorplanTools api={api} />
           <div className="border-t border-stone-200 pt-2">
-            <DraftsFind api={api} />
+            <DraftsFind api={api} inSetup />
           </div>
         </>}
       />

@@ -1,6 +1,6 @@
 import { parseModel } from "@oth/model";
 import { vi } from "vitest";
-import type { Api } from "../api/client";
+import type { Api, SetupState } from "../api/client";
 
 /**
  * A small real-shaped model for shell and screen tests: two floors with
@@ -25,6 +25,23 @@ export const sampleTeam = [
   { id: "u_sc", displayName: "Stef Chan" },
   { id: "u_wei", displayName: "Wei Kang" },
 ];
+
+/**
+ * A floor nobody has started setting up, with nothing counted: the setup
+ * calls' default. The setup tests' own `setupState` builds richer ones.
+ */
+function noSetup(): SetupState {
+  return {
+    steps: [],
+    counts: {
+      label: { tagged: 0, binned: 0, left: 0 },
+      review: { left: 0 },
+      rooms: { waiting: 0, setAside: 0, accepted: 0, rejected: 0, stops: 0 },
+      things: { bound: 0, unbound: 0, objects: [] },
+      paths: { pathways: 0, entrances: 0, unreachable: 0 },
+    },
+  };
+}
 
 /** Every Api method as a vi.fn with a harmless default; pass overrides for the ones a test cares about. */
 export function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}): Api {
@@ -81,8 +98,8 @@ export function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}): Ap
     rejectRoomDraft: vi.fn().mockResolvedValue({}),
     restoreRoomDraft: vi.fn().mockResolvedValue({}),
     // --- Floor setup and Claude's changes (plan 6C) ---
-    getSetup: vi.fn().mockResolvedValue({ steps: [], counts: null }),
-    setSetupStep: vi.fn().mockResolvedValue({ steps: [], counts: null }),
+    getSetup: vi.fn().mockResolvedValue(noSetup()),
+    setSetupStep: vi.fn().mockResolvedValue(noSetup()),
     listClaudeChanges: vi.fn().mockResolvedValue([]),
     undoChange: vi.fn().mockResolvedValue({ summary: "" }),
     ...overrides,

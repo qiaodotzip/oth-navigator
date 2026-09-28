@@ -124,6 +124,16 @@ export type TokenNotice = { id: string; name: string; createdAt: string };
 /** What an accepted draft became, and the versions its undo sends back. */
 export type AcceptedDraft = { draftId: string; draftVersion: number; roomId: string; roomVersion: number };
 
+/**
+ * Claude's mark on a draft it left for a person (contract v2): whose Claude
+ * Code it was, as a user id, its one-line reason, and when, as ISO. The draft
+ * is still waiting; a person accepting or rejecting it ends the mark.
+ */
+export type DraftSetAside = { by: string; reason: string; at: string };
+
+/** A draft as the floor's drafts list gives it: a set-aside one carries Claude's mark. */
+export type RoomDraftRow = RoomDraft & { setAside?: DraftSetAside };
+
 // --- Floor setup and Claude's changes (plan 6C) ---
 // The same shapes as Plan 6E's setup/types.ts, which is the contract; its
 // setupApi.ts holds the methods below to its SetupApi.
@@ -145,15 +155,26 @@ export type SetupStepState = {
 export type SetupCounts = {
   label: { tagged: number; binned: number; left: number };
   review: { left: number };
-  rooms: { waiting: number; accepted: number; rejectedOrSetAside: number; stops: number };
+  /**
+   * The floor's drafts: `waiting` leaves out those Claude set aside for a
+   * person, which are `setAside`, though they wait too.
+   */
+  rooms: { waiting: number; setAside: number; accepted: number; rejected: number; stops: number };
   things: { bound: number; unbound: number; objects: { kindId: string; name: string; count: number }[] };
-  paths: { pathways: number; entrances: number; unreachable: number };
+  /**
+   * `unreachable`: rooms with at least one doorway that no route reaches.
+   * Null from the light setup, which doesn't work routes out.
+   */
+  paths: { pathways: number; entrances: number; unreachable: number | null };
 };
 
 export type SetupState = { steps: SetupStepState[]; counts: SetupCounts };
 
-/** Spec §8's groups, in the order the check step shows them. */
-export const CHECK_GROUPS = ["rooms", "drafts", "names", "stops", "places", "objects", "pathways", "entrances"] as const;
+/**
+ * Spec §8's groups, in the order the check step shows them. `frames` are
+ * frames Claude binned, which Undo puts back.
+ */
+export const CHECK_GROUPS = ["rooms", "drafts", "names", "stops", "places", "objects", "pathways", "entrances", "frames"] as const;
 export type CheckGroup = (typeof CHECK_GROUPS)[number];
 /** Also: Claude's survey labels, which Review checks, and anything else. */
 export type ClaudeChangeGroup = CheckGroup | "labels" | "other";
@@ -496,9 +517,9 @@ export function createApi(options: ApiOptions = {}) {
       return new Uint8Array(await res.arrayBuffer());
     },
 
-    /** The floor's drafts still waiting for review. */
-    listRoomDrafts: async (levelId: string): Promise<RoomDraft[]> =>
-      (await request<{ drafts: RoomDraft[] }>(`/api/levels/${levelId}/drafts`)).drafts,
+    /** The floor's drafts still waiting for review, those Claude set aside for a person with its mark. */
+    listRoomDrafts: async (levelId: string): Promise<RoomDraftRow[]> =>
+      (await request<{ drafts: RoomDraftRow[] }>(`/api/levels/${levelId}/drafts`)).drafts,
 
     /** A new search's drafts in place of the floor's old ones. */
     replaceRoomDrafts: async (levelId: string, body: { source: DraftSource; drafts: RoomDraftInput[] }): Promise<RoomDraft[]> =>
@@ -521,8 +542,13 @@ export function createApi(options: ApiOptions = {}) {
 
     // --- Floor setup and Claude's changes (plan 6C) ---
 
-    /** A floor's setup: its nine steps as stored, and each step's live counts (spec §4.3). */
-    getSetup: (levelId: string) => request<SetupState>(`/api/levels/${levelId}/setup`),
+    /**
+     * A floor's setup: its nine steps as stored, and each step's live counts
+     * (spec §4.3). Light is the cheap one, for the Floors cards: the map isn't
+     * validated, so `paths.unreachable` comes back null.
+     */
+    getSetup: (levelId: string, opts: { light?: boolean } = {}) =>
+      request<SetupState>(`/api/levels/${levelId}/setup${opts.light ? "?light=1" : ""}`),
 
     /** Marks one step, as a person. Answers the whole setup again. */
     setSetupStep: (levelId: string, step: SetupStepId, body: { status: SetupStatus; note?: string }) =>

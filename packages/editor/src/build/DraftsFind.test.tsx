@@ -77,6 +77,16 @@ describe("DraftsFind", () => {
     expect(find.mock.calls[0]![0]).toMatchObject({ levelId: "oth-L2", image: { id: "img_2" } });
   });
 
+  it("in the setup wizard, says Claude makes the stops left out, rather than sending you to do them", async () => {
+    useEditorStore.getState().setLevelImages([plan()]);
+    find.mockResolvedValue({ drafts: [shop], rooms: 1, open: 0, skipped: ["Escalator 7", "Escalator 8"] });
+    render(<DraftsFind api={fakeApi()} inSetup />);
+    fireEvent.click(button());
+    await waitFor(() => expect(lastToast()?.message).toBe(
+      "Found 1 room in the drawing. 2 escalators and stairs left out: Claude makes lifts, escalators and stairs into stops in step 5.",
+    ));
+  });
+
   describe("on a floor searched before", () => {
     const question = () => screen.queryByText(/Find rooms again\?/);
     /** L2's model with one room on it: accepted from the drawing, or traced by hand. */

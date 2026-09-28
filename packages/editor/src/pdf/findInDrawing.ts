@@ -41,12 +41,17 @@ export class DraftsNotSavedError extends Error {
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** What a search found, for the toast (spec §5.2 step 5). */
-export function describeFind(s: Pick<FindSummary, "rooms" | "open" | "skipped">): string {
+/**
+ * What a search found, for the toast (spec §5.2 step 5). In the setup wizard
+ * (`inSetup`), what was left out is Claude's to make into stops at step 5,
+ * so it doesn't send you to do them by hand.
+ */
+export function describeFind(s: Pick<FindSummary, "rooms" | "open" | "skipped">, { inSetup = false } = {}): string {
   const parts = [`Found ${count(s.rooms, "room", "rooms")} in the drawing.`];
   if (s.open > 0) parts.push(`${count(s.open, "open space", "open spaces")} to draw by hand.`);
-  if (s.skipped.length === 1) parts.push("1 escalator or stair left out: mark it on Entrances & lifts.");
-  if (s.skipped.length > 1) parts.push(`${s.skipped.length} escalators and stairs left out: mark them on Entrances & lifts.`);
+  const leftOut = s.skipped.length === 1 ? "1 escalator or stair left out" : `${s.skipped.length} escalators and stairs left out`;
+  if (s.skipped.length > 0 && inSetup) parts.push(`${leftOut}: Claude makes lifts, escalators and stairs into stops in step 5.`);
+  else if (s.skipped.length > 0) parts.push(`${leftOut}: ${s.skipped.length === 1 ? "mark it" : "mark them"} on Entrances & lifts.`);
   return parts.join(" ");
 }
 

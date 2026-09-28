@@ -16,6 +16,7 @@ export const SECTION_LABEL: Record<CheckGroup | "other", string> = {
   objects: "Objects placed",
   pathways: "Pathways",
   entrances: "Entrances",
+  frames: "Frames binned",
   other: "Other changes",
 };
 

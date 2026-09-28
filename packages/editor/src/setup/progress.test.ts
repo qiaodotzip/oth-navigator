@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { LevelImage } from "../api/client";
 import {
   EPOCH, autoDone, cardLink, countRows, doneLine, firstOpenStep, notDoneLine, setupSince, sinceParam, stepDone,
-  type StepContext,
+  stepsLeft, stoppedLine, type StepContext,
 } from "./progress";
-import { STEP_COUNT, WIZARD_STEPS, doItMyself, slashCommand, stepAt, stepNumber } from "./steps";
+import { STEP_COUNT, STEP_GROUPS, WIZARD_STEPS, doItMyself, slashCommand, stepAt, stepNumber } from "./steps";
 import { NO_COUNTS, setupState } from "./testing";
 import { SETUP_STEP_IDS } from "./types";
 
@@ -63,6 +63,15 @@ describe("the nine steps", () => {
     expect(doItMyself("things", "L1")).toEqual({ label: "Do it myself on the Places tab", to: "/floors/L1/places" });
     expect(doItMyself("paths", "L1")).toEqual({ label: "Do it myself on Build", to: "/floors/L1/build?step=pathways" });
   });
+
+  it("give each Claude step its own groups of Claude's changes", () => {
+    expect(STEP_GROUPS).toEqual({
+      label: ["labels", "frames"],
+      rooms: ["rooms", "drafts", "names", "stops"],
+      things: ["places", "objects"],
+      paths: ["pathways", "entrances"],
+    });
+  });
 });
 
 describe("a step's tick", () => {
@@ -81,12 +90,23 @@ describe("a step's tick", () => {
 
   it("ticks Review once Claude has labelled and nothing waits, and says how much does", () => {
     expect(notDoneLine("review", on("L1"))).toBe("Claude hasn't labelled the survey yet.");
+    // Claude has tagged frames but not finished: it is under way.
+    const underWay = setupState({}, { label: { tagged: 26, binned: 18, left: 60 } });
+    expect(notDoneLine("review", on("L1", { setup: underWay }))).toBe("Claude hasn't finished labelling yet.");
     const labelled = setupState({ label: done });
     expect(notDoneLine("review", on("L1", { setup: labelled }))).toBe("1 label is waiting for you.");
     expect(stepDone("review", on("L1", { setup: labelled, model: reviewed }))).toBe(true);
     // Before Claude has labelled, nothing waits either: that is not done.
     expect(autoDone("review", on("L1", { model: reviewed }))).toBe(false);
     expect(stepDone("review", on("L1", { setup: setupState({ review: { status: "skipped" } }) }))).toBe(true);
+  });
+
+  it("waits in Review while the server still counts labels waiting, whatever an old map says", () => {
+    // The map was loaded before Claude labelled: it shows nothing waiting, the server shows 50.
+    const counted = setupState({ label: done }, { review: { left: 50 } });
+    expect(stepDone("review", on("L1", { setup: counted, model: reviewed }))).toBe(false);
+    expect(notDoneLine("review", on("L1", { setup: counted, model: reviewed }))).toBe("50 labels are waiting for you.");
+    expect(stepDone("review", on("L1", { setup: setupState({ label: done }), model: reviewed }))).toBe(true);
   });
 
   it("says what the Floorplan step still needs, in the order it is done", () => {
@@ -100,8 +120,10 @@ describe("a step's tick", () => {
 
   it("knows Find rooms has run from the server's drafts, the drafts store, or rooms from the drawing", () => {
     const withPlan = { levelImages: [plan()] };
-    const found = setupState({}, { rooms: { waiting: 0, accepted: 0, rejectedOrSetAside: 3, stops: 0 } });
+    const found = setupState({}, { rooms: { waiting: 0, setAside: 0, accepted: 0, rejected: 3, stops: 0 } });
     expect(stepDone("floorplan", on("L1", { ...withPlan, setup: found }))).toBe(true);
+    const setAside = setupState({}, { rooms: { waiting: 0, setAside: 2, accepted: 0, rejected: 0, stops: 0 } });
+    expect(stepDone("floorplan", on("L1", { ...withPlan, setup: setAside }))).toBe(true);
     expect(stepDone("floorplan", on("L1", { ...withPlan, draftsWaiting: 4 }))).toBe(true);
     const fromPdf = parseModel({
       ...model,
@@ -131,6 +153,22 @@ describe("where the wizard opens", () => {
     expect(cardLink(on("L1", { setup: setupState({ finish: done }) })))
       .toEqual({ label: "Set up again", to: "/floors/L1/setup/1", restart: true });
   });
+
+  it("continues at Review, not past it, while the server counts labels waiting that an old map doesn't show", () => {
+    const labelled = setupState(
+      { footage: { status: "done", finishedAt: "2026-09-28T09:00:00.000Z" }, label: done }, { review: { left: 12 } },
+    );
+    expect(cardLink(on("L1", { setup: labelled, model: reviewed })))
+      .toEqual({ label: "Continue: step 3 of 9", to: "/floors/L1/setup/3", restart: false });
+  });
+
+  it("names the steps before Finish still not done", () => {
+    expect(stepsLeft(on("L1"))).toEqual([2, 3, 4, 5, 6, 7, 8]);
+    const most = setupState({ label: done, review: { status: "skipped" }, floorplan: done, rooms: done, things: done, check: done });
+    expect(stepsLeft(on("L1", { setup: most }))).toEqual([7]);
+    const all = setupState(Object.fromEntries(SETUP_STEP_IDS.map(id => [id, done])));
+    expect(stepsLeft(on("L1", { setup: all }))).toEqual([]);
+  });
 });
 
 describe("since when the check looks", () => {
@@ -147,20 +185,37 @@ describe("since when the check looks", () => {
     expect(setupSince(setupState())).toBeNull();
     expect(sinceParam(null)).toBe(EPOCH);
   });
+
+  it("asks for every change there is when Add footage was stored after another step finished", () => {
+    // The stamp failed, and was stored late: Claude's labelling began before it.
+    const late = setupState({
+      footage: { status: "done", finishedAt: "2026-09-28T10:00:00.000Z" },
+      label: { status: "done", finishedAt: "2026-09-28T09:40:00.000Z" },
+    });
+    expect(setupSince(late)).toBeNull();
+    expect(sinceParam(late)).toBe(EPOCH);
+  });
 });
 
 describe("words", () => {
   it("names each Claude step's counts", () => {
     const counts = {
       ...NO_COUNTS,
-      rooms: { waiting: 12, accepted: 150, rejectedOrSetAside: 53, stops: 8 },
+      rooms: { waiting: 12, setAside: 184, accepted: 150, rejected: 1, stops: 8 },
       things: { bound: 30, unbound: 5, objects: [{ kindId: "ok_bin", name: "wastebin", count: 5 }] },
+      paths: { pathways: 38, entrances: 0, unreachable: null },
     };
     expect(countRows("rooms", counts)).toEqual([
       { label: "Drafts waiting", value: 12 },
       { label: "Made rooms", value: 150 },
-      { label: "Rejected or set aside", value: 53 },
+      { label: "Set aside for you", value: 184 },
+      { label: "Rejected", value: 1 },
       { label: "Stops made", value: 8 },
+    ]);
+    expect(countRows("paths", counts)).toEqual([
+      { label: "Pathways", value: 38 },
+      { label: "Entrances", value: 0 },
+      { label: "Rooms with a door no route reaches", value: null },
     ]);
     expect(countRows("things", counts).map(r => r.label)).toEqual(["Places bound", "Places not bound yet", "Objects placed: wastebin"]);
     expect(countRows("things", NO_COUNTS).at(-1)).toEqual({ label: "Objects placed", value: 0 });
@@ -177,5 +232,31 @@ describe("words", () => {
     expect(doneLine({ ...base, status: "skipped", finishedBy: "u_gone", finishedVia: null, finishedAt: null }, team, now))
       .toBe("Skipped by a teammate");
     expect(doneLine(null, team, now)).toBeNull();
+  });
+
+  it("says Claude stopped with work left when it finished a step the counts show undone", () => {
+    const now = Date.parse("2026-09-28T10:00:00.000Z");
+    const byClaude = (step: "label" | "rooms" | "things" | "paths", note = "") => ({
+      step, status: "done" as const, note, finishedBy: "u_sc", finishedVia: "tok_1", finishedAt: "2026-09-28T09:55:00.000Z",
+    });
+    const counts = {
+      ...NO_COUNTS,
+      label: { tagged: 339, binned: 47, left: 1 },
+      rooms: { waiting: 12, setAside: 0, accepted: 30, rejected: 1, stops: 3 },
+      things: { bound: 6, unbound: 13, objects: [] },
+      paths: { pathways: 38, entrances: 0, unreachable: 167 },
+    };
+    expect(stoppedLine(byClaude("label"), counts, now)).toBe("Claude stopped with 1 frame left, 5 minutes ago");
+    expect(stoppedLine(byClaude("rooms"), counts, now)).toBe("Claude stopped with 12 drafts waiting, 5 minutes ago");
+    expect(stoppedLine(byClaude("things", "Bound 0 new places"), counts, now))
+      .toBe("Claude stopped with 13 places not bound, 5 minutes ago: Bound 0 new places");
+    expect(stoppedLine(byClaude("paths"), counts, now))
+      .toBe("Claude stopped with 167 rooms with a door no route reaches, 5 minutes ago");
+    // Nothing left, a person's Mark done, an open step, or a count not known: no such line.
+    expect(stoppedLine(byClaude("things"), { ...counts, things: { bound: 19, unbound: 0, objects: [] } }, now)).toBeNull();
+    expect(stoppedLine({ ...byClaude("things"), finishedVia: null }, counts, now)).toBeNull();
+    expect(stoppedLine({ ...byClaude("things"), status: "open" as const }, counts, now)).toBeNull();
+    expect(stoppedLine(byClaude("paths"), { ...counts, paths: { pathways: 38, entrances: 0, unreachable: null } }, now)).toBeNull();
+    expect(stoppedLine(null, counts, now)).toBeNull();
   });
 });

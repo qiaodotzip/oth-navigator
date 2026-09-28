@@ -35,8 +35,16 @@ export const useSetupStore = create<SetupStore>(set => ({
   reset: () => set({ byLevel: {}, failed: {} }),
 }));
 
-/** Each floor's newest load. An answer to an older one is dropped, as the drafts' loads are. */
+/**
+ * Each floor's newest load, or setup a PUT answered with. An answer to an
+ * older load is dropped, as the drafts' loads are.
+ */
 const asked = new Map<string, number>();
+const ask = (levelId: string): number => {
+  const mine = (asked.get(levelId) ?? 0) + 1;
+  asked.set(levelId, mine);
+  return mine;
+};
 
 /**
  * A floor's setup from the server, into the store. Null when there is none
@@ -44,13 +52,17 @@ const asked = new Map<string, number>();
  * the last setup and marks the floor, for one quiet line rather than a toast:
  * a Claude step asks every 5 s. A 401 has already opened the sign-in dialog.
  * Before 6C's client lands `getSetup` is missing, and that fails here too.
+ *
+ * `light` asks for the cheap setup, which doesn't count the rooms no route
+ * reaches (`paths.unreachable` is null): for the Floors cards and Review.
  */
-export async function loadSetup(api: Pick<SetupApi, "getSetup">, levelId: string): Promise<SetupState | null> {
-  const mine = (asked.get(levelId) ?? 0) + 1;
-  asked.set(levelId, mine);
+export async function loadSetup(
+  api: Pick<SetupApi, "getSetup">, levelId: string, opts?: { light: boolean },
+): Promise<SetupState | null> {
+  const mine = ask(levelId);
   const newest = () => asked.get(levelId) === mine;
   try {
-    const state = await api.getSetup(levelId);
+    const state = await (opts ? api.getSetup(levelId, opts) : api.getSetup(levelId));
     if (!newest()) return null;
     useSetupStore.getState().put(levelId, state);
     return state;
@@ -58,6 +70,16 @@ export async function loadSetup(api: Pick<SetupApi, "getSetup">, levelId: string
     if (newest() && !isUnauthorized(err)) useSetupStore.getState().fail(levelId);
     return null;
   }
+}
+
+/**
+ * The setup a PUT answered with, into the store: the server's own word just
+ * after the change, so nothing needs asking again. A load asked before it
+ * that answers after is older, and is dropped.
+ */
+export function putSetup(levelId: string, state: SetupState): void {
+  ask(levelId);
+  useSetupStore.getState().put(levelId, state);
 }
 
 /**

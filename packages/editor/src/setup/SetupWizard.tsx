@@ -1,3 +1,4 @@
+import type { MapModel } from "@oth/model";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { Api } from "../api/client";
 import { useRoomDrafts } from "../build/drafts";
@@ -15,10 +16,10 @@ import { FinishStep } from "./FinishStep";
 import { FloorplanStep } from "./FloorplanStep";
 import { FootageStep } from "./FootageStep";
 import {
-  autoDone, doneLine, firstOpenStep, notDoneLine, sinceParam, stepDone, storedState, type StepContext,
+  autoDone, doneLine, firstOpenStep, notDoneLine, sinceParam, stepDone, stepsLeft, storedState, type StepContext,
 } from "./progress";
 import { STEP_COUNT, stepAt, stepNumber, wizardStep } from "./steps";
-import { loadSetup, useSetupStore, useStepContext } from "./sync";
+import { loadSetup, putSetup, useSetupStore, useStepContext } from "./sync";
 import type { SetupApi, SetupStepId } from "./types";
 
 /**
@@ -58,6 +59,26 @@ export function SetupWizard({ api, route }: { api: Api & SetupApi; route: SetupR
     if (levelId) void loadSetup(api, levelId);
   }, [api, levelId, route.step]);
 
+  // The map too: it was loaded when the editor opened, and Claude may have
+  // worked on the floor since, so a step's ticks and its map read the server
+  // as it is now. A reload that fails leaves the map as it was; the next step tries again.
+  useEffect(() => {
+    if (levelId) saver.refresh().catch(() => {});
+  }, [saver, levelId, route.step]);
+
+  // Review's tick reads the server's count of labels waiting as well as the
+  // map's. Each decision reloads the map; the cheap setup follows it, so the
+  // two agree. Not on arrival: the step's own load is on its way then.
+  const reviewedModel = useRef<MapModel | null>(null);
+  useEffect(() => {
+    if (stepId !== "review" || !levelId) {
+      reviewedModel.current = null;
+      return;
+    }
+    if (reviewedModel.current && reviewedModel.current !== model) void loadSetup(api, levelId, { light: true });
+    reviewedModel.current = model;
+  }, [api, levelId, stepId, model]);
+
   // No step in the address, or none of the nine: the first not done, written in.
   // A setup that can't be loaded still gets one, worked out from the map.
   useEffect(() => {
@@ -67,19 +88,21 @@ export function SetupWizard({ api, route }: { api: Api & SetupApi; route: SetupR
 
   // Past Add footage, with footage filed and the step not stored yet: store it
   // now. That moment is when this run's step 2 began, which the check lists
-  // Claude's changes from (spec §8). Once a visit; tried again if it failed.
+  // Claude's changes from (spec §8). Once a visit; one that failed is tried
+  // again at the next step (setupSince drops a stamp that lands too late).
   const stamped = useRef<string | null>(null);
   const stamp = ctx !== null && stepId !== null && stepId !== "footage" && autoDone("footage", ctx)
     && storedState(ctx.setup, "footage")?.status === "open";
   useEffect(() => {
     if (!stamp || !levelId || stamped.current === levelId) return;
     stamped.current = levelId;
-    api.setSetupStep(levelId, "footage", { status: "done" })
-      .then(() => loadSetup(api, levelId))
-      .catch(() => {
+    api.setSetupStep(levelId, "footage", { status: "done" }).then(
+      state => putSetup(levelId, state),
+      () => {
         stamped.current = null;
-      });
-  }, [stamp, api, levelId]);
+      },
+    );
+  }, [stamp, api, levelId, route.step]);
 
   if (!model || !level || !ctx || activeLevelId !== level.id) {
     return <p className="p-8 text-sm text-stone-500">Loading the floor…</p>;
@@ -88,10 +111,13 @@ export function SetupWizard({ api, route }: { api: Api & SetupApi; route: SetupR
 
   const go = (n: number) => navigate(href({ name: "setup", code: level.code, step: n, params: {} }));
 
-  /** Stores a step as done or skipped, then reloads the setup. False, and said, when it didn't land. */
+  /**
+   * Stores a step as done or skipped, and keeps the setup the server answers
+   * with: no second load. False, and said, when it didn't land.
+   */
   const store = async (step: SetupStepId, status: "done" | "skipped"): Promise<boolean> => {
     try {
-      await api.setSetupStep(level.id, step, { status });
+      putSetup(level.id, await api.setSetupStep(level.id, step, { status }));
     } catch (err) {
       reportFailure(err, {
         doing: status === "skipped" ? "skip the step" : "mark the step done",
@@ -101,7 +127,6 @@ export function SetupWizard({ api, route }: { api: Api & SetupApi; route: SetupR
       });
       return false;
     }
-    await loadSetup(api, level.id);
     return true;
   };
 
@@ -131,6 +156,7 @@ export function SetupWizard({ api, route }: { api: Api & SetupApi; route: SetupR
             api={api}
             level={level}
             state={storedState(ctx.setup, "finish")}
+            left={stepsLeft(ctx)}
             onFinish={() => void store("finish", "done").then(ok => {
               if (ok) navigate(href({ name: "floor", code: level.code, tab: "build", params: {} }));
             })}
@@ -161,7 +187,12 @@ export function SetupWizard({ api, route }: { api: Api & SetupApi; route: SetupR
 /**
  * Back, where you are, whether it is done, the one-line warning, Leave setup
  * and Next. Check and Finish have their own buttons, Looks right and Finish
- * setup, so they get no Mark done; only Review can be skipped.
+ * setup, so they get no Mark done; only Review can be skipped. On Check,
+ * Looks right is the one main button, so Next is a plain one there.
+ *
+ * Where you are takes the focus as the step changes, so a screen reader
+ * starts from the new step, not from a button that has gone. The warning is
+ * one live region whose words change, so it is heard as they do.
  */
 function BottomBar({ ctx, stepId, onBack, onNext, onLeave, onMark, onSkip }: {
   ctx: StepContext;
@@ -178,11 +209,18 @@ function BottomBar({ ctx, stepId, onBack, onNext, onLeave, onMark, onSkip }: {
   const done = stepDone(stepId, ctx);
   const warning = notDoneLine(stepId, ctx);
   const ownButton = stepId === "check" || stepId === "finish";
+  const where = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    where.current?.focus();
+  }, [stepId]);
 
   return (
     <section aria-label="Setup controls" className="flex shrink-0 items-center gap-3 border-t border-stone-200 bg-white px-4 py-2">
       <Button size="sm" disabled={n === 1} onClick={onBack}>Back</Button>
-      <span className="shrink-0 text-sm font-medium">Step {n} of {STEP_COUNT}: {wizardStep(stepId).title}</span>
+      <span ref={where} tabIndex={-1} className="shrink-0 text-sm font-medium outline-none">
+        Step {n} of {STEP_COUNT}: {wizardStep(stepId).title}
+      </span>
       {stored ? (
         <span className="shrink-0 text-xs text-stone-600"><span aria-hidden>✓ </span>{stored}</span>
       ) : done ? (
@@ -193,15 +231,19 @@ function BottomBar({ ctx, stepId, onBack, onNext, onLeave, onMark, onSkip }: {
           {stepId === "review" && <Button size="sm" variant="ghost" onClick={onSkip}>Skip</Button>}
         </>
       )}
-      {warning && (
-        <p role="status" className="min-w-0 truncate text-xs text-yours">
-          <span aria-hidden className="font-semibold">! </span>
-          {warning}
-        </p>
-      )}
+      <p role="status" className="min-w-0 truncate text-xs text-yours">
+        {warning && (
+          <>
+            <span aria-hidden className="font-semibold">! </span>
+            {warning}
+          </>
+        )}
+      </p>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <Button size="sm" variant="ghost" onClick={onLeave}>Leave setup</Button>
-        {n < STEP_COUNT && <Button size="sm" variant="primary" onClick={onNext}>Next</Button>}
+        {n < STEP_COUNT && (
+          <Button size="sm" variant={stepId === "check" ? "secondary" : "primary"} onClick={onNext}>Next</Button>
+        )}
       </div>
     </section>
   );

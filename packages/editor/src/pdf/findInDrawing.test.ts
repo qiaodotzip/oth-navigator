@@ -206,4 +206,11 @@ describe("describeFind", () => {
     expect(describeFind({ rooms: 190, open: 4, skipped: ["Escalator 7", "Escalator 8"] }))
       .toBe("Found 190 rooms in the drawing. 4 open spaces to draw by hand. 2 escalators and stairs left out: mark them on Entrances & lifts.");
   });
+
+  it("in the setup wizard, says Claude makes them stops in step 5", () => {
+    expect(describeFind({ rooms: 3, open: 0, skipped: ["Escalator"] }, { inSetup: true }))
+      .toBe("Found 3 rooms in the drawing. 1 escalator or stair left out: Claude makes lifts, escalators and stairs into stops in step 5.");
+    expect(describeFind({ rooms: 199, open: 16, skipped: Array(8).fill("Escalator") }, { inSetup: true }))
+      .toBe("Found 199 rooms in the drawing. 16 open spaces to draw by hand. 8 escalators and stairs left out: Claude makes lifts, escalators and stairs into stops in step 5.");
+  });
 });

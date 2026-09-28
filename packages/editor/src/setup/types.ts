@@ -34,8 +34,10 @@ export const SETUP_STEP_IDS = [
  * `{ reason: string }`: why, in a sentence ("Wei has bound Starbucks to it since").
  */
 export interface SetupApi {
-  getSetup(levelId: string): Promise<SetupState>;
-  setSetupStep(levelId: string, step: SetupStepId, body: { status: SetupStatus; note?: string }): Promise<unknown>;
+  /** Light is cheap: no routes worked out, so `paths.unreachable` is null. */
+  getSetup(levelId: string, opts?: { light?: boolean }): Promise<SetupState>;
+  /** Answers with the whole setup as the step left it, which the wizard keeps rather than asking again. */
+  setSetupStep(levelId: string, step: SetupStepId, body: { status: SetupStatus; note?: string }): Promise<SetupState>;
   /**
    * `since` is ISO; the wizard sends the epoch to mean every change there
    * is. `limit` caps how many rows come back (the route takes 1–1000).

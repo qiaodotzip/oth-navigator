@@ -4,7 +4,7 @@ import { waitingReview } from "../flow/floorProgress";
 import { href } from "../route";
 import { imageForLevel } from "../state/underlay";
 import { relativeTime } from "../ui/relativeTime";
-import { STEP_COUNT } from "./steps";
+import { STEP_COUNT, stepNumber } from "./steps";
 import { SETUP_STEP_IDS, type SetupCounts, type SetupState, type SetupStepId, type SetupStepState } from "./types";
 
 /** Everything a step's tick is read from. */
@@ -38,7 +38,7 @@ function stored(ctx: StepContext, step: SetupStepId): boolean {
  */
 function roomsFound(ctx: StepContext): boolean {
   const r = ctx.setup?.counts.rooms;
-  if (r && r.waiting + r.accepted + r.rejectedOrSetAside > 0) return true;
+  if (r && r.waiting + r.setAside + r.accepted + r.rejected > 0) return true;
   if (ctx.draftsWaiting > 0) return true;
   return live(ctx.model?.rooms ?? []).some(
     room => room.levelId === ctx.levelId && room.verification.evidence.some(e => e.startsWith("pdf:")),
@@ -56,6 +56,16 @@ export function floorplanGap(ctx: StepContext): string | null {
 }
 
 /**
+ * Labels waiting in Review: the more of the map's count and the server's. The
+ * map may be older than Claude's labelling (the Floors home loads it once);
+ * the server's count may be older than your last decision, until the setup
+ * is asked for again. Either still waiting means Review isn't done.
+ */
+function labelsWaiting(ctx: StepContext): number {
+  return Math.max(waitingReview(ctx.model, ctx.levelId), ctx.setup?.counts.review.left ?? 0);
+}
+
+/**
  * A "you" step's own rule, read off the map (spec §4.1), whatever is stored.
  * Review waits for Claude's labels: with none yet, nothing waits either, and
  * a tick there would say the step was done before it began.
@@ -65,7 +75,7 @@ export function autoDone(step: SetupStepId, ctx: StepContext): boolean {
     case "footage":
       return live(ctx.model?.captures ?? []).some(c => c.levelId === ctx.levelId);
     case "review":
-      return stepDone("label", ctx) && waitingReview(ctx.model, ctx.levelId) === 0;
+      return stepDone("label", ctx) && labelsWaiting(ctx) === 0;
     case "floorplan":
       return floorplanGap(ctx) === null;
     default:
@@ -87,8 +97,13 @@ export function notDoneLine(step: SetupStepId, ctx: StepContext): string | null 
     case "label":
       return "Claude hasn't finished labelling yet.";
     case "review": {
-      if (!stepDone("label", ctx)) return "Claude hasn't labelled the survey yet.";
-      const n = waitingReview(ctx.model, ctx.levelId);
+      if (!stepDone("label", ctx)) {
+        // Frames tagged: Claude has begun, and stopped or is still at it.
+        return (ctx.setup?.counts.label.tagged ?? 0) > 0
+          ? "Claude hasn't finished labelling yet."
+          : "Claude hasn't labelled the survey yet.";
+      }
+      const n = labelsWaiting(ctx);
       return n === 1 ? "1 label is waiting for you." : `${n} labels are waiting for you.`;
     }
     case "floorplan":
@@ -112,6 +127,11 @@ export function firstOpenStep(ctx: StepContext): number {
   return i < 0 ? STEP_COUNT : i + 1;
 }
 
+/** The numbers of the steps before Finish not done or skipped yet: Finish says the floor is set up only with none. */
+export function stepsLeft(ctx: StepContext): number[] {
+  return SETUP_STEP_IDS.filter(step => step !== "finish" && !stepDone(step, ctx)).map(stepNumber);
+}
+
 /** Whether anyone has started this floor's setup: something is stored. */
 export function setupStarted(setup: SetupState | null): boolean {
   return setup?.steps.some(s => s.status !== "open") ?? false;
@@ -126,9 +146,18 @@ export function setupFinished(setup: SetupState | null): boolean {
  * the wizard does the first time it shows a later step (SetupWizard). The
  * check lists Claude's changes from then (spec §8: "since the wizard's step 2
  * began"). Set up again opens every step, so a second run starts afresh.
+ *
+ * A stamp that failed is tried again at the next step, so it can land after
+ * Claude has finished a step: it would then leave that work out of the
+ * check. A stamp later than any other step's finish is no start, and the
+ * check asks for every change there is.
  */
 export function setupSince(setup: SetupState | null): string | null {
-  return storedState(setup, "footage")?.finishedAt ?? null;
+  const start = storedState(setup, "footage")?.finishedAt ?? null;
+  if (!start || !setup) return start;
+  const late = setup.steps.some(s =>
+    s.step !== "footage" && s.status !== "open" && s.finishedAt !== null && Date.parse(s.finishedAt) < Date.parse(start));
+  return late ? null : start;
 }
 
 /** The since the server is sent: the run's start, or every change there is. */
@@ -136,8 +165,8 @@ export function sinceParam(setup: SetupState | null): string {
   return setupSince(setup) ?? EPOCH;
 }
 
-/** A Claude step's live counts (spec §4.3), as a label and a number each. */
-export function countRows(step: SetupStepId, counts: SetupCounts): { label: string; value: number }[] {
+/** A Claude step's live counts (spec §4.3), as a label and a number each: null for one not known, shown as a dash. */
+export function countRows(step: SetupStepId, counts: SetupCounts): { label: string; value: number | null }[] {
   switch (step) {
     case "label":
       return [
@@ -149,7 +178,8 @@ export function countRows(step: SetupStepId, counts: SetupCounts): { label: stri
       return [
         { label: "Drafts waiting", value: counts.rooms.waiting },
         { label: "Made rooms", value: counts.rooms.accepted },
-        { label: "Rejected or set aside", value: counts.rooms.rejectedOrSetAside },
+        { label: "Set aside for you", value: counts.rooms.setAside },
+        { label: "Rejected", value: counts.rooms.rejected },
         { label: "Stops made", value: counts.rooms.stops },
       ];
     case "things":
@@ -164,7 +194,7 @@ export function countRows(step: SetupStepId, counts: SetupCounts): { label: stri
       return [
         { label: "Pathways", value: counts.paths.pathways },
         { label: "Entrances", value: counts.paths.entrances },
-        { label: "Rooms with a door but no route", value: counts.paths.unreachable },
+        { label: "Rooms with a door no route reaches", value: counts.paths.unreachable },
       ];
     default:
       return [];
@@ -182,6 +212,39 @@ export function doneLine(state: SetupStepState | null, team: readonly TeamMember
   const who = state.finishedVia ? "Claude" : team.find(m => m.id === state.finishedBy)?.displayName ?? "a teammate";
   const when = state.finishedAt ? `, ${relativeTime(state.finishedAt, now)}` : "";
   return `${state.status === "skipped" ? "Skipped" : "Done"} by ${who}${when}`;
+}
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** What a Claude step's counts still show undone, as words: "13 places not bound". Null for none, or not known. */
+export function workLeft(step: SetupStepId, counts: SetupCounts): string | null {
+  switch (step) {
+    case "label":
+      return counts.label.left > 0 ? `${count(counts.label.left, "frame", "frames")} left` : null;
+    case "rooms":
+      return counts.rooms.waiting > 0 ? `${count(counts.rooms.waiting, "draft", "drafts")} waiting` : null;
+    case "things":
+      return counts.things.unbound > 0 ? `${count(counts.things.unbound, "place", "places")} not bound` : null;
+    case "paths": {
+      const n = counts.paths.unreachable;
+      return n ? count(n, "room with a door no route reaches", "rooms with a door no route reaches") : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * "Claude stopped with 13 places not bound, 5 minutes ago: <its note>": what
+ * a step Claude finished still shows undone, as a warning in place of Done.
+ * Null unless Claude finished it (finish_step) and the counts show work left.
+ */
+export function stoppedLine(state: SetupStepState | null, counts: SetupCounts, now = Date.now()): string | null {
+  if (!state || state.status !== "done" || !state.finishedVia) return null;
+  const left = workLeft(state.step, counts);
+  if (!left) return null;
+  const when = state.finishedAt ? `, ${relativeTime(state.finishedAt, now)}` : "";
+  return `Claude stopped with ${left}${when}${state.note ? `: ${state.note}` : ""}`;
 }
 
 export type SetupLink = { label: string; to: string; restart: boolean };
