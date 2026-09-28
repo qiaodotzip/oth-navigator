@@ -98,8 +98,8 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
   );
   // The tick and the numbers are both read off `todos`, so neither can disagree with the list.
   const done = useMemo(
-    () => (model && levelId ? buildStepsDone(model, report, levelImages, levelId, todos) : NOTHING_DONE),
-    [model, report, levelImages, levelId, todos],
+    () => (model && levelId ? buildStepsDone(model, report, levelImages, levelId, todos, draftsToReview) : NOTHING_DONE),
+    [model, report, levelImages, levelId, todos, draftsToReview],
   );
   // One set of labels for the plan and the preview, so the two never disagree about a name.
   const labels = useMemo(() => (model && levelId ? roomLabels(model, levelId) : []), [model, levelId]);

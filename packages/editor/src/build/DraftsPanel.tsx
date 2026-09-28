@@ -21,11 +21,37 @@ const KINDS: { value: RoomKind; label: string }[] = [
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
+ * Each open space's name for its buttons. The drawing can print one name
+ * twice (two plazas), and two buttons both called "Plaza" can't be told
+ * apart by ear, so a repeated name is counted: "Plaza (1 of 2)".
+ */
+function openSpaceNames(open: readonly RoomDraft[]): Map<string, string> {
+  const total = new Map<string, number>();
+  for (const d of open) total.set(d.nameEn, (total.get(d.nameEn) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return new Map(open.map(d => {
+    const of = total.get(d.nameEn)!;
+    const n = (seen.get(d.nameEn) ?? 0) + 1;
+    seen.set(d.nameEn, n);
+    return [d.id, of > 1 ? `${d.nameEn} (${n} of ${of})` : d.nameEn];
+  }));
+}
+
+/**
  * The review of a floor's drafts, beside Find rooms in the drawing (spec §5.2
  * step 7). The draft in hand shows its name to correct, its kind and its
  * area. Accept, Reject and Skip each take up the next draft, and the plan
  * frames it. Accept all takes every draft still to review, but never one
  * already on the map: those are accepted one at a time, knowingly.
+ *
+ * "Next" is the list's own order: largest first, as the server sends the
+ * drafts, with those already on the map after the rest when they are shown.
+ * After the last it goes round to the first, so Skip never runs out.
+ *
+ * One decision at a time: while an accept, reject or Done is on its way,
+ * the buttons are off and the keys, Skip's included, do nothing. Skip there
+ * would move the draft in hand, and the decision would then take up the one
+ * after the draft it decided, not after the one you skipped to.
  */
 export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
   const levelId = useEditorStore(s => s.activeLevelId);
@@ -109,7 +135,7 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
     });
   };
   const skip = () => {
-    if (selected) take(nextDraft(shown, selected.id));
+    if (selected && !deciding.current) take(nextDraft(shown, selected.id));
   };
   const acceptAll = () => {
     if (!ctx) return;
@@ -128,10 +154,16 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
     s.setTool("draw-area");
     useDrafts.getState().frameBox(draftBox(d));
   };
+  /** An open space drawn, or not wanted: off the list, with Undo. */
+  const doneWith = (d: RoomDraft) => {
+    if (!ctx) return;
+    void decide(() => rejectDraft(ctx, d, { done: `Took ${d.nameEn} off the list`, undone: `${d.nameEn} is back on the list` }));
+  };
 
   useDraftKeys(selected ? { accept, reject, skip } : null);
 
   if (!levelId || view.review.length + view.covered.length + view.open.length === 0) return null;
+  const openNames = openSpaceNames(view.open);
 
   return (
     <section aria-label="Drafts from the drawing" className="space-y-2">
@@ -176,18 +208,20 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
       )}
       {view.open.length > 0 && (
         <div>
-          <h3 className="text-xs font-semibold text-stone-700">Draw by hand</h3>
+          <h3 className="text-xs font-semibold text-stone-700">{`Draw by hand (${view.open.length})`}</h3>
           <p className="text-xs text-stone-600">The drawing leaves these open, so they have no shape to add.</p>
           <ul className="mt-1 space-y-1">
-            {view.open.map(d => (
-              <li key={d.id} className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => drawByHand(d)}>{d.nameEn}</Button>
-                <Button size="sm" variant="ghost" aria-label={`Done with ${d.nameEn}`}
-                  onClick={() => ctx && void rejectDraft(ctx, d, { done: `Took ${d.nameEn} off the list`, undone: `${d.nameEn} is back on the list` })}>
-                  Done
-                </Button>
-              </li>
-            ))}
+            {view.open.map(d => {
+              const label = openNames.get(d.id) ?? d.nameEn;
+              return (
+                <li key={d.id} className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => drawByHand(d)}>{label}</Button>
+                  <Button size="sm" variant="ghost" aria-label={`Done with ${label}`} disabled={busy} onClick={() => doneWith(d)}>
+                    Done
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

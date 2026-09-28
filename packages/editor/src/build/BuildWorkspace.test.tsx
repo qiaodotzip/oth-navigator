@@ -637,5 +637,7 @@ describe("BuildWorkspace — drafts from the drawing", () => {
     open("/floors/L1/build?step=rooms", { listRoomDrafts: vi.fn().mockResolvedValue([found]) });
     expect(await within(screen.getByRole("region", { name: "To do" })).findByText("1 draft to review.")).toBeTruthy();
     expect(screen.getByText("1 draft to review")).toBeTruthy();
+    // Not done while a draft waits, though nothing there stops Publish.
+    expect(stepper().getByRole("button", { name: /^Areas & rooms/ })).toHaveAccessibleName("Areas & rooms, 2 warnings");
   });
 });

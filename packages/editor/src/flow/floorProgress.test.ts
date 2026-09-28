@@ -1,6 +1,7 @@
 import { parseModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import type { LevelImage } from "../api/client";
+import { stepTodos } from "../build/todo";
 import { buildStepForCode, buildStepsDone, floorProgress, nextStepText, reviewCounts, waitingReview } from "./floorProgress";
 
 const building = { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 };
@@ -93,6 +94,16 @@ describe("buildStepsDone", () => {
       building, levels, rooms: [{ ...library, deletedAt: "2026-09-28T08:00:00.000Z" }], places: bindings,
     });
     expect(buildStepsDone(gone, null, noImages, "oth-L1").bind).toBe(false);
+  });
+
+  it("does not call Areas & rooms done while drafts from the drawing wait for review, and does once none do", () => {
+    const traced = parseModel({ building, levels, rooms: [library] });
+    const waiting = stepTodos(traced, null, noImages, "oth-L1", 25);
+    expect(buildStepsDone(traced, null, noImages, "oth-L1", waiting, 25).rooms).toBe(false);
+    // Still only a warning, so nothing on the step stops Publish.
+    expect(waiting.rooms.every(t => t.severity === "warning")).toBe(true);
+    expect(buildStepsDone(traced, null, noImages, "oth-L1", stepTodos(traced, null, noImages, "oth-L1", 0), 0).rooms).toBe(true);
+    expect(buildStepsDone(traced, null, noImages, "oth-L1").rooms).toBe(true);
   });
 });
 

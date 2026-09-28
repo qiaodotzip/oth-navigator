@@ -25,13 +25,21 @@ export function buildStepsDone(
   levelImages: LevelImage[],
   levelId: string,
   todos: StepTodos = stepTodos(model, report, levelImages, levelId),
+  /**
+   * Drafts from the floor's drawing still to review (Part B). While any wait,
+   * Areas & rooms is not done: the drawing says there are rooms still to add
+   * or turn down. Their to-do stays a warning, so Publish is not stopped.
+   * Drafts are loaded only for the open floor, so the floor cards and the
+   * switcher pass none (Ruling 13).
+   */
+  draftsToReview = 0,
 ): Record<BuildStepId, boolean> {
   const checklist = levelChecklist({ model, levelId, image: imageForLevel(levelImages, levelId), report });
   const done = (id: StepId) => checklist.find(s => s.id === id)?.status === "done";
   const units = floorUnits(model, levelId);
   const there: Record<BuildStepId, boolean> = {
     floorplan: done("floorplan") && done("scale"),
-    rooms: done("rooms"),
+    rooms: done("rooms") && draftsToReview === 0,
     pathways: done("connect"),
     entrances: done("entrances") && done("portals"),
     // Nothing to bind is not the same as bound: a floor with no survey yet is not done.

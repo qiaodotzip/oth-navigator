@@ -137,6 +137,40 @@ describe("DraftsPanel", () => {
     expect(useEditorStore.getState().tool).toBe("select");
   });
 
+  it("sends one accept when A is pressed twice before the first lands", async () => {
+    let land!: (accepted: unknown) => void;
+    const api = setup({ acceptRoomDrafts: vi.fn(() => new Promise(resolve => { land = resolve; })) });
+    hold(shop);
+    key("a");
+    key("a");
+    expect(api.acceptRoomDrafts).toHaveBeenCalledTimes(1);
+    await act(async () => land([{ draftId: "rd_shop", draftVersion: 2, roomId: "L2-shop", roomVersion: 0 }]));
+    await waitFor(() => expect(useDrafts.getState().selectedId).toBe("rd_store"));
+    expect(api.acceptRoomDrafts).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores S while a decision is on its way, so the next draft is the one after the draft decided", async () => {
+    let land!: (accepted: unknown) => void;
+    setup({ acceptRoomDrafts: vi.fn(() => new Promise(resolve => { land = resolve; })) });
+    hold(shop);
+    key("a");
+    key("s");
+    expect(useDrafts.getState().selectedId).toBe("rd_shop");
+    await act(async () => land([{ draftId: "rd_shop", draftVersion: 2, roomId: "L2-shop", roomVersion: 0 }]));
+    await waitFor(() => expect(useDrafts.getState().selectedId).toBe("rd_store"));
+  });
+
+  it("takes up no draft when the reload after a decision no longer has the next one", async () => {
+    // A teammate searched the drawing again meanwhile: the Store Room draft is gone.
+    setup({ listRoomDrafts: vi.fn().mockResolvedValue([copy, plaza]) });
+    hold(shop);
+    fireEvent.click(screen.getByRole("button", { name: "Accept A" }));
+    await waitFor(() => expect(lastToast()?.message).toBe("Added Shop"));
+    await act(async () => {});
+    expect(useDrafts.getState().selectedId).toBeNull();
+    expect(screen.getByText("0 drafts to review")).toBeTruthy();
+  });
+
   it("accepts every draft to review in one go, never one already on the map, with one Undo for them all", async () => {
     const api = setup();
     act(() => useDrafts.getState().setShowCovered(true));
@@ -165,6 +199,30 @@ describe("DraftsPanel", () => {
     expect(useDrafts.getState().frame?.box).toEqual({ minX: 45, minY: 45, maxX: 75, maxY: 75 });
     fireEvent.click(screen.getByRole("button", { name: "Done with Plaza" }));
     await waitFor(() => expect(api.rejectRoomDraft).toHaveBeenCalledWith("rd_plaza", 0));
+  });
+
+  it("counts the open spaces, and tells apart two the drawing names alike", () => {
+    const plaza2 = draft("rd_plaza2", "Plaza", { footprint: undefined, kind: "area", labelPoint: [80, 80], areaM2: 0 });
+    useDrafts.getState().setDrafts("oth-L2", [...all, plaza2]);
+    setup();
+    expect(screen.getByRole("heading", { name: "Draw by hand (2)" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Plaza (1 of 2)" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Done with Plaza (1 of 2)" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Plaza (2 of 2)" }));
+    expect(useDrafts.getState().frame?.box).toEqual({ minX: 65, minY: 65, maxX: 95, maxY: 95 });
+  });
+
+  it("sends one Done while the first is on its way, and keeps the Done buttons off till it lands", async () => {
+    let land!: (answer: unknown) => void;
+    const api = setup({ rejectRoomDraft: vi.fn(() => new Promise(resolve => { land = resolve; })) });
+    const done = screen.getByRole("button", { name: "Done with Plaza" });
+    fireEvent.click(done);
+    fireEvent.click(done);
+    expect(api.rejectRoomDraft).toHaveBeenCalledTimes(1);
+    expect(done).toBeDisabled();
+    await act(async () => land({}));
+    await waitFor(() => expect(lastToast()?.message).toBe("Took Plaza off the list"));
+    expect(screen.getByRole("button", { name: "Done with Plaza" })).toBeEnabled();
   });
 
   it("lets go of the draft in hand to draw an open space, so A and R are Build's again", () => {
