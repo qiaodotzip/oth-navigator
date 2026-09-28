@@ -65,22 +65,31 @@ export function looksLikeToken(value: string): boolean {
 export async function mintToken(
   db: Database, owner: User, input: { name: string; mayPublish: boolean }, now: Date = new Date(),
 ): Promise<{ token: TokenListing; secret: string }> {
-  const live = await db.select({ id: apiTokens.id }).from(apiTokens).where(and(
-    eq(apiTokens.userId, owner.id), isNull(apiTokens.revokedAt), gt(apiTokens.expiresAt, now),
-  ));
-  if (live.length >= MAX_LIVE_TOKENS) throw new TooManyTokensError();
-
   const secret = TOKEN_PREFIX + randomBytes(32).toString("base64url");
   const id = `tok_${randomUUID()}`;
   const expiresAt = new Date(now.getTime() + TOKEN_LIFETIME_DAYS * DAY_MS);
-  await db.insert(apiTokens).values({
-    id, userId: owner.id, name: input.name, tokenHash: hashToken(secret),
-    mayPublish: input.mayPublish, createdAt: now, expiresAt,
-  });
-  // On the record like every other change, but only as the Team page shows
-  // it: the whole team reads audit rows, so neither the token nor its hash.
-  await recordAudit(db, "token", id, "create", owner.id, null, {
-    id, name: input.name, userId: owner.id, mayPublish: input.mayPublish, expiresAt,
+  // One transaction, so a record that fails to write takes its token with it:
+  // no live token exists that the trail never saw made.
+  await db.transaction(async t => {
+    const tx = t as unknown as Database;
+    // The owner's row is locked first, so two tabs making a token at once
+    // count one after the other and cannot both be the fifth. NO KEY UPDATE
+    // rather than UPDATE, so the owner signing in meanwhile is not held up.
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, owner.id)).for("no key update");
+    const live = await tx.select({ id: apiTokens.id }).from(apiTokens).where(and(
+      eq(apiTokens.userId, owner.id), isNull(apiTokens.revokedAt), gt(apiTokens.expiresAt, now),
+    ));
+    if (live.length >= MAX_LIVE_TOKENS) throw new TooManyTokensError();
+
+    await tx.insert(apiTokens).values({
+      id, userId: owner.id, name: input.name, tokenHash: hashToken(secret),
+      mayPublish: input.mayPublish, createdAt: now, expiresAt,
+    });
+    // On the record like every other change, but only as the Team page shows
+    // it: the whole team reads audit rows, so neither the token nor its hash.
+    await recordAudit(tx, "token", id, "create", owner.id, null, {
+      id, name: input.name, userId: owner.id, mayPublish: input.mayPublish, expiresAt,
+    });
   });
   return {
     secret,
@@ -141,10 +150,18 @@ export async function listTokens(db: Database, now: Date = new Date()): Promise<
  * one already revoked changes nothing and says true.
  */
 export async function revokeToken(db: Database, id: string, actorId: string, now: Date = new Date()): Promise<boolean> {
-  const [before] = await db.select().from(apiTokens).where(eq(apiTokens.id, id));
-  if (!before) return false;
-  if (before.revokedAt) return true;
-  await db.update(apiTokens).set({ revokedAt: now, revokedBy: actorId }).where(eq(apiTokens.id, id));
-  await recordAudit(db, "token", id, "revoke", actorId, null, { id, name: before.name, userId: before.userId });
-  return true;
+  return db.transaction(async t => {
+    const tx = t as unknown as Database;
+    // Only the call that actually ends the token writes the record, so two
+    // people revoking it at once leave one row, naming whoever was first.
+    const [ended] = await tx.update(apiTokens).set({ revokedAt: now, revokedBy: actorId })
+      .where(and(eq(apiTokens.id, id), isNull(apiTokens.revokedAt)))
+      .returning({ name: apiTokens.name, userId: apiTokens.userId });
+    if (ended) {
+      await recordAudit(tx, "token", id, "revoke", actorId, null, { id, name: ended.name, userId: ended.userId });
+      return true;
+    }
+    const [exists] = await tx.select({ id: apiTokens.id }).from(apiTokens).where(eq(apiTokens.id, id));
+    return exists !== undefined;
+  });
 }

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createUser, type User } from "../auth/users";
 import type { Database } from "../db/client";
@@ -41,6 +41,23 @@ describe("minting a token", () => {
     await expect(mintToken(db, wei, { name: "sixth", mayPublish: false })).rejects.toBeInstanceOf(TooManyTokensError);
     await revokeToken(db, made[0]!.token.id, wei.id);
     await expect(mintToken(db, wei, { name: "sixth", mayPublish: false })).resolves.toBeTruthy();
+  });
+
+  it("lets no more than five through when several are made at once", async () => {
+    const tries = await Promise.allSettled(
+      Array.from({ length: MAX_LIVE_TOKENS + 2 }, (_, i) => mintToken(db, wei, { name: `t${i}`, mayPublish: false })),
+    );
+    expect(tries.filter(t => t.status === "fulfilled")).toHaveLength(MAX_LIVE_TOKENS);
+    for (const t of tries.filter(t => t.status === "rejected")) {
+      expect((t as PromiseRejectedResult).reason).toBeInstanceOf(TooManyTokensError);
+    }
+    expect(await db.select().from(apiTokens)).toHaveLength(MAX_LIVE_TOKENS);
+  });
+
+  it("leaves no token behind when its making cannot be put on the record", async () => {
+    await db.execute(sql`drop table audit_log`);
+    await expect(mintToken(db, wei, { name: "a", mayPublish: false })).rejects.toThrow();
+    expect(await db.select().from(apiTokens)).toEqual([]);
   });
 
   it("puts the making on the record without the token or its hash", async () => {
@@ -130,5 +147,15 @@ describe("revoking a token", () => {
     expect(await revokeToken(db, token.id, wei.id)).toBe(true);
     const revokes = (await db.select().from(auditLog)).filter(r => r.action === "revoke");
     expect(revokes).toHaveLength(1);
+  });
+
+  it("puts one revoke on the record when two people revoke the same token at once", async () => {
+    const amy = await createUser(db, { email: "amy@example.com", password: "unused", displayName: "Amy" });
+    const { token } = await mintToken(db, wei, { name: "a", mayPublish: false });
+    expect(await Promise.all([revokeToken(db, token.id, wei.id), revokeToken(db, token.id, amy.id)])).toEqual([true, true]);
+    const revokes = (await db.select().from(auditLog)).filter(r => r.action === "revoke");
+    expect(revokes).toHaveLength(1);
+    const [row] = await db.select().from(apiTokens).where(eq(apiTokens.id, token.id));
+    expect(row?.revokedBy).toBe(revokes[0]?.actorId);
   });
 });

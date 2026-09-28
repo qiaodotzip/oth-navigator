@@ -96,4 +96,19 @@ describe("the tokens routes", () => {
     expect((await app.request("/api/tokens", { method: "POST", body: "{}" })).status).toBe(401);
     expect((await app.request("/api/tokens/tok_1", { method: "DELETE" })).status).toBe(401);
   });
+
+  it("refuse a valid Claude Code token in place of a sign-in, so a token can never make or end one", async () => {
+    const made = await json<Made>(await send("POST", "/api/tokens", weiCookie, { name: "Wei's laptop" }));
+    const bearer = (method: string, path: string, body?: unknown) =>
+      app.request(path, {
+        method,
+        headers: { "content-type": "application/json", authorization: `Bearer ${made.secret}` },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    expect((await bearer("GET", "/api/tokens")).status).toBe(401);
+    expect((await bearer("POST", "/api/tokens", { name: "Another" })).status).toBe(401);
+    expect((await bearer("DELETE", `/api/tokens/${made.token.id}`)).status).toBe(401);
+    const listed = await json<{ tokens: TokenListing[] }>(await send("GET", "/api/tokens", weiCookie));
+    expect(listed.tokens).toEqual([made.token]);
+  });
 });
