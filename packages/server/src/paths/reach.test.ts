@@ -34,8 +34,28 @@ describe("reachesOf (contract v4)", () => {
     expect(reachesOf([[0, 2], [20, 2], [20, 3], [0, 2]], ["loop", "loop"], rooms(shop, kiosk))).toEqual([]);
   });
 
-  it("counts a room of any kind, the open area the end stands in too", () => {
-    expect(reachesOf(LINE, ["fork", "end"], rooms({ id: "L1-hall", footprint: rect(-2, -2, 22, 6), kind: "area" }))).toEqual(["L1-hall"]);
+  it("counts a room of any kind the end runs into: an open area too", () => {
+    expect(reachesOf(LINE, ["fork", "end"], rooms({ id: "L1-hall", footprint: rect(19, -2, 30, 6), kind: "area" }))).toEqual(["L1-hall"]);
+  });
+});
+
+describe("reachesOf leaves out the rooms a line runs within (contract v4, amended)", () => {
+  it("gives a stub inside a concourse nothing: the concourse holds its midpoint", () => {
+    const concourse = { id: "L1-concourse", footprint: rect(-10, -10, 20, 20), kind: "area" as const };
+    expect(reachesOf([[0, 2], [3, 2]], ["fork", "end"], rooms(concourse))).toEqual([]);
+  });
+
+  it("gives a dead end from a corridor into a shop the shop, not the corridor it runs along", () => {
+    // The end (20, 2) is in the shop and 1 m from the corridor; the midpoint (10, 2) is in the corridor.
+    const corridor = { id: "L1-corridor", footprint: rect(-5, 0, 19, 4), kind: "area" as const };
+    const shop = { id: "L1-shop", footprint: rect(19, 0, 25, 4) };
+    expect(reachesOf(LINE, ["fork", "end"], rooms(corridor, shop))).toEqual(["L1-shop"]);
+  });
+
+  it("finds the midpoint half the line's length along, not at its middle vertex", () => {
+    // 2 m east, then 18 m north: half of 20 m is (2, 8), in the lobby; the first bend, (2, 0), is not.
+    const lobby = { id: "L1-lobby", footprint: rect(0, 5, 4, 30), kind: "area" as const };
+    expect(reachesOf([[0, 0], [2, 0], [2, 18]], ["fork", "end"], rooms(lobby))).toEqual([]);
   });
 });
 

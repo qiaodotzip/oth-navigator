@@ -26,7 +26,7 @@ function lineBox(line: readonly Vec2[]): Box {
 }
 
 /** How far a point is from a room: 0 inside it, else the nearest of its outline's edges, its holes' too. */
-export function distanceToRoom(p: Vec2, room: Room): number {
+function distanceToRoom(p: Vec2, room: Room): number {
   if (pointInPolygon(p, room.footprint, room.holes)) return 0;
   let best = Infinity;
   for (const ring of [room.footprint, ...room.holes]) {
@@ -35,16 +35,34 @@ export function distanceToRoom(p: Vec2, room: Room): number {
   return best;
 }
 
+/** The point half a line's length along it. */
+export function halfway(line: readonly Vec2[]): Vec2 {
+  const lengths = line.slice(1).map((b, i) => Math.hypot(b[0] - line[i]![0], b[1] - line[i]![1]));
+  let left = lengths.reduce((sum, l) => sum + l, 0) / 2;
+  for (let i = 0; i < lengths.length; i++) {
+    const a = line[i]!;
+    const b = line[i + 1]!;
+    if (left <= lengths[i]! && lengths[i]! > 0) return [a[0] + ((b[0] - a[0]) * left) / lengths[i]!, a[1] + ((b[1] - a[1]) * left) / lengths[i]!];
+    left -= lengths[i]!;
+  }
+  return line[line.length - 1]!;
+}
+
 /**
  * Contract v4's reaches: the ids of the rooms that a line's "end" ends lie
- * inside or within REACH_M of, in id order. Every kind counts, the open area
- * the end stands in too. A line with no "end" end reaches nothing.
+ * inside or within REACH_M of, in id order, of any kind. The amendment
+ * leaves out every room the line's midpoint (halfway) lies in: the line runs
+ * within those, not into them. Read as first written, every dead end reached
+ * the open area it stood in, 61 of 61 on L1. A line with no "end" end
+ * reaches nothing.
  */
 export function reachesOf(line: readonly Vec2[], ends: readonly [End, End], rooms: readonly Room[]): string[] {
   const at = [ends[0] === "end" ? line[0] : null, ends[1] === "end" ? line[line.length - 1] : null].filter((p): p is Vec2 => !!p);
   if (at.length === 0) return [];
+  const mid = halfway(line);
   const out = new Set<string>();
   for (const room of rooms) {
+    if (pointInPolygon(mid, room.footprint, room.holes)) continue;
     const box = bboxOfRing(room.footprint);
     for (const p of at) {
       if (near({ minX: p[0], minY: p[1], maxX: p[0], maxY: p[1] }, box, REACH_M) && distanceToRoom(p, room) <= REACH_M) out.add(room.id);

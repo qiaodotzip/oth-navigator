@@ -144,14 +144,15 @@ describe("suggestPaths", () => {
 
   it("says which rooms a line's dead ends reach and which shops it runs through (contract v4)", () => {
     // Rehearsal 3's p7-02 in small: a corridor drawn over part of a larger Public Service Centre, so the
-    // corridor's floor wins there and its line runs 8 m inside the centre. Only the floor's live rooms count.
+    // corridor's floor wins there and its line runs 8 m inside the centre. Only the floor's live rooms count,
+    // and not the corridor, which holds the line's midpoint: the line runs within it, not into it (v4, amended).
     const { lines } = suggest([
       { id: "L1-corridor", footprint: rect(0, 0, 30, 4) },
       { id: "L1-psc", footprint: rect(20, -20, 50, 3), kind: "room", walkable: false },
       { id: "L2-psc", footprint: rect(20, -20, 50, 3), kind: "room", walkable: false, levelId: "oth-L2" },
       { id: "L1-gone", footprint: rect(20, -20, 50, 3), kind: "room", walkable: false, deletedAt: "2026-09-28T00:00:00.000Z" },
     ]);
-    expect(lines.map(l => [l.ends, l.reaches, l.crosses])).toEqual([[["end", "end"], ["L1-corridor", "L1-psc"], ["L1-psc"]]]);
+    expect(lines.map(l => [l.ends, l.reaches, l.crosses])).toEqual([[["end", "end"], ["L1-psc"], ["L1-psc"]]]);
     // A line with no dead end reaches nothing; a hall with a shop standing in it goes round the shop, crossing nothing.
     const [loop] = suggest([{ id: "L1-hall", footprint: rect(0, 0, 30, 20) }, { id: "L1-shop", footprint: rect(10, 7, 20, 13), kind: "room", walkable: false }]).lines;
     expect([loop!.ends, loop!.reaches, loop!.crosses]).toEqual([["loop", "loop"], [], []]);

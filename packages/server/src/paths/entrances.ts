@@ -1,13 +1,17 @@
 import { bboxOfRing, live, pointInPolygon, type MapModel, type Room, type Vec2 } from "@oth/model";
-import { distanceToRoom } from "./reach";
 
 /** Contract v4: where a gate place is probably, for draw_paths to make its entrance. */
 export type EntranceGuess = { placeId: string; name: string; roomId: string; point: Vec2 };
 
 /** A guess stands this far inside its room (contract v4). */
 export const GUESS_INSET_M = 0.5;
-/** A room's outline is the building's outside where no other room on the floor is within this (contract v4). */
-export const OUTSIDE_M = 0.5;
+/**
+ * A room's outline is the building's outside where the point this far out
+ * from it, away from the room, lies in no room on the floor (contract v4,
+ * amended). The first rule, no other room within 0.5 m, found no outside on
+ * L1's West Concourses: the Stadium's rectangle is traced right over them.
+ */
+export const OUTWARD_M = 1;
 /** A place whose name has one of these words, case aside, is a way in (contract v4). "Gateway" is not. */
 const WAY_IN = /\b(gate|entrance|exit|way in)\b/;
 /** An outline is walked in pieces this long, or a little shorter, to find where it is outside. */
@@ -22,13 +26,17 @@ const cm = (v: number) => Math.round(v * 100) / 100;
 /** A piece of a room's outline: where it starts, which way it runs and how far, which way is into the room, and whether it is outside. */
 type Piece = { from: Vec2; dir: Vec2; length: number; inward: Vec2; outside: boolean };
 
-/** A room's outer ring in pieces, each marked outside when no other room is within OUTSIDE_M of its middle. */
-function piecesOf(room: Room, others: readonly Room[]): Piece[] {
+/**
+ * A room's outer ring in pieces, each marked outside when the point OUTWARD_M
+ * out from its middle lies in no room on the floor, this one included (a
+ * notch in its own outline is not outside).
+ */
+function piecesOf(room: Room, floorRooms: readonly Room[]): Piece[] {
   const ring = room.footprint;
   const box = bboxOfRing(ring);
-  const nearby = others.filter(o => {
+  const nearby = floorRooms.filter(o => {
     const b = bboxOfRing(o.footprint);
-    return b.minX - OUTSIDE_M <= box.maxX && box.minX - OUTSIDE_M <= b.maxX && b.minY - OUTSIDE_M <= box.maxY && box.minY - OUTSIDE_M <= b.maxY;
+    return b.minX - OUTWARD_M <= box.maxX && box.minX - OUTWARD_M <= b.maxX && b.minY - OUTWARD_M <= box.maxY && box.minY - OUTWARD_M <= b.maxY;
   });
   const out: Piece[] = [];
   for (let i = 0; i < ring.length; i++) {
@@ -44,7 +52,8 @@ function piecesOf(room: Room, others: readonly Room[]): Piece[] {
     for (let k = 0; k < count; k++) {
       const along = (t: number): Vec2 => [a[0] + dir[0] * length * t, a[1] + dir[1] * length * t];
       const centre = along((k + 0.5) / count);
-      out.push({ from: along(k / count), dir, length: length / count, inward, outside: !nearby.some(o => distanceToRoom(centre, o) <= OUTSIDE_M) });
+      const beyond: Vec2 = [centre[0] - inward[0] * OUTWARD_M, centre[1] - inward[1] * OUTWARD_M];
+      out.push({ from: along(k / count), dir, length: length / count, inward, outside: !nearby.some(o => pointInPolygon(beyond, o.footprint, o.holes)) });
     }
   }
   return out;
@@ -103,8 +112,8 @@ function insideAt(run: readonly Piece[], s: number, room: Room): Vec2 | null {
  * Contract v4's entranceGuesses. For each confirmed place bound to a room on
  * this floor whose name reads as a way in (WAY_IN), with no live entrance of
  * that name on the floor: a point GUESS_INSET_M inside the room on its
- * longest outside run, the stretch of its outline with no other room on the
- * floor within OUTSIDE_M. Several such places in one room stand evenly along
+ * longest outside run, the stretch of its outline where OUTWARD_M out from it
+ * is in no room on the floor. Several such places in one room stand evenly along
  * that run, in the order of their names. A room with no outside run gives
  * its places no guess. Rehearsal 3's Claude placed no entrance at all, since
  * a place has no point of its own; a person moves a guess in Check.
@@ -122,7 +131,7 @@ export function entranceGuesses(model: MapModel, levelId: string): EntranceGuess
   const out: EntranceGuess[] = [];
   for (const roomId of [...inRoom.keys()].sort()) {
     const room = byId.get(roomId)!;
-    const run = longestRun(piecesOf(room, rooms.filter(r => r.id !== roomId)));
+    const run = longestRun(piecesOf(room, rooms));
     if (run.length === 0) continue;
     const length = run.reduce((sum, p) => sum + p.length, 0);
     const places = inRoom.get(roomId)!.sort((a, b) => a.nameEn.localeCompare(b.nameEn, "en", { numeric: true }) || a.id.localeCompare(b.id));
