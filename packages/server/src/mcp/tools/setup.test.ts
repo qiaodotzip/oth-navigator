@@ -2,7 +2,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createUser, type User } from "../../auth/users";
-import { auditLog, portalEndpoints, portals, rooms } from "../../db/schema";
+import { auditLog, floorSetup, portalEndpoints, portals, rooms } from "../../db/schema";
 import { listDrafts, replaceDrafts } from "../../drafts/service";
 import { createEntity, updateEntity } from "../../entities/repository";
 import { acquireLock } from "../../locks/service";
@@ -146,5 +146,40 @@ describe("decide_drafts", () => {
     const id = await four();
     expect(await call(client, "decide_drafts", { floor: "L1", items: [{ id: id("Sliver"), expectedVersion: 0, decision: "reject", nameEn: "Gap" }] }))
       .toMatchObject({ isError: true, text: `nameEn and kind go with accept only: draft ${id("Sliver")} is a reject.` });
+  });
+});
+
+describe("step_status and finish_step", () => {
+  it("marks Claude's step done with its note, through the token, and step_status shows it", async () => {
+    const { text, isError } = await call(client, "finish_step", { floor: "L1", step: "rooms", note: "Accepted 3, rejected 1" });
+    expect({ text, isError }).toEqual({ text: "Marked step 5, Rooms from the PDF, done on L1, with your note.", isError: false });
+    const [row] = await f.db.select().from(floorSetup);
+    expect(row).toMatchObject({ levelId: "oth-L1", step: 5, status: "done", note: "Accepted 3, rejected 1", finishedBy: f.wei.id, finishedVia: f.tokenId });
+    const [trail] = await f.db.select().from(auditLog).where(eq(auditLog.entityType, "floorSetup"));
+    expect(trail).toMatchObject({ entityId: "oth-L1/rooms", via: f.tokenId });
+
+    const status = JSON.parse((await call(client, "step_status", { floor: "L1" })).text) as {
+      floor: string; steps: { n: number; step: string; status: string; by?: string }[]; counts: unknown;
+    };
+    expect(status.floor).toBe("L1");
+    expect(status.steps[0]).toMatchObject({ n: 1, step: "footage", who: "you", status: "open" });
+    expect(status.steps[4]).toMatchObject({ n: 5, step: "rooms", who: "claude", status: "done", note: "Accepted 3, rejected 1", by: "Wei via Claude Code" });
+    expect(status.counts).toMatchObject({ rooms: { waiting: 0, accepted: 0, rejectedOrSetAside: 0, stops: 0 } });
+  });
+
+  it("says what is still left, without refusing", async () => {
+    await replaceDrafts(f.db, "oth-L1", SOURCE, [drafted("Kiosk", sq(0, 20, 4, 24), 16)], amy.id);
+    expect((await call(client, "finish_step", { floor: "L1", step: "rooms", note: "Stopped early" })).text)
+      .toBe("Marked step 5, Rooms from the PDF, done on L1, with your note. Still left: 1 draft waiting.");
+  });
+
+  it("leaves a person's step to a person, and needs a floor that exists", async () => {
+    expect(await call(client, "finish_step", { floor: "L1", step: "floorplan", note: "Done" })).toMatchObject({
+      isError: true, text: "Step 4, Floorplan, is a person's: they mark it in the app.",
+    });
+    expect(await call(client, "finish_step", { floor: "L9", step: "rooms", note: "Done" })).toMatchObject({
+      isError: true, text: "There is no floor L9. list_floors gives every floor.",
+    });
+    expect(await f.db.select().from(floorSetup)).toEqual([]);
   });
 });

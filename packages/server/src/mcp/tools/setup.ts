@@ -5,12 +5,14 @@ import {
   DraftRefusedError, MAX_DECISIONS, RoomIdTakenError, decideDrafts, floorDrafts, listDrafts, tallyDrafts, type Decided,
 } from "../../drafts/service";
 import { assembleModel } from "../../model/assemble";
+import { UnknownFloorError, getSetup, setStep, type SetupCounts, type SetupState } from "../../setup/service";
+import { SETUP_STEPS, STEP_NAMES, isClaudeStep, stepNumber, type ClaudeStepId } from "../../setup/steps";
 import { StopRefusal, makeStop, type MadeStop } from "../../stops/makeStop";
 import type { ToolContext } from "../context";
 import { refuseIfLocked } from "../guards";
-import { Refusal, count, reply, replyJson, runTool } from "../results";
+import { Refusal, count, reply, replyJson, runTool, singaporeTime } from "../results";
 import { draftList } from "../views";
-import { FLOOR, READ_ONLY, levelFor } from "./read";
+import { FLOOR, READ_ONLY, levelFor, teamNames } from "./read";
 
 const ID = z.string().min(1).max(120);
 const VERSION = z.number().int().min(0).describe("The version you last read, from get or get_floor.");
@@ -26,7 +28,7 @@ async function refusing<T>(work: Promise<T>): Promise<T> {
   try {
     return await work;
   } catch (err) {
-    if (err instanceof StopRefusal || err instanceof DraftRefusedError || err instanceof RoomIdTakenError) throw new Refusal(err.message);
+    if (err instanceof StopRefusal || err instanceof DraftRefusedError || err instanceof RoomIdTakenError || err instanceof UnknownFloorError) throw new Refusal(err.message);
     throw err;
   }
 }
@@ -140,8 +142,63 @@ function registerDraftTools(server: McpServer, ctx: ToolContext): void {
   }, items.map(i => ({ type: "roomDraft", id: i.id, sent: i.expectedVersion }))));
 }
 
+/** What step_status shows Claude: each step plainly, as stored, who finished it, and the counts. */
+function statusView(code: string, state: SetupState, names: ReadonlyMap<string, string>) {
+  return {
+    floor: code,
+    steps: state.steps.map(s => ({
+      n: stepNumber(s.step), step: s.step, name: STEP_NAMES[s.step], who: isClaudeStep(s.step) ? "claude" : "you", status: s.status,
+      ...(s.note ? { note: s.note } : {}),
+      ...(s.finishedBy ? { by: `${names.get(s.finishedBy) ?? s.finishedBy}${s.finishedVia ? " via Claude Code" : ""}` } : {}),
+      ...(s.finishedAt ? { at: singaporeTime(s.finishedAt) } : {}),
+    })),
+    counts: state.counts,
+  };
+}
+
+const LEFT: Record<ClaudeStepId, { noun: string; state: string; n: (c: SetupCounts) => number }> = {
+  label: { noun: "frame", state: "untagged", n: c => c.label.left },
+  rooms: { noun: "draft", state: "waiting", n: c => c.rooms.waiting },
+  things: { noun: "place", state: "not bound to a room", n: c => c.things.unbound },
+  paths: { noun: "room", state: "that no route reaches", n: c => c.paths.unreachable },
+};
+
+function registerStepTools(server: McpServer, ctx: ToolContext): void {
+  server.registerTool("step_status", {
+    title: "Floor setup status",
+    description:
+      "Where a floor's guided setup stands: its nine steps in order, as marked (open, done or skipped) and by whom, and " +
+      "each step's live counts, such as frames left to tag, drafts waiting, places not bound, objects placed and rooms " +
+      "no route reaches. A person's step can read open while the counts show its work done: the app ticks it from the map.",
+    inputSchema: { floor: FLOOR },
+    annotations: READ_ONLY,
+  }, ({ floor }) => runTool(ctx, async () => {
+    const level = levelFor(ctx, await assembleModel(ctx.db), floor);
+    return replyJson(statusView(level.code, await getSetup(ctx.db, level.id), await teamNames(ctx)));
+  }));
+
+  server.registerTool("finish_step", {
+    title: "Finish a setup step",
+    description:
+      "Marks one of your setup steps done on a floor, with a one-line note the setup screen shows beside it. step is " +
+      "label (2), rooms (5), things (6) or paths (7); the others are a person's, marked in the app. Call it once the " +
+      "step's work is done, after your report.",
+    inputSchema: { floor: FLOOR, step: z.enum(SETUP_STEPS), note: z.string().trim().min(1).max(200) },
+    annotations: WRITES,
+  }, ({ floor, step, note }) => runTool(ctx, async () => {
+    const level = levelFor(ctx, await assembleModel(ctx.db), floor);
+    if (!isClaudeStep(step)) throw new Refusal(`Step ${stepNumber(step)}, ${STEP_NAMES[step]}, is a person's: they mark it in the app.`);
+    await refusing(setStep(ctx.db, level.id, step, { status: "done", note }, ctx.user.id, ctx.token.id));
+    const left = LEFT[step];
+    const n = left.n((await getSetup(ctx.db, level.id)).counts);
+    const still = n > 0 ? ` Still left: ${count(n, left.noun)} ${left.state}.` : "";
+    return reply(`Marked step ${stepNumber(step)}, ${STEP_NAMES[step]}, done on ${level.code}, with your note.${still}`);
+  }));
+}
+
 /** Plan 6C's tools for a floor's guided setup (spec §7.2). Each group registers here. */
 export function registerSetupTools(server: McpServer, ctx: ToolContext): void {
   registerStopTools(server, ctx);
   registerDraftTools(server, ctx);
+  registerStepTools(server, ctx);
 }
