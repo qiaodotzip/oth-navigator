@@ -82,6 +82,14 @@ describe("commitPoint", () => {
     );
   });
 
+  it("offers no Retry for a new lift itself, which a retry would save with no stop", async () => {
+    const saver = fakeSaver();
+    await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L1", point: [80, 80], say: vi.fn(), now: 9 });
+    expect(saver.create).toHaveBeenNthCalledWith(
+      1, "portal", expect.objectContaining({ id: "portal-9" }), { retry: false },
+    );
+  });
+
   it("keeps Retry for a stop that joins a lift already there", async () => {
     const saver = fakeSaver();
     await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L2", point: [40, 40], say: vi.fn(), now: 9 });
