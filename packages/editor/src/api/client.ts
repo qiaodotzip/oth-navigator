@@ -1,5 +1,5 @@
 import type { MapModel, ValidationReport } from "@oth/model";
-import type { PlanSheet, PlanSource } from "@oth/model";
+import type { DraftSource, PlanSheet, PlanSource, RoomDraft, RoomDraftInput, RoomKind } from "@oth/model";
 import type { LockEntry, PresenceEntry } from "../collab/types";
 
 export class ApiError extends Error {
@@ -118,6 +118,11 @@ export type ApiToken = {
 export type TokenList = { tokens: ApiToken[]; mayPublishByDefault: boolean };
 
 export type TokenNotice = { id: string; name: string; createdAt: string };
+
+// --- PDF plans and room drafts (plan 5B) ---
+
+/** What an accepted draft became, and the versions its undo sends back. */
+export type AcceptedDraft = { draftId: string; draftVersion: number; roomId: string; roomVersion: number };
 
 export type ApiOptions = {
   fetchImpl?: typeof fetch;
@@ -431,6 +436,29 @@ export function createApi(options: ApiOptions = {}) {
       }
       return new Uint8Array(await res.arrayBuffer());
     },
+
+    /** The floor's drafts still waiting for review. */
+    listRoomDrafts: async (levelId: string): Promise<RoomDraft[]> =>
+      (await request<{ drafts: RoomDraft[] }>(`/api/levels/${levelId}/drafts`)).drafts,
+
+    /** A new search's drafts in place of the floor's old ones. */
+    replaceRoomDrafts: async (levelId: string, body: { source: DraftSource; drafts: RoomDraftInput[] }): Promise<RoomDraft[]> =>
+      (await request<{ drafts: RoomDraft[] }>(`/api/levels/${levelId}/drafts`, { method: "PUT", body: json(body) })).drafts,
+
+    /** Drafts made rooms, all or none. */
+    acceptRoomDrafts: async (items: { id: string; expectedVersion: number; nameEn?: string; kind?: RoomKind }[]): Promise<AcceptedDraft[]> =>
+      (await request<{ accepted: AcceptedDraft[] }>("/api/room-drafts/accept", { method: "POST", body: json({ items }) })).accepted,
+
+    /** The undo of an accept: the rooms off the map, the drafts back. */
+    unacceptRoomDrafts: (items: { id: string; expectedVersion: number; roomVersion: number }[]) =>
+      request<{ drafts: number }>("/api/room-drafts/unaccept", { method: "POST", body: json({ items }) }),
+
+    /** Reject is a soft delete, like every removal; restore is its undo. */
+    rejectRoomDraft: (id: string, expectedVersion: number) =>
+      request<{ entity: Record<string, unknown> }>(`/api/entities/roomDraft/${id}`, { method: "DELETE", body: json({ expectedVersion }) }),
+
+    restoreRoomDraft: (id: string, expectedVersion: number) =>
+      request<{ entity: Record<string, unknown> }>(`/api/entities/roomDraft/${id}/restore`, { method: "POST", body: json({ expectedVersion }) }),
   };
 }
 

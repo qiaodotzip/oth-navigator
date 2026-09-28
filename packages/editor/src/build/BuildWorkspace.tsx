@@ -23,6 +23,7 @@ import { toast, useToasts } from "../ui/toast";
 import { deleteWithUndo } from "../ui/undo";
 import { BindTools, waitingForRoom } from "./BindPlaces";
 import { selectionRemovals } from "./deleteSelection";
+import { useRoomDrafts } from "./drafts";
 import { FloorplanTools, PlanDropZone, patchPlan } from "./FloorplanTools";
 import { LayersDrawer } from "./LayersDrawer";
 import { PreviewPanel, PreviewToggle, usePreview, usePreviewOptions } from "./PreviewToggle";
@@ -83,6 +84,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
   const levelId = useEditorStore(s => s.activeLevelId);
   const selection = useEditorStore(s => s.selection);
   const [canvasBox, canvasSize] = useElementSize();
+  useRoomDrafts(api, levelId);
   const [layersOpen, setLayersOpen] = useState(false);
   const [previewOn, togglePreview] = usePreview();
   const [previewOptions, setPreviewOptions] = usePreviewOptions();
@@ -331,7 +333,7 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
       case "floorplan":
         return <FloorplanTools api={api} />;
       case "rooms":
-        return <RoomsTools saver={saver} />;
+        return <RoomsTools api={api} saver={saver} />;
       case "pathways":
         return <PathwaysTools saver={saver} />;
       case "entrances":

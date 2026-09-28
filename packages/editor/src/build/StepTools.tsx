@@ -8,11 +8,17 @@ import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
 import { Popover } from "../ui/Popover";
 import { toast } from "../ui/toast";
+import { DraftsFind } from "./DraftsFind";
 import { newPlacement } from "./placeModel";
 
-/** Areas & rooms: a CAD export can stand in for tracing. */
-export function RoomsTools({ saver }: { saver: Saver }) {
-  return <DxfImportButton saver={saver} />;
+/** Areas & rooms: find the rooms in the floor's PDF, or bring in a CAD export instead of tracing. */
+export function RoomsTools({ api, saver }: { api: Api; saver: Saver }) {
+  return (
+    <div className="flex flex-wrap items-start gap-2">
+      <DraftsFind api={api} />
+      <DxfImportButton saver={saver} />
+    </div>
+  );
 }
 
 /** Pathways: the team's walkway types, where the pathways are drawn rather than a panel away. */
