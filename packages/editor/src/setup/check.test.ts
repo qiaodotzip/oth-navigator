@@ -98,6 +98,14 @@ describe("checkSections", () => {
     expect(sections.map(s => [s.label, s.rows.map(r => r.auditId)])).toEqual([["Entrances", ["e"]], ["Frames binned", ["f"]]]);
   });
 
+  it("puts the drafts Claude set aside first in their section: a person must decide them", () => {
+    const draftRow = (auditId: string, action: string) => change({ auditId, group: "drafts", entityType: "roomDraft", entityId: `rd_${auditId}`, action });
+    const { sections } = checkSections([
+      draftRow("r1", "delete"), draftRow("s1", "set-aside"), draftRow("r2", "delete"), draftRow("s2", "set-aside"),
+    ]);
+    expect(sections.map(s => [s.label, s.rows.map(r => r.auditId)])).toEqual([["Drafts rejected or set aside", ["s1", "s2", "r1", "r2"]]]);
+  });
+
   it("puts a group it doesn't know under Other changes", () => {
     const { sections } = checkSections([change({ auditId: "n", group: "navHints" as never })]);
     expect(sections.map(s => s.label)).toEqual(["Other changes"]);

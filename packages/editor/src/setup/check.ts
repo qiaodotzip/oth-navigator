@@ -23,18 +23,24 @@ export const SECTION_LABEL: Record<CheckGroup | "other", string> = {
 
 const KNOWN: ReadonlySet<string> = new Set(CHECK_GROUPS);
 
+/** The audit action of a draft Claude set aside for a person (contract v2). */
+const SET_ASIDE = "set-aside";
+
 /**
  * Claude's changes in spec §8's groups, in its order, empty groups left out.
  * Objects placed from a capture-order guess come first: they are the likeliest
- * to be wrong. Anything without a group goes last, so nothing Claude did here
- * is hidden, except its survey labels: those can run to thousands, and Review
- * is their check. They are counted, for a line saying so.
+ * to be wrong. Drafts Claude set aside come first in theirs: a person must
+ * decide them, and the check step folds a long section to its first rows.
+ * Anything without a group goes last, so nothing Claude did here is hidden,
+ * except its survey labels: those can run to thousands, and Review is their
+ * check. They are counted, for a line saying so.
  */
 export function checkSections(changes: readonly ClaudeChange[]): { sections: CheckSection[]; labels: number } {
   const groups: (CheckGroup | "other")[] = [...CHECK_GROUPS, "other"];
   const sections = groups.map(group => {
     let rows = changes.filter(c => (group === "other" ? !KNOWN.has(c.group) && c.group !== "labels" : c.group === group));
     if (group === "objects") rows = [...rows.filter(c => c.confidence === "low"), ...rows.filter(c => c.confidence !== "low")];
+    if (group === "drafts") rows = [...rows.filter(c => c.action === SET_ASIDE), ...rows.filter(c => c.action !== SET_ASIDE)];
     return { group, label: SECTION_LABEL[group], rows };
   });
   return {

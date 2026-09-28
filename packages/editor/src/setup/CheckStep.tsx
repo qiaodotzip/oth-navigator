@@ -9,7 +9,7 @@ import { Button } from "../ui/Button";
 import { reportFailure } from "../ui/failure";
 import { relativeTime } from "../ui/relativeTime";
 import { toast } from "../ui/toast";
-import { checkSections, objectFrames, showTarget, undoRefusal } from "./check";
+import { checkSections, objectFrames, showTarget, undoRefusal, type CheckSection } from "./check";
 import { EPOCH } from "./progress";
 import { SetupMap, type MapFocus } from "./SetupMap";
 import { stepNumber, wizardStep } from "./steps";
@@ -17,6 +17,12 @@ import type { ClaudeChange, SetupApi } from "./types";
 
 /** Frame thumbnails are 64 px wide; 160 covers a 2x screen. */
 const THUMB_PX = 160;
+
+/**
+ * A section longer than this shows its first rows only, until Show all:
+ * rehearsal 3 listed 199 drafts in one, burying every section after it.
+ */
+const FOLD_AT = 20;
 
 type CheckApi = Pick<Api, "keyframeFileUrl" | "levelImageFileUrl"> & Pick<SetupApi, "listClaudeChanges" | "undoChange">;
 
@@ -43,6 +49,9 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
   const undoing = useRef(new Set<string>());
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [focus, setFocus] = useState<MapFocus | null>(null);
+  // The long sections unfolded with Show all.
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
+  const folded = (section: CheckSection) => section.rows.length > FOLD_AT && !unfolded.has(section.group);
 
   const load = useCallback(async () => {
     setFailed(false);
@@ -132,7 +141,7 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
                 {section.label} <span className="font-normal">{section.rows.length}</span>
               </h2>
               <ul className="mt-1 divide-y divide-stone-100">
-                {section.rows.map(change => (
+                {(folded(section) ? section.rows.slice(0, FOLD_AT) : section.rows).map(change => (
                   <ChangeRow
                     key={change.auditId}
                     api={api}
@@ -148,6 +157,11 @@ export function CheckStep({ api, saver, level, since, onLooksRight }: {
                   />
                 ))}
               </ul>
+              {folded(section) && (
+                <Button size="sm" variant="ghost" onClick={() => setUnfolded(s => new Set(s).add(section.group))}>
+                  Show all {section.rows.length}
+                </Button>
+              )}
             </section>
           ))}
           {labels > 0 && (

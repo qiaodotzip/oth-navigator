@@ -170,6 +170,35 @@ describe("CheckStep", () => {
     expect(screen.queryByTestId("draft-outline")).toBeNull();
   });
 
+  it("folds a section of more than 20 rows to its first 20, and Show all unfolds it", async () => {
+    const many = Array.from({ length: 25 }, (_, i) => change({
+      auditId: `a_d${i}`, group: "drafts", summary: `Rejected the draft Shop ${i}`, entityType: "roomDraft", entityId: `rd_${i}`, action: "delete",
+    }));
+    open(fakeSetupApi({ listClaudeChanges: vi.fn().mockResolvedValue([made, ...many]) }));
+    const drafts = within(await screen.findByRole("region", { name: "Drafts rejected or set aside" }));
+    expect(drafts.getByRole("heading").textContent).toBe("Drafts rejected or set aside 25");
+    expect(drafts.getAllByRole("listitem")).toHaveLength(20);
+    expect(drafts.queryByTestId("change-a_d20")).toBeNull();
+    // A section of 20 or fewer shows every row, with nothing to unfold.
+    expect(within(screen.getByRole("region", { name: "Rooms made from drafts" })).queryByRole("button", { name: /^Show all/ })).toBeNull();
+    fireEvent.click(drafts.getByRole("button", { name: "Show all 25" }));
+    expect(drafts.getAllByRole("listitem")).toHaveLength(25);
+    expect(drafts.queryByRole("button", { name: /^Show all/ })).toBeNull();
+  });
+
+  it("lists the drafts set aside for you first, so a folded section still shows them", async () => {
+    const rejects = Array.from({ length: 22 }, (_, i) => change({
+      auditId: `a_r${i}`, group: "drafts", summary: `Rejected the draft Shop ${i}`, entityType: "roomDraft", entityId: `rd_${i}`, action: "delete",
+    }));
+    const aside = change({
+      auditId: "a_aside", group: "drafts", summary: "Set aside Storage for you: two rooms there", entityType: "roomDraft", entityId: "rd_store", action: "set-aside",
+    });
+    open(fakeSetupApi({ listClaudeChanges: vi.fn().mockResolvedValue([...rejects, aside]) }));
+    const drafts = within(await screen.findByRole("region", { name: "Drafts rejected or set aside" }));
+    expect(drafts.getAllByRole("listitem")[0]!.getAttribute("data-testid")).toBe("change-a_aside");
+    expect(drafts.getByRole("button", { name: "Show all 23" })).toBeTruthy();
+  });
+
   it("Undo takes a change back, says so, and reloads the map", async () => {
     const { api, saver } = open();
     fireEvent.click(await screen.findByRole("button", { name: "Undo: Made Starbucks from a draft" }));
