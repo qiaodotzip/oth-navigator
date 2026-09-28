@@ -9,7 +9,7 @@ import { TagRefusal, tagFrame } from "../../survey/tag";
 import { CLAUDE_TAG_STATUS } from "../../tokens/policy";
 import type { ToolContext } from "../context";
 import { refuseIfLocked } from "../guards";
-import { Refusal, count, reply, replyJson, runTool } from "../results";
+import { Refusal, count, reply, runTool } from "../results";
 
 const ID = z.string().min(1).max(120);
 const VERSION = z.number().int().min(0).describe("The version you last read, from get or get_floor.");
@@ -38,8 +38,11 @@ export function registerSurveyTools(server: McpServer, ctx: ToolContext): void {
     title: "Tag a frame",
     description:
       "Says what a frame shows: a place already surveyed (placeId), or a new one (nameEn and category). " +
-      "box says which part of the frame, when it shows more than one thing. Your tags arrive as proposals: " +
-      `a person accepts them in Review, or you do with review_place when ${name} asks you to.`,
+      "box says which part of the frame, when it shows more than one thing. Your tags arrive as proposals. " +
+      "A tag on a new or proposed place waits in Review with its place: a person accepts it there, or you do " +
+      `with review_place when ${name} asks you to. Review lists only proposed places, so a tag on a place ` +
+      "already confirmed is not shown there: it stays a proposal until review_place with decision accept runs " +
+      `on that place, which confirms its proposed tags. ${name} can ask you to do that.`,
     inputSchema: {
       frameId: ID,
       placeId: ID.optional(),
@@ -51,7 +54,15 @@ export function registerSurveyTools(server: McpServer, ctx: ToolContext): void {
   }, input => runTool(ctx, async () => {
     const tagged = await refusing(tagFrame(ctx.db, input, ctx.user.id, claim));
     if (tagged.levelId) ctx.seenOn(tagged.levelId);
-    return replyJson({ ...tagged, status: claim.status });
+    const answer = JSON.stringify({ ...tagged, status: claim.status });
+    if (claim.status !== "proposed" || tagged.placeStatus !== "confirmed") return reply(answer);
+    // No screen in the app would ever show this tag, so the model has to be
+    // told what does confirm it.
+    return reply(
+      `${answer}\n${tagged.placeId} is already confirmed, and Review lists only proposed places, so this tag is not shown ` +
+      `there. It stays a proposal until review_place with decision accept runs on ${tagged.placeId}, which confirms its ` +
+      `proposed tags. ${name} can ask you to do that.`,
+    );
   }));
 
   server.registerTool("review_place", {
@@ -61,7 +72,8 @@ export function registerSurveyTools(server: McpServer, ctx: ToolContext): void {
       "accept confirms it and its proposed tags (nameEn and category correct it, and levelId files one that has no floor);",
       "reject removes it and its tags (restore undoes it);",
       "merge says it is the same as the place into: its tags move there, confirmed, and it goes;",
-      "reopen puts an accepted place back in the queue, and sightingIds are the tags accept confirmed, which go back to proposed.",
+      "reopen puts an accepted place back in the queue as it was: send the nameEn, category, levelId and sightingIds",
+      "accept's answer gave, and those tags go back to proposed.",
       "expectedVersion is the place's version from get or get_floor.",
     ].join(" "),
     inputSchema: {
@@ -70,7 +82,7 @@ export function registerSurveyTools(server: McpServer, ctx: ToolContext): void {
       expectedVersion: VERSION,
       nameEn: z.string().trim().min(1).max(120).optional(),
       category: TenantCategorySchema.optional(),
-      levelId: ID.optional(),
+      levelId: ID.nullable().optional().describe("For reopen, null puts back a place that had no floor."),
       into: ID.optional(),
       sightingIds: z.array(ID).max(500).optional(),
     },
@@ -88,9 +100,14 @@ export function registerSurveyTools(server: McpServer, ctx: ToolContext): void {
       const confirmed = await refusing(acceptPlace(ctx.db, placeId, {
         expectedVersion, nameEn, category, ...(input.levelId ? { levelId: input.levelId } : {}),
       }, ctx.user.id));
+      // The place as it was, as Review's own Undo sends it (editor/src/review/decide.ts):
+      // accept may have renamed, recategorised or filed it, and reopen puts all three back.
+      const was = `nameEn ${JSON.stringify(place.nameEn)}, category ${JSON.stringify(place.category)}, ` +
+        `levelId ${JSON.stringify(place.levelId ?? null)}`;
       return reply(
         `Accepted ${nameEn} and ${count(confirmed.length, "tag")}. It is now at version ${expectedVersion + 1}. ` +
-        `To undo: review_place with decision reopen, expectedVersion ${expectedVersion + 1} and sightingIds ${JSON.stringify(confirmed)}.`,
+        `To undo: review_place with decision reopen, expectedVersion ${expectedVersion + 1}, ${was} ` +
+        `and sightingIds ${JSON.stringify(confirmed)}.`,
       );
     }
     if (decision === "reject") {
@@ -110,7 +127,10 @@ export function registerSurveyTools(server: McpServer, ctx: ToolContext): void {
       return reply(`Merged ${place.nameEn} into ${input.into}: ${count(moved.length, "tag")} moved there, confirmed.`);
     }
     const n = await refusing(reopenPlace(ctx.db, placeId, {
-      expectedVersion, nameEn, category, levelId: input.levelId ?? place.levelId ?? null, sightingIds: input.sightingIds ?? [],
+      expectedVersion, nameEn, category,
+      // Given as null, it clears the floor accept filed; left out, it keeps the one the place has.
+      levelId: input.levelId === undefined ? (place.levelId ?? null) : input.levelId,
+      sightingIds: input.sightingIds ?? [],
     }, ctx.user.id));
     return reply(`Reopened ${nameEn}: it waits in Review again, with ${count(n, "tag")} back to proposed.`);
   }, { type: "place", id: input.placeId, sent: input.expectedVersion }));

@@ -21,7 +21,7 @@ beforeEach(async () => {
 describe("tagFrame", () => {
   it("makes a new place on the frame's floor and the tag that ties it to the frame, both as the claim says", async () => {
     const tagged = await tagFrame(db, { frameId: "kf_1", nameEn: "Gong Cha", category: "retail", box: { x: 0.1, y: 0.2, w: 0.3, h: 0.1 } }, "u_wei", CLAIM);
-    expect(tagged).toMatchObject({ newPlace: true, levelId: "oth-L1" });
+    expect(tagged).toMatchObject({ newPlace: true, levelId: "oth-L1", placeStatus: "proposed" });
     const [place] = await db.select().from(places).where(eq(places.id, tagged.placeId));
     expect(place).toMatchObject({ nameEn: "Gong Cha", levelId: "oth-L1", status: "proposed", proposedBy: "Claude Code (Wei)", updatedBy: "u_wei" });
     const [tag] = await db.select().from(sightings).where(eq(sightings.id, tagged.sightingId));
@@ -31,7 +31,7 @@ describe("tagFrame", () => {
   it("tags a place already surveyed, once", async () => {
     await createEntity(db, "place", { id: "pl_sb", nameEn: "Starbucks", category: "retail", levelId: "oth-L1" }, "u_sc");
     const tagged = await tagFrame(db, { frameId: "kf_1", placeId: "pl_sb" }, "u_wei", CLAIM);
-    expect(tagged).toMatchObject({ placeId: "pl_sb", newPlace: false });
+    expect(tagged).toMatchObject({ placeId: "pl_sb", newPlace: false, placeStatus: "confirmed" });
     await expect(tagFrame(db, { frameId: "kf_1", placeId: "pl_sb" }, "u_wei", CLAIM)).rejects.toThrow(
       `Frame kf_1 already has a tag for Starbucks (${tagged.sightingId}).`,
     );
@@ -42,6 +42,21 @@ describe("tagFrame", () => {
     await expect(tagFrame(db, { frameId: "kf_1", placeId: "pl_nope" }, "u_wei", CLAIM)).rejects.toThrow("There is no place pl_nope.");
     await expect(tagFrame(db, { frameId: "kf_1", nameEn: "A" }, "u_wei", CLAIM)).rejects.toThrow(
       "Give either placeId, for a place already surveyed, or nameEn and category for a new one.",
+    );
+    expect(await db.select().from(places)).toEqual([]);
+    expect(await db.select().from(sightings)).toEqual([]);
+  });
+
+  it("refuses a frame whose footage was deleted, naming the footage, and writes nothing", async () => {
+    await db.insert(captures).values({ id: "cap_2", kind: "video", filename: "L2 walk.mp4", levelId: "oth-L2", deletedAt: new Date() });
+    await db.insert(keyframes).values({
+      id: "kf_2", captureId: "cap_2", timeMs: 1000, imageId: "kf_2", storagePath: "assets/aa/y.jpg", checksum: "y",
+      widthPx: 640, heightPx: 480, sizeBytes: 1,
+    });
+    const tagging = tagFrame(db, { frameId: "kf_2", nameEn: "Gong Cha", category: "retail" }, "u_wei", CLAIM);
+    await expect(tagging).rejects.toBeInstanceOf(TagRefusal);
+    await expect(tagging).rejects.toThrow(
+      "Frame kf_2 is from the footage L2 walk.mp4, which was deleted. Tag a frame from footage still in Survey.",
     );
     expect(await db.select().from(places)).toEqual([]);
     expect(await db.select().from(sightings)).toEqual([]);

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../db/client";
-import { captures, keyframes, levels, places, rooms } from "../db/schema";
+import { buildings, captures, keyframes, levels, places, rooms } from "../db/schema";
 import { VersionConflictError, createEntity, softDeleteEntity } from "../entities/repository";
 import { createTestDb } from "../testing/harness";
 import { BindRefusal, bindPlace } from "./bind";
@@ -12,6 +12,8 @@ let db: Database;
 
 beforeEach(async () => {
   db = await createTestDb();
+  // bindPlace reads the assembled model, as the editor does, and that needs its building.
+  await db.insert(buildings).values({ id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94, rotationDeg: 0 });
   await createEntity(db, "room", { id: "L1-shop-12", levelId: "oth-L1", kind: "room", footprint: square, heightM: 4 }, "u_sc");
   await createEntity(db, "room", { id: "L1-shop-13", levelId: "oth-L1", kind: "room", footprint: square, heightM: 4 }, "u_sc");
   await createEntity(db, "place", { id: "pl_sb", nameEn: "Starbucks", category: "retail" }, "u_sc");
@@ -107,8 +109,8 @@ describe("bindPlace", () => {
 
   it("reads a place filmed on two floors as on the one it was seen on most, a tie going to the lower", async () => {
     await db.insert(levels).values([
-      { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "Level 1", nameZh: "", elevationM: 0, heightM: 6 },
-      { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "Level 2", nameZh: "", elevationM: 6, heightM: 4 },
+      { id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "Level 1", nameZh: "一楼", elevationM: 0, heightM: 6 },
+      { id: "oth-L2", buildingId: "oth", code: "L2", ordinal: 2, nameEn: "Level 2", nameZh: "二楼", elevationM: 6, heightM: 4 },
     ]);
     await createEntity(db, "room", { id: "L2-shop-1", levelId: "oth-L2", kind: "room", footprint: square, heightM: 4 }, "u_sc");
     await filmedOn("kf_2", "oth-L2");

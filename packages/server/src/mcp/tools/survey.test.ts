@@ -39,6 +39,20 @@ describe("tag_frame", () => {
     expect(trail[0]).toMatchObject({ action: "create", actorId: f.wei.id, via: f.tokenId });
   });
 
+  it("says what confirms a tag on a place already confirmed, which Review does not list", async () => {
+    await createEntity(f.db, "place", { id: "pl_sb", nameEn: "Starbucks", category: "retail", levelId: "oth-L1" }, amy.id);
+    const { text, isError } = await call(client, "tag_frame", { frameId: "kf_2", placeId: "pl_sb" });
+    expect(isError).toBe(false);
+    const [answer, note] = text.split("\n");
+    expect(JSON.parse(answer!)).toMatchObject({ placeId: "pl_sb", placeStatus: "confirmed", status: "proposed" });
+    expect(note).toBe(
+      "pl_sb is already confirmed, and Review lists only proposed places, so this tag is not shown there. " +
+      "It stays a proposal until review_place with decision accept runs on pl_sb, which confirms its proposed tags. " +
+      "Wei can ask you to do that.",
+    );
+    expect(note).not.toContain("accepts it in Review");
+  });
+
   it("says why a tag can't be made", async () => {
     expect(await call(client, "tag_frame", { frameId: "kf_1", placeId: "pl_gc" })).toMatchObject({
       isError: true, text: "Frame kf_1 already has a tag for Gong Ch (sg_1).",
@@ -51,12 +65,36 @@ describe("review_place", () => {
     const accepted = await call(client, "review_place", { placeId: "pl_gc", decision: "accept", expectedVersion: 0, nameEn: "Gong Cha" });
     expect(accepted).toMatchObject({
       isError: false,
-      text: 'Accepted Gong Cha and 1 tag. It is now at version 1. To undo: review_place with decision reopen, expectedVersion 1 and sightingIds ["sg_1"].',
+      text: 'Accepted Gong Cha and 1 tag. It is now at version 1. To undo: review_place with decision reopen, expectedVersion 1, ' +
+        'nameEn "Gong Ch", category "retail", levelId "oth-L1" and sightingIds ["sg_1"].',
     });
     expect((await f.db.select().from(sightings).where(eq(sightings.id, "sg_1")))[0]?.status).toBe("confirmed");
-    const reopened = await call(client, "review_place", { placeId: "pl_gc", decision: "reopen", expectedVersion: 1, sightingIds: ["sg_1"] });
-    expect(reopened.text).toBe("Reopened Gong Cha: it waits in Review again, with 1 tag back to proposed.");
-    expect((await f.db.select().from(places).where(eq(places.id, "pl_gc")))[0]).toMatchObject({ status: "proposed", nameEn: "Gong Cha" });
+    const reopened = await call(client, "review_place", {
+      placeId: "pl_gc", decision: "reopen", expectedVersion: 1, nameEn: "Gong Ch", category: "retail", levelId: "oth-L1", sightingIds: ["sg_1"],
+    });
+    expect(reopened.text).toBe("Reopened Gong Ch: it waits in Review again, with 1 tag back to proposed.");
+    expect((await f.db.select().from(places).where(eq(places.id, "pl_gc")))[0]).toMatchObject({ status: "proposed", nameEn: "Gong Ch" });
+    expect((await f.db.select().from(sightings).where(eq(sightings.id, "sg_1")))[0]?.status).toBe("proposed");
+  });
+
+  it("files a place with no floor as it accepts it, and the undo takes the floor away again", async () => {
+    await createEntity(f.db, "place", { id: "pl_nf", nameEn: "Kiosk", category: "retail", status: "proposed" }, amy.id);
+    const accepted = await call(client, "review_place", { placeId: "pl_nf", decision: "accept", expectedVersion: 0, levelId: "oth-L1" });
+    expect(accepted.text).toContain('nameEn "Kiosk", category "retail", levelId null and sightingIds []');
+    expect((await f.db.select().from(places).where(eq(places.id, "pl_nf")))[0]?.levelId).toBe("oth-L1");
+    const reopened = await call(client, "review_place", {
+      placeId: "pl_nf", decision: "reopen", expectedVersion: 1, nameEn: "Kiosk", category: "retail", levelId: null, sightingIds: [],
+    });
+    expect(reopened.isError).toBe(false);
+    expect((await f.db.select().from(places).where(eq(places.id, "pl_nf")))[0]).toMatchObject({ status: "proposed", levelId: null });
+  });
+
+  it("marks an accept's writes as coming through the token", async () => {
+    await call(client, "review_place", { placeId: "pl_gc", decision: "accept", expectedVersion: 0 });
+    for (const id of ["pl_gc", "sg_1"]) {
+      const trail = await f.db.select().from(auditLog).where(eq(auditLog.entityId, id));
+      expect(trail.find(row => row.action === "update")).toMatchObject({ actorId: f.wei.id, via: f.tokenId });
+    }
   });
 
   it("rejects a proposal with its tags, and says how to restore it", async () => {

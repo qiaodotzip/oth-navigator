@@ -21,7 +21,17 @@ export type TagInput = {
   box?: Box;
 };
 
-export type Tagged = { placeId: string; sightingId: string; newPlace: boolean; levelId: string | null };
+export type Tagged = {
+  placeId: string;
+  sightingId: string;
+  newPlace: boolean;
+  levelId: string | null;
+  /**
+   * How the tagged place stands. Review lists proposed places only, so a
+   * proposed tag on a confirmed place waits for an accept run on that place.
+   */
+  placeStatus: ReviewStatus;
+};
 
 /** An id the model accepts (a slug) that nothing else has. */
 export function newId(prefix: string): string {
@@ -42,10 +52,16 @@ export async function tagFrame(
     const [frame] = await tx.select().from(keyframes).where(and(eq(keyframes.id, input.frameId), isNull(keyframes.deletedAt)));
     if (!frame) throw new TagRefusal(`There is no frame ${input.frameId}.`);
     const [capture] = await tx.select().from(captures).where(eq(captures.id, frame.captureId));
+    // Deleting footage is final, and Survey no longer shows its frames: a tag
+    // there would be evidence nobody can look at.
+    if (capture?.deletedAt) {
+      throw new TagRefusal(`Frame ${frame.id} is from the footage ${capture.filename}, which was deleted. Tag a frame from footage still in Survey.`);
+    }
     const levelId = capture?.levelId ?? null;
 
     let placeId: string;
     let newPlace = false;
+    let placeStatus = claim.status;
     if (input.placeId) {
       const [place] = await tx.select().from(places).where(and(eq(places.id, input.placeId), isNull(places.deletedAt)));
       if (!place) throw new TagRefusal(`There is no place ${input.placeId}.`);
@@ -54,6 +70,7 @@ export async function tagFrame(
       ));
       if (already) throw new TagRefusal(`Frame ${frame.id} already has a tag for ${place.nameEn} (${already.id}).`);
       placeId = place.id;
+      placeStatus = place.status as ReviewStatus;
     } else {
       if (!input.nameEn || !input.category) {
         throw new TagRefusal("Give either placeId, for a place already surveyed, or nameEn and category for a new one.");
@@ -72,6 +89,6 @@ export async function tagFrame(
       id: sightingId, placeId, keyframeId: frame.id, ...(input.box ? { box: input.box } : {}),
       status: claim.status, proposedBy: claim.proposedBy,
     }, actorId);
-    return { placeId, sightingId, newPlace, levelId };
+    return { placeId, sightingId, newPlace, levelId, placeStatus };
   });
 }
