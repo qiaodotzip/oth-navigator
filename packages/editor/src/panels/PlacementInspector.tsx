@@ -19,6 +19,7 @@ export function PlacementInspector({
     <label className="block flex-1 text-xs">
       {label}
       <input
+        key={placement.id}
         aria-label={label}
         className="mt-1 w-full rounded border px-2 py-1"
         inputMode="decimal"
@@ -51,6 +52,7 @@ export function PlacementInspector({
         <label className="block flex-1 text-xs">
           Rotation (deg)
           <input
+            key={placement.id}
             aria-label="Rotation in degrees"
             className="mt-1 w-full rounded border px-2 py-1"
             inputMode="decimal"
@@ -65,6 +67,7 @@ export function PlacementInspector({
         <label className="block flex-1 text-xs">
           Scale
           <input
+            key={placement.id}
             aria-label="Scale"
             className="mt-1 w-full rounded border px-2 py-1"
             inputMode="decimal"

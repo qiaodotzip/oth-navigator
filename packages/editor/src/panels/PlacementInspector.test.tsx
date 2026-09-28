@@ -1,5 +1,5 @@
 import { parseModel } from "@oth/model";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEditorStore } from "../state/store";
 import { PlacementInspector } from "./PlacementInspector";
@@ -79,5 +79,22 @@ describe("PlacementInspector", () => {
     fireEvent.change(screen.getByLabelText(/scale/i), { target: { value: "0" } });
     fireEvent.blur(screen.getByLabelText(/scale/i));
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("shows the next placement's numbers when the selection moves to it", () => {
+    useEditorStore.getState().setModel(parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: model.levels,
+      assets: model.assets,
+      placements: [
+        ...model.placements,
+        { id: "pl_2", levelId: "oth-L1", assetId: "asset_1", position: [9, 3, 0] },
+      ],
+    }));
+    selectPlacement();
+    render(<PlacementInspector onChange={vi.fn()} />);
+    act(() => useEditorStore.getState().select({ type: "placement", id: "pl_2" }));
+    // Uncontrolled fields keep what they first showed unless they are keyed by the entity.
+    expect((screen.getByLabelText(/east/i) as HTMLInputElement).value).toBe("9");
   });
 });
