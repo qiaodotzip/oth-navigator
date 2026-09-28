@@ -1,16 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AppEnv } from "../app";
 import { readAsset, storeAsset } from "../assets/storage";
 import { requireUser } from "../auth/middleware";
-import type { Database } from "../db/client";
-import type { Row } from "../db/rows";
 import { captures, keyframes, sightings } from "../db/schema";
 import { toModelRow } from "../db/rows";
-import { recordAudit, restoreEntity, softDeleteEntity } from "../entities/repository";
 import { IMAGE_MAX_BYTES, InvalidImageError, readImageSize } from "../images/inspect";
 import { readThumbnail, thumbnailWidth } from "../images/thumbnail";
+import { binFrame, restoreFrame } from "./frames";
 
 /**
  * Keyframes have their own route rather than going through generic entity CRUD,
@@ -130,28 +128,8 @@ keyframeRoutes.post("/", async c => {
  * the tags binned with the first.
  */
 keyframeRoutes.delete("/:id", async c => {
-  const id = c.req.param("id");
-  const by = c.get("user").id;
-  const found = await c.get("db").transaction(async t => {
-    const tx = t as unknown as Database;
-    const [before] = await tx.select().from(keyframes).where(eq(keyframes.id, id));
-    if (!before) return false;
-    if (before.deletedAt) return true;
-
-    const at = new Date();
-    const tagged = await tx.select().from(sightings)
-      .where(and(eq(sightings.keyframeId, id), isNull(sightings.deletedAt)));
-    for (const s of tagged) await softDeleteEntity(tx, "sighting", s.id, s.version, by, at);
-
-    const [after] = await tx.update(keyframes)
-      .set({ deletedAt: at, version: sql`${keyframes.version} + 1`, updatedBy: by, updatedAt: at })
-      .where(eq(keyframes.id, id))
-      .returning();
-    await recordAudit(tx, "keyframe", id, "delete", by, before as Row, (after ?? null) as Row | null);
-    return true;
-  });
-
-  if (!found) return c.json({ error: "not found" }, 404);
+  const binned = await binFrame(c.get("db"), c.req.param("id"), c.get("user").id);
+  if (binned === "missing") return c.json({ error: "not found" }, 404);
   return c.body(null, 204);
 });
 
@@ -164,29 +142,10 @@ keyframeRoutes.delete("/:id", async c => {
  * the bin.
  */
 keyframeRoutes.post("/:id/restore", async c => {
-  const id = c.req.param("id");
-  const by = c.get("user").id;
-  const result = await c.get("db").transaction(async t => {
-    const tx = t as unknown as Database;
-    const [before] = await tx.select().from(keyframes).where(eq(keyframes.id, id));
-    if (!before) return { status: 404 as const };
-    if (!before.deletedAt) return { status: 422 as const };
-
-    const binned = await tx.select().from(sightings)
-      .where(and(eq(sightings.keyframeId, id), eq(sightings.deletedAt, before.deletedAt)));
-    for (const s of binned) await restoreEntity(tx, "sighting", s.id, s.version, by);
-
-    const [after] = await tx.update(keyframes)
-      .set({ deletedAt: null, version: sql`${keyframes.version} + 1`, updatedBy: by, updatedAt: new Date() })
-      .where(eq(keyframes.id, id))
-      .returning();
-    await recordAudit(tx, "keyframe", id, "restore", by, before as Row, (after ?? null) as Row | null);
-    return { status: 200 as const, sightings: binned.length };
-  });
-
-  if (result.status === 404) return c.json({ error: "not found" }, 404);
-  if (result.status === 422) return c.json({ error: "not deleted" }, 422);
-  return c.json({ sightings: result.sightings });
+  const restored = await restoreFrame(c.get("db"), c.req.param("id"), c.get("user").id);
+  if (restored === "missing") return c.json({ error: "not found" }, 404);
+  if (restored === "not-deleted") return c.json({ error: "not deleted" }, 422);
+  return c.json({ sightings: restored.sightings });
 });
 
 /**
