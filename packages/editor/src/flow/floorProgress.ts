@@ -68,6 +68,12 @@ export type FloorProgress = {
   /** Places on the floor: confirmed, and still waiting on a person. */
   review: { confirmed: number; proposed: number };
   build: { done: number; total: number; next: BuildStepId | null };
+  /**
+   * The floor's confirmed units, and those of them on the map: bound to a
+   * live room here. Bind places' own rule (`floorUnits`), so the card's line
+   * and the step's tick cannot disagree about a place.
+   */
+  places: { onMap: number; confirmed: number };
 };
 
 /** One floor's progress. The home cards, the floor switcher and the tabs all read this. */
@@ -82,6 +88,7 @@ export function floorProgress(
   const counts = labelCounts(model);
   const levels = placeLevels(model);
   const done = buildStepsDone(model, report, levelImages, levelId);
+  const units = floorUnits(model, levelId, levels);
 
   return {
     levelId,
@@ -95,6 +102,7 @@ export function floorProgress(
       total: BUILD_STEPS.length,
       next: BUILD_STEPS.find(s => !done[s.id])?.id ?? null,
     },
+    places: { onMap: units.bound.length, confirmed: units.bound.length + units.waiting.length },
   };
 }
 

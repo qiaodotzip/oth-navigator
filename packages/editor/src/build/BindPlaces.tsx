@@ -1,7 +1,9 @@
-import { live, placeLevels, type MapModel, type Place, type Room, type Sighting } from "@oth/model";
+import { live, placeLevels, type MapModel, type Place, type Room } from "@oth/model";
 import { useState } from "react";
 import type { Api } from "../api/client";
 import { floorUnits } from "../flow/buildSteps";
+import { bestEvidence } from "../places/evidence";
+import { placesByRoom } from "../places/labels";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { matchPlaces } from "../survey/places";
@@ -12,15 +14,13 @@ import { offerUndo } from "../ui/offerUndo";
 const THUMB_WIDTH = 240;
 
 /**
- * The frame each place is shown by — the picture that says "this one". A
- * confirmed tag's frame where there is one: a proposed tag is still a guess,
- * and Review may yet move it or bin it.
+ * The frame a place is shown by, the picture that says "this one": the one
+ * its card and its Places row lead with, so the same place never shows two
+ * different photos. A confirmed tag's comes first, since a proposed tag is
+ * still a guess that Review may yet move or bin.
  */
-function placeFrames(sightings: readonly Sighting[]): Map<string, string> {
-  const frames = new Map<string, string>();
-  for (const s of sightings) if (s.status === "confirmed" && !frames.has(s.placeId)) frames.set(s.placeId, s.keyframeId);
-  for (const s of sightings) if (!frames.has(s.placeId)) frames.set(s.placeId, s.keyframeId);
-  return frames;
+function placeFrame(model: MapModel, placeId: string): string | undefined {
+  return bestEvidence(model, placeId)[0]?.frame.id;
 }
 
 /**
@@ -91,16 +91,39 @@ export function BindPlaces({
     }
   }
 
-  const bound = live(model.places).find(p => p.roomId === room.id);
-  if (bound) {
+  // By name, as the place card above lists them. A room can hold several on
+  // purpose (L1's west concourses hold three gates each), so each is named,
+  // with an Unbind of its own.
+  const bound = placesByRoom(model).get(room.id) ?? [];
+  const [only] = bound;
+  if (bound.length === 1 && only) {
     return (
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-stone-700">
-          <span aria-hidden className="text-confirmed">✓ </span>Bound to <span className="font-medium">{bound.nameEn}</span> from the survey.
+          <span aria-hidden className="text-confirmed">✓ </span>Bound to <span className="font-medium">{only.nameEn}</span> from the survey.
         </p>
-        <Button size="sm" disabled={busy} onClick={() => void unbind(bound)}>
+        <Button size="sm" disabled={busy} onClick={() => void unbind(only)}>
           Unbind
         </Button>
+      </div>
+    );
+  }
+  if (bound.length > 1) {
+    return (
+      <div className="space-y-1">
+        <p className="text-xs text-stone-700">
+          <span aria-hidden className="text-confirmed">✓ </span>Bound to {bound.length} places from the survey:
+        </p>
+        <ul aria-label="Bound places" className="space-y-1">
+          {bound.map(place => (
+            <li key={place.id} className="flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-xs font-medium text-stone-700">{place.nameEn}</span>
+              <Button size="sm" disabled={busy} aria-label={`Unbind ${place.nameEn}`} onClick={() => void unbind(place)}>
+                Unbind
+              </Button>
+            </li>
+          ))}
+        </ul>
       </div>
     );
   }
@@ -118,7 +141,6 @@ export function BindPlaces({
   const here = matchPlaces(open.here, query).sort(pendingFirst);
   const floorless = matchPlaces(open.floorless, query).sort(pendingFirst);
   const sightings = live(model.sightings);
-  const frames = placeFrames(sightings);
   const code = model.levels.find(l => l.id === room.levelId)?.code ?? "this floor";
 
   async function bind(place: Place) {
@@ -177,7 +199,7 @@ export function BindPlaces({
   }
 
   const row = (p: Place) => {
-    const frame = frames.get(p.id);
+    const frame = placeFrame(model, p.id);
     return (
       <li key={p.id}>
         <button
@@ -266,7 +288,7 @@ export function BindTools({
   if (!model || !place || !waitingForRoom(model, place)) {
     return <p className="text-xs text-stone-600">Or pick a place from the to-do list, then click the room it is in.</p>;
   }
-  const frame = placeFrames(live(model.sightings)).get(place.id);
+  const frame = placeFrame(model, place.id);
 
   return (
     <div role="status" className="flex items-start gap-2">

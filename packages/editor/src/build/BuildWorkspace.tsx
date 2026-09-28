@@ -1,4 +1,4 @@
-import { live, type ValidationReport } from "@oth/model";
+import { live } from "@oth/model";
 import { MapScene, SceneRoomLabels, forgetPlacementModels } from "@oth/renderer";
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Api } from "../api/client";
@@ -14,11 +14,11 @@ import { PlanRoomLabels } from "../plan/RoomLabels";
 import { useElementSize } from "../plan/useElementSize";
 import { fitViewport } from "../plan/viewport";
 import { setParams, type FloorRoute } from "../route";
+import { recheck } from "../state/recheck";
 import type { Saver } from "../state/save";
 import { ringsOnActiveLevel, useEditorStore, type Selection } from "../state/store";
 import { displayBBox, imageForLevel } from "../state/underlay";
 import { Button } from "../ui/Button";
-import { reportFailure } from "../ui/failure";
 import { toast, useToasts } from "../ui/toast";
 import { deleteWithUndo } from "../ui/undo";
 import { BindTools } from "./BindPlaces";
@@ -44,28 +44,6 @@ const NOTHING_DONE: Record<BuildStepId, boolean> = {
 /** The address bar's own `?select=`, read fresh rather than from a render that may be a step behind it. */
 function selectInAddress(): string {
   return new URLSearchParams(window.location.search).get("select") ?? "";
-}
-
-/**
- * Checks the floor again, for the to-do list. Survey and Review save without
- * validating — nothing they write can block Publish — so the report can be
- * older than a place tagged since, which Bind places would then never list.
- * Only the report: the map itself is already here.
- *
- * A failure is said only while `heard()`: StrictMode mounts twice in
- * development, and two identical toasts would read as two failures.
- */
-async function recheck(api: Api, heard: () => boolean = () => true): Promise<void> {
-  const before = useEditorStore.getState().report;
-  let report: ValidationReport;
-  try {
-    report = await api.validate();
-  } catch (err) {
-    if (heard()) reportFailure(err, { doing: "refresh the to-do list", retry: () => recheck(api) });
-    return;
-  }
-  // A save that landed meanwhile brought a report of its own, from after it: keep that one.
-  if (useEditorStore.getState().report === before) useEditorStore.getState().setReport(report);
 }
 
 /**
@@ -135,9 +113,11 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
     [model, below],
   );
 
+  // Survey and Review save without validating, so the to-do list may be older
+  // than a place tagged since, which Bind places would then never list.
   useEffect(() => {
     let mounted = true;
-    void recheck(api, () => mounted);
+    void recheck(api, "refresh the to-do list", () => mounted);
     return () => {
       mounted = false;
     };
@@ -156,6 +136,19 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
     if (s.tool !== "select" && !STEP_GUIDES[step].tools.includes(s.tool)) s.setTool("select");
     setPendingPlaceId(null);
   }, [step]);
+
+  // A link from the Places tab's "Bind it": that place in hand, as choosing
+  // its to-do item does. Read once, then taken out of the address, so the
+  // address never goes on naming a place already bound. After the effect
+  // above, which lets go of the place in hand as Build opens, and before the
+  // selection's, so a room left selected from before is let go before it can
+  // be written back into the address.
+  const placeParam = route.params.place ?? "";
+  useEffect(() => {
+    if (!placeParam) return;
+    takePlace(placeParam);
+    setParams({ place: null });
+  }, [placeParam]);
 
   // Leaving Build lets go of the selection. It is also the collaboration lock,
   // which would otherwise show you to teammates as editing that room from
@@ -248,15 +241,30 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
     setParams({ step: next });
   }
 
+  /**
+   * A place in hand, from its to-do item or a link from Places: Bind places
+   * then asks for the room it is in. Whatever was selected is let go first.
+   * The store keeps a selection across tabs, so a room selected before would
+   * stay, its picker would ring this place first, and one click would bind it
+   * there.
+   */
+  function takePlace(placeId: string) {
+    const s = useEditorStore.getState();
+    s.setTool("select");
+    s.select(null);
+    setPendingPlaceId(placeId);
+  }
+
   function chooseTodo(item: TodoItem) {
+    if (item.target.kind === "place") {
+      takePlace(item.target.placeId);
+      return;
+    }
     const s = useEditorStore.getState();
     s.setTool("select");
     if (item.target.kind === "select") {
       s.select(item.target.selection);
       zoomTo(item.target.selection);
-    } else if (item.target.kind === "place") {
-      s.select(null);
-      setPendingPlaceId(item.target.placeId);
     }
   }
 

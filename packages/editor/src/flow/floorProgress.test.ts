@@ -41,6 +41,29 @@ describe("floorProgress", () => {
     expect(waitingReview(model, "oth-L2")).toBe(1);
   });
 
+  it("counts a floor's confirmed places, and those on the map, by Bind places' own rule", () => {
+    const rooms = [
+      { id: "L1-lib", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 3 },
+      { id: "L1-old", levelId: "oth-L1", kind: "room", footprint: [[20, 0], [30, 0], [30, 10], [20, 10]], heightM: 3, deletedAt: "2026-09-28T08:00:00.000Z" },
+    ];
+    const bindings = parseModel({
+      building,
+      levels,
+      rooms,
+      places: [
+        { id: "a", nameEn: "Library", category: "community", levelId: "oth-L1", roomId: "L1-lib" },
+        // Its room was deleted, so it is waiting for one again: not on the map.
+        { id: "b", nameEn: "Gate 2", category: "facility", levelId: "oth-L1", roomId: "L1-old" },
+        { id: "c", nameEn: "Anchor Books", category: "retail", levelId: "oth-L1" },
+        // Neither a proposal nor a walkway is a place to put on the map.
+        { id: "d", nameEn: "iTea", category: "retail", levelId: "oth-L1", status: "proposed" },
+        { id: "w", nameEn: "Covered link", category: "facility", levelId: "oth-L1", pathwayKindId: "pk-1" },
+      ],
+    });
+    expect(floorProgress(bindings, null, noImages, "oth-L1").places).toEqual({ onMap: 1, confirmed: 3 });
+    expect(floorProgress(bindings, null, noImages, "oth-L2").places).toEqual({ onMap: 0, confirmed: 0 });
+  });
+
   it("names the floorplan as next on a floor where nothing is built", () => {
     const p = floorProgress(model, null, noImages, "oth-L1");
     expect(p.build).toEqual({ done: 0, total: 6, next: "floorplan" });

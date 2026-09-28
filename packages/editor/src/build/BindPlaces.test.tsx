@@ -55,6 +55,16 @@ const orphaned = parseModel({
   places: [{ id: "pl_gate", nameEn: "Gate 2", category: "facility", levelId: "oth-L1", roomId: "L1-gone" }],
 });
 
+// Two confirmed tags: the first in model order has no box, the second boxes the sign.
+const boxed = parseModel({
+  ...base,
+  places: [{ id: "pl_kopi", nameEn: "Kopitiam", category: "retail", levelId: "oth-L1" }],
+  sightings: [
+    { id: "s1", placeId: "pl_kopi", keyframeId: "kf_1" },
+    { id: "s2", placeId: "pl_kopi", keyframeId: "kf_2", box: { x: 0.1, y: 0.1, w: 0.3, h: 0.2 } },
+  ],
+});
+
 // Typed with its arguments: `vi.fn(async () => true)` records calls as `[]`,
 // and reading an argument off one would not type-check.
 function setup({
@@ -174,6 +184,12 @@ describe("BindPlaces", () => {
     expect(update.mock.calls[1]![3]).toMatchObject({ verification: { status: "photo", evidence: ["kf_2"] } });
   });
 
+  it("shows each place by the frame its card leads with: a confirmed tag's box before one with none", () => {
+    setup({ m: boxed });
+    const button = screen.getByRole("button", { name: "Bind to Kopitiam" });
+    expect(button.querySelector("img")?.getAttribute("src")).toBe("/api/keyframes/kf_2/file?w=240");
+  });
+
   it("leaves the room alone when the place could not be bound", async () => {
     const update = vi.fn(async (..._args: unknown[]) => false);
     const { onBound } = setup({ update });
@@ -206,6 +222,24 @@ describe("BindPlaces", () => {
     fireEvent.click(screen.getByRole("button", { name: "Unbind" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Unbind" }).hasAttribute("disabled")).toBe(false));
     expect(update.mock.calls).toEqual([["place", "pl_1", 0, { roomId: null }]]);
+  });
+
+  it("names every place a room holds, by name as its card does, each with its own Unbind", async () => {
+    // L1's west concourses hold three gates each, on purpose. Model order is not name order.
+    const concourse: MapModel = parseModel({
+      ...base,
+      places: [
+        { id: "pl_g3", nameEn: "Gate 3", category: "facility", levelId: "oth-L1", roomId: "L1-a" },
+        { id: "pl_g2", nameEn: "Gate 2", category: "facility", levelId: "oth-L1", roomId: "L1-a" },
+      ],
+    });
+    const { update } = setup({ m: concourse });
+    expect(screen.getByText(/Bound to 2 places from the survey/)).toBeTruthy();
+    const held = within(screen.getByRole("list", { name: "Bound places" })).getAllByRole("listitem");
+    expect(held.map(li => li.querySelector(".font-medium")?.textContent)).toEqual(["Gate 2", "Gate 3"]);
+    fireEvent.click(screen.getByRole("button", { name: "Unbind Gate 3" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Unbind Gate 3" }).hasAttribute("disabled")).toBe(false));
+    expect(update.mock.calls).toEqual([["place", "pl_g3", 0, { roomId: null }]]);
   });
 
   it("offers again a place whose room has since been deleted, so a room drawn again can have it", async () => {
@@ -262,5 +296,11 @@ describe("BindTools", () => {
     useEditorStore.getState().setModel(orphaned);
     render(<BindTools api={fakeApi()} pendingPlaceId="pl_gate" onCancel={vi.fn()} />);
     expect(screen.getByRole("status").textContent).toMatch(/Click the room where you see Gate 2/);
+  });
+
+  it("shows the place in hand by the same frame as its card", () => {
+    useEditorStore.getState().setModel(boxed);
+    render(<BindTools api={fakeApi()} pendingPlaceId="pl_kopi" onCancel={vi.fn()} />);
+    expect(screen.getByRole("img", { name: "Where Kopitiam was filmed" }).getAttribute("src")).toBe("/api/keyframes/kf_2/file?w=240");
   });
 });

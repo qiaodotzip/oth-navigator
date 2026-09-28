@@ -1,3 +1,4 @@
+import { parseModel } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEditorStore } from "../state/store";
@@ -35,6 +36,22 @@ describe("FloorsHome", () => {
   it("says what is next on each floor", () => {
     render(<FloorsHome api={fakeApi()} saver={fakeSaver()} />);
     expect(within(screen.getAllByRole("article")[0]!).getByText("Next: add the floorplan and set its scale")).toBeTruthy();
+  });
+
+  it("says how many of a floor's confirmed places are on the map", () => {
+    useEditorStore.getState().setModel(parseModel({
+      ...sampleModel,
+      rooms: [{ id: "L1-a", levelId: "oth-L1", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 3 }],
+      places: [
+        { id: "pl_a", nameEn: "Starbucks", category: "retail", levelId: "oth-L1", roomId: "L1-a" },
+        { id: "pl_b", nameEn: "Anchor Books", category: "retail", levelId: "oth-L1" },
+      ],
+      sightings: [],
+    }));
+    render(<FloorsHome api={fakeApi()} saver={fakeSaver()} />);
+    const [l1, l2] = screen.getAllByRole("article");
+    expect(within(l1!).getByText("1 of 2 confirmed places are on the map")).toBeTruthy();
+    expect(within(l2!).queryByText(/confirmed place/)).toBeNull();
   });
 
   it("says when the map was last published as a date, not as its version id", async () => {

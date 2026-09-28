@@ -325,6 +325,33 @@ describe("BuildWorkspace — links", () => {
     expect(useEditorStore.getState().selection).toBeNull();
     expect(param("select")).toBeNull();
   });
+
+  it("picks the place a link from Places names, as its to-do item would, then takes it out of the address", async () => {
+    open("/floors/L1/build?step=bind&place=pl_1");
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Bind places guide" }).textContent).toMatch(/click the room where you see Festive Mall/i));
+    await waitFor(() => expect(param("place")).toBeNull());
+  });
+
+  it("lets go of a room still selected from before, so a link's place is not bound to it in one click", async () => {
+    // Selected on Build, then off to Places: the store keeps the selection.
+    act(() => useEditorStore.getState().select({ type: "room", id: "L1-a" }));
+    open("/floors/L1/build?step=bind&place=pl_1");
+    await waitFor(() => expect(param("place")).toBeNull());
+    expect(useEditorStore.getState().selection).toBeNull();
+    expect(param("select")).toBeNull();
+    // No room's picker is open, ringing the place first.
+    expect(screen.queryByRole("button", { name: "Bind to Festive Mall" })).toBeNull();
+    expect(screen.getByRole("region", { name: "Bind places guide" }).textContent).toMatch(/click the room where you see Festive Mall/i);
+  });
+
+  it("lets go of the selection when a place is chosen from the to-do list, as a link does", () => {
+    open("/floors/L1/build?step=bind&select=room:L1-a");
+    fireEvent.click(within(screen.getByRole("region", { name: "To do" })).getByRole("button", { name: /Festive Mall/ }));
+    expect(useEditorStore.getState().selection).toBeNull();
+    expect(param("select")).toBeNull();
+    expect(screen.getByRole("region", { name: "Bind places guide" }).textContent).toMatch(/click the room where you see Festive Mall/i);
+  });
 });
 
 describe("BuildWorkspace — the plan", () => {

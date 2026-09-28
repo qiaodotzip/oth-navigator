@@ -1,6 +1,7 @@
 import type { Level } from "@oth/model";
 import { nextStepText, type FloorProgress } from "../flow/floorProgress";
 import { pickTab } from "../flow/floors";
+import { onMapLine } from "../places/rows";
 import { followLink, href } from "../route";
 import type { Saver } from "../state/save";
 import { Progress } from "../ui/Progress";
@@ -50,6 +51,10 @@ export function FloorCard({ level, progress, mine, saver }: {
       <Bar label="Survey" value={progress.survey.tagged} max={progress.survey.total} empty="no footage yet" tone="accent" />
       <Bar label="Review" value={progress.review.confirmed} max={reviewTotal} empty="nothing to review" tone="confirmed" />
       <Bar label="Build" value={progress.build.done} max={progress.build.total} empty="" tone="accent" />
+      {/* The Places tab's heading, repeated here (spec §4). */}
+      {progress.places.confirmed > 0 && (
+        <p className="text-xs text-stone-600">{onMapLine(progress.places.onMap, progress.places.confirmed)}</p>
+      )}
       <p className="mt-auto pt-1 text-xs font-medium text-stone-700">{nextStepText(progress)}</p>
     </article>
   );
