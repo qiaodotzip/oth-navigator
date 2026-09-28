@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type ApiToken } from "../api/client";
 import { fakeApi } from "../testing/fakeApi";
@@ -62,6 +62,26 @@ describe("ClaudeCode", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(document.body.innerHTML).not.toContain(SECRET);
     expect(listTokens).toHaveBeenCalledTimes(2);
+  });
+
+  it("can't be closed while the token is being made, so its one showing can't be lost", async () => {
+    let answer!: (made: { token: ApiToken; secret: string }) => void;
+    const createToken = vi.fn(() => new Promise<{ token: ApiToken; secret: string }>(r => { answer = r; }));
+    render(<ClaudeCode api={fakeApi({ listTokens: listed([]), createToken })} />);
+    const dialog = await openDialog();
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Wei's laptop" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create token" }));
+    await waitFor(() => expect(createToken).toHaveBeenCalled());
+
+    expect(within(dialog).queryByRole("button", { name: "Close" })).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+
+    await act(async () => answer({ token: tokens[0]!, secret: SECRET }));
+    expect(await within(dialog).findByLabelText("Command to connect Claude Code")).toBeTruthy();
+    // Once it is shown, closing is yours again: Escape and × throw it away on purpose.
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeTruthy();
   });
 
   it("asks for publishing only when it is ticked", async () => {

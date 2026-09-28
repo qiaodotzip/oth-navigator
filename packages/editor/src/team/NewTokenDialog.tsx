@@ -21,7 +21,9 @@ async function copy(text: string): Promise<void> {
  * Makes a token, then shows it once, inside the command that uses it. It is
  * mounted only while open, so closing it throws the token away: the server
  * keeps only its hash, and nothing can show it again. A stray click outside
- * never closes it, as the Dialog allows for a shown-once secret.
+ * never closes it, as the Dialog allows for a shown-once secret. While the
+ * token is being made nothing closes it: closing then would make a token
+ * whose one showing nobody sees.
  */
 export function NewTokenDialog({
   api, mayPublishByDefault, origin, onClose, onMade,
@@ -64,6 +66,7 @@ export function NewTokenDialog({
     <Dialog
       open
       onOpenChange={open => { if (!open) onClose(); }}
+      dismissible={!busy}
       closeOnOutsideClick={false}
       title={secret ? "Connect Claude Code" : "Create a Claude Code token"}
       description={secret
@@ -102,7 +105,7 @@ export function NewTokenDialog({
           </label>
           {error && <p role="alert" className="text-sm text-danger">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
-            <Button onClick={onClose}>Cancel</Button>
+            <Button onClick={onClose} disabled={busy}>Cancel</Button>
             <Button type="submit" variant="primary" disabled={busy}>{busy ? "Creating…" : "Create token"}</Button>
           </div>
         </form>
