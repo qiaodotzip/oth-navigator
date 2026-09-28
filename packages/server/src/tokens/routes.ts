@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
 import { MAY_PUBLISH_BY_DEFAULT } from "./policy";
-import { TooManyTokensError, hashToken, listTokens, mintToken, revokeToken } from "./service";
+import { TooManyTokensError, claimNotices, hashToken, listTokens, mintToken, revokeToken } from "./service";
 
 const CreateBody = z.object({
   name: z.string().trim().min(1).max(60),
@@ -37,6 +37,11 @@ tokenRoutes.post("/", async c => {
     throw err;
   }
 });
+
+/** The notice at sign-in: tokens made in your name since you were last told. A POST, since it marks them told. */
+tokenRoutes.post("/notices", async c =>
+  c.json({ notices: await claimNotices(c.get("db"), c.get("user").id) }),
+);
 
 tokenRoutes.delete("/:id", async c => {
   const found = await revokeToken(c.get("db"), c.req.param("id"), c.get("user").id);

@@ -176,3 +176,22 @@ export async function revokeToken(db: Database, id: string, actorId: string, now
     return exists !== undefined;
   });
 }
+
+export type TokenNotice = { id: string; name: string; createdAt: string };
+
+/**
+ * Live tokens made in this person's name that they have not been told about,
+ * now marked as told (spec §6.1). Signing in is picking a name, so anyone
+ * past the gate can make a token as anyone: telling the owner is what makes
+ * that visible.
+ */
+export async function claimNotices(db: Database, userId: string, now: Date = new Date()): Promise<TokenNotice[]> {
+  const rows = await db.update(apiTokens).set({ announcedAt: now })
+    .where(and(
+      eq(apiTokens.userId, userId), isNull(apiTokens.announcedAt), isNull(apiTokens.revokedAt), gt(apiTokens.expiresAt, now),
+    ))
+    .returning({ id: apiTokens.id, name: apiTokens.name, createdAt: apiTokens.createdAt });
+  return rows
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map(r => ({ id: r.id, name: r.name, createdAt: r.createdAt.toISOString() }));
+}

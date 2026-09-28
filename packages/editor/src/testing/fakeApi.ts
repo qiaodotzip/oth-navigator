@@ -70,6 +70,7 @@ export function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}): Ap
     listTokens: vi.fn().mockResolvedValue({ tokens: [], mayPublishByDefault: false }),
     createToken: vi.fn(),
     revokeToken: vi.fn().mockResolvedValue(undefined),
+    claimTokenNotices: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as unknown as Api;
 }

@@ -114,6 +114,8 @@ export type ApiToken = {
 
 export type TokenList = { tokens: ApiToken[]; mayPublishByDefault: boolean };
 
+export type TokenNotice = { id: string; name: string; createdAt: string };
+
 export type ApiOptions = {
   fetchImpl?: typeof fetch;
   baseUrl?: string;
@@ -396,6 +398,10 @@ export function createApi(options: ApiOptions = {}) {
       }),
 
     revokeToken: (id: string) => request<void>(`/api/tokens/${id}`, { method: "DELETE" }),
+
+    /** Tokens made in your name since you were last told. It runs at sign-in, so a 401 here is no session ending. */
+    claimTokenNotices: async (): Promise<TokenNotice[]> =>
+      (await request<{ notices: TokenNotice[] }>("/api/tokens/notices", { method: "POST" }, { skipUnauthorized: true })).notices,
   };
 }
 

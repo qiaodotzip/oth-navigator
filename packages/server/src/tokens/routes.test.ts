@@ -111,4 +111,18 @@ describe("the tokens routes", () => {
     const listed = await json<{ tokens: TokenListing[] }>(await send("GET", "/api/tokens", weiCookie));
     expect(listed.tokens).toEqual([made.token]);
   });
+
+  it("tell the owner once about each token made in their name, and no one else", async () => {
+    await send("POST", "/api/tokens", weiCookie, { name: "Wei's laptop" });
+    const first = await json<{ notices: { name: string }[] }>(await send("POST", "/api/tokens/notices", weiCookie));
+    expect(first.notices.map(n => n.name)).toEqual(["Wei's laptop"]);
+    expect((await json<{ notices: unknown[] }>(await send("POST", "/api/tokens/notices", weiCookie))).notices).toEqual([]);
+    expect((await json<{ notices: unknown[] }>(await send("POST", "/api/tokens/notices", amyCookie))).notices).toEqual([]);
+  });
+
+  it("never tell anyone about a token already revoked", async () => {
+    const made = await json<Made>(await send("POST", "/api/tokens", weiCookie, { name: "Wei's laptop" }));
+    await send("DELETE", `/api/tokens/${made.token.id}`, amyCookie);
+    expect((await json<{ notices: unknown[] }>(await send("POST", "/api/tokens/notices", weiCookie))).notices).toEqual([]);
+  });
 });

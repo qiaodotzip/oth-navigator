@@ -5,6 +5,7 @@ import { AuthGate } from "./auth/AuthGate";
 import { reloadForGate } from "./auth/gateReload";
 import { Workspace } from "./shell/Workspace";
 import { useEditorStore } from "./state/store";
+import { TokenNotices } from "./team/TokenNotices";
 import { Toaster } from "./ui/Toaster";
 import "@fontsource-variable/inter";
 import "./styles.css";
@@ -30,6 +31,7 @@ function Root() {
     <>
       <AuthGate api={api}>
         <Workspace api={api} />
+        <TokenNotices api={api} />
       </AuthGate>
       <Toaster />
     </>
