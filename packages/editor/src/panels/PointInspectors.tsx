@@ -1,6 +1,7 @@
 import { PortalKindSchema } from "@oth/model";
 import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
+import { FlightControls } from "./FlightControls";
 
 const KIND_LABELS: Record<(typeof PortalKindSchema.options)[number], string> = {
   lift: "Lift",
@@ -132,6 +133,7 @@ export function PortalInspector({ saver }: { saver: Saver }) {
       <p data-testid="portal-stops" className="text-xs text-stone-600">
         Stops on {stops.join(", ")}
       </p>
+      <FlightControls saver={saver} endpoint={endpoint} portal={portal} />
       {stops.length < 2 && (
         <p className="text-xs text-amber-700">
           Only one stop so far. Switch floor and click its dashed outline to add the next.

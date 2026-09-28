@@ -13,6 +13,7 @@ import type { Saver } from "../state/save";
 import { useEditorStore, type Selection } from "../state/store";
 import { Kbd } from "../ui/Kbd";
 import { BindPlaces, offersPlaces } from "./BindPlaces";
+import { MakeStop } from "./MakeStop";
 
 /** Rooms and areas are bound to a surveyed place; a detail is dressing, and has none. */
 const bindable = (kind: string) => kind === "room" || kind === "area";
@@ -116,6 +117,7 @@ export function SelectionInspector({
                 <BindPlaces api={api} saver={saver} room={room} pendingPlaceId={pendingPlaceId} onBound={onBound} />
               </div>
             )}
+            <MakeStop saver={saver} room={room} step={step} />
           </>
         );
       }

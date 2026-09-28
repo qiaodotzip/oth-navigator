@@ -2,7 +2,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createUser, type User } from "../../auth/users";
-import { auditLog, captures, keyframes, levels, places, rooms, sightings } from "../../db/schema";
+import { auditLog, captures, keyframes, levels, places, portalEndpoints, rooms, sightings } from "../../db/schema";
 import { createEntity, softDeleteEntity, updateEntity } from "../../entities/repository";
 import { acquireLock, releaseLock } from "../../locks/service";
 import { rejectPlace } from "../../survey/review";
@@ -145,6 +145,21 @@ describe("update", () => {
     await acquireLock(f.db, "room", ROOM.id, f.wei.id, 300);
     expect((await call(client, "update", { type: "room", id: ROOM.id, expectedVersion: 0, data: { nameEn: "X" } })).text)
       .toMatch(/^Not saved: Wei is editing room L1-shop-12 now/);
+  });
+
+  it("keeps a lift or stair stop's outline and which way its flight climbs, rather than saying Saved and dropping them", async () => {
+    const outline = [[4, 0], [6, 0], [6, 10], [4, 10]];
+    await call(client, "create", { type: "portal", data: { id: "esc-1", kind: "escalator" } });
+    expect((await call(client, "create", { type: "portalEndpoint", data: {
+      id: "esc-1-1", portalId: "esc-1", levelId: "oth-L1", roomId: ROOM.id, point: [5, 5], footprint: outline,
+    } })).text).toBe("Created portalEndpoint esc-1-1, at version 0.");
+    const stop = async () => (await f.db.select().from(portalEndpoints).where(eq(portalEndpoints.id, "esc-1-1")))[0];
+    expect(await stop()).toMatchObject({ footprint: outline, flipped: false });
+
+    const wider = [[3, 0], [7, 0], [7, 10], [3, 10]];
+    expect((await call(client, "update", { type: "portalEndpoint", id: "esc-1-1", expectedVersion: 0, data: { footprint: wider, flipped: true } })).text)
+      .toBe("Saved portalEndpoint esc-1-1: it is now at version 1.");
+    expect(await stop()).toMatchObject({ footprint: wider, flipped: true });
   });
 
   it("says a deleted or missing thing is not there", async () => {

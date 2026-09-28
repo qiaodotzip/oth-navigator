@@ -111,6 +111,10 @@ export const portalEndpoints = pgTable("portal_endpoints", {
   levelId: text("level_id").notNull(),
   roomId: text("room_id").notNull(),
   point: jsonb("point").$type<[number, number]>().notNull(),
+  /** The drawing's outline of the shaft or flight at this stop (spec §7). */
+  footprint: jsonb("footprint").$type<[number, number][]>(),
+  /** The flight from this stop climbs the other way from the one its next stop suggests. */
+  flipped: boolean("flipped").notNull().default(false),
   ...auditColumns,
 });
 

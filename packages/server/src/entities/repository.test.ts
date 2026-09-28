@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../db/client";
 import { auditLog, buildings, levels, places, rooms } from "../db/schema";
+import { assembleModel } from "../model/assemble";
 import { createTestDb } from "../testing/harness";
 import {
   VersionConflictError, createEntity, listEntities, softDeleteEntity, updateEntity,
@@ -122,5 +123,31 @@ describe("softDeleteEntity", () => {
     await createEntity(db, "room", roomData, "user_1");
     await expect(softDeleteEntity(db, "room", "L1-lobby", 7, "user_1"))
       .rejects.toBeInstanceOf(VersionConflictError);
+  });
+});
+
+describe("a lift or stair stop's outline", () => {
+  const stop = {
+    id: "esc-1-1", portalId: "esc-1", levelId: "oth-L1", roomId: "L1-lobby", point: [5, 5],
+    footprint: [[4, 0], [6, 0], [6, 10], [4, 10]],
+  };
+
+  it("keeps the outline and which way the flight climbs", async () => {
+    await createEntity(db, "portal", { id: "esc-1", kind: "escalator" }, "user_1");
+    const created = await createEntity(db, "portalEndpoint", stop, "user_1");
+    expect(created.footprint).toEqual(stop.footprint);
+    expect(created.flipped).toBe(false);
+    const flipped = await updateEntity(db, "portalEndpoint", "esc-1-1", 0, { flipped: true }, "user_1");
+    expect(flipped.flipped).toBe(true);
+  });
+
+  it("clears an outline, and the model reads the stop back without one", async () => {
+    await createEntity(db, "portal", { id: "esc-1", kind: "escalator" }, "user_1");
+    await createEntity(db, "portalEndpoint", stop, "user_1");
+    const cleared = await updateEntity(db, "portalEndpoint", "esc-1-1", 0, { footprint: null }, "user_1");
+    expect(cleared.footprint).toBeNull();
+    const model = await assembleModel(db);
+    expect(model.portalEndpoints[0]?.footprint).toBeUndefined();
+    expect(model.portalEndpoints[0]?.flipped).toBe(false);
   });
 });

@@ -122,4 +122,10 @@ describe("PortalInspector", () => {
     act(() => useEditorStore.getState().select({ type: "portalEndpoint", id: "ep-3" }));
     expect(screen.getByLabelText("Lift or stair name")).toHaveValue("Lift B");
   });
+
+  it("says how the selected lift is built in 3D", () => {
+    useEditorStore.getState().select({ type: "portalEndpoint", id: "ep-1" });
+    render(<PortalInspector saver={fakeSaver()} />);
+    expect(screen.getByText(/2\.4 m shaft/)).toBeTruthy();
+  });
 });

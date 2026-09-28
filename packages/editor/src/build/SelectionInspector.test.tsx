@@ -193,4 +193,9 @@ describe("SelectionInspector", () => {
     expect(screen.getByText("Loading the floor…")).toBeTruthy();
     expect(screen.queryByText(/select something on the plan/i)).toBeNull();
   });
+
+  it("offers to make a room a lift or stair stop on Entrances & lifts", () => {
+    setup({ type: "room", id: "L1-a" }, "entrances");
+    expect(screen.getByRole("button", { name: "Escalator" })).toBeTruthy();
+  });
 });

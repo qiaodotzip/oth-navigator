@@ -133,6 +133,24 @@ describe("pathway routes", () => {
   });
 });
 
+describe("a lift or stair stop's outline", () => {
+  it("stores the outline and which way the flight climbs, and returns them", async () => {
+    const footprint = [[4, 0], [6, 0], [6, 10], [4, 10]];
+    await post("/api/entities/portal", { data: { id: "esc-1", kind: "escalator" } });
+    const created = await post("/api/entities/portalEndpoint", {
+      data: { id: "esc-1-1", portalId: "esc-1", levelId: "oth-L1", roomId: "L1-lobby", point: [5, 5], footprint },
+    });
+    expect(created.status).toBe(201);
+    expect((await json<{ entity: { footprint: unknown; flipped: boolean } }>(created)).entity)
+      .toMatchObject({ footprint, flipped: false });
+
+    const flipped = await patch("/api/entities/portalEndpoint/esc-1-1", { expectedVersion: 0, data: { flipped: true } });
+    expect(flipped.status).toBe(200);
+    const list = await app.request("/api/entities/portalEndpoint", { headers: { cookie } });
+    expect((await json<{ items: unknown[] }>(list)).items).toEqual([expect.objectContaining({ footprint, flipped: true })]);
+  });
+});
+
 describe("level owners", () => {
   it("saves and returns a floor's owners", async () => {
     await app.request("/api/entities/level", {
