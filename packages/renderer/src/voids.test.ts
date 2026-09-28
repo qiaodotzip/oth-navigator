@@ -70,6 +70,16 @@ describe("voidHoles", () => {
     const upstairs = space("L2-hall", "area", square(0, 0, 40, 20), { levelId: "oth-L2" });
     expect(voidHoles([upstairs, atrium]).size).toBe(0);
   });
+
+  it("cuts a void drawn twice only once", () => {
+    const twin = space("L1-atrium-2", "void", square(10, 5, 20, 15));
+    expect(voidHoles([hall, atrium, twin]).get("L1-hall")).toEqual([atrium.footprint]);
+  });
+
+  it("cuts only the first of two voids that share an edge", () => {
+    const beside = space("L1-v", "void", square(20, 5, 30, 15));
+    expect(voidHoles([hall, atrium, beside]).get("L1-hall")).toEqual([atrium.footprint]);
+  });
 });
 
 describe("balustradeRuns", () => {
@@ -77,5 +87,23 @@ describe("balustradeRuns", () => {
     const rails = balustradeRuns([hall, atrium]);
     expect(rails).toHaveLength(4);
     expect(rails.every(r => r.thicknessM === BALUSTRADE_THICKNESS_M && r.rooms.join() === "L1-atrium")).toBe(true);
+  });
+
+  it("rails only a void that cuts a floor", () => {
+    const overhang = space("L1-v", "void", square(35, 5, 45, 15));
+    expect(balustradeRuns([hall, overhang])).toHaveLength(0);
+    expect(balustradeRuns([atrium])).toHaveLength(0);
+  });
+
+  it("rails a void drawn twice only once", () => {
+    const twin = space("L1-atrium-2", "void", square(10, 5, 20, 15));
+    expect(balustradeRuns([hall, atrium, twin]).map(r => r.rooms.join())).toEqual(Array(4).fill("L1-atrium"));
+  });
+
+  it("skips an edge of no length", () => {
+    const doubled = space("L1-v", "void", [[10, 5], [20, 5], [20, 5], [20, 15], [10, 15]]);
+    const rails = balustradeRuns([hall, doubled]);
+    expect(rails).toHaveLength(4);
+    expect(rails.every(r => r.a[0] !== r.b[0] || r.a[1] !== r.b[1])).toBe(true);
   });
 });

@@ -65,26 +65,41 @@ export function floorContains(slab: Room, inner: Ring): boolean {
 }
 
 /**
+ * Cuts the voids in turn. Each one sees the holes cut before it, so a void
+ * drawn twice, or one sharing an edge with another, is cut only once.
+ */
+function cutVoids(rooms: readonly Room[]): { holes: Map<string, Room["holes"]>; cut: Room[] } {
+  const holes = new Map<string, Room["holes"]>();
+  const cut: Room[] = [];
+  for (const opening of rooms.filter(r => r.kind === "void")) {
+    let cuts = false;
+    for (const slab of rooms) {
+      if (slab.levelId !== opening.levelId || !FLOORED.has(slab.kind)) continue;
+      const already = holes.get(slab.id) ?? [];
+      if (!floorContains({ ...slab, holes: [...slab.holes, ...already] }, opening.footprint)) continue;
+      holes.set(slab.id, [...already, opening.footprint]);
+      cuts = true;
+    }
+    if (cuts) cut.push(opening);
+  }
+  return { holes, cut };
+}
+
+/**
  * Spec §7: a void cuts itself out of any slab on its floor that contains it.
  * Keyed by the slab's room id; each value is extra holes for that slab.
  */
 export function voidHoles(rooms: readonly Room[]): Map<string, Room["holes"]> {
-  const holes = new Map<string, Room["holes"]>();
-  for (const opening of rooms.filter(r => r.kind === "void")) {
-    for (const slab of rooms) {
-      if (slab.levelId !== opening.levelId || !FLOORED.has(slab.kind)) continue;
-      if (!floorContains(slab, opening.footprint)) continue;
-      holes.set(slab.id, [...(holes.get(slab.id) ?? []), opening.footprint]);
-    }
-  }
-  return holes;
+  return cutVoids(rooms).holes;
 }
 
-/** A balustrade along every edge of every void. */
+/**
+ * A balustrade along every edge of every void that cuts a floor. A void left
+ * uncut has no drop to guard, so it gets none.
+ */
 export function balustradeRuns(rooms: readonly Room[]): Rail[] {
   const rails: Rail[] = [];
-  for (const opening of rooms) {
-    if (opening.kind !== "void") continue;
+  for (const opening of cutVoids(rooms).cut) {
     const ring = opening.footprint;
     for (let i = 0; i < ring.length; i++) {
       const a = ring[i]!;
