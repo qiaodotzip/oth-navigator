@@ -2,7 +2,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { storeAsset } from "./storage";
+import { readAsset, storeAsset } from "./storage";
 
 const dir = () => mkdtemp(join(tmpdir(), "oth-assets-"));
 
@@ -41,5 +41,17 @@ describe("storeAsset", () => {
     const d = await dir();
     const a = await storeAsset(d, new Uint8Array([7, 7]));
     expect([...(await readFile(join(d, a.storagePath)))]).toEqual([7, 7]);
+  });
+
+  it("writes its path with forward slashes, so a database moved to Linux still finds the file", async () => {
+    const a = await storeAsset(await dir(), new Uint8Array([1, 2, 3]), "jpg");
+    expect(a.storagePath).toMatch(/^assets\/[0-9a-f]{2}\/[0-9a-f]{64}\.jpg$/);
+  });
+
+  it("still reads a path a Windows laptop wrote with backslashes", async () => {
+    const d = await dir();
+    const a = await storeAsset(d, new Uint8Array([4, 5, 6]), "jpg");
+    const windows = a.storagePath.split("/").join("\\");
+    expect(Array.from(await readAsset(d, windows))).toEqual([4, 5, 6]);
   });
 });

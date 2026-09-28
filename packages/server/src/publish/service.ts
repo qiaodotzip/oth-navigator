@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { validateModel, type ValidationReport } from "@oth/model";
 import { buildBundle } from "@oth/model/bundle";
 import { isNull } from "drizzle-orm";
+import { assetFile } from "../assets/storage";
 import type { Database } from "../db/client";
 import { assets, publishedVersions } from "../db/schema";
 import { assembleModel } from "../model/assemble";
@@ -57,7 +58,7 @@ export async function publish(db: Database, dataDir: string, input: PublishInput
     if (!referenced.has(asset.id)) continue;
     const dest = join(root, "assets", `${asset.checksum}.glb`);
     await mkdir(dirname(dest), { recursive: true });
-    await copyFile(join(dataDir, asset.storagePath), dest);
+    await copyFile(assetFile(dataDir, asset.storagePath), dest);
   }
 
   const manifest = JSON.parse(files.find(f => f.path === "manifest.json")?.contents ?? "{}");

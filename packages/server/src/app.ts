@@ -29,6 +29,11 @@ export type AppDeps = {
    * Left out, it is TEAM_CODE from the environment.
    */
   teamCode?: string | null;
+  /**
+   * Whether a 500's body carries the error's message. Off in production,
+   * where a raw message can carry a query, a file path or a connection string.
+   */
+  exposeErrors?: boolean;
 };
 
 export type AppEnv = { Variables: { db: Database; user: User; dataDir: string } };
@@ -39,6 +44,7 @@ export function createApp(deps: AppDeps) {
   const config = loadConfig();
   const dataDir = deps.dataDir ?? config.DATA_DIR;
   const teamCode = deps.teamCode !== undefined ? deps.teamCode : (config.TEAM_CODE ?? null);
+  const exposeErrors = deps.exposeErrors ?? config.NODE_ENV !== "production";
 
   app.use("*", async (c, next) => {
     c.set("db", deps.db);
@@ -76,7 +82,11 @@ export function createApp(deps: AppDeps) {
   app.route("/", staticRoutes(deps.editorDist));
 
   app.notFound(c => c.json({ error: "not found" }, 404));
-  app.onError((err, c) => c.json({ error: err.message }, 500));
+  app.onError((err, c) => {
+    // The whole error goes to the log, which Railway keeps; tests stay quiet.
+    if (config.NODE_ENV !== "test") console.error(err);
+    return c.json({ error: exposeErrors ? err.message : "Something went wrong on the server." }, 500);
+  });
 
   return app;
 }
