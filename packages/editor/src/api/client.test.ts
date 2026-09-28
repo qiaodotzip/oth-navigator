@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, ConflictError, createApi, isUnauthorized, wasWrite } from "./client";
+import { ApiError, ConflictError, createApi, isGateRefusal, isUnauthorized, wasWrite } from "./client";
 
 /**
  * Declares the fetch parameters explicitly so `mock.calls` is typed and the
@@ -121,6 +121,25 @@ describe("api client", () => {
     await expect(api.deleteKeyframe("kf_1")).rejects.toBeInstanceOf(ApiError);
     expect(onUnauthorized).toHaveBeenCalledWith({ method: "DELETE", path: "/api/keyframes/kf_1" });
   });
+
+  it("sends a team-code refusal to onGateClosed and never to onUnauthorized", async () => {
+    const onUnauthorized = vi.fn();
+    const onGateClosed = vi.fn();
+    const refusal = { error: "Enter the team code first: reload the page.", gate: true };
+    const api = createApi({ fetchImpl: mockFetch(401, refusal), onUnauthorized, onGateClosed });
+    await expect(api.getModel()).rejects.toBeInstanceOf(ApiError);
+    // The start-up check skips onUnauthorized, but a closed gate is still news.
+    await expect(api.me()).rejects.toBeInstanceOf(ApiError);
+    expect(onGateClosed).toHaveBeenCalledTimes(2);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("leaves an ordinary 401 to onUnauthorized", async () => {
+    const onGateClosed = vi.fn();
+    const api = createApi({ fetchImpl: mockFetch(401, { error: "unauthenticated" }), onGateClosed });
+    await expect(api.getModel()).rejects.toBeInstanceOf(ApiError);
+    expect(onGateClosed).not.toHaveBeenCalled();
+  });
 });
 
 describe("isUnauthorized", () => {
@@ -191,5 +210,14 @@ describe("assets", () => {
   it("reports the server unreachable rather than throwing", async () => {
     const fetchImpl = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
     expect(await createApi({ fetchImpl }).health()).toBe(false);
+  });
+});
+
+describe("isGateRefusal", () => {
+  it("is a 401 marked gate: true, and nothing else", () => {
+    expect(isGateRefusal(401, { error: "Enter the team code first.", gate: true })).toBe(true);
+    expect(isGateRefusal(401, { error: "unauthenticated" })).toBe(false);
+    expect(isGateRefusal(403, { gate: true })).toBe(false);
+    expect(isGateRefusal(401, null)).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ import { StrictMode, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { createApi, wasWrite } from "./api/client";
 import { AuthGate } from "./auth/AuthGate";
+import { reloadForGate } from "./auth/gateReload";
 import { Workspace } from "./shell/Workspace";
 import { useEditorStore } from "./state/store";
 import { Toaster } from "./ui/Toaster";
@@ -20,6 +21,8 @@ function Root() {
           // still hears about a write that was in flight when it did.
           if (state.user || state.sessionEnd === "expired") state.endSession("expired", wasWrite(request));
         },
+        // A code changed since this page opened: the server's team-code page asks again.
+        onGateClosed: () => void reloadForGate(),
       }),
     [],
   );

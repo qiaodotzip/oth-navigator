@@ -27,6 +27,15 @@ export function isUnauthorized(err: unknown): boolean {
 }
 
 /**
+ * The server's answer when this browser's team code is missing or out of
+ * date (spec §13). It is not a signed-out session, so it must not open the
+ * sign-in dialog: the gate would refuse every name the same way.
+ */
+export function isGateRefusal(status: number, body: unknown): boolean {
+  return status === 401 && (body as { gate?: unknown } | null)?.gate === true;
+}
+
+/**
  * Whether a refused request was trying to change something, so the sign-in
  * dialog can say that change did not land. Presence and lock pings are POSTs
  * too, but they save nothing anyone made.
@@ -90,12 +99,19 @@ export type ApiOptions = {
   /**
    * Called for a 401 on any request except login, `me`, `people` and logout —
    * a signed-out start-up `me` also answers 401, and that must lead to the
-   * sign-in screen, not this. `people` is public, so it never 401s, but it
-   * skips the hook for the same reason the others do: it runs before anyone
-   * is signed in. Wired in `main.tsx` to end the session as "expired" so
-   * every direct write notices the same way the saver does.
+   * sign-in screen, not this. `people` is public, so only the team-code gate
+   * ever 401s it, but it skips the hook for the same reason the others do: it
+   * runs before anyone is signed in. Wired in `main.tsx` to end the session
+   * as "expired" so every direct write notices the same way the saver does.
    */
   onUnauthorized?: (request: { method: string; path: string }) => void;
+  /**
+   * Called when the server turns this browser away at the team-code gate:
+   * the code was changed since it was typed here. Wired in `main.tsx` to
+   * reload, which brings up the server's team-code page. Called for every
+   * request, the start-up ones included.
+   */
+  onGateClosed?: () => void;
 };
 
 export function createApi(options: ApiOptions = {}) {
@@ -118,6 +134,10 @@ export function createApi(options: ApiOptions = {}) {
 
     const body = await res.json().catch(() => null);
     if (!res.ok) {
+      if (isGateRefusal(res.status, body)) {
+        options.onGateClosed?.();
+        throw new ApiError(res.status, body);
+      }
       if (res.status === 409) {
         const current = (body as { current?: Record<string, unknown> } | null)?.current ?? null;
         throw new ConflictError(current, body);
