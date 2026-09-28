@@ -1,8 +1,9 @@
+import { parseModel } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthGate } from "../auth/AuthGate";
 import { useEditorStore } from "../state/store";
-import { fakeApi } from "../testing/fakeApi";
+import { fakeApi, sampleModel } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
 import { Workspace } from "./Workspace";
 
@@ -125,5 +126,21 @@ describe("Workspace", () => {
     // By text: the dialog hides the page from role queries, not from the screen.
     expect(screen.getByText("Areas & rooms", { selector: "h2" })).toBeTruthy();
     expect(screen.getByRole("dialog", { name: /session ended/i })).toBeTruthy();
+  });
+
+  it("opens a link to a room on an upper floor with that room selected", async () => {
+    // The map loads onto the lowest floor. Were Build shown before this floor
+    // is the active one, it would judge the link against L1 and drop it.
+    const model = parseModel({
+      ...sampleModel,
+      rooms: [{ id: "L2-a", levelId: "oth-L2", kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]], heightM: 3, nameEn: "Upstairs" }],
+    });
+    const api = fakeApi({ getModel: vi.fn().mockResolvedValue(model) });
+    window.history.pushState({}, "", "/floors/L2/build?step=rooms&select=room:L2-a");
+    render(<Workspace api={api} />);
+    expect(await screen.findByRole("navigation", { name: "Build steps" })).toBeTruthy();
+
+    await waitFor(() => expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L2-a" }));
+    expect(new URLSearchParams(window.location.search).get("select")).toBe("room:L2-a");
   });
 });
