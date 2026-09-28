@@ -14,3 +14,6 @@ scripts/.context.glb
 # store and the proposals go back through survey:import.
 survey-out/frames/
 **/survey-out/*/frames/
+
+# Playwright's output from the smoke test
+e2e/test-results/

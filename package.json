@@ -24,9 +24,11 @@
     "survey:tidy": "npm run start --workspace @oth/server -- survey:tidy",
     "data:export": "npm run start --workspace @oth/server -- data:export",
     "data:import": "npm run start --workspace @oth/server -- data:import",
+    "e2e": "playwright test --config e2e/playwright.config.ts",
     "plan:l1": "npm run start --workspace @oth/server -- plan:l1"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
   }
