@@ -4,6 +4,8 @@ import { FloorWorkspace } from "../floor/FloorWorkspace";
 import { yourFloor } from "../flow/floors";
 import { FloorsHome } from "../home/FloorsHome";
 import { href, navigate, useCurrentRoute } from "../route";
+import { SetupWizard } from "../setup/SetupWizard";
+import { asSetupApi } from "../setup/setupApi";
 import { createSaver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { TeamPage } from "../team/TeamPage";
@@ -36,6 +38,7 @@ export function Workspace({ api }: { api: Api }) {
       {route.name === "floors" && <FloorsHome api={api} saver={saver} />}
       {route.name === "team" && <TeamPage api={api} />}
       {route.name === "floor" && <FloorWorkspace api={api} saver={saver} route={route} />}
+      {route.name === "setup" && <SetupWizard api={asSetupApi(api)} route={route} />}
     </AppShell>
   );
 }

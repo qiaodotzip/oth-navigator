@@ -2,6 +2,8 @@ import { parseModel } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthGate } from "../auth/AuthGate";
+import { fakeSetupApi } from "../setup/testing";
+import { useSetupStore } from "../setup/sync";
 import { useEditorStore } from "../state/store";
 import { fakeApi, sampleModel } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
@@ -149,5 +151,15 @@ describe("Workspace", () => {
 
     await waitFor(() => expect(useEditorStore.getState().selection).toEqual({ type: "room", id: "L2-a" }));
     expect(new URLSearchParams(window.location.search).get("select")).toBe("room:L2-a");
+  });
+
+  it("opens a floor's setup on its first step not done, with the steps in place of the tabs", async () => {
+    useSetupStore.getState().reset();
+    window.history.pushState({}, "", "/floors/L2/setup");
+    render(<Workspace api={fakeSetupApi()} />);
+    await waitFor(() => expect(window.location.pathname).toBe("/floors/L2/setup/1"));
+    expect(await screen.findByRole("heading", { name: "Add footage" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Setup steps" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
   });
 });

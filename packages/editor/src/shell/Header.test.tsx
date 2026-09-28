@@ -105,4 +105,16 @@ describe("Header", () => {
     fireEvent.click(screen.getByRole("button", { name: /Floor L1/ }));
     expect(await screen.findByText(/couldn't load the team/i)).toBeTruthy();
   });
+
+  it("shows the setup's nine steps in place of the tabs, each a link, the current one marked", () => {
+    const api = fakeApi();
+    render(<Header api={api} saver={createSaver(api)} route={{ name: "setup", code: "L1", step: 2, params: {} }} />);
+    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
+    const steps = within(screen.getByRole("navigation", { name: "Setup steps" }));
+    expect(steps.getAllByRole("link")).toHaveLength(9);
+    // L1 has footage, so its first step ticks itself.
+    expect(steps.getByRole("link", { name: "Step 1: Add footage, done" }).getAttribute("href")).toBe("/floors/L1/setup/1");
+    expect(steps.getByRole("link", { name: "Step 2: Label the survey" }).getAttribute("aria-current")).toBe("step");
+    expect(steps.getByRole("link", { name: "Step 9: Finish" }).getAttribute("href")).toBe("/floors/L1/setup/9");
+  });
 });
