@@ -17,7 +17,7 @@ const model = parseModel({
 });
 
 function fakeSaver() {
-  return { create: vi.fn().mockResolvedValue(true) };
+  return { create: vi.fn().mockResolvedValue(true), remove: vi.fn().mockResolvedValue(true) };
 }
 
 describe("commitPoint", () => {
@@ -55,8 +55,32 @@ describe("commitPoint", () => {
   });
 
   it("does not add a stop when creating its lift failed", async () => {
-    const saver = { create: vi.fn().mockResolvedValue(false) };
+    const saver = { create: vi.fn().mockResolvedValue(false), remove: vi.fn() };
     await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L1", point: [80, 80], say: vi.fn(), now: 9 });
     expect(saver.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes the new lift back out when its stop is refused, so no lift is left on no floor", async () => {
+    const saver = fakeSaver();
+    saver.create.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L1", point: [80, 80], say: vi.fn(), now: 9 });
+    // A new lift is saved at version 0.
+    expect(saver.remove).toHaveBeenCalledWith("portal", "portal-9", 0);
+  });
+
+  it("never removes a lift that already existed when a new stop on it is refused", async () => {
+    const saver = fakeSaver();
+    saver.create.mockResolvedValueOnce(false);
+    await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L2", point: [40, 40], say: vi.fn(), now: 9 });
+    expect(saver.remove).not.toHaveBeenCalled();
+  });
+
+  it("says where to find the lift when taking it back out fails too", async () => {
+    const saver = fakeSaver();
+    saver.create.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    saver.remove.mockResolvedValueOnce(false);
+    const say = vi.fn();
+    await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L1", point: [80, 80], say, now: 9 });
+    expect(say).toHaveBeenCalledWith(expect.stringMatching(/Entrances & lifts to-do/));
   });
 });

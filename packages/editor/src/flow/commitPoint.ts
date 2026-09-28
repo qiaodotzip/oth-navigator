@@ -3,7 +3,10 @@ import type { EntityType } from "../api/client";
 import type { Tool } from "../state/store";
 import { entranceAt, portalEndpointAt } from "./placePoint";
 
-type Creates = { create: (type: EntityType, data: Record<string, unknown>) => Promise<boolean> };
+type Writes = {
+  create: (type: EntityType, data: Record<string, unknown>) => Promise<boolean>;
+  remove: (type: EntityType, id: string, expectedVersion: number) => Promise<boolean>;
+};
 
 /**
  * What a click with the Entrance or Portal tool saves.
@@ -14,7 +17,7 @@ type Creates = { create: (type: EntityType, data: Record<string, unknown>) => Pr
 export async function commitPoint({
   saver, model, tool, levelId, point, say, now = Date.now(),
 }: {
-  saver: Creates;
+  saver: Writes;
   model: MapModel;
   tool: Tool;
   levelId: string;
@@ -38,6 +41,14 @@ export async function commitPoint({
       say(placed.portal
         ? "New lift placed. Switch level and click its dashed outline to add its next stop."
         : "Joined the lift or stair already at this spot on another level.");
+      return;
+    }
+    if (!placed.portal) return;
+    // The stop was refused after its lift was saved. A lift with no stops is
+    // on no floor, connects nothing and cannot be clicked, so take it back out
+    // (a new entity is saved at version 0) rather than leave it orphaned.
+    if (!(await saver.remove("portal", placed.portal.id, 0))) {
+      say("The lift was saved without its stop. Delete it from the Entrances & lifts to-do list.");
     }
   }
 }
