@@ -1,13 +1,16 @@
 import { live, type Level, type MapModel } from "@oth/model";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Api } from "../api/client";
 import { floorUnits } from "../flow/buildSteps";
 import { followLink, href, setParams } from "../route";
 import { useRecheck } from "../state/recheck";
+import type { Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
+import { Button } from "../ui/Button";
 import { Chip } from "../ui/Chip";
 import { BoxedFrame } from "./BoxedFrame";
 import { frameSrc } from "./evidence";
+import { ObjectsSection } from "./ObjectsSection";
 import {
   FILTER_LABEL, GAP_LABEL, PLACES_FILTERS, filterRows, onMapLine, placeRows, placesSummary, readPlacesFilter,
   rowAction, whereText, type PlaceRow, type PlacesFilter,
@@ -26,14 +29,19 @@ const EMPTY: Record<PlacesFilter, string> = {
  * The checklist of every confirmed place on a floor (spec §4): is each on the
  * map, and what is missing if not. It reads across Review and Build, so it is
  * a tab of its own. Proposals are counted, not listed, because they are
- * claims until Review decides them.
+ * claims until Review decides them. Its Objects section lists each kind of
+ * object, and turns a place into one.
  */
-export function PlacesWorkspace({ api, level, params }: { api: Api; level: Level; params: Record<string, string> }) {
+export function PlacesWorkspace({ api, saver, level, params }: {
+  api: Api; saver: Saver; level: Level; params: Record<string, string>;
+}) {
   const model = useEditorStore(s => s.model);
   const report = useEditorStore(s => s.report);
   const filter = readPlacesFilter(params);
   const rows = useMemo(() => (model ? placeRows(model, report, level.id) : []), [model, report, level.id]);
   const summary = useMemo(() => (model ? placesSummary(model, rows, level.id) : null), [model, rows, level.id]);
+  // The place the Objects section's form is turning into an object.
+  const [objectPlaceId, setObjectPlaceId] = useState<string | null>(null);
   // Confirmed units that no floor claims: no floor of their own, filmed on
   // footage filed under none, and no room yet. No floor's rows count them and
   // no floor's to-do names them, yet Bind places offers them on every floor
@@ -108,16 +116,27 @@ export function PlacesWorkspace({ api, level, params }: { api: Api; level: Level
 
       {shown.length > 0 ? (
         <ul aria-label="Confirmed places" className="divide-y divide-stone-200 rounded border border-stone-200 bg-white">
-          {shown.map(row => <PlaceRowItem key={row.place.id} api={api} model={model} row={row} levelCode={level.code} />)}
+          {shown.map(row => (
+            <PlaceRowItem
+              key={row.place.id} api={api} model={model} row={row} levelCode={level.code} onMakeObject={setObjectPlaceId}
+            />
+          ))}
         </ul>
       ) : (
         <p className="text-sm text-stone-600">{summary.confirmed === 0 ? EMPTY.all : EMPTY[filter]}</p>
       )}
+
+      <ObjectsSection
+        api={api} saver={saver} model={model} level={level}
+        placeId={objectPlaceId} onPlaceId={setObjectPlaceId}
+      />
     </div>
   );
 }
 
-function PlaceRowItem({ api, model, row, levelCode }: { api: Api; model: MapModel; row: PlaceRow; levelCode: string }) {
+function PlaceRowItem({ api, model, row, levelCode, onMakeObject }: {
+  api: Api; model: MapModel; row: PlaceRow; levelCode: string; onMakeObject: (placeId: string) => void;
+}) {
   const action = rowAction(model, row, levelCode);
   const where = whereText(model, row);
   return (
@@ -150,6 +169,17 @@ function PlaceRowItem({ api, model, row, levelCode }: { api: Api; model: MapMode
           </ul>
         )}
       </div>
+      {/* Only a place with no room could be an object: one on the map is a unit. */}
+      {!row.room && (
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label={`This is an object: ${row.place.nameEn}`}
+          onClick={() => onMakeObject(row.place.id)}
+        >
+          This is an object
+        </Button>
+      )}
       {/* Named for its place, since every row has one; the name starts with the words on it. */}
       <a
         href={action.to}

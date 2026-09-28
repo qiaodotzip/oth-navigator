@@ -2,6 +2,7 @@ import { parseModel, type ValidationReport } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useCurrentRoute } from "../route";
+import { createSaver } from "../state/save";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { PlacesWorkspace } from "./PlacesWorkspace";
@@ -52,7 +53,9 @@ function at(path: string, validate = vi.fn().mockResolvedValue(report)) {
   function Harness() {
     const route = useCurrentRoute();
     const level = useEditorStore(s => s.model)?.levels.find(l => route.name === "floor" && l.code === route.code);
-    return route.name === "floor" && level ? <PlacesWorkspace api={api} level={level} params={route.params} /> : null;
+    return route.name === "floor" && level
+      ? <PlacesWorkspace api={api} saver={createSaver(api)} level={level} params={route.params} />
+      : null;
   }
   render(<Harness />);
   return { api };
@@ -177,5 +180,14 @@ describe("PlacesWorkspace", () => {
     useEditorStore.getState().setModel(withFloorless());
     at("/floors/L2/places");
     expect(screen.queryByRole("link", { name: /Places with no floor/ })).toBeNull();
+  });
+
+  it("turns a place in the list into an object from its row, in the Objects section's form", () => {
+    at("/floors/L1/places?filter=all");
+    // Only a place with no room is offered: one on the map is a unit.
+    expect(screen.queryByRole("button", { name: "This is an object: Starbucks" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "This is an object: Anchor Books" }));
+    expect((screen.getByLabelText("Which place?") as HTMLSelectElement).value).toBe("pl_books");
+    expect(screen.getByRole("heading", { name: "Objects" })).toBeTruthy();
   });
 });

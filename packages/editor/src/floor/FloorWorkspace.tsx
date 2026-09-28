@@ -21,7 +21,8 @@ import { toast } from "../ui/toast";
  * skipping it saves half a second on every tag. Neither loads the model —
  * the shell already has. The Build tab is `BuildWorkspace`, on the shell's
  * saver, which validates: what Build draws can change what blocks publishing.
- * Places writes nothing, so it takes no saver.
+ * Places turns places into objects and edits their kinds on the shell's
+ * saver, which validates: a kind's model is checked at publish.
  */
 export function FloorWorkspace({ api, saver, route }: { api: Api; saver: Saver; route: FloorRoute }) {
   const model = useEditorStore(s => s.model);
@@ -61,7 +62,7 @@ export function FloorWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
     return <ReviewWorkspace api={api} saver={surveySaver} level={level} params={route.params} />;
   }
   if (route.tab === "places") {
-    return <PlacesWorkspace api={api} level={level} params={route.params} />;
+    return <PlacesWorkspace api={api} saver={saver} level={level} params={route.params} />;
   }
   // Build reads the active level everywhere. Until it is this floor, a link's
   // ?select= would be judged against the wrong one and dropped.
