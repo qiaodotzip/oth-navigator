@@ -64,6 +64,8 @@ describe("Claude's changes on a floor", () => {
     expect((await send("GET", `/api/levels/oth-L1/claude-changes?since=${epoch}&limit=5`)).status).toBe(200);
     expect((await send("GET", "/api/levels/oth-L1/claude-changes")).status).toBe(400);
     expect((await send("GET", "/api/levels/oth-L1/claude-changes?since=yesterday")).status).toBe(400);
+    // "1" parses as a (wrong) date under JS's legacy fallback rather than an invalid one, so since must look like an ISO date-time up front.
+    expect((await send("GET", "/api/levels/oth-L1/claude-changes?since=1")).status).toBe(400);
     expect((await send("GET", `/api/levels/oth-L1/claude-changes?since=${epoch}&limit=0`)).status).toBe(400);
     expect((await send("GET", `/api/levels/oth-L9/claude-changes?since=${epoch}`)).status).toBe(404);
     expect((await send("GET", `/api/levels/oth-L1/claude-changes?since=${epoch}`, undefined, false)).status).toBe(401);

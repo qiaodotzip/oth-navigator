@@ -9,6 +9,13 @@ import { isSetupStep } from "./steps";
 const StepBody = z.object({ status: z.enum(SETUP_STATUSES), note: z.string().max(500).optional() });
 
 /**
+ * `new Date("1")` parses to a real (bogus) date rather than an invalid one —
+ * legacy, non-ISO fallback parsing — so `since` must look like an ISO
+ * date-time up front, not just survive `new Date(...)`.
+ */
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T/;
+
+/**
  * Mounted at /api/levels, beside the drafts' routes. Each route takes
  * requireUser itself: a token reaches /mcp and nothing else, so only a
  * signed-in person reads or marks a setup here.
@@ -44,7 +51,7 @@ setupRoutes.get("/:id/claude-changes", requireUser, async c => {
   const levelId = c.req.param("id");
   // Plan 6E always sends since: the epoch for every change, or when step 2 began.
   const rawSince = c.req.query("since");
-  const since = rawSince === undefined ? null : new Date(rawSince);
+  const since = rawSince !== undefined && ISO_DATETIME.test(rawSince) ? new Date(rawSince) : null;
   if (!since || Number.isNaN(since.getTime())) {
     return c.json({ error: "since is a date and time, such as 1970-01-01T00:00:00.000Z for every change." }, 400);
   }

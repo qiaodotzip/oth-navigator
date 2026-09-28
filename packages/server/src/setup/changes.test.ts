@@ -107,6 +107,34 @@ describe("listClaudeChanges", () => {
     }]);
   });
 
+  it("gives an object low confidence when its frame has fewer than two anchors", async () => {
+    // No bound place on the whole floor, so no frame ever gets a second anchor.
+    await createEntity(f.db, "room", { id: "L1-corridor", levelId: "oth-L1", kind: "area", footprint: sq(0, 0, 60, 6), heightM: 6, walkable: true }, amy.id);
+    await f.db.insert(captures).values({ id: "cap_1", kind: "video", filename: "L1 walk.mp4", levelId: "oth-L1" });
+    await f.db.insert(keyframes).values({
+      id: "kf_0", captureId: "cap_1", timeMs: 0, imageId: "kf_0", storagePath: "assets/aa/x.jpg", checksum: "x", widthPx: 640, heightPx: 480, sizeBytes: 1,
+    });
+    await createEntity(f.db, "objectKind", { id: "bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }, amy.id);
+    await createEntity(f.db, "place", { id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "bin" }, amy.id);
+    await createEntity(f.db, "sighting", { id: "sg_1", placeId: "pl_bin", keyframeId: "kf_0" }, amy.id);
+    await call(client, "create", { type: "placement", data: {
+      id: "L1-wastebin-1", levelId: "oth-L1", objectKindId: "bin", position: [5, 5.65, 0], sightingIds: ["sg_1"],
+    } });
+    expect(await listClaudeChanges(f.db, "oth-L1", EPOCH)).toMatchObject([{ group: "objects", confidence: "low" }]);
+  });
+
+  it("folds make_stop's second call — just finishing the room's opening — into stops", async () => {
+    // A stop placed by hand already: outlined, but the space still has walls.
+    await createEntity(f.db, "room", { id: "L1-esc", levelId: "oth-L1", kind: "service", footprint: sq(4, 2, 6, 12), heightM: 6, walkable: false, nameEn: "Escalator - 07" }, amy.id);
+    await createEntity(f.db, "portal", { id: "portal-1", kind: "escalator" }, amy.id);
+    await createEntity(f.db, "portalEndpoint", {
+      id: "L1-portal-1", portalId: "portal-1", levelId: "oth-L1", roomId: "L1-esc", point: [5, 7], footprint: sq(4, 2, 6, 12),
+    }, amy.id);
+    await call(client, "make_stop", { floor: "L1", room: "L1-esc", expectedVersion: 0, kind: "escalator" });
+    expect(brief(await listClaudeChanges(f.db, "oth-L1", EPOCH)))
+      .toEqual([["stops", "Finished opening Escalator - 07 as a stop", "room", "update", false]]);
+  });
+
   it("lists Claude's survey labels on the floor of their frame", async () => {
     await frameOnL1();
     await call(client, "tag_frame", { frameId: "kf_1", nameEn: "Gong Cha", category: "retail" });

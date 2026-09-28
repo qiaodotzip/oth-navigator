@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS "audit_via_at_idx" ON "audit_log" USING btree ("at") WHERE "audit_log"."via" is not null;

@@ -202,7 +202,15 @@ export const auditLog = pgTable("audit_log", {
   after: jsonb("after"),
   /** The Claude Code token a change came through; null for one made in the app. */
   via: text("via"),
-}, t => ({ entityIdx: index("audit_entity_idx").on(t.entityType, t.entityId) }));
+}, t => ({
+  entityIdx: index("audit_entity_idx").on(t.entityType, t.entityId),
+  /**
+   * The check step's list (`setup/changes.ts` listClaudeChanges) scans by
+   * `at` for rows with a `via`; partial on `via is not null` so a person's
+   * far larger share of the log never bloats it.
+   */
+  viaAtIdx: index("audit_via_at_idx").on(t.at).where(sql`${t.via} is not null`),
+}));
 
 export const publishedVersions = pgTable("published_versions", {
   id: text("id").primaryKey(),

@@ -89,7 +89,11 @@ export async function undoneMarks(db: Database, ids: readonly string[]): Promise
 async function currentVersions(db: Database, touches: readonly Touch[]): Promise<Map<string, number>> {
   const out = new Map<string, number>();
   const byType = new Map<EntityType, string[]>();
-  for (const t of touches) byType.set(t.type, [...(byType.get(t.type) ?? []), t.id]);
+  for (const t of touches) {
+    const ids = byType.get(t.type);
+    if (ids) ids.push(t.id);
+    else byType.set(t.type, [t.id]);
+  }
   for (const [type, ids] of byType) {
     const { table } = entityRegistry[type];
     const rows = (await db.select({ id: table.id, version: table.version }).from(table).where(inArray(table.id, ids))) as { id: string; version: number }[];
@@ -161,10 +165,15 @@ export async function listClaudeChanges(db: Database, levelId: string, since: Da
     .orderBy(desc(auditLog.at));
   const model = await assembleModel(db);
   const frameFloor = frameFloors(model);
+  // The limit is applied here, right after the floor filter — as early as it
+  // can be, since folding and the floor test both need the full window's
+  // rows — so nothing past it pays for names, undo marks or confidence.
   const changes = foldChanges(rows).filter(c => onFloor(c, model, levelId, frameFloor)).slice(0, limit ?? Infinity);
   const names = namesFrom(model);
   const undone = await undoneMarks(db, changes.map(c => c.id));
-  const confidence = confidenceFor(model, levelId);
+  // confidenceFor walks every frame on the floor; skip it unless the limited
+  // list actually has an object row to ask it about.
+  const confidence = changes.some(c => c.facts.kind === "object") ? confidenceFor(model, levelId) : null;
   return changes.map(c => ({
     auditId: c.id,
     at: c.at.toISOString(),
@@ -173,7 +182,7 @@ export async function listClaudeChanges(db: Database, levelId: string, since: Da
     entityType: c.entityType,
     entityId: c.entityId,
     action: c.action,
-    ...(c.facts.kind === "object" ? { confidence: confidence(c.facts.sightingIds) } : {}),
+    ...(c.facts.kind === "object" ? { confidence: confidence!(c.facts.sightingIds) } : {}),
     undone: undone.has(c.id),
   }));
 }

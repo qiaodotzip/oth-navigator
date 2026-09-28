@@ -30,6 +30,7 @@ export type Facts =
   | { kind: "draftOff"; name: string; setAside: boolean }
   | { kind: "renamed"; from: string; to: string; kindFrom: string; kindTo: string }
   | { kind: "stop"; roomId: string; roomName: string; portalId: string; stopKind: string | null; joined: boolean }
+  | { kind: "stopOpened"; roomId: string; roomName: string }
   | { kind: "bound"; placeName: string; roomId: string; photos: number }
   | { kind: "object"; objectKindId: string; sightingIds: string[]; at: Vec2 }
   | { kind: "pathway"; name: string; lengthM: number }
@@ -193,14 +194,17 @@ function foldGroup(rows: readonly AuditRow[]): Folded[] {
     const placeId = str(after.placeId);
     const placeMade = free("place", placeId, "create");
     const madeObject = free("place", placeId, "update");
-    const kindMade = rows.find(r => !used.has(r.id) && r.entityType === "objectKind" && r.action === "create");
+    // The kind this tag's own place points at — not any objectKind create
+    // sitting elsewhere in the same call.
+    const objectKindId = str(obj(placeMade?.after).objectKindId) || str(obj(madeObject?.after).objectKindId);
+    const kindMade = objectKindId ? free("objectKind", objectKindId, "create") : undefined;
     out.push(made(tag, "labels", use(tag, placeMade, madeObject, kindMade), {
       levelId: null,
       undo: null,
       facts: {
         kind: "label", placeId, placeName: str(obj(placeMade?.after).nameEn), frameId: str(after.keyframeId),
         newPlace: placeMade !== undefined,
-        object: kindMade !== undefined || str(obj(placeMade?.after).objectKindId) !== "" || str(obj(madeObject?.after).objectKindId) !== "",
+        object: objectKindId !== "",
       },
     }));
   }
@@ -241,6 +245,17 @@ function alone(r: AuditRow, rows: readonly AuditRow[]): Folded | null {
   if (r.action === "update") {
     const patch = patchBack(before, after);
     if (Object.keys(patch).length === 0) return null;
+    // make_stop's "finish opening it" (stops/makeStop.ts): the stop was
+    // already outlined in an earlier call, so this call writes only the
+    // room's own opening, `{ kind: "area", walkable: true }` — Object.keys
+    // of patchBack's reverse is a subset of those two fields exactly because
+    // nothing else changed.
+    if (
+      r.entityType === "room" && str(after.kind) === "area" && after.walkable === true &&
+      Object.keys(patch).every(key => key === "kind" || key === "walkable")
+    ) {
+      return one("stops", { kind: "stopOpened", roomId: r.entityId, roomName: str(after.nameEn) }, [{ do: "patch", ...ref(r), patch }]);
+    }
     if (r.entityType === "room" && ("nameEn" in patch || "kind" in patch)) {
       return one("names", { kind: "renamed", from: str(before.nameEn), to: str(after.nameEn), kindFrom: str(before.kind), kindTo: str(after.kind) },
         [{ do: "patch", ...ref(r), patch }]);
@@ -258,10 +273,16 @@ export function foldChanges(rows: readonly AuditRow[]): Folded[] {
   for (const r of rows) {
     if (!r.via) continue;
     const key = `${r.via} ${r.at.getTime()}`;
-    calls.set(key, [...(calls.get(key) ?? []), r]);
+    const group = calls.get(key);
+    if (group) group.push(r);
+    else calls.set(key, [r]);
   }
+  // Ties (same moment: several changes from one call, or two calls that land
+  // in the same instant) break on the entity, then the action — never on the
+  // audit id, which is a random uuid and so no order at all.
   return [...calls.values()].flatMap(foldGroup)
-    .sort((a, b) => b.at.getTime() - a.at.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+    .sort((a, b) => b.at.getTime() - a.at.getTime()
+      || a.entityId.localeCompare(b.entityId) || a.action.localeCompare(b.action));
 }
 
 const A: Record<string, string> = {
@@ -292,6 +313,8 @@ export function summarise(change: Folded, names: Names): string {
       const what = kind ? A[kind] ?? kind : "a lift or stair";
       return `Made ${f.roomName || names.room(f.roomId)} ${what} stop${f.joined ? ", joining the one on another floor" : ""}`;
     }
+    case "stopOpened":
+      return `Finished opening ${f.roomName || names.room(f.roomId)} as a stop`;
     case "bound":
       return `Bound ${f.placeName} to ${names.room(f.roomId)}${f.photos > 0 ? `, seen in ${count(f.photos, "photo")}` : ""}`;
     case "object": {
