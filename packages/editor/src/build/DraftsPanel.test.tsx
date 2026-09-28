@@ -109,7 +109,7 @@ describe("DraftsPanel", () => {
     setup();
     expect(screen.getByText(
       "The drawing sits about 11.5 m east and 4.6 m south of the rooms already on L2. "
-      + "Line it up with Align on this step, then run Find rooms again.",
+      + "Line it up with Align on the Floorplan step, then run Find rooms again.",
     )).toBeTruthy();
   });
 

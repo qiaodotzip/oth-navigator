@@ -185,7 +185,7 @@ export function DraftsPanel({ api, saver }: { api: Api; saver: Saver }) {
 
   return (
     <section aria-label="Drafts from the drawing" className="space-y-2">
-      {lineUp && <LineUpWarning>{lineUpWords(lineUp, levelCode)}</LineUpWarning>}
+      {lineUp && <LineUpWarning>{lineUpWords(lineUp, levelCode, "the Floorplan step")}</LineUpWarning>}
       <p className="text-xs text-stone-700">
         <span className="font-medium">{`${plural(view.review.length, "draft", "drafts")} to review`}</span>
         {setAside > 0 && ` · ${setAside} set aside by Claude`}

@@ -13,7 +13,7 @@ import { imageForLevel } from "../state/underlay";
 import { Button } from "../ui/Button";
 import { reportFailure } from "../ui/failure";
 import { toast } from "../ui/toast";
-import { useDrafts } from "./drafts";
+import { loadDrafts, useDrafts } from "./drafts";
 
 const STOPPING = "Stopping…";
 
@@ -99,6 +99,11 @@ async function run(
     const found = await work(say);
     useDrafts.getState().setDrafts(search.levelId, found.drafts);
     toast({ tone: "success", message: describeFind(found, { inSetup: search.inSetup }) });
+    // The save (PUT) doesn't carry lineUp; only the GET does (contract v3),
+    // and this is exactly when a person needs the warning. loadDrafts's own
+    // staleness guard drops this answer if a newer search has since replaced
+    // the floor's drafts.
+    void loadDrafts(api, search.levelId);
   } catch (err) {
     sayWhy(api, search, err);
   } finally {

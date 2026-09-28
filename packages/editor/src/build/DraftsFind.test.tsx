@@ -69,12 +69,26 @@ describe("DraftsFind", () => {
   it("finds the rooms, keeps them as the floor's drafts, and says what it found", async () => {
     useEditorStore.getState().setLevelImages([plan()]);
     find.mockResolvedValue({ drafts: [shop], rooms: 1, open: 0, skipped: ["Escalator"] });
-    render(<DraftsFind api={fakeApi()} />);
+    const api = fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop] }) });
+    render(<DraftsFind api={api} />);
     fireEvent.click(button());
     await waitFor(() => expect(lastToast()?.message)
       .toBe("Found 1 room in the drawing. 1 escalator or stair left out: mark it on Entrances & lifts."));
-    expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]);
+    await waitFor(() => expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]));
     expect(find.mock.calls[0]![0]).toMatchObject({ levelId: "oth-L2", image: { id: "img_2" } });
+  });
+
+  it("fetches the drafts again once the save lands, so a line-up warning shows at once, with no other reload", async () => {
+    useEditorStore.getState().setLevelImages([plan()]);
+    find.mockResolvedValue({ drafts: [shop], rooms: 1, open: 0, skipped: [] });
+    const api = fakeApi({
+      listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop], lineUp: { dx: 11.5, dy: -4.6, pairs: 7 } }),
+    });
+    render(<DraftsFind api={api} />);
+    fireEvent.click(button());
+    await waitFor(() => expect(lastToast()?.message).toBe("Found 1 room in the drawing."));
+    await waitFor(() => expect(useDrafts.getState().lineUpByLevel["oth-L2"]).toEqual({ dx: 11.5, dy: -4.6, pairs: 7 }));
+    expect(api.listRoomDrafts).toHaveBeenCalledWith("oth-L2");
   });
 
   it("in the setup wizard, says Claude makes the stops left out, rather than sending you to do them", async () => {
@@ -99,7 +113,7 @@ describe("DraftsFind", () => {
       useEditorStore.getState().setLevelImages([plan()]);
       useDrafts.getState().setDrafts("oth-L2", [shop, { ...shop, id: "rd_two" }]);
       find.mockResolvedValue(foundShop);
-      render(<DraftsFind api={fakeApi()} />);
+      render(<DraftsFind api={fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop] }) })} />);
 
       fireEvent.click(button());
       expect(question()!.textContent)
@@ -173,7 +187,7 @@ describe("DraftsFind", () => {
       stage("Finding rooms…");
       return new Promise(resolve => { finish = resolve; });
     });
-    render(<DraftsFind api={fakeApi()} />);
+    render(<DraftsFind api={fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop] }) })} />);
     fireEvent.click(button());
     expect(await screen.findByText("Finding rooms…")).toBeTruthy();
 
@@ -186,7 +200,7 @@ describe("DraftsFind", () => {
     finish(foundShop);
     await waitFor(() => expect(button()).not.toBeDisabled());
     // The search's drafts are L2's, wherever you were when it finished.
-    expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]);
+    await waitFor(() => expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]));
     expect(useDrafts.getState().byLevel["oth-L3"]).toBeUndefined();
   });
 
@@ -215,20 +229,20 @@ describe("DraftsFind", () => {
   it("says the room finder stopped, and its Retry searches again", async () => {
     useEditorStore.getState().setLevelImages([plan()]);
     find.mockRejectedValueOnce(new RoomFinderStoppedError(new Error("Out of memory"))).mockResolvedValueOnce(foundShop);
-    render(<DraftsFind api={fakeApi()} />);
+    render(<DraftsFind api={fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop] }) })} />);
     fireEvent.click(button());
     await waitFor(() => expect(lastToast()).toMatchObject({
       tone: "error", message: "The room finder stopped. Try again, or find rooms on a smaller part.", action: { label: "Retry" },
     }));
     await act(() => lastToast()!.action!.run());
     expect(find).toHaveBeenCalledTimes(2);
-    expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]);
+    await waitFor(() => expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]));
   });
 
   it("offers Retry when the server had a problem, and the Retry reads the plan as it is now", async () => {
     useEditorStore.getState().setLevelImages([plan()]);
     find.mockRejectedValueOnce(new ApiError(500, {})).mockResolvedValueOnce(foundShop);
-    render(<DraftsFind api={fakeApi()} />);
+    render(<DraftsFind api={fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop] }) })} />);
     fireEvent.click(button());
     await waitFor(() => expect(lastToast()?.action?.label).toBe("Retry"));
 
@@ -236,7 +250,7 @@ describe("DraftsFind", () => {
     setPlans([plan({ offsetX: 40, offsetY: -12, version: 3 })]);
     await act(() => lastToast()!.action!.run());
     expect(find.mock.calls[1]![0]).toMatchObject({ image: { offsetX: 40, offsetY: -12, version: 3 } });
-    expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]);
+    await waitFor(() => expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]));
   });
 
   it("knows the plan moved if it is aligned, rescaled or replaced during the search, but not for its opacity", async () => {
@@ -286,7 +300,7 @@ describe("DraftsFind", () => {
     useEditorStore.getState().setLevelImages([plan()]);
     const save = vi.fn().mockResolvedValue(foundShop);
     find.mockRejectedValueOnce(new DraftsNotSavedError(new ApiError(503, {}), save));
-    render(<DraftsFind api={fakeApi()} />);
+    render(<DraftsFind api={fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [shop] }) })} />);
     fireEvent.click(button());
     await waitFor(() => expect(lastToast()).toMatchObject({
       message: "Couldn't save the drafts from the drawing: the server had a problem. Try again in a moment.", action: { label: "Retry" },
@@ -294,7 +308,7 @@ describe("DraftsFind", () => {
     await act(() => lastToast()!.action!.run());
     expect(save).toHaveBeenCalledTimes(1);
     expect(find).toHaveBeenCalledTimes(1);
-    expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]);
+    await waitFor(() => expect(useDrafts.getState().byLevel["oth-L2"]).toEqual([shop]));
     expect(lastToast()?.message).toBe("Found 1 room in the drawing.");
   });
 

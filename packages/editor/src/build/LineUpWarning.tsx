@@ -19,11 +19,14 @@ function northSouth(dy: number): string {
 /**
  * Said on the Floorplan step and the rooms Claude step once a fresh plan's
  * drafts show it sits off the rooms already on the floor (contract v3), and
- * above Build's own drafts review, in the same words everywhere.
+ * above Build's own drafts review. `alignWhere` says where Align actually is:
+ * "this step" on the wizard's own Floorplan step (the default), where Align
+ * is one of the step's tools; Build's drafts review names the Floorplan step
+ * instead, since Align isn't on Areas & rooms.
  */
-export function lineUpWords(lineUp: LineUp, floorCode: string): string {
+export function lineUpWords(lineUp: LineUp, floorCode: string, alignWhere = "this step"): string {
   return `The drawing sits about ${eastWest(lineUp.dx)} and ${northSouth(lineUp.dy)} of the rooms already on ${floorCode}. `
-    + "Line it up with Align on this step, then run Find rooms again.";
+    + `Line it up with Align on ${alignWhere}, then run Find rooms again.`;
 }
 
 /**

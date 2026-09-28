@@ -16,6 +16,13 @@ describe("lineUpWords", () => {
       + "Line it up with Align on this step, then run Find rooms again.",
     );
   });
+
+  it("names where Align actually is, when it isn't this step (Build's drafts review)", () => {
+    expect(lineUpWords({ dx: 11.5, dy: -4.6, pairs: 7 }, "L1", "the Floorplan step")).toBe(
+      "The drawing sits about 11.5 m east and 4.6 m south of the rooms already on L1. "
+      + "Line it up with Align on the Floorplan step, then run Find rooms again.",
+    );
+  });
 });
 
 describe("alreadyHasRoomsWords", () => {
