@@ -1,4 +1,5 @@
 import { live, placeLevels, type MapModel, type Place, type Room, type ValidationReport } from "@oth/model";
+import { floorUnits } from "../flow/buildSteps";
 import { waitingReview } from "../flow/floorProgress";
 import { href } from "../route";
 import { bestEvidence, type Evidence } from "./evidence";
@@ -26,21 +27,6 @@ export type PlaceRow = {
 };
 
 /**
- * The live room a place is bound to, on whichever floor, or null. Deleting a
- * room leaves its place still naming it, so a place is bound only while that
- * room is on the map. Build's Bind step keeps the same rule, so the places
- * this list calls "Not on the map" or "Room gone" are the ones Bind places is
- * waiting on, and the two never disagree about a place.
- *
- * TODO(5A): read Plan 3's shared `floorUnits` (flow/buildSteps.ts, Ruling 29)
- * once it is committed. Its `waiting` places are this floor's "Not on the map"
- * and "Room gone"; until then this repeats its rule.
- */
-function liveRoomOf(place: Place, rooms: ReadonlyMap<string, Room>): Room | null {
-  return place.roomId ? rooms.get(place.roomId) ?? null : null;
-}
-
-/**
  * One row per confirmed place on a floor: the Places checklist (spec §4).
  *
  * A proposal is a claim until Review decides it, so it is counted, not
@@ -51,6 +37,9 @@ function liveRoomOf(place: Place, rooms: ReadonlyMap<string, Room>): Room | null
 export function placeRows(model: MapModel, report: ValidationReport | null, levelId: string): PlaceRow[] {
   const floors = placeLevels(model);
   const rooms = new Map(live(model.rooms).map(r => [r.id, r]));
+  // Bind places' own rule for which places still need a room, so the two
+  // never disagree about one: a place is bound only while its room is on the map.
+  const waiting = new Set(floorUnits(model, levelId, floors).waiting.map(p => p.id));
   // The validator files each far-apart pair once, against one of its two
   // places, so only that one shows the gap. The spec defines it by the issue.
   const disagree = new Set(
@@ -61,13 +50,12 @@ export function placeRows(model: MapModel, report: ValidationReport | null, leve
     .filter(p => p.status === "confirmed" && !p.pathwayKindId && floors.get(p.id) === levelId)
     .map<PlaceRow>(place => {
       const evidence = bestEvidence(model, place.id);
-      const room = liveRoomOf(place, rooms);
+      const room = place.roomId ? rooms.get(place.roomId) ?? null : null;
       const gaps: Gap[] = [];
       // A place still naming a deleted room is "Room gone", not "Not on the map":
       // what it was bound to is worth saying when you bind it again.
-      if (!place.roomId) gaps.push("unbound");
-      else if (!room) gaps.push("roomGone");
-      else if (room.levelId !== levelId) gaps.push("otherFloor");
+      if (waiting.has(place.id)) gaps.push(place.roomId ? "roomGone" : "unbound");
+      else if (room && room.levelId !== levelId) gaps.push("otherFloor");
       if (!evidence.some(e => e.sighting.status === "confirmed")) gaps.push("noConfirmedPhoto");
       if (disagree.has(place.id)) gaps.push("photosDisagree");
       return { place, best: evidence[0] ?? null, room, onMap: room?.levelId === levelId, gaps };

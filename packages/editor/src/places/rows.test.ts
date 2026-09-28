@@ -1,5 +1,6 @@
 import { parseModel, type ValidationReport } from "@oth/model";
 import { describe, expect, it } from "vitest";
+import { floorUnits } from "../flow/buildSteps";
 import {
   filterRows, onMapLine, placeRows, placesSummary, readPlacesFilter, rowAction, whereText, type PlaceRow,
 } from "./rows";
@@ -83,6 +84,16 @@ describe("placeRows", () => {
     expect(rows.filter(r => r.onMap).map(r => r.place.id).sort()).toEqual(["pl_cafe", "pl_kiosk", "pl_star"]);
     expect(row("pl_gone").room).toBeNull();
     expect(row("pl_up").room?.id).toBe("L2-shop");
+  });
+
+  it("says 'Not on the map' or 'Room gone' for exactly the places Bind places is waiting on", () => {
+    const waiting = floorUnits(model, "oth-L1").waiting.map(p => p.id).sort();
+    const missing = rows
+      .filter(r => r.gaps.includes("unbound") || r.gaps.includes("roomGone"))
+      .map(r => r.place.id)
+      .sort();
+    expect(missing).toEqual(waiting);
+    expect(waiting).toEqual(["pl_books", "pl_gone"]);
   });
 
   it("shows each place by its best frame, never one from the bin", () => {
