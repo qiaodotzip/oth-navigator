@@ -80,6 +80,9 @@ export function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}): Ap
     unacceptRoomDrafts: vi.fn().mockResolvedValue({ drafts: 0 }),
     rejectRoomDraft: vi.fn().mockResolvedValue({}),
     restoreRoomDraft: vi.fn().mockResolvedValue({}),
+    // --- Floor setup and Claude's changes (plan 6C) ---
+    getSetup: vi.fn().mockResolvedValue({ steps: [], counts: null }),
+    setSetupStep: vi.fn().mockResolvedValue({ steps: [], counts: null }),
     ...overrides,
   } as unknown as Api;
 }

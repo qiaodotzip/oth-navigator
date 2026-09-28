@@ -14,6 +14,7 @@ import { BadTokens, TokenLimits } from "./mcp/limits";
 import { mcpRoutes, type McpDeps } from "./mcp/route";
 import { modelRoutes } from "./model/routes";
 import { presenceRoutes } from "./presence/routes";
+import { setupRoutes } from "./setup/routes";
 import { placeReviewRoutes } from "./survey/review";
 import { captureRoutes, keyframeRoutes } from "./survey/routes";
 import { PresenceTracker } from "./presence/service";
@@ -108,6 +109,8 @@ export function createApp(deps: AppDeps) {
   app.route("/api/level-images", levelImageRoutes);
   app.route("/api/levels", levelDraftRoutes);
   app.route("/api/room-drafts", roomDraftRoutes);
+  // Plan 6C: a floor's guided setup, and the check step's list of Claude's changes.
+  app.route("/api/levels", setupRoutes);
   app.route("/api", publishRoutes);
 
   // One tracker for the app and for Claude Code, so "Wei (Claude)" shows where people look.

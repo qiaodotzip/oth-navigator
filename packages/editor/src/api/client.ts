@@ -124,6 +124,34 @@ export type TokenNotice = { id: string; name: string; createdAt: string };
 /** What an accepted draft became, and the versions its undo sends back. */
 export type AcceptedDraft = { draftId: string; draftVersion: number; roomId: string; roomVersion: number };
 
+// --- Floor setup and Claude's changes (plan 6C) ---
+// The same shapes as Plan 6E's setup/types.ts, which is the contract; its
+// setupApi.ts holds the methods below to its SetupApi.
+
+export type SetupStepId = "footage" | "label" | "review" | "floorplan" | "rooms" | "things" | "paths" | "check" | "finish";
+export type SetupStatus = "open" | "done" | "skipped";
+
+/** One step as the server stores it. A step with no row comes back open, and everything else empty. */
+export type SetupStepState = {
+  step: SetupStepId;
+  status: SetupStatus;
+  note: string;
+  finishedBy: string | null;
+  /** Set when Claude Code finished it, through this token. */
+  finishedVia: string | null;
+  finishedAt: string | null;
+};
+
+export type SetupCounts = {
+  label: { tagged: number; binned: number; left: number };
+  review: { left: number };
+  rooms: { waiting: number; accepted: number; rejectedOrSetAside: number; stops: number };
+  things: { bound: number; unbound: number; objects: { kindId: string; name: string; count: number }[] };
+  paths: { pathways: number; entrances: number; unreachable: number };
+};
+
+export type SetupState = { steps: SetupStepState[]; counts: SetupCounts };
+
 export type ApiOptions = {
   fetchImpl?: typeof fetch;
   baseUrl?: string;
@@ -459,6 +487,15 @@ export function createApi(options: ApiOptions = {}) {
 
     restoreRoomDraft: (id: string, expectedVersion: number) =>
       request<{ entity: Record<string, unknown> }>(`/api/entities/roomDraft/${id}/restore`, { method: "POST", body: json({ expectedVersion }) }),
+
+    // --- Floor setup and Claude's changes (plan 6C) ---
+
+    /** A floor's setup: its nine steps as stored, and each step's live counts (spec §4.3). */
+    getSetup: (levelId: string) => request<SetupState>(`/api/levels/${levelId}/setup`),
+
+    /** Marks one step, as a person. Answers the whole setup again. */
+    setSetupStep: (levelId: string, step: SetupStepId, body: { status: SetupStatus; note?: string }) =>
+      request<SetupState>(`/api/levels/${levelId}/setup/${step}`, { method: "PUT", body: json(body) }),
   };
 }
 

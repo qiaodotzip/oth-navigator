@@ -234,3 +234,16 @@ describe("isGateRefusal", () => {
     expect(isGateRefusal(401, null)).toBe(false);
   });
 });
+
+describe("floor setup (plan 6C)", () => {
+  it("reads a floor's setup and marks a step where the server expects them", async () => {
+    const fetchImpl = mockFetch(200, { steps: [], counts: {} });
+    const api = createApi({ fetchImpl });
+    await api.getSetup("oth-L1");
+    await api.setSetupStep("oth-L1", "rooms", { status: "done", note: "Looks right" });
+    expect(fetchImpl.mock.calls.map(([url, init]) => [url, init?.method ?? "GET", init?.body ? JSON.parse(String(init.body)) : null])).toEqual([
+      ["/api/levels/oth-L1/setup", "GET", null],
+      ["/api/levels/oth-L1/setup/rooms", "PUT", { status: "done", note: "Looks right" }],
+    ]);
+  });
+});
