@@ -1,16 +1,18 @@
+import type { Node as GltfNode } from "@gltf-transform/core";
 import { WebIO, type Material } from "@gltf-transform/core";
-import { LevelSchema, parseModel, PlacementSchema, RoomSchema, type MapModel } from "@oth/model";
+import { AssetSchema, LevelSchema, ObjectKindSchema, parseModel, PlacementSchema, RoomSchema, type MapModel } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import { CATEGORY_TINT } from "../categoryTint";
 import { CONTEXT_ORIGIN_NOTE } from "../contextExport";
 import { SLAB_HEIGHT_M } from "../geometry";
+import { objectBoxGeometry } from "../objectBox";
 import { DEFAULT_PATHWAY_COLOUR, STRIP_HEIGHT_M, STRIP_OPACITY } from "../pathwayStrips";
 import { PORTAL_COLOUR, SHAFT_OPACITY } from "../portals";
 import { roomColor, wallColor } from "../theme";
 import { BALUSTRADE_COLOUR, BALUSTRADE_HEIGHT_M, BALUSTRADE_OPACITY, BALUSTRADE_THICKNESS_M } from "../voids";
 import { FLOOR_GROUPS, STACKED_NOTE, buildFloorGlb } from "./floorGlb";
 import {
-  bounds, child, DELETED, floorModel, floorNodes, group, linear, materialOf, names, noModels, readGlb, sq, worldVertices,
+  bounds, child, DELETED, floorModel, floorNodes, group, linear, materialOf, names, noModels, readGlb, sq, triangleGlb, worldVertices,
 } from "./testing";
 
 const exported = async (model: MapModel, levelIds: string[]) => readGlb(await buildFloorGlb(model, levelIds, noModels));
@@ -274,5 +276,128 @@ describe("buildFloorGlb — Pathways", () => {
     const plain = materialOf(child(pathways, "L1-east"));
     expect(plain.getName()).toBe("pathway");
     expectColour(plain, DEFAULT_PATHWAY_COLOUR);
+  });
+});
+
+describe("buildFloorGlb — Objects", () => {
+  const bin = ObjectKindSchema.parse({ id: "ok-bin", nameEn: "wastebin", size: { w: 0.6, d: 0.4, h: 1 } });
+  const cooler = ObjectKindSchema.parse({ id: "ok-cooler", nameEn: "water cooler", size: { w: 0.5, d: 0.5, h: 1.4 }, assetId: "asset-cooler" });
+  const place = (id: string, extra: Record<string, unknown>) =>
+    PlacementSchema.parse({ id, levelId: "oth-L1", position: [5, -5, 0], ...extra });
+  const withObjects: MapModel = {
+    ...floorModel,
+    objectKinds: [bin, cooler],
+    assets: [AssetSchema.parse({
+      id: "asset-vend", filename: "vending machine.glb", storagePath: "assets/vend.glb", checksum: "c",
+      sizeBytes: 100, triangleCount: 1, bbox: { minX: 0, minY: 0, minZ: 0, maxX: 2, maxY: 1, maxZ: 0 },
+    })],
+    placements: [
+      place("pm-bin-1", { objectKindId: "ok-bin", position: [5, -5, 0] }),
+      place("pm-bin-2", { objectKindId: "ok-bin", position: [8, -5, 0] }),
+      place("pm-cooler", { objectKindId: "ok-cooler", position: [10, -3, 0], rotationDeg: 90 }),
+      place("pm-cooler-2", { objectKindId: "ok-cooler", position: [11, -3, 0] }),
+      place("pm-own", { objectKindId: "ok-bin", assetId: "asset-fancy", position: [12, -3, 0] }),
+      place("pm-vend", { assetId: "asset-vend", position: [15, -2, 0] }),
+      place("pm-broken", { assetId: "asset-missing", position: [16, -2, 0] }),
+      place("pm-gone", { objectKindId: "ok-bin", deletedAt: DELETED }),
+      place("pm-up", { objectKindId: "ok-bin", levelId: "oth-L2" }),
+    ],
+  };
+
+  async function exportWith(model: MapModel, levelIds: string[], broken: string[] = ["asset-missing"]) {
+    const asked: string[] = [];
+    const glb = await triangleGlb();
+    const bytes = await buildFloorGlb(model, levelIds, async assetId => {
+      asked.push(assetId);
+      return broken.includes(assetId) ? null : glb;
+    });
+    return { doc: await readGlb(bytes), asked };
+  }
+  const byId = (objects: GltfNode, id: string) => {
+    const found = objects.listChildren().find(n => n.getExtras().othId === id);
+    if (!found) throw new Error(`No object ${id}`);
+    return found;
+  };
+  const boxBounds = () => {
+    const box = objectBoxGeometry(bin.size);
+    box.computeBoundingBox();
+    return box.boundingBox!;
+  };
+
+  it("places one node per live object on the floor, named after its kind, its model's file, or its id", async () => {
+    const { doc } = await exportWith(withObjects, ["oth-L1"]);
+    expect(names(group(doc, "L1", "Objects")))
+      .toEqual(["wastebin", "wastebin", "water cooler", "water cooler", "wastebin", "vending machine", "pm-broken"]);
+    expect(byId(group(doc, "L1", "Objects"), "pm-cooler").getExtras())
+      .toEqual({ othId: "pm-cooler", objectKindId: "ok-cooler", assetId: "asset-cooler" });
+  });
+
+  it("builds a kind with no model as a box of its size, standing where the object is", async () => {
+    const { doc } = await exportWith(withObjects, ["oth-L1"]);
+    const got = bounds(byId(group(doc, "L1", "Objects"), "pm-bin-1"));
+    const want = boxBounds();
+    // The object stands at plan (5, -5), which is x = 5, z = 5.
+    expect(got.minX).toBeCloseTo(5 + want.min.x);
+    expect(got.maxX).toBeCloseTo(5 + want.max.x);
+    expect(got.minY).toBeCloseTo(want.min.y);
+    expect(got.maxY).toBeCloseTo(want.max.y);
+    expect(got.minZ).toBeCloseTo(5 + want.min.z);
+    expect(got.maxZ).toBeCloseTo(5 + want.max.z);
+  });
+
+  it("shares one box between the objects of one kind", async () => {
+    const { doc } = await exportWith(withObjects, ["oth-L1"]);
+    const objects = group(doc, "L1", "Objects");
+    const box = (id: string) => byId(objects, id).listChildren()[0]!.getMesh();
+    expect(box("pm-bin-2")).toBe(box("pm-bin-1"));
+    expect(doc.getRoot().listMeshes().filter(m => m.getName() === "wastebin box")).toHaveLength(1);
+  });
+
+  it("builds a kind with a model from its model, turned as the object is turned", async () => {
+    const { doc } = await exportWith(withObjects, ["oth-L1"]);
+    const turned = bounds(byId(group(doc, "L1", "Objects"), "pm-cooler"));
+    // The triangle runs 2 m along x and 1 m up. At plan (10, -3), turned 90°, it runs from z = 3 toward -z.
+    expect(turned.minX).toBeCloseTo(10);
+    expect(turned.maxX).toBeCloseTo(10);
+    expect(turned.minZ).toBeCloseTo(1);
+    expect(turned.maxZ).toBeCloseTo(3);
+    expect(turned.maxY).toBeCloseTo(1);
+  });
+
+  it("uses an object's own model over its kind's box", async () => {
+    const { doc } = await exportWith(withObjects, ["oth-L1"]);
+    expect(names(byId(group(doc, "L1", "Objects"), "pm-own"))).toEqual(["body"]);
+  });
+
+  it("fetches and copies each model once, however many objects use it", async () => {
+    const { doc, asked } = await exportWith(withObjects, ["oth-L1", "oth-L2"]);
+    expect([...asked].sort()).toEqual(["asset-cooler", "asset-fancy", "asset-missing", "asset-vend"]);
+    // Two coolers, one fancy bin and one vending machine: three models, not four.
+    expect(doc.getRoot().listMeshes().filter(m => m.getName() === "bin")).toHaveLength(3);
+  });
+
+  it("leaves an object whose model won't come empty, and lists it in the file", async () => {
+    const { doc } = await exportWith(withObjects, ["oth-L1"]);
+    expect(byId(group(doc, "L1", "Objects"), "pm-broken").listChildren()).toEqual([]);
+    expect(doc.getRoot().getExtras()).toMatchObject({
+      othExport: { missingModels: [{ placementId: "pm-broken", assetId: "asset-missing" }] },
+    });
+  });
+
+  it("falls back to the kind's box when the kind's model won't come", async () => {
+    const { doc } = await exportWith(withObjects, ["oth-L1"], ["asset-cooler"]);
+    expect(names(byId(group(doc, "L1", "Objects"), "pm-cooler"))).toEqual(["water cooler box"]);
+  });
+
+  it("still writes the file when fetching models fails outright", async () => {
+    const bytes = await buildFloorGlb(withObjects, ["oth-L1"], async () => {
+      throw new Error("offline");
+    });
+    expect(names(group(await readGlb(bytes), "L1", "Objects"))).toHaveLength(7);
+  });
+
+  it("stacks a floor's objects with it", async () => {
+    const { doc } = await exportWith(withObjects, ["oth-L1", "oth-L2"]);
+    expect(bounds(byId(group(doc, "L2", "Objects"), "pm-up")).minY).toBeCloseTo(6 + boxBounds().min.y);
   });
 });

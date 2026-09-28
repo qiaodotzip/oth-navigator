@@ -1,5 +1,5 @@
-import type { Node as GltfNode, Scene } from "@gltf-transform/core";
-import { live, type Level, type MapModel, type Room } from "@oth/model";
+import type { Mesh, Node as GltfNode, Scene } from "@gltf-transform/core";
+import { live, placementModelAsset, type Level, type MapModel, type ObjectKind, type Room } from "@oth/model";
 import { blocksGeometry, quadsGeometry, type Block } from "../blocks";
 import { CATEGORY_TINT, roomTints } from "../categoryTint";
 import { CONTEXT_ORIGIN_NOTE } from "../contextExport";
@@ -7,12 +7,15 @@ import { modelToThree } from "../coords";
 import { roomsToDraw } from "../LevelGroup";
 import { floorColour, railBlock, roomFloorGeometry, wallBlock } from "../levelParts";
 import { massingOf } from "../massing";
+import { OBJECT_BOX_COLOUR, objectBoxGeometry } from "../objectBox";
 import { STRIP_HEIGHT_M, STRIP_OPACITY, pathwayColour, stripQuads } from "../pathwayStrips";
+import { placementTransform } from "../placementTransform";
 import { PORTAL_COLOUR, SHAFT_OPACITY, flightColour, portalParts, shaftBlocks } from "../portals";
 import { levelStructure, type LevelStructure } from "../structure";
 import { wallColor } from "../theme";
 import { BALUSTRADE_COLOUR, BALUSTRADE_OPACITY } from "../voids";
 import { GlbWriter, type Paint } from "./gltfWrite";
+import { copyModelInto, type ModelTemplate } from "./modelCopy";
 
 /** A placed model's bytes, fetched through the asset URL; null when it can't be had. */
 export type AssetBytes = (assetId: string) => Promise<Uint8Array | null>;
@@ -167,20 +170,99 @@ function addFloors(ctx: FloorContext): void {
 }
 
 /**
+ * A kind with no model yet is a box in the preview's neutral colour (spec
+ * §5.3), so the file and the preview agree on what stands there.
+ */
+const OBJECT_BOX_PAINT: Paint = { name: "object box", colour: OBJECT_BOX_COLOUR };
+
+/** An object whose model couldn't be fetched or read. The file's extras list them, so a gap explains itself later. */
+export type MissingModel = { placementId: string; assetId: string };
+
+/**
+ * Each model fetched and copied into the file once, however many objects use
+ * it, and each kind's box built once. A fetch that fails or throws, or bytes
+ * this can't read, count as no model.
+ */
+class ModelShelf {
+  readonly missing: MissingModel[] = [];
+  private readonly models = new Map<string, Promise<ModelTemplate | null>>();
+  private readonly boxes = new Map<string, Mesh | null>();
+
+  constructor(private readonly writer: GlbWriter, private readonly assetBytes: AssetBytes) {}
+
+  model(assetId: string): Promise<ModelTemplate | null> {
+    let model = this.models.get(assetId);
+    if (!model) {
+      model = Promise.resolve()
+        .then(() => this.assetBytes(assetId))
+        .then(bytes => (bytes ? copyModelInto(this.writer.doc, bytes) : null))
+        .catch(() => null);
+      this.models.set(assetId, model);
+    }
+    return model;
+  }
+
+  box(kind: ObjectKind): Mesh | null {
+    if (!this.boxes.has(kind.id)) {
+      const name = `${label(kind.nameEn, kind.id)} box`;
+      this.boxes.set(kind.id, this.writer.geometryMesh(name, objectBoxGeometry(kind.size), OBJECT_BOX_PAINT));
+    }
+    return this.boxes.get(kind.id) ?? null;
+  }
+}
+
+function objectName(kind: ObjectKind | undefined, file: string | undefined, placementId: string): string {
+  if (kind) return label(kind.nameEn, kind.id);
+  return file?.replace(/\.glb$/i, "").trim() || placementId;
+}
+
+/**
+ * Objects: one node per placement on this floor, at its position, rotation and
+ * scale (spec §5.3). Under it is its own model or its kind's, or, while the
+ * kind has none, a box of the kind's size.
+ */
+async function addObjects(ctx: FloorContext, shelf: ModelShelf): Promise<void> {
+  const kinds = new Map(live(ctx.model.objectKinds).map(k => [k.id, k]));
+  const files = new Map(live(ctx.model.assets).map(a => [a.id, a.filename]));
+  for (const placement of live(ctx.model.placements)) {
+    if (placement.levelId !== ctx.level.id) continue;
+    const kind = placement.objectKindId ? kinds.get(placement.objectKindId) : undefined;
+    const assetId = placementModelAsset(ctx.model, placement);
+    const t = placementTransform(placement);
+    const node = ctx.writer.doc.createNode(objectName(kind, assetId ? files.get(assetId) : undefined, placement.id))
+      .setTranslation(t.position)
+      .setRotation([0, Math.sin(t.rotationY / 2), 0, Math.cos(t.rotationY / 2)])
+      .setScale([t.scale, t.scale, t.scale])
+      .setExtras({ othId: placement.id, objectKindId: kind?.id ?? null, assetId: assetId ?? null });
+    ctx.groups.Objects.addChild(node);
+
+    const model = assetId ? await shelf.model(assetId) : null;
+    if (assetId && !model) shelf.missing.push({ placementId: placement.id, assetId });
+    if (model) {
+      for (const root of model.place()) node.addChild(root);
+    } else if (kind) {
+      const box = shelf.box(kind);
+      if (box) node.addChild(ctx.writer.doc.createNode(`${label(kind.nameEn, kind.id)} box`).setMesh(box));
+    }
+  }
+}
+
+/**
  * The floors asked for, as one .glb of named parts (spec §6), built from the
  * preview's own geometry. Floors come out lowest first; ids of deleted or
- * unknown floors are skipped.
+ * unknown floors are skipped. Placed models come through `assetBytes`, once
+ * each; one that can't be had never stops the file.
  */
 export async function buildFloorGlb(
   model: MapModel,
   levelIds: string[],
-  // Used by the Objects group, which comes with Plan 6A (Task 8).
-  _assetBytes: AssetBytes,
+  assetBytes: AssetBytes,
 ): Promise<Uint8Array> {
   const wanted = new Set(levelIds);
   const levels = live(model.levels).filter(l => wanted.has(l.id)).sort((a, b) => a.ordinal - b.ordinal);
   const stacked = levels.length > 1;
   const writer = new GlbWriter();
+  const shelf = new ModelShelf(writer, assetBytes);
   const scene = writer.doc.createScene(model.building.id);
   writer.doc.getRoot().setDefaultScene(scene);
   for (const level of levels) {
@@ -189,8 +271,9 @@ export async function buildFloorGlb(
     addWalls(ctx);
     addVoids(ctx);
     addStops(ctx);
+    await addObjects(ctx, shelf);
     addPathways(ctx);
   }
-  writer.setNote(floorExportNote(stacked), { floors: levels.map(l => l.code) });
+  writer.setNote(floorExportNote(stacked), { floors: levels.map(l => l.code), missingModels: shelf.missing });
   return writer.write();
 }

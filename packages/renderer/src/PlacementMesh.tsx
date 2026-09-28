@@ -1,7 +1,7 @@
 import { placementModelAsset, type ObjectKind, type Placement } from "@oth/model";
 import { useGLTF } from "@react-three/drei";
 import { Component, type ReactNode } from "react";
-import { modelToThree } from "./coords";
+import { placementTransform } from "./placementTransform";
 
 /**
  * A dressing asset in the scene.
@@ -12,18 +12,8 @@ import { modelToThree } from "./coords";
  */
 export function PlacementMesh({ placement, url }: { placement: Placement; url: string }) {
   const { scene } = useGLTF(url);
-  const [x, y, z] = modelToThree(
-    placement.position[0], placement.position[1], placement.position[2],
-  );
-
-  return (
-    <primitive
-      object={scene.clone()}
-      position={[x, y, z]}
-      rotation={[0, (placement.rotationDeg * Math.PI) / 180, 0]}
-      scale={placement.scale}
-    />
-  );
+  const t = placementTransform(placement);
+  return <primitive object={scene.clone()} position={t.position} rotation={[0, t.rotationY, 0]} scale={t.scale} />;
 }
 
 /**

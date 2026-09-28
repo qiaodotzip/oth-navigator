@@ -2,8 +2,8 @@ import type { Placement } from "@oth/model";
 import { Html } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { modelToThree } from "./coords";
 import { OBJECT_BOX_COLOUR, objectBoxGeometry, type ObjectSize } from "./objectBox";
+import { placementTransform } from "./placementTransform";
 
 /**
  * Inline styles, not Tailwind: the editor's stylesheet is built from the
@@ -31,9 +31,9 @@ export function ObjectBoxMesh({ placement, size, name }: { placement: Placement;
   // The scene renders on demand; the name would otherwise wait for the next orbit.
   useEffect(() => invalidate(), [hovered, invalidate]);
 
-  const [x, y, z] = modelToThree(placement.position[0], placement.position[1], placement.position[2]);
+  const t = placementTransform(placement);
   return (
-    <group position={[x, y, z]} rotation={[0, (placement.rotationDeg * Math.PI) / 180, 0]} scale={placement.scale}>
+    <group position={t.position} rotation={[0, t.rotationY, 0]} scale={t.scale}>
       <mesh
         geometry={geometry}
         castShadow
