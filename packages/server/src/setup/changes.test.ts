@@ -157,6 +157,20 @@ describe("listClaudeChanges", () => {
     expect((await listClaudeChanges(f.db, "oth-L2", EPOCH)).map(c => [c.group, c.summary])).toEqual([["names", "Renamed Hall to Town Hall"]]);
   });
 
+  it("gives a draft row the box of its own footprint, rejected or not (contract v3, amendment 3)", async () => {
+    const [kiosk] = await replaceDrafts(f.db, "oth-L1", SOURCE, [{ nameEn: "Kiosk", kind: "room", footprint: sq(0, 0, 4, 4), labelPoint: [2, 2], areaM2: 16 }], amy.id);
+    await call(client, "decide_drafts", { floor: "L1", items: [{ id: String(kiosk!.id), expectedVersion: 0, decision: "reject" }] });
+    const rejected = (await listClaudeChanges(f.db, "oth-L1", EPOCH)).find(c => c.summary === "Rejected the draft Kiosk")!;
+    expect(rejected.box).toEqual({ minX: 0, minY: 0, maxX: 4, maxY: 4 });
+  });
+
+  it("has no box for a draft row whose draft has no footprint, or for a room row (contract v3, amendment 3)", async () => {
+    const { plaza } = await claudeDecides();
+    const changes = await listClaudeChanges(f.db, "oth-L1", EPOCH);
+    expect(changes.find(c => c.entityId === plaza)!.box).toBeUndefined();
+    expect(changes.find(c => c.group === "rooms")!.box).toBeUndefined();
+  });
+
   it("never lists a find-rooms marker row: a person's Find rooms, via null, is not Claude's", async () => {
     // Find rooms is a person's action (drafts/routes.ts), and writes a
     // level/find-rooms marker row even for an empty search — with no via, so

@@ -1,4 +1,4 @@
-import { distancePointToSegment, live, pointInPolygon, type MapModel, type Ring, type Vec2 } from "@oth/model";
+import { bboxOfRing, distancePointToSegment, live, pointInPolygon, type BBox, type MapModel, type Ring, type Vec2 } from "@oth/model";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
@@ -29,6 +29,8 @@ export type ClaudeChange = {
   summary: string;
   entityType: string;
   entityId: string;
+  /** A draft row's own footprint, in metres, deleted or not; entityType "roomDraft" only, and only when it has one. */
+  box?: BBox;
   action: string;
   /** Objects only: worked out again from the placement's sightingIds, since it isn't stored. */
   confidence?: "high" | "low";
@@ -178,12 +180,17 @@ export function labelsFrom(model: MapModel, names: Names, drafts: ReadonlyMap<st
   };
 }
 
-/** The names of the drafts these changes touched: drafts aren't in the model. */
-async function draftNames(db: Database, touches: readonly Touch[]): Promise<Map<string, string>> {
+/**
+ * The names and boxes of the drafts these changes touched: drafts aren't in
+ * the model. `box` is the draft's own footprint's bbox, whether or not the
+ * draft is deleted (a rejected or set-aside one is); absent without one.
+ */
+async function draftInfo(db: Database, touches: readonly Touch[]): Promise<Map<string, { name: string; box?: BBox }>> {
   const ids = [...new Set(touches.filter(t => t.type === "roomDraft").map(t => t.id))];
   if (ids.length === 0) return new Map();
-  return new Map((await db.select({ id: roomDrafts.id, nameEn: roomDrafts.nameEn }).from(roomDrafts).where(inArray(roomDrafts.id, ids)))
-    .map(d => [d.id, d.nameEn]));
+  return new Map((await db.select({ id: roomDrafts.id, nameEn: roomDrafts.nameEn, footprint: roomDrafts.footprint })
+    .from(roomDrafts).where(inArray(roomDrafts.id, ids)))
+    .map(d => [d.id, { name: d.nameEn, box: d.footprint ? bboxOfRing(d.footprint) : undefined }]));
 }
 
 export async function userNames(db: Database): Promise<Map<string, string>> {
@@ -294,6 +301,9 @@ export async function listClaudeChanges(db: Database, levelId: string, since: Da
   const changes = folded.filter(c => onFloor(c, model, levelId, frames)).slice(0, limit ?? Infinity);
   const names = namesFrom(model, frames);
   const undone = await undoneMarks(db, changes.map(c => c.id));
+  // draftInfo's select is skipped unless the limited list actually has a
+  // draft row to ask it about.
+  const drafts = changes.some(c => c.entityType === "roomDraft") ? await draftInfo(db, changes.flatMap(c => c.touches)) : null;
   // confidenceFor walks every frame on the floor; skip it unless the limited
   // list actually has an object row to ask it about.
   const confidence = changes.some(c => c.facts.kind === "object") ? confidenceFor(model, levelId) : null;
@@ -304,6 +314,7 @@ export async function listClaudeChanges(db: Database, levelId: string, since: Da
     summary: summarise(c, names),
     entityType: c.entityType,
     entityId: c.entityId,
+    ...(c.entityType === "roomDraft" && drafts?.get(c.entityId)?.box ? { box: drafts.get(c.entityId)!.box } : {}),
     action: c.action,
     ...(c.facts.kind === "object" ? { confidence: confidence!(c.facts.sightingIds) } : {}),
     undone: undone.has(c.id),
@@ -454,7 +465,8 @@ export async function undoChange(db: Database, auditId: string, actorId: string)
 
   const model = await assembleModel(db);
   const names = namesFrom(model, await frameInfo(db, framesOf([change])));
-  const label = labelsFrom(model, names, await draftNames(db, change.touches));
+  const draftNames = new Map([...(await draftInfo(db, change.touches))].map(([id, d]) => [id, d.name]));
+  const label = labelsFrom(model, names, draftNames);
   const summary = summarise(change, names);
   const status = (await statuses(db, [change], label, await userNames(db))).get(change.id)!;
   if (status.state !== "live") throw new UndoRefusedError(status.reason ?? "This change can't be undone now.");
