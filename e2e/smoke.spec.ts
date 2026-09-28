@@ -53,11 +53,15 @@ type Model = {
   rooms: Row[];
   entrances: (Row & { roomId: string })[];
 };
-/** A proposal as it stood before this run accepted it, the tags the accept confirmed, and the accept's answer. */
+/**
+ * What the accept's answer said, read the moment it came: refused, or the
+ * tags it confirmed. Null when no answer could be read.
+ */
+type Answer = { ok: false } | { ok: true; confirmed: string[] };
+/** A proposal as it stood before this run accepted it, and the accept's answer. */
 type Accepted = Pick<Place, "id" | "version" | "nameEn" | "category"> & {
   levelId: string | null;
-  sightingIds: string[];
-  answered: Promise<unknown>;
+  answered: Promise<Answer | null>;
 };
 
 test.describe.configure({ mode: "serial" });
@@ -105,17 +109,34 @@ async function cleanUp(api: APIRequestContext): Promise<void> {
   if (failed.length > 0) throw new Error(`${failed.length} left behind: ${failed.join("; ")}`);
 }
 
+/** The answer, or "late" once 30 s have gone without one. */
+async function within30s<T>(answer: Promise<T>): Promise<T | "late"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<"late">(done => { timer = setTimeout(() => done("late"), 30_000); });
+  try {
+    return await Promise.race([answer, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Puts back an accept whose Undo was never seen, through the reopen the
- * app's own Undo sends: the place as it stood, and its tags back to claims.
- * Only while it is exactly as the accept left it. Changed since, it is a
- * teammate's now, and is named rather than overwritten.
+ * app's own Undo sends: the place as it stood, and the tags the server says
+ * this accept confirmed back to claims. Only after the accept has answered,
+ * since one still on its way would land after this looked, and only while
+ * the place is exactly as the accept left it. Anything else is a person's to
+ * judge, and is named rather than overwritten.
  */
 async function putBack(api: APIRequestContext, was: Accepted): Promise<void> {
-  // After the accept's answer: one still on its way would land after this looked.
-  await was.answered;
+  const answer = await within30s(was.answered);
+  if (answer === "late" || answer === null) {
+    throw new Error(`${was.nameEn} may have been accepted, and no answer said so. Check it is still waiting in ${FLOOR}'s Review.`);
+  }
+  // Refused: most likely a teammate decided it first, so nothing here is this run's.
+  if (!answer.ok) return;
   const now = (await model(api)).places.find(p => p.id === was.id);
-  // The Undo landed after all, or the accept never did.
+  // The Undo landed after all.
   if (now?.status === "proposed") return;
   if (now?.status !== "confirmed" || now.version !== was.version + 1) {
     throw new Error(`${was.nameEn} has changed since it was accepted. Check it is still waiting in ${FLOOR}'s Review.`);
@@ -123,11 +144,26 @@ async function putBack(api: APIRequestContext, was: Accepted): Promise<void> {
   const res = await api.post(`/api/places/${was.id}/reopen`, {
     data: {
       expectedVersion: was.version + 1, nameEn: was.nameEn, category: was.category,
-      levelId: was.levelId, sightingIds: was.sightingIds,
+      levelId: was.levelId, sightingIds: answer.confirmed,
     },
   });
   if (!res.ok()) throw new Error(`putting ${was.nameEn} back in the queue answered ${res.status()}`);
   console.log(`Review's Undo was never seen, so ${was.nameEn} was put back in the queue.`);
+}
+
+/**
+ * Entrances stamped since this run began that are outside every test area:
+ * a click that missed lands in a real room. Named, never deleted, since a
+ * teammate may have placed one meanwhile.
+ */
+async function strayEntrances(api: APIRequestContext): Promise<string[]> {
+  return (await model(api)).entrances
+    .filter(e => !SMOKE_AREA.test(e.roomId))
+    .filter(e => {
+      const at = Number(e.id.split("-entrance-")[1]);
+      return Number.isFinite(at) && at >= RUN;
+    })
+    .map(e => `${e.id} in ${e.roomId}`);
 }
 
 test.beforeAll(async ({ browser }) => {
@@ -143,6 +179,13 @@ test.afterAll(async () => {
       await putBack(page.request, was).catch(err => console.log(`Putting back ${was.nameEn}: ${firstLine(err)}`));
     }
     await cleanUp(page.request).catch(err => console.log(`Cleaning up after a failed run: ${firstLine(err)}`));
+    const strays = await strayEntrances(page.request).catch(() => []);
+    if (strays.length > 0) {
+      console.log(
+        `Left alone, outside the test area and placed since this run began: ${strays.join(", ")}. ` +
+        "If a missed click put it there, delete it in Build.",
+      );
+    }
   }
   await page.close();
 });
@@ -214,19 +257,28 @@ test("Review: accept a proposal, then Undo puts it back", async () => {
   if (await nothing.isVisible()) throw new Error(`${FLOOR} has no proposals waiting, so there is nothing to accept.`);
   const name = (await page.getByLabel("Name", { exact: true }).inputValue()).trim();
 
-  // Everything as it stood, so an accept whose Undo is never seen can be put
-  // back. The accept's own request says which proposal it was.
+  // The place as it stood, so an accept whose Undo is never seen can be put
+  // back. The accept's own request says which proposal it was, and its
+  // answer which tags it confirmed. Caught where they start, so a click that
+  // throws first leaves no promise to reject unheard.
   const before = await model(page.request);
-  const sent = page.waitForRequest(r => r.method() === "POST" && /^\/api\/places\/[^/]+\/accept$/.test(new URL(r.url()).pathname));
+  const sent = page.waitForRequest(
+    r => r.method() === "POST" && /^\/api\/places\/[^/]+\/accept$/.test(new URL(r.url()).pathname), NETWORK,
+  ).catch(() => null);
   await accept.click();
   const request = await sent;
+  if (!request) throw new Error("Accept was pressed, and no accept was sent.");
   const id = decodeURIComponent(new URL(request.url()).pathname.split("/")[3] ?? "");
   const place = before.places.find(p => p.id === id);
   if (!place) throw new Error(`Review accepted ${id}, which wasn't among the places a moment before.`);
   accepted = {
     id, version: place.version, nameEn: place.nameEn, category: place.category, levelId: place.levelId ?? null,
-    sightingIds: before.sightings.filter(s => s.placeId === id && s.status === "proposed").map(s => s.id),
-    answered: request.response().catch(() => null),
+    // Read at once: later, the page may have moved on and taken the body with it.
+    answered: request.response().then(async (res): Promise<Answer | null> => {
+      if (!res) return null;
+      if (!res.ok()) return { ok: false };
+      return { ok: true, confirmed: ((await res.json()) as { confirmed: string[] }).confirmed };
+    }).catch(() => null),
   };
 
   // The Undo on the toast that says so, pressed the moment it shows: it goes after eight seconds.
@@ -267,10 +319,13 @@ test("Build: place an entrance in the Entrances & lifts step", async () => {
 });
 
 test("Publish is refused, and says what to fix", async () => {
-  // Until the check's report arrives the button reads "Publish ▾" as well, so it is waited for first.
-  const checked = page.waitForResponse(r => new URL(r.url()).pathname === "/api/model/validate", NETWORK);
+  // Until the check's report arrives the button reads "Publish ▾" as well, so
+  // it is waited for first. Caught where it starts, as the accept's is.
+  const checked = page.waitForResponse(r => new URL(r.url()).pathname === "/api/model/validate", NETWORK)
+    .catch(() => null);
   await page.goto("/floors");
-  expect((await checked).ok(), "the publish check failed").toBeTruthy();
+  const check = await checked;
+  expect(check?.ok(), `the publish check ${check ? `answered ${check.status()}` : "never answered"}`).toBeTruthy();
   // Checked and blocked, the button opens the list of what to fix. The one
   // that would publish reads "Publish" alone, and is never pressed.
   await page.getByRole("button", { name: "Publish ▾", exact: true }).click(NETWORK);
