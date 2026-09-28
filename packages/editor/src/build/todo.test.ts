@@ -2,7 +2,7 @@ import { parseModel, type ValidationIssue, type ValidationReport } from "@oth/mo
 import { describe, expect, it } from "vitest";
 import type { LevelImage } from "../api/client";
 import { buildStepsDone } from "../flow/floorProgress";
-import { EMPTY_TODOS, stepCounts, stepTodos } from "./todo";
+import { EMPTY_TODOS, issueMessage, stepCounts, stepTodos } from "./todo";
 
 const square: [number, number][] = [[0, 0], [10, 0], [10, 10], [0, 10]];
 
@@ -243,6 +243,31 @@ describe("stepTodos — lifts and stairs", () => {
     for (const levelId of ["oth-L1", "oth-L2"]) {
       expect(on(levelId, r).entrances[0]!.target).toEqual({ kind: "orphan-portal", portalId: "lift-orphan", version: 0 });
     }
+  });
+
+  it("names the lift and says what to do, never its id", () => {
+    const [oneStop] = on("oth-L1", report(tooFew("lift-a"))).entrances;
+    expect(oneStop!.message).toBe("An unnamed lift stops only on L1, so it connects nothing. Add its stop on another floor.");
+    const [orphan] = on("oth-L1", report(tooFew("lift-orphan"))).entrances;
+    expect(orphan!.message).toBe("An unnamed lift has no stops, so it connects nothing. Delete it from the Entrances & lifts to-do list.");
+  });
+});
+
+describe("issueMessage", () => {
+  it("calls a named lift by its name", () => {
+    const named = parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "L1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+      rooms: [{ id: "L1-a", levelId: "oth-L1", kind: "room", footprint: square, heightM: 3 }],
+      portals: [{ id: "lift-b", kind: "stair", nameEn: "North stair" }],
+      portalEndpoints: [{ id: "ep-b", portalId: "lift-b", levelId: "oth-L1", roomId: "L1-a", point: [5, 5] }],
+    });
+    expect(issueMessage(named, issue("portal.endpoints.insufficient", "portal", "lift-b", undefined, "error")))
+      .toBe('Stair "North stair" stops only on L1, so it connects nothing. Add its stop on another floor.');
+  });
+
+  it("leaves every other issue's words as the validator wrote them", () => {
+    expect(issueMessage(model, issue("room.name.missing", "room", "L1-a", "oth-L1"))).toBe("room.name.missing on L1-a");
   });
 });
 

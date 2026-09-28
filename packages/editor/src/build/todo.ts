@@ -1,4 +1,6 @@
-import { live, type MapModel, type ValidationIssue, type ValidationReport } from "@oth/model";
+import {
+  live, type MapModel, type Portal, type PortalEndpoint, type ValidationIssue, type ValidationReport,
+} from "@oth/model";
 import type { LevelImage } from "../api/client";
 import { BUILD_STEPS, buildStepForCode, floorUnits, type BuildStepId } from "../flow/buildSteps";
 import type { Selection } from "../state/store";
@@ -49,6 +51,39 @@ export function stepCounts(todos: StepTodos): Record<BuildStepId, TodoCounts> {
 }
 
 /**
+ * A lift or stair's stops, which is where what is wrong with it is fixed. The
+ * validator files it under no floor, but a new lift has one stop until you
+ * add the next on another floor, so its to-do is on that stop's floor, and
+ * Publish files it there too. With no stops it is on no floor at all.
+ */
+export function portalStops(model: MapModel, portalId: string): PortalEndpoint[] {
+  return live(model.portalEndpoints).filter(e => e.portalId === portalId);
+}
+
+const PORTAL_NOUN: Record<Portal["kind"], string> = { lift: "lift", escalator: "escalator", stair: "stair", ramp: "ramp" };
+
+/**
+ * An issue's words, for the to-do and for Publish alike. The validator names a
+ * lift that connects nothing by its id, which means nothing on screen, so that
+ * one is said again by name — as the Layers drawer calls it — with what to do.
+ */
+export function issueMessage(model: MapModel, issue: ValidationIssue): string {
+  if (issue.code !== "portal.endpoints.insufficient") return issue.message;
+  const portal = live(model.portals).find(p => p.id === issue.entityId);
+  if (!portal) return issue.message;
+  const noun = PORTAL_NOUN[portal.kind];
+  const it = portal.nameEn ? `${noun[0]!.toUpperCase()}${noun.slice(1)} "${portal.nameEn}"` : `An unnamed ${noun}`;
+  const stops = portalStops(model, portal.id);
+  if (stops.length === 0) {
+    return `${it} has no stops, so it connects nothing. Delete it from the Entrances & lifts to-do list.`;
+  }
+  const floor = model.levels.find(l => l.id === stops[0]!.levelId)?.code;
+  // Two stops or more means the report is older than the map: its own words will do until it catches up.
+  if (stops.length > 1 || !floor) return issue.message;
+  return `${it} stops only on ${floor}, so it connects nothing. Add its stop on another floor.`;
+}
+
+/**
  * What is left to do on each step of one floor — spec §11's "to-do from"
  * column. Built from the validation report, so a to-do and the Publish
  * blocker it answers always agree about which step fixes it.
@@ -78,7 +113,6 @@ export function stepTodos(
   const roomLevel = new Map(live(model.rooms).map(r => [r.id, r.levelId]));
   const places = new Map(live(model.places).map(p => [p.id, p]));
   const portals = new Map(live(model.portals).map(p => [p.id, p]));
-  const stops = live(model.portalEndpoints);
   const waiting = floorUnits(model, levelId).waiting;
   const waitingIds = new Set(waiting.map(p => p.id));
   const seen = new Map<string, number>();
@@ -95,7 +129,7 @@ export function stepTodos(
     seen.set(base, n + 1);
     todos[step].push({
       key: n === 0 ? base : `${base}#${n}`,
-      step, severity: issue.severity, code: issue.code, message: issue.message, target,
+      step, severity: issue.severity, code: issue.code, message: issueMessage(model, issue), target,
     });
   }
 
@@ -137,7 +171,7 @@ export function stepTodos(
         : null;
     }
     if (issue.entityType === "portal") {
-      const itsStops = stops.filter(e => e.portalId === issue.entityId);
+      const itsStops = portalStops(model, issue.entityId);
       if (itsStops.length === 0) {
         // On no floor, so on every floor's list: the one place it can be deleted from.
         const portal = portals.get(issue.entityId);
