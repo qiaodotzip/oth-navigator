@@ -8,6 +8,11 @@ export const BALUSTRADE_HEIGHT_M = 1.1;
 /** Thin: glass and a handrail, not a wall. */
 export const BALUSTRADE_THICKNESS_M = 0.08;
 
+/** A grey-blue a shade off the walls, so a balustrade reads as a rail and not a wall. */
+export const BALUSTRADE_COLOUR = "#9fb3c8";
+/** Glass: see-through, but there. */
+export const BALUSTRADE_OPACITY = 0.6;
+
 /** The kinds that are floor. A detail stands on the floor; a void is the lack of one. */
 const FLOORED: ReadonlySet<RoomKind> = new Set<RoomKind>(["room", "area", "service"]);
 

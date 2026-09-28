@@ -1,13 +1,11 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { blocksGeometry, type Block } from "./blocks";
-import { wallTop, type LevelStructure } from "./structure";
+import { blocksGeometry } from "./blocks";
+import { railBlock, wallBlock } from "./levelParts";
+import type { LevelStructure } from "./structure";
 import { roomColor, wallColor } from "./theme";
-import { BALUSTRADE_HEIGHT_M } from "./voids";
+import { BALUSTRADE_COLOUR, BALUSTRADE_OPACITY } from "./voids";
 import type { WallPiece } from "./wallPlan";
-
-/** A grey-blue a shade off the walls, so a balustrade reads as a rail and not a wall. */
-const BALUSTRADE_COLOUR = "#9fb3c8";
 
 /**
  * A level's walls and balustrades. The walls of the selected room are drawn
@@ -26,17 +24,14 @@ export function StructureMesh({ structure, fullHeight, ghosted, selectedId }: {
   selectedId: string | null;
 }) {
   const { plain, picked } = useMemo(() => {
-    const block = (w: WallPiece): Block => ({ ...w, baseM: 0, topM: wallTop(w, structure.heightByRoom, fullHeight) });
+    const block = (w: WallPiece) => wallBlock(w, structure.heightByRoom, fullHeight);
     const mine = (w: WallPiece) => selectedId !== null && w.rooms.includes(selectedId);
     return {
       plain: blocksGeometry(structure.walls.filter(w => !mine(w)).map(block)),
       picked: blocksGeometry(structure.walls.filter(mine).map(block)),
     };
   }, [structure, fullHeight, selectedId]);
-  const rails = useMemo(
-    () => blocksGeometry(structure.balustrades.map(r => ({ ...r, baseM: 0, topM: BALUSTRADE_HEIGHT_M }))),
-    [structure],
-  );
+  const rails = useMemo(() => blocksGeometry(structure.balustrades.map(railBlock)), [structure]);
   useEffect(() => () => {
     plain.dispose();
     picked.dispose();
@@ -65,7 +60,7 @@ export function StructureMesh({ structure, fullHeight, ghosted, selectedId }: {
         </mesh>
       )}
       <mesh geometry={rails}>
-        <meshStandardMaterial color={BALUSTRADE_COLOUR} transparent opacity={ghosted ? 0.2 : 0.6} side={THREE.DoubleSide} />
+        <meshStandardMaterial color={BALUSTRADE_COLOUR} transparent opacity={ghosted ? 0.2 : BALUSTRADE_OPACITY} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );

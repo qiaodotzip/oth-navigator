@@ -1,6 +1,6 @@
 import type { Room } from "@oth/model";
 import { useMemo } from "react";
-import { roomGeometry } from "./geometry";
+import { floorColour, roomFloorGeometry } from "./levelParts";
 import { massingOf, WALL_THICKNESS_M } from "./massing";
 import { shellWalls } from "./shell";
 import { roomColor, wallColor } from "./theme";
@@ -32,13 +32,7 @@ export function RoomMesh({
   const massing = massingOf(room);
   // A solid builds its whole height in one extrusion; everything else gets a
   // floor, and a shell gets walls standing on it.
-  const floor = useMemo(
-    () => roomGeometry(
-      extraHoles.length > 0 ? { ...room, holes: [...room.holes, ...extraHoles] } : room,
-      massing === "solid" ? { slabHeightM: room.heightM } : {},
-    ),
-    [room, massing, extraHoles],
-  );
+  const floor = useMemo(() => roomFloorGeometry(room, extraHoles), [room, extraHoles]);
   const walls = useMemo(
     () => (massing === "shell" && ownWalls
       ? shellWalls(room, { thicknessM: WALL_THICKNESS_M })
@@ -59,7 +53,7 @@ export function RoomMesh({
     <group>
       <mesh geometry={floor} castShadow receiveShadow onClick={select}>
         <meshStandardMaterial
-          color={tint && !selected && !ghosted ? tint : roomColor(room.kind, { selected, ghosted })}
+          color={floorColour(room.kind, { tint, selected, ghosted })}
           transparent={ghosted}
           opacity={ghosted ? 0.35 : 1}
         />

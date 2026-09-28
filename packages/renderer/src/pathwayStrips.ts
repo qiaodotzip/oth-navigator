@@ -1,7 +1,12 @@
 import { live, type MapModel, type Pathway, type PathwayKind, type Vec2 } from "@oth/model";
+import { SLAB_HEIGHT_M } from "./geometry";
 
 /** The plan's colour for a pathway with no kind (PathwayShape's default). */
 export const DEFAULT_PATHWAY_COLOUR = "#38bdf8";
+/** Just above the floor slabs, so a strip is never lost in them. */
+export const STRIP_HEIGHT_M = SLAB_HEIGHT_M + 0.02;
+/** See-through enough to show the floor's tint under it. */
+export const STRIP_OPACITY = 0.7;
 
 export type Quad = readonly [Vec2, Vec2, Vec2, Vec2];
 
@@ -21,7 +26,8 @@ export function stripQuads(polyline: readonly Vec2[], widthM: number): Quad[] {
   return quads;
 }
 
-function colourOf(pathway: Pathway, kinds: readonly PathwayKind[]): string {
+/** A pathway's colour: its kind's, or the plan's default blue. */
+export function pathwayColour(pathway: Pathway, kinds: readonly PathwayKind[]): string {
   return kinds.find(k => k.id === pathway.kindId)?.colorHex ?? DEFAULT_PATHWAY_COLOUR;
 }
 
@@ -31,7 +37,7 @@ export function pathwayStrips(model: MapModel, levelId: string): Array<{ colour:
   const byColour = new Map<string, Quad[]>();
   for (const pathway of live(model.pathways)) {
     if (pathway.levelId !== levelId) continue;
-    const colour = colourOf(pathway, kinds);
+    const colour = pathwayColour(pathway, kinds);
     const quads = byColour.get(colour) ?? [];
     quads.push(...stripQuads(pathway.polyline, pathway.widthM));
     byColour.set(colour, quads);

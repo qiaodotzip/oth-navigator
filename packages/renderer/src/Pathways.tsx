@@ -2,11 +2,7 @@ import type { MapModel } from "@oth/model";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { quadsGeometry } from "./blocks";
-import { SLAB_HEIGHT_M } from "./geometry";
-import { pathwayStrips } from "./pathwayStrips";
-
-/** Just above the floor slabs, so a strip is never lost in them. */
-const STRIP_HEIGHT_M = SLAB_HEIGHT_M + 0.02;
+import { STRIP_HEIGHT_M, STRIP_OPACITY, pathwayStrips } from "./pathwayStrips";
 
 export function Pathways({ model, levelId }: { model: MapModel; levelId: string }) {
   const strips = useMemo(
@@ -18,7 +14,7 @@ export function Pathways({ model, levelId }: { model: MapModel; levelId: string 
     <>
       {strips.map(s => (
         <mesh key={s.colour} geometry={s.geometry} receiveShadow>
-          <meshStandardMaterial color={s.colour} transparent opacity={0.7} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-1} />
+          <meshStandardMaterial color={s.colour} transparent opacity={STRIP_OPACITY} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-1} />
         </mesh>
       ))}
     </>

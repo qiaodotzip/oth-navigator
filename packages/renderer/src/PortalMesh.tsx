@@ -2,11 +2,7 @@ import type { MapModel } from "@oth/model";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { blocksGeometry } from "./blocks";
-import { portalParts, shaftBlocks } from "./portals";
-
-const SHAFT_COLOUR = "#7c93b5";
-const ESCALATOR_COLOUR = "#8d99a6";
-const STAIR_COLOUR = "#b9ae96";
+import { PORTAL_COLOUR, SHAFT_OPACITY, portalParts, shaftBlocks } from "./portals";
 
 /**
  * A level's lift shafts and the flights that climb from it.
@@ -29,17 +25,17 @@ export function Portals({ model, levelId, ghosted = false }: { model: MapModel; 
   return (
     <group>
       <mesh geometry={geometries.shafts}>
-        <meshStandardMaterial color={SHAFT_COLOUR} transparent opacity={ghosted ? 0.2 : 0.45} side={THREE.DoubleSide} depthWrite={false} />
+        <meshStandardMaterial color={PORTAL_COLOUR.shaft} transparent opacity={ghosted ? 0.2 : SHAFT_OPACITY} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
       <mesh geometry={geometries.escalators} castShadow receiveShadow>
         <meshStandardMaterial
-          color={ESCALATOR_COLOUR} transparent={ghosted} opacity={ghosted ? 0.35 : 1} side={THREE.DoubleSide}
+          color={PORTAL_COLOUR.escalator} transparent={ghosted} opacity={ghosted ? 0.35 : 1} side={THREE.DoubleSide}
           polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1}
         />
       </mesh>
       <mesh geometry={geometries.stairs} castShadow receiveShadow>
         <meshStandardMaterial
-          color={STAIR_COLOUR} transparent={ghosted} opacity={ghosted ? 0.35 : 1} side={THREE.DoubleSide}
+          color={PORTAL_COLOUR.stair} transparent={ghosted} opacity={ghosted ? 0.35 : 1} side={THREE.DoubleSide}
           polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1}
         />
       </mesh>

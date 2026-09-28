@@ -12,6 +12,16 @@ export const RISER_M = 0.17;
 /** Thin, so a shaft reads as glass and shows the lift inside. */
 const SHAFT_WALL_M = 0.12;
 
+/** What lifts and flights are painted with, in the preview (PortalMesh) and the export. */
+export const PORTAL_COLOUR = { shaft: "#7c93b5", escalator: "#8d99a6", stair: "#b9ae96" } as const;
+/** A shaft is see-through, so the lift inside it shows. */
+export const SHAFT_OPACITY = 0.45;
+
+/** A flight's colour: an escalator's grey, or the stone of stairs and ramps. */
+export function flightColour(kind: PortalKind): string {
+  return kind === "escalator" ? PORTAL_COLOUR.escalator : PORTAL_COLOUR.stair;
+}
+
 export type Shaft = { portalId: string; ring: Ring; heightM: number };
 export type Flight = { portalId: string; kind: PortalKind; steps: Block[] };
 
