@@ -152,7 +152,7 @@ describe("floorPart", () => {
         { id: "sg_x", placeId: "pl_gc", keyframeId: "kf_9", deletedAt: "2026-09-28T00:00:00.000Z" },
       ],
     });
-    const { places } = floorPart(model, findLevel(model, "L1")!, names, "places", 0, 100) as { places: { id: string; frames?: unknown }[] };
+    const { places } = floorPart(model, findLevel(model, "L1")!, names, "places", 0, 100) as unknown as { places: { id: string; frames?: unknown }[] };
     expect(places.find(p => p.id === "pl_sb")!.frames).toEqual([
       { id: "kf_1", file: "L1 walk.mp4", timeMs: 1000 },
       { id: "kf_3", file: "L1 walk.mp4", timeMs: 3000 },
@@ -175,7 +175,7 @@ describe("floorPart", () => {
       placements: ["L1-o-c", "L1-o-a", "L1-o-b"].map(id => ({ id, levelId: "oth-L1", objectKindId: "ok_a", position: [1, 1, 0] })),
     });
     const ids = (part: "rooms" | "places" | "pathways" | "entrances" | "objects", key: string = part) =>
-      ((floorPart(model, findLevel(model, "L1")!, names, part, 0, 100) as Record<string, { id: string }[]>)[key] ?? []).map(i => i.id);
+      ((floorPart(model, findLevel(model, "L1")!, names, part, 0, 100) as unknown as Record<string, { id: string }[]>)[key] ?? []).map(i => i.id);
     expect(ids("rooms")).toEqual(["L1-a", "L1-b", "L1-c"]);
     expect(ids("places")).toEqual(["pl_a", "pl_b", "pl_c"]);
     expect(ids("pathways")).toEqual(["pw_a", "pw_b", "pw_c"]);
