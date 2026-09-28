@@ -75,7 +75,7 @@ describe("ClaudeStep", () => {
     const list = within(screen.getByRole("region", { name: "Claude's last changes" }));
     await waitFor(() => expect(list.getAllByRole("listitem")).toHaveLength(5));
     expect(list.getAllByRole("listitem")[0]!.textContent).toContain("Made room 0 from a draft");
-    expect(listClaudeChanges).toHaveBeenCalledWith("oth-L1", "2026-09-28T09:00:00.000Z");
+    expect(listClaudeChanges).toHaveBeenCalledWith("oth-L1", "2026-09-28T09:00:00.000Z", 5);
   });
 
   it("says so while Claude has done nothing here", async () => {

@@ -75,7 +75,7 @@ export function ClaudeStep({ api, saver, level, stepId }: {
   // Claude's last changes: on arrival, and whenever the counts move.
   useEffect(() => {
     let mounted = true;
-    api.listClaudeChanges(level.id, since).then(
+    api.listClaudeChanges(level.id, since, LAST_CHANGES).then(
       list => {
         if (mounted) setChanges(list.slice(0, LAST_CHANGES));
       },

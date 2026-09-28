@@ -19,6 +19,7 @@ export type {
   ClaudeChangeGroup,
   ClaudeChange,
 } from "../api/client";
+export { CHECK_GROUPS } from "../api/client";
 
 import type { ClaudeChange, SetupState, SetupStepId, SetupStatus } from "../api/client";
 
@@ -35,7 +36,10 @@ export const SETUP_STEP_IDS = [
 export interface SetupApi {
   getSetup(levelId: string): Promise<SetupState>;
   setSetupStep(levelId: string, step: SetupStepId, body: { status: SetupStatus; note?: string }): Promise<unknown>;
-  /** `since` is ISO; the wizard sends the epoch to mean every change there is. */
-  listClaudeChanges(levelId: string, since: string): Promise<ClaudeChange[]>;
+  /**
+   * `since` is ISO; the wizard sends the epoch to mean every change there
+   * is. `limit` caps how many rows come back (the route takes 1–1000).
+   */
+  listClaudeChanges(levelId: string, since: string, limit?: number): Promise<ClaudeChange[]>;
   undoChange(auditId: string): Promise<unknown>;
 }
