@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
 import { storeAsset } from "../assets/storage";
 import { createUser } from "../auth/users";
-import { apiTokens, auditLog, buildings, captures, keyframes, levels, publishedVersions, roomDrafts, rooms, users } from "../db/schema";
+import {
+  apiTokens, auditLog, buildings, captures, floorSetup, keyframes, levels, portals, publishedVersions, roomDrafts, rooms, users,
+} from "../db/schema";
 import { listDrafts, replaceDrafts } from "../drafts/service";
 import { createEntity, updateEntity } from "../entities/repository";
 import { GATE_COOKIE, gateToken } from "../gate/gate";
@@ -433,6 +435,7 @@ describe("MCP end to end", () => {
     expect(names).toEqual(expect.arrayContaining([
       "list_floors", "get_floor", "get", "check_floor", "list_frames", "view_frame", "view_plan",
       "tag_frame", "review_place", "bind_place", "create", "update", "delete", "restore",
+      "list_drafts", "decide_drafts", "make_stop", "suggest_object_spots", "step_status", "finish_step",
     ]));
     await createEntity(f.db, "room", ROOM, f.wei.id);
     await updateEntity(f.db, "room", ROOM.id, 0, { nameEn: "Starbucks" }, f.wei.id);
@@ -442,5 +445,72 @@ describe("MCP end to end", () => {
     const refused = await client.callTool({ name: "publish", arguments: {} }).then(r => r.isError === true, () => true);
     expect(refused).toBe(true);
     expect(await f.db.select().from(publishedVersions)).toEqual([]);
+  });
+});
+
+// Owner: mcp/tools/setup.ts, setup/routes.ts (Plan 6C, spec §7.4).
+describe("§7.4 Plan 6's tools keep the Plan 5C guards", () => {
+  const SOURCE = { checksum: "a".repeat(64), page: 1 };
+  const SHOP = { nameEn: "Shop 12", kind: "room", footprint: ROOM.footprint, labelPoint: [15, 35], areaM2: 100 };
+
+  it("reach only the floor they are given", async () => {
+    const f = await mcpFixture();
+    const [draft] = await replaceDrafts(f.db, "oth-L2", SOURCE, [SHOP], f.wei.id);
+    await createEntity(f.db, "room", { ...ROOM, id: "L2-esc", levelId: "oth-L2", nameEn: "Escalator - 07" }, f.wei.id);
+    const client = await f.connect();
+    expect((await call(client, "decide_drafts", { floor: "L1", items: [{ id: String(draft!.id), expectedVersion: 0, decision: "accept" }] })).isError).toBe(true);
+    expect((await call(client, "make_stop", { floor: "L1", room: "L2-esc", expectedVersion: 0, kind: "escalator" })).isError).toBe(true);
+    expect(await f.db.select().from(rooms).where(eq(rooms.levelId, "oth-L1"))).toEqual([]);
+    expect(await f.db.select().from(portals)).toEqual([]);
+    expect((await listDrafts(f.db, "oth-L2")).map(d => d.id)).toEqual([draft!.id]);
+  });
+
+  it("count against the token's writes like any change", async () => {
+    const f = await mcpFixture({ deps: { mcp: { limits: new TokenLimits({ ...LIMITS, writesPerMinute: 1 }) } } });
+    const finish = () => f.raw({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "finish_step", arguments: { floor: "L1", step: "label", note: "Done" } } });
+    expect((await finish()).status).toBe(200);
+    expect((await finish()).status).toBe(429);
+    expect(await f.db.select().from(floorSetup)).toHaveLength(1);
+  });
+
+  it("leave a via trail on everything they write", async () => {
+    const f = await mcpFixture();
+    const [draft] = await replaceDrafts(f.db, "oth-L1", SOURCE, [{ ...SHOP, nameEn: "Escalator - 07" }], f.wei.id);
+    const client = await f.connect();
+    await call(client, "decide_drafts", { floor: "L1", items: [{ id: String(draft!.id), expectedVersion: 0, decision: "accept" }] });
+    await call(client, "make_stop", { floor: "L1", room: "L1-escalator-07", expectedVersion: 0, kind: "escalator" });
+    await call(client, "finish_step", { floor: "L1", step: "rooms", note: "One stop" });
+    const theirs = await f.db.select().from(auditLog).where(eq(auditLog.actorId, f.wei.id));
+    // Three kinds of Wei's rows are written outside any tool, with no via: the
+    // token's own create row (mcpFixture, minting it), the drafts' create rows
+    // and the level's own find-rooms marker (replaceDrafts, as Find rooms does
+    // from a person's browser).
+    const byTools = theirs.filter(r =>
+      r.entityType !== "token" && !(r.entityType === "roomDraft" && r.action === "create") && !(r.entityType === "level" && r.action === "find-rooms"));
+    expect(byTools.map(r => `${r.entityType} ${r.action}`).sort()).toEqual([
+      "floorSetup set", "portal create", "portalEndpoint create", "room create", "room update", "roomDraft delete", "roomDraft update",
+    ]);
+    expect(byTools.every(r => r.via === f.tokenId)).toBe(true);
+  });
+
+  it("publish nothing: publish stays the one tool that does, and still needs May publish", async () => {
+    const f = await mcpFixture();
+    const client = await f.connect();
+    expect((await client.listTools()).tools.map(t => t.name).filter(n => /publish/.test(n))).toEqual(["publish"]);
+    await call(client, "finish_step", { floor: "L1", step: "paths", note: "Done" });
+    expect(await f.db.select().from(publishedVersions)).toEqual([]);
+  });
+
+  it("leave the setup and Undo to a person: a token reaches none of their routes", async () => {
+    const f = await mcpFixture();
+    for (const [method, path] of [
+      ["GET", "/api/levels/oth-L1/setup"], ["PUT", "/api/levels/oth-L1/setup/label"],
+      ["GET", "/api/levels/oth-L1/claude-changes"], ["POST", "/api/changes/audit_x/undo"],
+    ] as const) {
+      const res = await f.app.request(path, {
+        method, headers: { "content-type": "application/json", ...bearer(f.secret) }, body: method === "GET" ? undefined : "{}",
+      });
+      expect(res.status, `${method} ${path}`).toBe(401);
+    }
   });
 });
