@@ -35,6 +35,13 @@ describe("Stepper", () => {
     expect(nav.getByRole("button", { name: "Pathways" })).toBeTruthy();
   });
 
+  it("says a finished step still has something open", () => {
+    render(<Stepper current="bind" done={{ ...done, bind: true }} counts={counts} onChoose={vi.fn()} />);
+    const button = screen.getByRole("button", { name: "Bind places, done, 190 open" });
+    expect(button.textContent).toContain("✓");
+    expect(button.textContent).toContain("190");
+  });
+
   it("goes to a step when it is chosen", () => {
     const onChoose = vi.fn();
     fireEvent.click(setup(onChoose).getByRole("button", { name: "Pathways" }));
