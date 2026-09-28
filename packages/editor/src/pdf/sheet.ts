@@ -4,6 +4,8 @@ import { readTextItems, wordsOf, type Box, type TextItem } from "./text";
 import { isRoomLabel } from "./words";
 
 export const WINDOW_MARGIN_M = 10;
+/** How far past its grid's dimensions a building's own names may sit. */
+export const LABEL_REACH_M = 30;
 export const WIDE_SHEET_M = 400;
 /**
  * About 6,000 × 6,000 px. The raster, its ink mask and the pinched copy
@@ -33,9 +35,22 @@ export function boxUnion(boxes: readonly Box[]): Box | null {
   };
 }
 
-/** What the window goes round: the grid's dimensions and the names of spaces, never the title block's notes. */
+/**
+ * What the window goes round: the agreeing runs' dimensions, and the names of
+ * spaces within 30 m of them, never the title block's notes. The runs anchor
+ * it because a room word is not always a room: L1's sheet names the building
+ * next door "OCBC TAMPINES CENTRE 2", 100 m past the grid. With no runs there
+ * is no anchor, and nothing to go round.
+ */
 export function windowMarks(items: readonly TextItem[], runs: readonly Run[]): Box[] {
-  return [...runs.flatMap(r => r.words.map(w => w.box)), ...items.filter(i => isRoomLabel(i.text)).map(i => i.box)];
+  const grid = boxUnion(runs.flatMap(r => r.words.map(w => w.box)));
+  if (!grid) return [];
+  // The runs' own scale, which is the sheet's: calibrate takes it the same way.
+  const metresPerPoint = runs.reduce((s, r) => s + r.mm, 0) / runs.reduce((s, r) => s + r.pt, 0) / 1000;
+  const reach = LABEL_REACH_M / metresPerPoint;
+  const near = (b: Box) =>
+    b.x1 >= grid.x0 - reach && b.x0 <= grid.x1 + reach && b.y1 >= grid.y0 - reach && b.y0 <= grid.y1 + reach;
+  return [grid, ...items.filter(i => isRoomLabel(i.text) && near(i.box)).map(i => i.box)];
 }
 
 /**
@@ -63,10 +78,18 @@ export function fitBudget(window: Box, metresPerPoint: number, metresPerPixel: n
   return least <= metresPerPixel ? metresPerPixel : Math.ceil(least * 1000) / 1000;
 }
 
-/** A sheet with no scale: 4 pixels a point, and no side longer than 8000 px. */
+/**
+ * A sheet with no scale: 4 pixels a point, no side longer than 8000 px, and
+ * within the pixel budget, which an A0 sheet 8000 px across would pass by 9 Mpx.
+ */
 export function unscaledPointsPerPixel(window: Box): number {
-  const longest = Math.max(window.x1 - window.x0, window.y1 - window.y0);
-  return Math.max(1 / UNSCALED_MAX_PX_PER_PT, longest / UNSCALED_MAX_SIDE_PX);
+  const width = window.x1 - window.x0;
+  const height = window.y1 - window.y0;
+  return Math.max(
+    1 / UNSCALED_MAX_PX_PER_PT,
+    Math.max(width, height) / UNSCALED_MAX_SIDE_PX,
+    Math.sqrt((width * height) / PIXEL_BUDGET),
+  );
 }
 
 /** Where a plan image came from on its sheet: fixed when it was rendered. */

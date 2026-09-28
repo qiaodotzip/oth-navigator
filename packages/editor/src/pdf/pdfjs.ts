@@ -7,6 +7,14 @@ type Pdfjs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
 /** The server's own limit (`PDF_MAX_BYTES` in `server/src/images/pdf.ts`). */
 export const PDF_MAX_BYTES = 50 * 1024 * 1024;
 
+/**
+ * The largest image, in pixels, that pdf.js will decode from a sheet. An A0
+ * scan at 300 dpi (140 Mpx) still draws. A file that declares an image many
+ * times that would take gigabytes to decode, and the tab with it, so pdf.js
+ * leaves that image out instead.
+ */
+const MAX_IMAGE_PIXELS = 150_000_000;
+
 export class PdfUnreadableError extends Error {
   constructor(message: string) {
     super(message);
@@ -24,6 +32,9 @@ let loading: Promise<Pdfjs> | null = null;
  * In a browser it parses in its own worker, so an untrusted file is read off
  * the page's thread. Under Node, in the tests, it parses in place and needs no
  * worker file.
+ *
+ * A fetch that fails is forgotten, so the next PDF tries again rather than
+ * failing until the page is reloaded.
  */
 export function loadPdfjs(): Promise<Pdfjs> {
   loading ??= (async () => {
@@ -33,7 +44,10 @@ export function loadPdfjs(): Promise<Pdfjs> {
       pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
     }
     return pdfjs;
-  })();
+  })().catch((err: unknown) => {
+    loading = null;
+    throw err;
+  });
   return loading;
 }
 
@@ -60,6 +74,22 @@ export function readBytes(blob: Blob): Promise<Uint8Array> {
 }
 
 /**
+ * What pdf.js's failure says about the file, when it is the file's fault: a
+ * PdfUnreadableError, or null for anything else. A worker that failed to load,
+ * or a read cut short, is left as it was, so it is not blamed on the file.
+ * From the worker, pdf.js sends any error it has no name for as
+ * UnknownErrorException, a FormatError included.
+ */
+export function asUnreadable(err: unknown): PdfUnreadableError | null {
+  const name = (err as { name?: unknown } | null)?.name;
+  if (name === "PasswordException") return new PdfUnreadableError("it is protected by a password");
+  if (name === "InvalidPDFException" || name === "FormatError" || name === "UnknownErrorException") {
+    return new PdfUnreadableError("it isn't a PDF this app can read");
+  }
+  return null;
+}
+
+/**
  * Opens a PDF. pdf.js takes over the buffer it is handed and empties it, so it
  * gets a copy: the caller still has the file to upload. A file it cannot read
  * says so as a PdfUnreadableError, which the screens word differently from a
@@ -68,15 +98,12 @@ export function readBytes(blob: Blob): Promise<Uint8Array> {
  */
 export async function openPdf(bytes: Uint8Array): Promise<{ doc: PdfDocument; close: () => Promise<void> }> {
   const pdfjs = await loadPdfjs();
-  const task = pdfjs.getDocument({ data: bytes.slice(), verbosity: 0 });
+  const task = pdfjs.getDocument({ data: bytes.slice(), verbosity: 0, maxImageSize: MAX_IMAGE_PIXELS });
   try {
     const doc = await task.promise;
     return { doc, close: () => task.destroy() };
   } catch (err) {
     await task.destroy().catch(() => {});
-    const name = (err as { name?: string } | null)?.name;
-    throw new PdfUnreadableError(
-      name === "PasswordException" ? "it is protected by a password" : "it isn't a PDF this app can read",
-    );
+    throw asUnreadable(err) ?? err;
   }
 }

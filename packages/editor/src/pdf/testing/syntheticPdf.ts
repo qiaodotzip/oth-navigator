@@ -9,6 +9,11 @@ export type SyntheticPage = {
   rotate?: 0 | 90 | 180 | 270;
   /** Where the MediaBox starts. The content is moved with it, so the sheet looks the same. */
   origin?: [number, number];
+  /**
+   * Marks laid over the sheet, as a reviewer's stamp or cloud is: each a box
+   * [x, y, w, h] and what its appearance draws, in the box's own space.
+   */
+  annotations?: readonly { rect: readonly [number, number, number, number]; appearance: string }[];
   content: string;
 };
 
@@ -19,15 +24,29 @@ export function syntheticPdf(pages: readonly SyntheticPage[]): Uint8Array {
     `<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
   ];
+  // Annotations and their appearances follow the pages, numbered on from them.
+  const after: string[] = [];
+  let next = 4 + pages.length * 2;
   pages.forEach((page, i) => {
     const [ox, oy] = page.origin ?? [0, 0];
     const body = ox || oy ? `q 1 0 0 1 ${ox} ${oy} cm\n${page.content}\nQ` : page.content;
+    const annots = (page.annotations ?? []).map(({ rect: [x, y, w, h], appearance }) => {
+      const ref = next;
+      next += 2;
+      after.push(
+        `<< /Type /Annot /Subtype /Square /Rect [${ox + x} ${oy + y} ${ox + x + w} ${oy + y + h}] /F 4 /AP << /N ${ref + 1} 0 R >> >>`,
+        `<< /Type /XObject /Subtype /Form /BBox [0 0 ${w} ${h}] /Length ${appearance.length} >>\nstream\n${appearance}\nendstream`,
+      );
+      return `${ref} 0 R`;
+    });
     objects.push(
       `<< /Type /Page /Parent 2 0 R /MediaBox [${ox} ${oy} ${ox + page.width} ${oy + page.height}] ` +
-        `/Rotate ${page.rotate ?? 0} /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + i * 2} 0 R >>`,
+        `/Rotate ${page.rotate ?? 0} /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + i * 2} 0 R` +
+        `${annots.length ? ` /Annots [${annots.join(" ")}]` : ""} >>`,
       `<< /Length ${body.length} >>\nstream\n${body}\nendstream`,
     );
   });
+  objects.push(...after);
   let out = "%PDF-1.4\n";
   const offsets: number[] = [];
   objects.forEach((body, i) => {

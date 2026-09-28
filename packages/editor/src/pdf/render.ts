@@ -1,4 +1,4 @@
-import type { PdfDocument, PdfPage } from "./pdfjs";
+import { loadPdfjs, type PdfDocument, type PdfPage } from "./pdfjs";
 import type { Box } from "./text";
 
 type Made = { canvas: unknown; context: CanvasRenderingContext2D | null };
@@ -25,8 +25,12 @@ export type Rendered = {
  * script's `get_pixmap` with a clip. It uses pdf.js's own canvas factory: a
  * <canvas> in a browser, and @napi-rs/canvas under Node, so the tests draw
  * what the app draws.
+ *
+ * The sheet's annotations are left out. A reviewer's stamp, cloud or note is
+ * laid over the drawing, not part of it, and the rooms are found in the ink.
  */
 export async function renderWindow(doc: PdfDocument, page: PdfPage, window: Box, pxPerPt: number): Promise<Rendered> {
+  const { AnnotationMode } = await loadPdfjs();
   const width = Math.max(1, Math.ceil((window.x1 - window.x0) * pxPerPt));
   const height = Math.max(1, Math.ceil((window.y1 - window.y0) * pxPerPt));
   const factory = doc.canvasFactory as CanvasFactory;
@@ -41,7 +45,10 @@ export async function renderWindow(doc: PdfDocument, page: PdfPage, window: Box,
   const release = () => factory.destroy(made);
   try {
     const viewport = page.getViewport({ scale: pxPerPt, offsetX: -window.x0 * pxPerPt, offsetY: -window.y0 * pxPerPt });
-    await page.render({ canvas: made.canvas as HTMLCanvasElement, canvasContext: context, viewport, background: "#ffffff" }).promise;
+    await page.render({
+      canvas: made.canvas as HTMLCanvasElement, canvasContext: context, viewport, background: "#ffffff",
+      annotationMode: AnnotationMode.DISABLE,
+    }).promise;
   } catch (err) {
     release();
     throw err;

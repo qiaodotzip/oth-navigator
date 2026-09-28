@@ -14,7 +14,7 @@ export const MIN_RUN_PT = 50;
  * script finds).
  */
 export const PAIR_BAND = [2 / 3, 1.5] as const;
-/** Runs this close to the median are the sheet's scale (spec §5.2: 0.5%). */
+/** Runs this close to each other agree (spec §5.2: 0.5%). */
 export const RUN_AGREEMENT = 0.005;
 const PLAUSIBLE_M_PER_PT = [0.001, 10] as const;
 
@@ -34,8 +34,10 @@ const median = (values: readonly number[]) => [...values].sort((a, b) => a - b)[
  * - A pair is judged against its own run's spacing (PAIR_BAND). The script
  *   bounded the spacing to 0.5–2 m per point instead. That was right for L1
  *   (0.75), but it would throw out a sheet drawn at 1:100 altogether.
- * - A run whose numbers straddle a rounding boundary sits in two lanes. It is
- *   still counted once, so it cannot agree with itself.
+ * - A run whose numbers straddle a rounding boundary sits in two lanes. The
+ *   fuller lane is read, and a lane within LANE_TOLERANCE_PT of one already
+ *   read as a run is skipped. So one printed run cannot agree with itself,
+ *   even when a stray number puts the two lanes' rows a word apart.
  */
 export function dimensionRuns(words: readonly Word[]): Run[] {
   const dims = words.filter(w => GRID_MM.test(w.text));
@@ -45,13 +47,11 @@ export function dimensionRuns(words: readonly Word[]): Run[] {
     const across = (w: Word) => (axis === "x" ? w.y : w.x);
     const lanes = new Map<number, number>();
     for (const d of dims) lanes.set(Math.round(across(d)), (lanes.get(Math.round(across(d))) ?? 0) + 1);
-    const counted = new Set<string>();
-    for (const [lane, n] of lanes) {
-      if (n < MIN_RUN_WORDS) continue;
+    const read: number[] = [];
+    for (const [lane, n] of [...lanes].sort((p, q) => q[1] - p[1])) {
+      if (n < MIN_RUN_WORDS) break;
+      if (read.some(r => Math.abs(r - lane) < LANE_TOLERANCE_PT)) continue;
       const row = dims.filter(d => Math.abs(across(d) - lane) < LANE_TOLERANCE_PT).sort((p, q) => along(p) - along(q));
-      const key = row.map(d => dims.indexOf(d)).join(",");
-      if (counted.has(key)) continue;
-      counted.add(key);
       const pairs: { gap: number; span: number; a: Word; b: Word }[] = [];
       for (let i = 0; i + 1 < row.length; i++) {
         const a = row[i]!;
@@ -72,25 +72,52 @@ export function dimensionRuns(words: readonly Word[]): Run[] {
         used.add(p.a);
         used.add(p.b);
       }
-      if (pt > MIN_RUN_PT) runs.push({ axis, mm, pt, words: [...used] });
+      if (pt > MIN_RUN_PT) {
+        runs.push({ axis, mm, pt, words: [...used] });
+        read.push(lane);
+      }
     }
   }
   return runs;
 }
 
 /**
+ * The largest group of runs within RUN_AGREEMENT of each other, or null when
+ * no group has two, or another group is as large. A sheet whose runs split two
+ * and two has two scales, and picking one would be a guess.
+ */
+function agreeing(runs: readonly Run[]): Run[] | null {
+  const ratio = (r: Run) => r.mm / r.pt;
+  const sorted = [...runs].sort((p, q) => ratio(p) - ratio(q));
+  let best: Run[] = [];
+  let tied = false;
+  for (let i = 0; i < sorted.length; i++) {
+    const least = ratio(sorted[i]!);
+    let j = i;
+    while (j + 1 < sorted.length && (ratio(sorted[j + 1]!) - least) / least < RUN_AGREEMENT) j++;
+    // A group starting later that is as large ends later too: a different group.
+    if (j + 1 - i > best.length) {
+      best = sorted.slice(i, j + 1);
+      tied = false;
+    } else if (j + 1 - i === best.length) {
+      tied = true;
+    }
+  }
+  return best.length >= 2 && !tied ? best : null;
+}
+
+/**
  * Metres per point, from the sheet's own dimension strings (the script's
  * `calibrate`). Never the printed ratio: OTH's L1 sheet says 1:500 and is
  * out by 4.25×, and its 2020 sheets carry a scale bar that is out by 3×.
- * The agreeing majority is the scale: the median, and the runs within 0.5%
- * of it. Fewer than two agreeing runs is no scale at all.
+ * The scale is the one group of runs that agree with each other, and outnumber
+ * any other group; it takes two at least. Anything else is no scale at all.
  */
 export function calibrate(words: readonly Word[]): Calibration {
   const runs = dimensionRuns(words);
   if (runs.length < 2) return { metresPerPoint: null, runsAgree: 0, runsFound: runs.length, runs };
-  const mid = median(runs.map(r => r.mm / r.pt));
-  const keep = runs.filter(r => Math.abs(r.mm / r.pt - mid) / mid < RUN_AGREEMENT);
-  if (keep.length < 2) return { metresPerPoint: null, runsAgree: keep.length, runsFound: runs.length, runs: keep };
+  const keep = agreeing(runs);
+  if (!keep) return { metresPerPoint: null, runsAgree: 0, runsFound: runs.length, runs: [] };
   const metresPerPoint = keep.reduce((s, r) => s + r.mm, 0) / keep.reduce((s, r) => s + r.pt, 0) / 1000;
   if (metresPerPoint < PLAUSIBLE_M_PER_PT[0] || metresPerPoint > PLAUSIBLE_M_PER_PT[1]) {
     return { metresPerPoint: null, runsAgree: 0, runsFound: runs.length, runs: [] };

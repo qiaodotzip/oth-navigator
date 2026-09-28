@@ -26,6 +26,24 @@ describe("renderWindow", () => {
     }
   });
 
+  it("leaves out the sheet's annotations: a reviewer's stamp is not part of the drawing", async () => {
+    const pdf = syntheticPdf([{ width: 100, height: 100, content: "", annotations: [{ rect: [40, 40, 20, 20], appearance: fillRect(0, 0, 20, 20) }] }]);
+    const { doc, close } = await openPdf(pdf);
+    try {
+      const page = await doc.getPage(1);
+      expect(await page.getAnnotations()).toHaveLength(1);
+      const r = await renderWindow(doc, page, { x0: 0, y0: 0, x1: 100, y1: 100 }, 1);
+      try {
+        const ink = inkFromRgba(r.context.getImageData(0, 0, 100, 100).data, 100, 100);
+        expect(ink.reduce((n, v) => n + v, 0)).toBe(0);
+      } finally {
+        r.release();
+      }
+    } finally {
+      await close();
+    }
+  });
+
   it("saves the drawing as a JPEG", async () => {
     const { doc, close } = await openPdf(syntheticPdf([{ width: 100, height: 100, content: fillRect(10, 10, 10, 10) }]));
     try {

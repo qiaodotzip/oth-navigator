@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PdfUnreadableError, looksLikePdf, openPdf, readBytes } from "./pdfjs";
+import { PdfUnreadableError, asUnreadable, looksLikePdf, openPdf, readBytes } from "./pdfjs";
 import { planSheet, syntheticPdf } from "./testing/syntheticPdf";
 
 const bytes = (s: string) => new TextEncoder().encode(s);
@@ -26,6 +26,21 @@ describe("openPdf", () => {
 
   it("says a file it cannot read is unreadable, rather than failing as a lost connection would", async () => {
     await expect(openPdf(bytes("%PDF-1.4\nnot really"))).rejects.toBeInstanceOf(PdfUnreadableError);
+  });
+});
+
+describe("asUnreadable", () => {
+  it("blames the file only for what pdf.js says is wrong with a file", () => {
+    for (const name of ["InvalidPDFException", "FormatError", "UnknownErrorException"]) {
+      expect(asUnreadable({ name, message: "" })?.message).toBe("it isn't a PDF this app can read");
+    }
+    expect(asUnreadable({ name: "PasswordException", message: "" })?.message).toBe("it is protected by a password");
+  });
+
+  it("leaves anything else as it was: a reader that failed to load, or a read cut short, is not a bad file", () => {
+    expect(asUnreadable(new TypeError("Failed to fetch dynamically imported module"))).toBeNull();
+    expect(asUnreadable({ name: "AbortException", message: "Worker was destroyed" })).toBeNull();
+    expect(asUnreadable(null)).toBeNull();
   });
 });
 

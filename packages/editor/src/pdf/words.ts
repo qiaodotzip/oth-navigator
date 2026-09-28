@@ -1,8 +1,9 @@
 /**
  * The word lists of `scripts/extract-storey-plan.py`, which decide what a
  * printed line is. Verbatim, except where Part B departs from the script on
- * purpose (spec §5.2): a void is a draft, so "Void" is not junk here, and
- * escalators and stairs are left out and reported.
+ * purpose (spec §5.2): a void is a draft, so "Void" is not junk here;
+ * escalators and stairs are left out and reported; and an outer line is not
+ * a name.
  */
 
 /** A grid dimension: one bay, in millimetres. */
@@ -39,10 +40,15 @@ export const OPEN_WORDS: ReadonlySet<string> = new Set([
 /** Left out and reported: flooded, L1's escalators came out as walled rooms. Part D draws them as flights. */
 export const FLIGHT_WORDS: ReadonlySet<string> = new Set(["ESCALATOR", "ESCALATORS", "STAIR", "STAIRS", "STAIRCASE"]);
 
+/**
+ * The script's list, which reads from the start of a line, and one more that
+ * does not: L1 marks a tunnel's edge "TUNNEL OUTER LINE", which leads with a
+ * room word and names no space. None of L1's rooms came from it.
+ */
 export const NOT_A_NAME = new RegExp(
   "^(FFL|SFL|SLL|CLL|RL|FALL|GRADIENT|RWDP|LINE OF|DOUBLE SLAB|MIN HEADROOM|" +
     "BOUNDARY|BASEMENT|ROOF LINE|UP TO|UP FROM|RAMP UP|STEP UP|SHUTTER GATE|" +
-    "OPERABLE|TO \\+)",
+    "OPERABLE|TO \\+)|\\bOUTER LINE\\b",
   "i",
 );
 

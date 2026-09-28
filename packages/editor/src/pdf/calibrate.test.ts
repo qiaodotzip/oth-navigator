@@ -59,11 +59,35 @@ describe("calibrate", () => {
     expect(cal).toMatchObject({ metresPerPoint: null, runsFound: 2 });
   });
 
+  it("gives no scale when the runs split two and two: it never guesses", () => {
+    const cal = calibrate([
+      ...run("x", 50, 0, bays(10), 0.75), ...run("y", -30, 100, bays(10), 0.75),
+      ...run("x", 400, 0, bays(10), 0.6), ...run("y", -300, 500, bays(10), 0.6),
+    ]);
+    expect(cal).toMatchObject({ metresPerPoint: null, runsFound: 4 });
+  });
+
+  it("takes the largest group of runs that agree, when no other group is as large", () => {
+    const cal = calibrate([
+      ...run("x", 50, 0, bays(10), 0.75), ...run("y", -30, 100, bays(10), 0.75),
+      ...run("x", 400, 0, bays(10), 0.6), ...run("y", -300, 500, bays(10), 0.5),
+    ]);
+    expect(cal.metresPerPoint).toBeCloseTo(0.75, 6);
+    expect([cal.runsAgree, cal.runsFound]).toEqual([2, 4]);
+  });
+
   it("counts a run once when its numbers straddle two lanes", () => {
     // The script counted lanes by rounded position, so a run printed at 88.4 and 88.6 was two runs, and agreed with itself.
     const straddling = run("x", 0, 0, bays(16), 0.75).map((w, i) => ({ ...w, y: i % 2 ? 88.6 : 88.4 }));
     const cal = calibrate(straddling);
     expect(cal).toMatchObject({ metresPerPoint: null, runsFound: 1 });
+  });
+
+  it("counts a run once when a stray number reaches only one of the two lanes it straddles", () => {
+    // The stray puts one more number in lane 89's reach than in lane 88's, so the two lanes read different rows of the same run.
+    const straddling = run("x", 0, 0, bays(16), 0.75).map((w, i) => ({ ...w, y: i % 2 ? 88.6 : 88.4 }));
+    const stray = word("9000", straddling.at(-1)!.x + 12, 94.5);
+    expect(calibrate([...straddling, stray])).toMatchObject({ metresPerPoint: null, runsFound: 1 });
   });
 
   it("keeps a run with one dimension missing: only the pair across the gap is left out", () => {
