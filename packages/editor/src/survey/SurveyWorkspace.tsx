@@ -101,6 +101,26 @@ export function SurveyWorkspace({ api, saver, level, params }: {
     }
   }
 
+  /**
+   * The reload after a tag or bin, whatever its outcome. One that fails after
+   * the write landed is said, and its Retry reloads: the screen would not show
+   * the tag, and typing it again would make a second place of the same name.
+   * After a write that failed, that failure has been said already.
+   */
+  async function reload(landed: boolean): Promise<void> {
+    try {
+      await saver.refresh();
+    } catch (err) {
+      if (!landed) return;
+      reportFailure(err, {
+        doing: "reload the map after saving",
+        retry: async () => {
+          await saver.refresh().catch(() => {});
+        },
+      });
+    }
+  }
+
   /** The place a name means in what the server has now. */
   function placeNamed(nameEn: string): string | null {
     const now = useEditorStore.getState().model;
@@ -122,6 +142,7 @@ export function SurveyWorkspace({ api, saver, level, params }: {
    */
   function sendTag(t: Tag, frameId: string, drawn: Box | null, again = false): Promise<void> {
     return holding(async () => {
+      let landed = false;
       try {
         let placeId = t.placeId;
         if (again) {
@@ -131,6 +152,7 @@ export function SurveyWorkspace({ api, saver, level, params }: {
         const writes = tagWrites({ ...t, placeId }, frameId, level.id);
         if (writes.place) await api.createEntity("place", writes.place);
         await api.createEntity("sighting", writes.sighting);
+        landed = true;
         setDraft(d => (d === drawn ? null : d));
       } catch (err) {
         reportFailure(err, {
@@ -138,7 +160,7 @@ export function SurveyWorkspace({ api, saver, level, params }: {
           retry: () => sendTag(t, frameId, drawn, true),
         });
       } finally {
-        await saver.refresh().catch(() => {});
+        await reload(landed);
       }
     });
   }
@@ -165,8 +187,10 @@ export function SurveyWorkspace({ api, saver, level, params }: {
    */
   function sendBin(target: { id: string; number: number }, movedTo: string | null, page: string): Promise<void> {
     return holding(async () => {
+      let landed = false;
       try {
         await api.deleteKeyframe(target.id);
+        landed = true;
       } catch (err) {
         if (addressShows(page, movedTo)) setParams({ frame: target.id });
         reportFailure(err, {
@@ -179,7 +203,7 @@ export function SurveyWorkspace({ api, saver, level, params }: {
         });
         return;
       } finally {
-        await saver.refresh().catch(() => {});
+        await reload(landed);
       }
       offerUndo({
         message: `Binned frame ${target.number}`,
@@ -200,13 +224,28 @@ export function SurveyWorkspace({ api, saver, level, params }: {
     void sendBin({ id: frame.id, number: view.index + 1 }, movedTo, window.location.pathname);
   }
 
+  /**
+   * Unfiled footage is offered on every floor, since it belongs to whichever
+   * one it was filmed on. So a click on the wrong floor moves all of it, and
+   * every place seen in it, there — and nothing else in the app files it back.
+   * The Undo is that way back.
+   */
   async function fileUnder(capture: Capture): Promise<void> {
     setFiling(s => new Set(s).add(capture.id));
-    await saver.update("capture", capture.id, capture.version, { levelId: level.id });
+    const filed = await saver.update("capture", capture.id, capture.version, { levelId: level.id });
     setFiling(s => {
       const left = new Set(s);
       left.delete(capture.id);
       return left;
+    });
+    if (!filed) return;
+    offerUndo({
+      message: `Filed ${capture.filename} under ${level.code}`,
+      undone: `${capture.filename} isn't filed under a floor again`,
+      what: capture.filename,
+      // An explicit null clears the floor; the filing moved the version on by one.
+      run: () => api.updateEntity("capture", capture.id, capture.version + 1, { levelId: null }),
+      refresh: saver.refresh,
     });
   }
 
@@ -330,6 +369,10 @@ export function SurveyWorkspace({ api, saver, level, params }: {
         labels={labels}
         draft={draft}
         onDraft={setDraft}
+        // Box, then name, then Enter (spec §9): the mouse press that drew the
+        // box took the focus, and without this the name typed next was read
+        // as keys — the G of "Guardian" opened the grid.
+        onDrawn={() => tagBar.current?.focus()}
         onMoveLabel={moveLabel}
         onRemoveLabel={removeLabel}
         tagBar={tagBar}

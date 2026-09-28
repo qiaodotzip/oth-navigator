@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
 import { restorePlace } from "../survey/review";
@@ -36,7 +36,10 @@ entityRoutes.post("/:type", async c => {
     return c.json({ entity }, 201);
   } catch (err) {
     // A schema rejection is the client's fault, not a server error.
-    return c.json({ error: "invalid entity", detail: String(err) }, 422);
+    if (err instanceof ZodError) return c.json({ error: "invalid entity", detail: String(err) }, 422);
+    // Anything else — a dropped connection, a timeout — is the server's, and
+    // onError's 500 is what lets the client offer Retry.
+    throw err;
   }
 });
 
@@ -56,7 +59,8 @@ entityRoutes.patch("/:type/:id", async c => {
       return c.json({ error: "version conflict", current: err.current }, 409);
     }
     if (err instanceof NotFoundError) return c.json({ error: "not found" }, 404);
-    return c.json({ error: "invalid entity", detail: String(err) }, 422);
+    if (err instanceof ZodError) return c.json({ error: "invalid entity", detail: String(err) }, 422);
+    throw err;
   }
 });
 

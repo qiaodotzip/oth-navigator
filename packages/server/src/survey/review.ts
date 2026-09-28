@@ -1,13 +1,13 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Hono } from "hono";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import type { AppEnv } from "../app";
 import { requireUser } from "../auth/middleware";
 import type { Database } from "../db/client";
 import type { Row } from "../db/rows";
 import { levels, places, sightings } from "../db/schema";
 import {
-  NotFoundError, VersionConflictError,
+  NotDeletedError, NotFoundError, VersionConflictError,
   restoreEntity, softDeleteEntity, updateEntity,
 } from "../entities/repository";
 
@@ -65,13 +65,22 @@ async function requireLevel(db: Database, id: string): Promise<void> {
   if (!level) throw new UnknownLevelError(id);
 }
 
+/**
+ * The answer for a failure the request caused. Anything else — a dropped
+ * connection, a statement timeout — is rethrown, so onError answers 500 and
+ * the client offers Retry; as a 422 it read "Couldn't accept Gate 1: invalid."
+ * with no way on.
+ */
 function failure(err: unknown) {
   if (err instanceof VersionConflictError) {
     return { body: { error: "version conflict", current: err.current }, status: 409 as const };
   }
   if (err instanceof NotFoundError) return { body: { error: "not found" }, status: 404 as const };
   if (err instanceof UnknownLevelError) return { body: { error: err.message }, status: 422 as const };
-  return { body: { error: "invalid", detail: String(err) }, status: 422 as const };
+  // Undoing a merge of a place that is not merged away.
+  if (err instanceof NotDeletedError) return { body: { error: "not deleted" }, status: 422 as const };
+  if (err instanceof ZodError) return { body: { error: "invalid", detail: String(err) }, status: 422 as const };
+  throw err;
 }
 
 placeReviewRoutes.post("/:id/accept", async c => {

@@ -19,7 +19,7 @@ const HINTS: ReadonlyArray<[string, string]> = [
  * directly under it, the keys that drive it, and the filmstrip at the bottom.
  */
 export function FrameView({
-  api, frame, alt, labels, draft, onDraft, onMoveLabel, onRemoveLabel, tagBar,
+  api, frame, alt, labels, draft, onDraft, onDrawn, onMoveLabel, onRemoveLabel, tagBar,
   candidates, levels, levelId, counts, walkwayKinds, onTag, onAddWalkwayKind, strip,
 }: {
   api: Pick<Api, "keyframeFileUrl">;
@@ -28,6 +28,7 @@ export function FrameView({
   labels: readonly FrameLabel[];
   draft: Box | null;
   onDraft: (box: Box | null) => void;
+  onDrawn: () => void;
   onMoveLabel: (label: FrameLabel, box: Box) => void;
   onRemoveLabel: (label: FrameLabel) => void;
   tagBar: Ref<TagBarHandle>;
@@ -53,6 +54,7 @@ export function FrameView({
           labels={labels}
           draft={draft}
           onDraft={onDraft}
+          onDrawn={onDrawn}
           onMoveLabel={onMoveLabel}
           onRemoveLabel={onRemoveLabel}
         />

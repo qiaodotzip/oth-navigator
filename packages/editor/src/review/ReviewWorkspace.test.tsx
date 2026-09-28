@@ -1,5 +1,6 @@
 import { parseModel, type Level } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConflictError, type Api } from "../api/client";
 import { useCurrentRoute } from "../route";
@@ -383,6 +384,30 @@ describe("ReviewWorkspace", () => {
     const api = at();
     dragBox();
     await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("sighting", "s1", 0, expect.objectContaining({ box: expect.any(Object) })));
+  });
+
+  it("keeps typing in the name after the box is corrected, so a letter is not a decision", async () => {
+    // I2 (final review): dragging the box took the focus out of the name, so
+    // the a of "Rice Garden" accepted with half a name.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+    // user-event, not fireEvent: only it moves focus on a mouse press, as a browser does.
+    const user = userEvent.setup();
+    const api = at();
+    await user.click(nameField());
+    await user.pointer([
+      { keys: "[MouseLeft>]", target: screen.getByTitle(/Drag to move/), coords: { clientX: 100, clientY: 100 } },
+      { target: screen.getByTestId("tag-frame"), coords: { clientX: 140, clientY: 100 } },
+      { keys: "[/MouseLeft]", target: screen.getByTestId("tag-frame"), coords: { clientX: 140, clientY: 100 } },
+    ]);
+    await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("sighting", "s1", 0, expect.objectContaining({ box: expect.any(Object) })));
+    await user.keyboard("a");
+    expect(document.activeElement).toBe(nameField());
+    expect(nameField().value).toBe("Festive Malla");
+    await settle();
+    expect(api.acceptPlace).not.toHaveBeenCalled();
+    expect(param("place")).toBeNull();
   });
 
   it("saves a corrected box before deciding, and decides only once it has", async () => {

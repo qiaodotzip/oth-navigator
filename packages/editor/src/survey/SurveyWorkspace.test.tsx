@@ -215,6 +215,53 @@ describe("SurveyWorkspace", () => {
     expect(screen.queryByTestId("tag-box")).toBeNull();
   });
 
+  it("keeps typing in the name after a box is drawn, so the name is not read as keys", async () => {
+    // I2 (final review): drawing took the focus out of the name, so the T of
+    // "Toast Box" jumped into it and the rest typed "oast Box"; G opened the
+    // grid, N moved on, and Backspace, fixing a typo, binned the frame.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+    // user-event, not fireEvent: only it moves focus on a mouse press, as a browser does.
+    const user = userEvent.setup();
+    const api = at("?frame=kf_1");
+    const drawOn = screen.getByTestId("tag-frame");
+    await user.pointer([
+      { keys: "[MouseLeft>]", target: drawOn, coords: { clientX: 100, clientY: 60 } },
+      { target: drawOn, coords: { clientX: 300, clientY: 240 } },
+      { keys: "[/MouseLeft]", target: drawOn, coords: { clientX: 300, clientY: 240 } },
+    ]);
+    await user.keyboard("Toast Boxx{Backspace}");
+    expect((screen.getByLabelText("Place name") as HTMLInputElement).value).toBe("Toast Box");
+    expect(api.deleteKeyframe).not.toHaveBeenCalled();
+    expect(param("view")).toBeNull();
+    expect(param("frame")).toBe("kf_1");
+    expect(screen.getByTestId("tag-box")).toBeTruthy();
+  });
+
+  it("says so when the reload after a tag that landed fails, and Retry reloads", async () => {
+    // M3 (final review): the tag landed but the screen didn't show it, and
+    // typing it again made a second place of the same name.
+    const getModel = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue(model);
+    const api = at("", fakeApi({ getModel }));
+    const name = screen.getByLabelText("Place name");
+    fireEvent.change(name, { target: { value: "Kiosk" } });
+    key("Enter", name);
+    await waitFor(() => expect(useToasts.getState().toasts.some(t => t.tone === "error")).toBe(true));
+    expect(api.createEntity).toHaveBeenCalledTimes(2);
+    const errors = useToasts.getState().toasts.filter(t => t.tone === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      message: "Couldn't reload the map after saving. Check your connection, then retry.",
+      action: { label: "Retry" },
+    });
+    await act(async () => { await errors[0]!.action!.run(); });
+    expect(getModel).toHaveBeenCalledTimes(2);
+    expect(api.createEntity).toHaveBeenCalledTimes(2);
+  });
+
   it("puts the cursor in the name on T", () => {
     at();
     key("t");
@@ -362,6 +409,32 @@ describe("SurveyWorkspace", () => {
     expect(screen.getByRole("status").textContent).toMatch(/level 1.*1 frame.*isn't filed under a floor/);
     fireEvent.click(screen.getByRole("button", { name: "File under L1" }));
     await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("capture", "cap_u", 0, { levelId: "oth-L1" }));
+  });
+
+  it("offers Undo on filing footage, which puts it back on no floor", async () => {
+    // I1 (final review): the banner is on every floor, so one click on the
+    // wrong one moved the whole walkthrough, and every place seen in it, there.
+    let filedUnder: string | null = null;
+    const updateEntity = vi.fn(async (_type: string, _id: string, _version: number, data: { levelId: string | null }) => {
+      filedUnder = data.levelId;
+      return {};
+    });
+    const getModel = vi.fn(async () => parseModel({
+      ...model,
+      captures: model.captures.map(c => (c.id === "cap_u" && filedUnder ? { ...c, levelId: filedUnder } : c)),
+    }));
+    at("", fakeApi({ getModel, updateEntity }));
+    fireEvent.click(screen.getByRole("button", { name: "File under L1" }));
+    await waitFor(() =>
+      expect(useToasts.getState().toasts.some(t => t.message === "Filed level 1 under L1")).toBe(true));
+    expect(screen.queryByRole("button", { name: "File under L1" })).toBeNull();
+
+    const filed = useToasts.getState().toasts.find(t => t.message === "Filed level 1 under L1")!;
+    expect(filed.action?.label).toBe("Undo");
+    await act(async () => { await filed.action!.run(); });
+    expect(updateEntity).toHaveBeenLastCalledWith("capture", "cap_u", 1, { levelId: null });
+    expect(screen.getByRole("status").textContent).toMatch(/level 1.*isn't filed under a floor/);
+    expect(screen.getByRole("button", { name: "File under L1" })).toBeTruthy();
   });
 
   it("holds File under L1 while it saves, so a double click can't send it twice", async () => {

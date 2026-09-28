@@ -2,7 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
 import { createUser } from "../auth/users";
 import type { Database } from "../db/client";
@@ -102,6 +102,13 @@ describe("accepting a proposal", () => {
     await db.update(placeRows).set({ levelId: "oth-L2" }).where(eq(placeRows.id, "pl_1"));
     await post("/api/places/pl_1/accept", { expectedVersion: 0, nameEn: "Festive Mall", category: "retail", levelId: "oth-L1" });
     expect((await byId("place")).get("pl_1")?.levelId).toBe("oth-L2");
+  });
+
+  it("answers 500 when an accept fails for a reason that is not the request, so the client offers Retry", async () => {
+    // A dropped connection read as "Couldn't accept Gate 1: invalid." with no way on.
+    vi.spyOn(db, "transaction").mockRejectedValue(new Error("Connection terminated unexpectedly"));
+    const res = await post("/api/places/pl_1/accept", { expectedVersion: 0, nameEn: "Festive Mall", category: "retail" });
+    expect(res.status).toBe(500);
   });
 
   it("422s an unknown floor and writes nothing", async () => {

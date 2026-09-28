@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
 import { createUser } from "../auth/users";
 import type { Database } from "../db/client";
@@ -62,6 +62,20 @@ describe("entity routes", () => {
 
   it("422s data the model schema rejects", async () => {
     expect((await post("/api/entities/room", { data: { ...roomData, footprint: [[0, 0]] } })).status).toBe(422);
+  });
+
+  it("answers 500 when a create fails for a reason that is not the data, so the client offers Retry", async () => {
+    // A dropped connection is the server's trouble; a 422 called it invalid and offered nothing.
+    vi.spyOn(db, "insert").mockImplementation(() => { throw new Error("Connection terminated unexpectedly"); });
+    expect((await post("/api/entities/room", { data: roomData })).status).toBe(500);
+    // A bad body is still the client's, whatever else is going on.
+    expect((await post("/api/entities/room", { data: { ...roomData, footprint: [[0, 0]] } })).status).toBe(422);
+  });
+
+  it("answers 500 when an update fails for a reason that is not the data", async () => {
+    await post("/api/entities/room", { data: roomData });
+    vi.spyOn(db, "update").mockImplementation(() => { throw new Error("canceling statement due to statement timeout"); });
+    expect((await patch("/api/entities/room/L1-lobby", { expectedVersion: 0, data: { nameEn: "Hall" } })).status).toBe(500);
   });
 
   it("409s a stale update and returns the current state", async () => {

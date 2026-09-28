@@ -4,6 +4,7 @@ import { useElementSize } from "../plan/useElementSize";
 import { labelInside, moveBox, resizeBox, type Corner } from "./boxEdit";
 import { fitSize } from "./fit";
 import type { FrameLabel } from "./labelled";
+import { drawnBox } from "./tagging";
 
 type Edit = { label: FrameLabel; mode: "move" | Corner; from: { x: number; y: number }; box: Box };
 
@@ -32,7 +33,7 @@ function cornerAt(corner: Corner) {
  * so the size it is shown at never changes what is saved.
  */
 export function FrameCanvas({
-  imageUrl, alt, widthPx, heightPx, labels, draft = null, onDraft, onMoveLabel, onRemoveLabel,
+  imageUrl, alt, widthPx, heightPx, labels, draft = null, onDraft, onDrawn, onMoveLabel, onRemoveLabel,
 }: {
   imageUrl: string;
   alt: string;
@@ -42,6 +43,8 @@ export function FrameCanvas({
   /** A box being drawn and not yet saved. */
   draft?: Box | null;
   onDraft?: (box: Box | null) => void;
+  /** A draw has ended with a box worth keeping: the time to name what is in it. */
+  onDrawn?: () => void;
   onMoveLabel: (label: FrameLabel, box: Box) => void;
   onRemoveLabel?: (label: FrameLabel) => void;
 }) {
@@ -52,13 +55,17 @@ export function FrameCanvas({
 
   // A drag that ends anywhere finishes the box: letting go off the picture is
   // normal when boxing something at its edge, and without this the drag
-  // stayed live and the next click resized it.
+  // stayed live and the next click resized it. This is the one place a draw
+  // ends, on the picture or off it, so `onDrawn` is told exactly once.
   useEffect(() => {
     if (!start) return;
-    const up = () => setStart(null);
+    const up = () => {
+      setStart(null);
+      if (drawnBox(draft)) onDrawn?.();
+    };
     window.addEventListener("mouseup", up);
     return () => window.removeEventListener("mouseup", up);
-  }, [start]);
+  }, [start, draft, onDrawn]);
 
   /** Fractions of the displayed frame. */
   function at(event: { clientX: number; clientY: number }) {
@@ -93,12 +100,10 @@ export function FrameCanvas({
   }
 
   function onMouseUp() {
-    if (edit) {
-      onMoveLabel(edit.label, edit.box);
-      setEdit(null);
-      return;
-    }
-    setStart(null);
+    // A draw ends on the window's mouseup, above.
+    if (!edit) return;
+    onMoveLabel(edit.label, edit.box);
+    setEdit(null);
   }
 
   const fitted = space ? fitSize(space, { widthPx, heightPx }) : null;
@@ -163,6 +168,10 @@ export function FrameCanvas({
                   className="pointer-events-auto absolute h-2.5 w-2.5 border border-white bg-accent"
                   style={{ cursor: `${corner}-resize`, ...cornerAt(corner) }}
                   onMouseDown={event => {
+                    // The focus stays where it was: in the name being typed,
+                    // a correction mid-word must not hand the next letters to
+                    // the keys (Backspace bins, A accepts).
+                    event.preventDefault();
                     event.stopPropagation();
                     setEdit({ label, mode: corner, from: at(event), box: b });
                   }}
@@ -179,6 +188,8 @@ export function FrameCanvas({
                 style={{ cursor: "move" }}
                 title={`Drag to move, corners to resize — ${place.nameEn}${proposed ? " (proposed)" : ""}`}
                 onMouseDown={event => {
+                  // As the corners: the focus stays where it was.
+                  event.preventDefault();
                   event.stopPropagation();
                   setEdit({ label, mode: "move", from: at(event), box: b });
                 }}
