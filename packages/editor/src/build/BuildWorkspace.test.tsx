@@ -1,4 +1,5 @@
-import { parseModel, type ValidationReport } from "@oth/model";
+import { PlacementSchema, parseModel, type ValidationReport } from "@oth/model";
+import { useGLTF } from "@react-three/drei";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -83,6 +84,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function open(path: string, overrides: Parameters<typeof fakeApi>[0] = {}, { strict = false } = {}) {
@@ -279,25 +281,46 @@ describe("BuildWorkspace — the plan", () => {
 });
 
 describe("BuildWorkspace — the 3D preview", () => {
-  it("turns itself off when the scene fails, says so, and can be tried again", () => {
+  const placed = PlacementSchema.parse({
+    id: "pm_1", levelId: "oth-L1", assetId: "asset_1", roomId: "L1-a", position: [5, 5, 0],
+  });
+  const failed = "The 3D preview failed to load, so it's off. Turn it on again to retry.";
+
+  function failsThenRecovers({ strict }: { strict: boolean }) {
     // Remembered on, so without a catch every reload would fail the same way.
     localStorage.setItem("oth.build.preview", "on");
+    useEditorStore.getState().setModel({ ...model, placements: [placed] });
     scene.fails = true;
+    const clear = vi.spyOn(useGLTF, "clear");
     // React reports the caught error on the console as well; the toast is what the user sees.
     const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
-    open("/floors/L1/build?step=rooms");
-    quiet.mockRestore();
+    open("/floors/L1/build?step=rooms", {}, { strict });
 
     expect(screen.getByRole("navigation", { name: "Build steps" })).toBeTruthy();
     expect(screen.queryByRole("region", { name: "3D preview" })).toBeNull();
     expect(screen.getByRole("button", { name: "3D" }).getAttribute("aria-pressed")).toBe("false");
     expect(recall("build.preview")).toBe("off");
-    expect(useToasts.getState().toasts.map(t => t.message))
-      .toEqual(["The 3D preview failed to load, so it's off. Turn it on again to retry."]);
+    // The loader keeps a failed model failed for the page's life: forgotten,
+    // so turning the preview on again really does try again.
+    expect(clear).toHaveBeenCalledWith("/api/assets/asset_1/file");
+    expect(useToasts.getState().toasts.map(t => t.message)).toEqual([failed]);
+
+    // Tried again while it still fails: the one toast, not a second beside it.
+    fireEvent.click(screen.getByRole("button", { name: "3D" }));
+    expect(useToasts.getState().toasts.map(t => t.message)).toEqual([failed]);
+    quiet.mockRestore();
 
     scene.fails = false;
     fireEvent.click(screen.getByRole("button", { name: "3D" }));
     expect(screen.getByRole("region", { name: "3D preview" })).toBeTruthy();
+  }
+
+  it("turns itself off when the scene fails, says so, and can be tried again", () => {
+    failsThenRecovers({ strict: false });
+  });
+
+  it("says so once under StrictMode, which renders twice as the app does in development", () => {
+    failsThenRecovers({ strict: true });
   });
 });
 

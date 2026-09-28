@@ -1,7 +1,7 @@
 import type { Level, Placement, Room } from "@oth/model";
 import { Suspense } from "react";
 import { modelToThree } from "./coords";
-import { PlacementMesh } from "./PlacementMesh";
+import { PlacementBoundary, PlacementMesh } from "./PlacementMesh";
 import { RoomMesh } from "./RoomMesh";
 
 /**
@@ -45,10 +45,12 @@ export function LevelGroup({
         />
       ))}
       {!ghosted && assetUrl && placements.map(p => (
-        // Suspended per placement: one asset failing to load must not blank the level.
-        <Suspense key={p.id} fallback={null}>
-          <PlacementMesh placement={p} url={assetUrl(p.assetId)} />
-        </Suspense>
+        // Suspended and caught per placement: one asset failing to load must not blank the level.
+        <PlacementBoundary key={p.id} url={assetUrl(p.assetId)}>
+          <Suspense fallback={null}>
+            <PlacementMesh placement={p} url={assetUrl(p.assetId)} />
+          </Suspense>
+        </PlacementBoundary>
       ))}
     </group>
   );

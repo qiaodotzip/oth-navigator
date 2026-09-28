@@ -1,5 +1,5 @@
 import { live, type ValidationReport } from "@oth/model";
-import { MapScene } from "@oth/renderer";
+import { MapScene, forgetPlacementModels } from "@oth/renderer";
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Api } from "../api/client";
 import { commitPoint } from "../flow/commitPoint";
@@ -17,7 +17,7 @@ import { ringsOnActiveLevel, useEditorStore, type Selection } from "../state/sto
 import { displayBBox, imageForLevel } from "../state/underlay";
 import { Button } from "../ui/Button";
 import { reportFailure } from "../ui/failure";
-import { toast } from "../ui/toast";
+import { toast, useToasts } from "../ui/toast";
 import { deleteWithUndo } from "../ui/undo";
 import { BindTools } from "./BindPlaces";
 import { selectionRemovals } from "./deleteSelection";
@@ -67,10 +67,10 @@ async function recheck(api: Api, heard: () => boolean = () => true): Promise<voi
 }
 
 /**
- * Keeps a failing 3D preview to itself. The scene loads every placed model,
- * and one that will not load (a model file gone, say) throws past Suspense.
- * Uncaught, that blanks the whole editor — and, as the preview is remembered
- * on, blanks it again on every reload.
+ * Keeps a failing 3D preview to itself. A placed model that will not load is
+ * caught in the scene, which then draws without it; what reaches here is the
+ * scene failing as a whole (no WebGL, say). Uncaught, that blanks the whole
+ * editor — and, as the preview is remembered on, blanks it again on every reload.
  */
 class PreviewBoundary extends Component<{ onFail: () => void; children: ReactNode }, { failed: boolean }> {
   override state = { failed: false };
@@ -254,10 +254,20 @@ export function BuildWorkspace({ api, saver, route }: { api: Api; saver: Saver; 
   }
 
   // Off, and remembered off, so a reload opens on the plan rather than failing
-  // again. Turning it back on mounts a fresh boundary, which is the retry.
+  // again. Turning it back on mounts a fresh boundary, which is the retry, once
+  // the loader has forgotten the models: it keeps a failed load failed for the
+  // page's life. One model that will not load is caught in the scene, so what
+  // lands here is the scene as a whole (no WebGL, say). Tried again and failing
+  // again, it replaces its toast: an error toast stays until dismissed.
+  const previewToast = useRef<string | null>(null);
   function previewFailed() {
     if (previewOn) togglePreview();
-    toast({ tone: "error", message: "The 3D preview failed to load, so it's off. Turn it on again to retry." });
+    forgetPlacementModels(useEditorStore.getState().model?.placements ?? [], api.assetFileUrl);
+    if (previewToast.current) useToasts.getState().dismiss(previewToast.current);
+    previewToast.current = toast({
+      tone: "error",
+      message: "The 3D preview failed to load, so it's off. Turn it on again to retry.",
+    });
   }
 
   useBuildKeys({
