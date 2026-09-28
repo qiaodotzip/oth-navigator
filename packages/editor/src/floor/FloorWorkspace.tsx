@@ -3,27 +3,28 @@ import { useEffect, useMemo } from "react";
 import type { Api } from "../api/client";
 import { App } from "../App";
 import { findLevel, pickTab } from "../flow/floors";
+import { ReviewWorkspace } from "../review/ReviewWorkspace";
 import { href, navigate, type FloorRoute } from "../route";
 import { createSaver, type Saver } from "../state/save";
 import { useEditorStore } from "../state/store";
-import { ReviewPanel } from "../survey/ReviewPanel";
-import { SurveyApp } from "../survey/SurveyApp";
+import { SurveyWorkspace } from "../survey/SurveyWorkspace";
 import { recall, remember } from "../ui/remember";
 import { toast } from "../ui/toast";
 
 /**
  * One floor's workspace: finds the floor, makes it the active level, picks and
- * remembers the tab.
+ * remembers the tab, and shows it.
  *
- * Until Plans 2 and 3 replace them, the tabs host the existing Survey, Review
- * and Build screens without their own headers, so the app stays usable while
- * the shell around them is new.
+ * Survey and Review share one saver that skips validation: every survey rule
+ * is a warning, so nothing they write can change what blocks publishing, and
+ * skipping it saves half a second on every tag. Neither loads the model —
+ * the shell already has. Build is still the old editor until Plan 3.
  */
 export function FloorWorkspace({ api, route }: { api: Api; saver: Saver; route: FloorRoute }) {
   const model = useEditorStore(s => s.model);
   const activeLevelId = useEditorStore(s => s.activeLevelId);
   const setActiveLevel = useEditorStore(s => s.setActiveLevel);
-  const reviewSaver = useMemo(() => createSaver(api, { validate: false }), [api]);
+  const surveySaver = useMemo(() => createSaver(api, { validate: false }), [api]);
   const level = findLevel(model, route.code);
 
   useEffect(() => {
@@ -50,13 +51,11 @@ export function FloorWorkspace({ api, route }: { api: Api; saver: Saver; route: 
   if (!model || !level || route.tab === null) {
     return <p className="p-8 text-sm text-stone-500">Loading the floor…</p>;
   }
-  if (route.tab === "survey") return <SurveyApp api={api} embedded />;
+  if (route.tab === "survey") {
+    return <SurveyWorkspace api={api} saver={surveySaver} level={level} params={route.params} />;
+  }
   if (route.tab === "review") {
-    return (
-      <div className="mx-auto max-w-3xl">
-        <ReviewPanel api={api} saver={reviewSaver} />
-      </div>
-    );
+    return <ReviewWorkspace api={api} saver={surveySaver} level={level} params={route.params} />;
   }
   return <App api={api} embedded />;
 }

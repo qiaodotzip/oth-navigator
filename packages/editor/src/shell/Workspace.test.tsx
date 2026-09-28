@@ -1,5 +1,5 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthGate } from "../auth/AuthGate";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
@@ -53,10 +53,8 @@ describe("Workspace", () => {
     expect(await screen.findByRole("heading", { name: "Team" })).toBeTruthy();
   });
 
-  // I1: an expired session must not blank a floor's embedded tab behind the
-  // sign-in dialog. Survey is a real tab that is cheap to render in jsdom;
-  // App.test.tsx pins the same rule for Build, which needs WebGL to render
-  // for real.
+  // I1: an expired session must not blank a floor's tab behind the sign-in
+  // dialog. App.test.tsx pins the same rule for Build, which needs WebGL.
   it("keeps a floor's tab on screen through an expired session", async () => {
     const api = fakeApi();
     window.history.pushState({}, "", "/floors/L1/survey");
@@ -65,11 +63,35 @@ describe("Workspace", () => {
         <Workspace api={api} />
       </AuthGate>,
     );
-    expect(await screen.findByText("L1 walk.mp4")).toBeTruthy();
+    expect(await screen.findByText(/Frame 2 of 2/)).toBeTruthy();
 
     act(() => useEditorStore.getState().endSession("expired"));
 
-    expect(screen.getByText("L1 walk.mp4")).toBeTruthy();
+    expect(screen.getByText(/Frame 2 of 2/)).toBeTruthy();
     expect(screen.getByRole("dialog", { name: /session ended/i })).toBeTruthy();
+  });
+
+  it("shows the new Survey on the Survey tab", async () => {
+    at("/floors/L1/survey");
+    // sampleModel: two frames on L1, the first carrying a proposal, so it opens on the second.
+    expect(await screen.findByText(/Frame 2 of 2/)).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Show frames" })).toBeTruthy();
+  });
+
+  it("shows one proposal at a time on the Review tab", async () => {
+    at("/floors/L1/review");
+    expect(await screen.findByDisplayValue("Festive Mall")).toBeTruthy();
+    expect(screen.getByText("0 of 1 decided on L1")).toBeTruthy();
+  });
+
+  it("loads the model once, whichever of Survey and Review is open", async () => {
+    // The old screens each loaded it again, and doubled every error toast.
+    const api = fakeApi();
+    window.history.pushState({}, "", "/floors/L1/survey");
+    render(<Workspace api={api} />);
+    await screen.findByText(/Frame 2 of 2/);
+    fireEvent.click(screen.getByRole("link", { name: /Review/ }));
+    await screen.findByDisplayValue("Festive Mall");
+    expect((api as unknown as { getModel: ReturnType<typeof vi.fn> }).getModel).toHaveBeenCalledTimes(1);
   });
 });

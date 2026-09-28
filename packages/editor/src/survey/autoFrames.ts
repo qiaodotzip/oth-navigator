@@ -3,7 +3,7 @@
  *
  * Everything here is a pure function of numbers, so the part that decides what
  * to keep is testable. Only the seeking and drawing is not, and that lives in
- * CaptureVideo.
+ * `captureFrame.ts`, driven by `findFrames.ts`.
  */
 
 /** How often to look. A walking pace covers a shopfront in roughly this long. */
