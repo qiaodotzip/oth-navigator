@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { draggedOffset } from "./align";
+import { draggedOffset, movedEnough } from "./align";
+
+describe("movedEnough", () => {
+  it("takes a press that wobbled under 3 px for a click, not a drag", () => {
+    expect(movedEnough(0, 0)).toBe(false);
+    expect(movedEnough(2, -2)).toBe(false);
+  });
+
+  it("takes 3 px or more, in any direction, for a drag", () => {
+    expect(movedEnough(3, 0)).toBe(true);
+    expect(movedEnough(0, -3)).toBe(true);
+  });
+});
 
 describe("draggedOffset", () => {
   it("moves the plan east and north as it is dragged right and up", () => {

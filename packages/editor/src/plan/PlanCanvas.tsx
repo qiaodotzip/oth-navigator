@@ -1,13 +1,14 @@
 import type { Placement, Ring, Room, Vec2 } from "@oth/model";
 import { roomColor } from "@oth/renderer";
 import { useEffect, useRef, useState } from "react";
+import { levelBelow } from "../flow/floors";
 import type { SpaceKind } from "../flow/newSpace";
 import { ringsOnActiveLevel, roomsOnActiveLevel, useEditorStore } from "../state/store";
 import { displayBBox, displayCalibration, imageForLevel } from "../state/underlay";
 import { Kbd } from "../ui/Kbd";
 import { isTyping } from "../ui/typing";
-import { draggedOffset, type PlanOffset } from "./align";
-import { BELOW_STROKE, SELECTED_FILL, SELECTED_STROKE } from "./colours";
+import { draggedOffset, movedEnough, type PlanOffset } from "./align";
+import { BELOW_STROKE, SELECTED_FILL, SELECTED_STROKE, SPACE_STROKE } from "./colours";
 import { contentBBox, hasArea } from "./content";
 import { DrawingHint } from "./DrawingHint";
 import { PathwayShape } from "./PathwayShape";
@@ -26,6 +27,20 @@ const PORTAL_LETTER = { lift: "L", escalator: "Es", stair: "S", ramp: "R" } as c
  * drawing has to show through for a trace to be checked against it.
  */
 const SPACE_FILL_OPACITY = 0.55;
+
+/**
+ * An Align drag: where it was pressed, where the plan's corner sat then, and
+ * the zoom it began at, so a wheel turned mid-drag does not rescale a movement
+ * already made.
+ */
+type AlignDrag = { from: Vec2; start: PlanOffset; pixelsPerMetre: number };
+
+/** Where the plan's corner sits with the pointer here; null while the press is not yet a drag. */
+function alignedAt(drag: AlignDrag, event: { clientX: number; clientY: number }): PlanOffset | null {
+  const dx = event.clientX - drag.from[0];
+  const dy = event.clientY - drag.from[1];
+  return movedEnough(dx, dy) ? draggedOffset(drag.start, dx, dy, drag.pixelsPerMetre) : null;
+}
 
 /**
  * A point on the plan that means something: an entrance, or a stop of a lift or
@@ -83,8 +98,12 @@ export type PlanCanvasProps = {
   imageUrl?: (imageId: string) => string;
   /** Footprints of the floor below, drawn faintly so this floor's plan can be lined up on them. */
   belowRings?: readonly Ring[];
-  /** Once per drag with the Align tool: where the plan's top-left corner now sits, in world metres. */
-  onMoveUnderlay?: (offset: PlanOffset) => void;
+  /**
+   * Once per drag with the Align tool: where the plan's top-left corner now
+   * sits, in world metres. Return the save, and the plan stays where it was
+   * dropped until the save settles.
+   */
+  onMoveUnderlay?: (offset: PlanOffset) => void | Promise<unknown>;
   /** False where the page has its own guide, which then carries the drawing hint. */
   showHint?: boolean;
 };
@@ -108,7 +127,7 @@ export function PlanCanvas({
   const rooms = roomsOnActiveLevel(state);
   const rings = ringsOnActiveLevel(state);
   const [cursor, setCursor] = useState<Vec2 | null>(null);
-  const [draggingPlacement, setDraggingPlacement] = useState<string | null>(null);
+  const [draggingPlacement, setDraggingPlacement] = useState<{ id: string; from: Vec2 } | null>(null);
   const [placementAt, setPlacementAt] = useState<Vec2 | null>(null);
 
   const image = imageForLevel(state.levelImages, state.activeLevelId);
@@ -116,8 +135,12 @@ export function PlanCanvas({
   // so a plan can be seen — and measured on — before anyone has scaled it.
   const calibration = displayCalibration(image);
   const underlay = displayBBox(image);
-  const [alignDrag, setAlignDrag] = useState<{ from: Vec2; start: PlanOffset } | null>(null);
+  const [alignDrag, setAlignDrag] = useState<AlignDrag | null>(null);
+  // Where the plan is shown instead of where it is saved: under the pointer
+  // mid-drag, then where it was dropped until that save lands.
   const [alignAt, setAlignAt] = useState<PlanOffset | null>(null);
+  const alignSaving = useRef(0);
+  const alignDragging = useRef(false);
 
   // Shapes take clicks only for Select. Otherwise a click lands on whatever
   // room is under the pointer instead of the drawing surface beneath it, and an
@@ -155,16 +178,21 @@ export function PlanCanvas({
    */
   useEffect(() => {
     if (!draggingPlacement) return;
-    const placement = state.model?.placements.find(p => p.id === draggingPlacement);
+    const drag = draggingPlacement;
+    const placement = state.model?.placements.find(p => p.id === drag.id);
     if (!placement) return;
 
-    const onMove = (event: MouseEvent) => setPlacementAt(pointerWorld(event));
-    const onUp = () => {
-      const at = placementAt;
+    const dragged = (event: MouseEvent) =>
+      movedEnough(event.clientX - drag.from[0], event.clientY - drag.from[1]);
+    const onMove = (event: MouseEvent) => setPlacementAt(dragged(event) ? pointerWorld(event) : null);
+    const onUp = (event: MouseEvent) => {
       setDraggingPlacement(null);
       setPlacementAt(null);
-      // One save per gesture, as with vertex dragging.
-      if (at) onMovePlacement?.(placement, [at[0], at[1], placement.position[2]]);
+      // One save per gesture, as with vertex dragging, and from the release
+      // itself: a quick flick lets go before its last move has rendered.
+      if (!dragged(event)) return;
+      const at = pointerWorld(event);
+      onMovePlacement?.(placement, [at[0], at[1], placement.position[2]]);
     };
 
     window.addEventListener("mousemove", onMove);
@@ -182,18 +210,31 @@ export function PlanCanvas({
    */
   useEffect(() => {
     if (!alignDrag) return;
-    const onMove = (event: MouseEvent) =>
-      setAlignAt(draggedOffset(
-        alignDrag.start,
-        event.clientX - alignDrag.from[0],
-        event.clientY - alignDrag.from[1],
-        state.viewport.scale,
-      ));
-    const onUp = () => {
-      const at = alignAt;
+    const drag = alignDrag;
+    const onMove = (event: MouseEvent) => setAlignAt(alignedAt(drag, event) ?? drag.start);
+    const onUp = (event: MouseEvent) => {
+      // From the release itself: a quick flick lets go before its last move has rendered.
+      const at = alignedAt(drag, event);
+      alignDragging.current = false;
       setAlignDrag(null);
-      setAlignAt(null);
-      if (at) onMoveUnderlay?.(at);
+      const saving = at ? onMoveUnderlay?.(at) : undefined;
+      if (at && saving instanceof Promise) {
+        // Held where it was dropped until the save lands. Let go at once, the
+        // plan jumps back to where it was saved, then forward again.
+        setAlignAt(at);
+        alignSaving.current += 1;
+        saving
+          .finally(() => {
+            alignSaving.current -= 1;
+            if (alignSaving.current === 0 && !alignDragging.current) setAlignAt(null);
+          })
+          // A failed save is the caller's to report; here it only means the
+          // plan goes back to where it is saved.
+          .catch(() => {});
+        return;
+      }
+      // An earlier drop still on its way keeps the plan where that one left it.
+      setAlignAt(alignSaving.current > 0 ? at ?? drag.start : null);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -256,9 +297,13 @@ export function PlanCanvas({
     // The Align tool drags the plan itself, not the view.
     if (state.tool === "align-plan" && calibration && event.button === 0 && !spaceHeld.current) {
       event.preventDefault();
+      alignDragging.current = true;
       setAlignDrag({
         from: [event.clientX, event.clientY],
-        start: { offsetX: calibration.offsetX, offsetY: calibration.offsetY },
+        // From where the plan is shown, which is where the last drop left it
+        // while that save is still on its way.
+        start: alignAt ?? { offsetX: calibration.offsetX, offsetY: calibration.offsetY },
+        pixelsPerMetre: state.viewport.scale,
       });
       return;
     }
@@ -400,7 +445,7 @@ export function PlanCanvas({
       fill={state.selection?.id === room.id ? SELECTED_FILL : roomColor(room.kind)}
       fillOpacity={SPACE_FILL_OPACITY}
       pointerEvents={shapeEvents}
-      stroke="#57534e"
+      stroke={SPACE_STROKE}
       strokeWidth={1}
       onClick={event => {
         // Drawing tools own the surface; clicking a room must not steal the point.
@@ -520,7 +565,7 @@ export function PlanCanvas({
         {state.model?.placements
           .filter(p => p.levelId === state.activeLevelId)
           .map(p => {
-            const at = draggingPlacement === p.id && placementAt
+            const at = draggingPlacement?.id === p.id && placementAt
               ? placementAt
               : ([p.position[0], p.position[1]] as Vec2);
             const [x, y] = worldToScreen(state.viewport, at);
@@ -541,7 +586,7 @@ export function PlanCanvas({
                   if (state.tool !== "select") return;
                   event.stopPropagation();
                   state.select({ type: "placement", id: p.id });
-                  setDraggingPlacement(p.id);
+                  setDraggingPlacement({ id: p.id, from: [event.clientX, event.clientY] });
                 }}
               />
             );
@@ -696,21 +741,44 @@ export function PlanCanvas({
         <DrawingHint
           tool={state.tool}
           pointCount={(state.tool === "calibrate" ? state.calibrationDraft : state.draft)?.length ?? 0}
+          context={{
+            hasPlan: Boolean(image),
+            floorBelow: state.activeLevelId ? levelBelow(state.model, state.activeLevelId)?.code ?? null : null,
+          }}
         />
       )}
 
-      <div className="absolute bottom-3 right-3 flex items-center gap-2">
-        <span className="rounded bg-white/90 px-2 py-1 text-xs text-stone-500 shadow-sm">
-          Drag to pan · Space-drag while drawing · scroll to zoom
-        </span>
-        <button
-          type="button"
-          aria-label="Fit to level"
-          className="inline-flex items-center gap-1.5 rounded border border-stone-300 bg-white px-3 py-1 text-sm shadow-sm hover:bg-stone-100"
-          onClick={fitToLevel}
-        >
-          Fit <Kbd>F</Kbd>
-        </button>
+      {/*
+        Stacked with Fit in one column, so the warning can never sit over the
+        canvas's own controls, and clear of the hint's corner. The column lets
+        clicks through to the plan; only the controls themselves take them.
+      */}
+      <div className="pointer-events-none absolute bottom-3 right-3 flex flex-col items-end gap-2">
+        {image && image.metresPerPixel == null && (
+          // Drawn at a provisional metre per pixel, an unscaled plan looks
+          // usable; anything traced on it now comes out the wrong size.
+          <p
+            role="status"
+            data-testid="scale-warning"
+            className="max-w-xs rounded border border-yours bg-yours-soft px-3 py-2 text-xs text-yours shadow-sm"
+          >
+            <span aria-hidden className="font-semibold">!</span> <span className="font-semibold">Warning:</span>{" "}
+            This plan is not to scale yet. Measure a known distance before you draw on it.
+          </p>
+        )}
+        <div className="pointer-events-auto flex items-center gap-2">
+          <span className="rounded bg-white/90 px-2 py-1 text-xs text-stone-500 shadow-sm">
+            Drag to pan · Space-drag while drawing · scroll to zoom
+          </span>
+          <button
+            type="button"
+            aria-label="Fit to level"
+            className="inline-flex items-center gap-1.5 rounded border border-stone-300 bg-white px-3 py-1 text-sm shadow-sm hover:bg-stone-100"
+            onClick={fitToLevel}
+          >
+            Fit <Kbd>F</Kbd>
+          </button>
+        </div>
       </div>
     </div>
   );

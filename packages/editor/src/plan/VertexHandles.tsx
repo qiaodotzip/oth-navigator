@@ -1,7 +1,7 @@
 import type { Ring, Room, Vec2 } from "@oth/model";
 import { useEffect, useState } from "react";
 import { isTyping } from "../ui/typing";
-import { SELECTED_FILL } from "./colours";
+import { SELECTED_FILL, SPACE_STROKE } from "./colours";
 import { deleteVertex, insertVertex, MIN_RING_LENGTH, moveVertex } from "./ring";
 import { worldToScreen, type Viewport } from "./viewport";
 
@@ -86,7 +86,7 @@ export function VertexHandles({
             cy={y}
             r={6}
             fill={selected === i ? SELECTED_FILL : "#ffffff"}
-            stroke="#57534e"
+            stroke={SPACE_STROKE}
             strokeWidth={2}
             style={{ cursor: "grab" }}
             onMouseDown={event => {

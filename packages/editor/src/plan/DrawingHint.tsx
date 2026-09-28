@@ -12,7 +12,28 @@ const WHAT: Partial<Record<Tool, string>> = {
   "align-plan": "Aligning the plan",
 };
 
-function howTo(tool: Tool, pointCount: number): string {
+/**
+ * What the Align hint needs to know about the floor. Left out, the hint says
+ * only what is true on every floor.
+ */
+export type HintContext = {
+  /** False when the floor has no plan to drag. */
+  hasPlan?: boolean;
+  /** The code of the floor below, whose outlines the plan is lined up on; null on the lowest floor. */
+  floorBelow?: string | null;
+};
+
+function alignHow({ hasPlan, floorBelow }: HintContext): string {
+  if (hasPlan === false) return "There is no plan on this floor yet. Add one first, then drag it into line.";
+  if (floorBelow) return `Drag the plan until its walls sit on the dashed outlines of ${floorBelow}, the floor below.`;
+  // The lowest floor has nothing under it to line up on: it is what the rest line up on.
+  if (floorBelow === null) {
+    return "This is the lowest floor, so every other floor lines up on its plan. Drag it only if the whole building should move.";
+  }
+  return "Drag the plan into line. Space-drag moves the view instead.";
+}
+
+function howTo(tool: Tool, pointCount: number, context: HintContext): string {
   if (tool === "draw-room") {
     if (pointCount === 0) return "Click to place the first corner.";
     if (pointCount < 3) return `${pointCount} of at least 3 corners. Backspace undoes, Esc cancels.`;
@@ -46,11 +67,9 @@ function howTo(tool: Tool, pointCount: number): string {
     // The drawn scale bars on OTH's sheets are wrong; a dimensioned grid bay is not.
     return pointCount < 2
       ? `Click two points a known distance apart — a structural grid bay, not the drawn scale bar (${pointCount}/2).`
-      : "Now type the real distance below.";
+      : "Now type the real distance.";
   }
-  if (tool === "align-plan") {
-    return "Drag the plan until its walls sit on the dashed outlines of the floor below.";
-  }
+  if (tool === "align-plan") return alignHow(context);
   return "Click where it goes.";
 }
 
@@ -58,17 +77,21 @@ function howTo(tool: Tool, pointCount: number): string {
  * What a tool is doing and how to finish it. The canvas's own hint and the
  * Build guide both say this, so there is one wording to learn.
  */
-export function hintFor(tool: Tool, pointCount: number): { what: string; how: string } | null {
+export function hintFor(
+  tool: Tool, pointCount: number, context: HintContext = {},
+): { what: string; how: string } | null {
   const what = WHAT[tool];
-  return what ? { what, how: howTo(tool, pointCount) } : null;
+  return what ? { what, how: howTo(tool, pointCount, context) } : null;
 }
 
 /**
  * Says what you are doing and how to finish. Without it the drawing tools are
  * discoverable only by guessing that double-click ends a shape.
  */
-export function DrawingHint({ tool, pointCount }: { tool: Tool; pointCount: number }) {
-  const hint = hintFor(tool, pointCount);
+export function DrawingHint({
+  tool, pointCount, context,
+}: { tool: Tool; pointCount: number; context?: HintContext }) {
+  const hint = hintFor(tool, pointCount, context);
   if (!hint) return null;
 
   return (

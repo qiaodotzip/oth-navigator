@@ -2,7 +2,7 @@ import { parseModel } from "@oth/model";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEditorStore } from "../state/store";
-import { BELOW_STROKE, SELECTED_FILL } from "./colours";
+import { BELOW_STROKE, SELECTED_FILL, SPACE_STROKE } from "./colours";
 import { PlanCanvas } from "./PlanCanvas";
 
 const model = parseModel({
@@ -395,6 +395,27 @@ describe("placements on the canvas", () => {
     fireEvent.mouseMove(window, { clientX: 140, clientY: 130 });
     fireEvent.mouseUp(window, { clientX: 140, clientY: 130 });
     expect(onMovePlacement.mock.calls[0]![1][2]).toBe(0);
+  });
+
+  it("saves where the pointer was let go, even when the last move was never drawn", () => {
+    // A quick flick can release before the final mousemove has rendered.
+    const onMovePlacement = vi.fn();
+    render(<PlanCanvas width={800} height={600} onMovePlacement={onMovePlacement} />);
+    act(() => useEditorStore.getState().setViewport({ originX: 0, originY: 600, scale: 10 }));
+    // pl_1 sits at (5, 5): on screen, (50, 550).
+    fireEvent.mouseDown(screen.getByTestId("placement-pl_1"), { clientX: 50, clientY: 550 });
+    fireEvent.mouseMove(window, { clientX: 60, clientY: 550 });
+    fireEvent.mouseUp(window, { clientX: 80, clientY: 540 });
+    expect(onMovePlacement.mock.calls[0]![1]).toEqual([8, 6, 0]);
+  });
+
+  it("does not move a placement for a press that wobbled under 3 px", () => {
+    const onMovePlacement = vi.fn();
+    render(<PlanCanvas width={800} height={600} onMovePlacement={onMovePlacement} />);
+    fireEvent.mouseDown(screen.getByTestId("placement-pl_1"), { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(window, { clientX: 102, clientY: 101 });
+    fireEvent.mouseUp(window, { clientX: 102, clientY: 101 });
+    expect(onMovePlacement).not.toHaveBeenCalled();
   });
 
   it("does not drag with a drawing tool active", () => {
@@ -818,6 +839,7 @@ describe("the plan under the spaces", () => {
     const opacity = Number(screen.getByTestId("room-L1-a").getAttribute("fill-opacity"));
     expect(opacity).toBeGreaterThan(0);
     expect(opacity).toBeLessThan(1);
+    expect(screen.getByTestId("room-L1-a").getAttribute("stroke")).toBe(SPACE_STROKE);
   });
 
   it("draws the selected space in the accent colour", () => {
@@ -899,5 +921,143 @@ describe("aligning the plan", () => {
     fireEvent.mouseDown(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100, button: 0 });
     fireEvent.mouseUp(window, { clientX: 100, clientY: 100 });
     expect(onMoveUnderlay).not.toHaveBeenCalled();
+  });
+
+  it("saves nothing for a press that wobbled under 3 px", () => {
+    const onMoveUnderlay = vi.fn();
+    render(<PlanCanvas width={800} height={600} imageUrl={url} onMoveUnderlay={onMoveUnderlay} />);
+    fireEvent.mouseDown(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100, button: 0 });
+    fireEvent.mouseMove(window, { clientX: 102, clientY: 101 });
+    fireEvent.mouseUp(window, { clientX: 102, clientY: 101 });
+    expect(onMoveUnderlay).not.toHaveBeenCalled();
+  });
+
+  it("saves where the pointer was let go, even when the last move was never drawn", () => {
+    const onMoveUnderlay = startDrag();
+    // The last mousemove seen was at (150, 80); the release is 20 px further right.
+    fireEvent.mouseUp(window, { clientX: 170, clientY: 80 });
+    expect(onMoveUnderlay).toHaveBeenCalledWith({ offsetX: 7, offsetY: 2 });
+  });
+
+  it("measures the drag at the zoom it started at", () => {
+    const onMoveUnderlay = startDrag();
+    act(() => useEditorStore.getState().setViewport({ originX: 0, originY: 600, scale: 20 }));
+    // 70 px right and 20 px up, at the 10 px per metre the drag began with.
+    fireEvent.mouseUp(window, { clientX: 170, clientY: 80 });
+    expect(onMoveUnderlay).toHaveBeenCalledWith({ offsetX: 7, offsetY: 2 });
+  });
+
+  it("holds the plan where it was dropped while its save is on its way", () => {
+    startDrag(vi.fn(() => new Promise<void>(() => {})));
+    fireEvent.mouseUp(window, { clientX: 150, clientY: 80 });
+    // Letting go at once would show the old position until the save lands.
+    expect(Number(screen.getByTestId("underlay").getAttribute("x"))).toBe(50);
+  });
+
+  it("puts the plan back where it was saved when the save fails", async () => {
+    let fail!: () => void;
+    startDrag(vi.fn(() => new Promise<void>((_, reject) => { fail = () => reject(new Error("offline")); })));
+    fireEvent.mouseUp(window, { clientX: 150, clientY: 80 });
+    await act(async () => fail());
+    expect(Number(screen.getByTestId("underlay").getAttribute("x"))).toBe(0);
+  });
+
+  it("starts the next drag from where the last was dropped, while its save is still on its way", () => {
+    const onMoveUnderlay = startDrag(vi.fn(() => new Promise<void>(() => {})));
+    fireEvent.mouseUp(window, { clientX: 150, clientY: 80 });
+    fireEvent.mouseDown(screen.getByTestId("plan-surface"), { clientX: 150, clientY: 80, button: 0 });
+    fireEvent.mouseMove(window, { clientX: 160, clientY: 80 });
+    fireEvent.mouseUp(window, { clientX: 160, clientY: 80 });
+    expect(onMoveUnderlay).toHaveBeenLastCalledWith({ offsetX: 6, offsetY: 2 });
+  });
+
+  it("pans the view with Space held, and leaves the plan where it is", () => {
+    const onMoveUnderlay = vi.fn();
+    render(<PlanCanvas width={800} height={600} imageUrl={url} onMoveUnderlay={onMoveUnderlay} />);
+    act(() => useEditorStore.getState().setViewport({ originX: 0, originY: 600, scale: 10 }));
+    fireEvent.keyDown(window, { key: " ", code: "Space" });
+    fireEvent.mouseDown(screen.getByTestId("plan-surface"), { clientX: 100, clientY: 100, button: 0 });
+    fireEvent.mouseMove(window, { clientX: 150, clientY: 80 });
+    fireEvent.mouseUp(window, { clientX: 150, clientY: 80 });
+    fireEvent.keyUp(window, { key: " ", code: "Space" });
+    expect(useEditorStore.getState().viewport).toMatchObject({ originX: 50, originY: 580 });
+    expect(onMoveUnderlay).not.toHaveBeenCalled();
+  });
+});
+
+describe("the Align hint", () => {
+  const url = (id: string) => `/api/level-images/${id}/file`;
+  const hint = () => screen.getByTestId("drawing-hint").textContent ?? "";
+
+  beforeEach(() => useEditorStore.getState().setTool("align-plan"));
+
+  it("points at the floor below's outlines", () => {
+    useEditorStore.getState().setActiveLevel("oth-L2");
+    useEditorStore.getState().setLevelImages([{ ...levelImage, levelId: "oth-L2" }]);
+    render(<PlanCanvas width={800} height={600} imageUrl={url} belowRings={[]} />);
+    expect(hint()).toContain("dashed outlines of L1");
+  });
+
+  it("on the lowest floor, says nothing of a floor below", () => {
+    useEditorStore.getState().setLevelImages([levelImage]);
+    render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    expect(hint()).toMatch(/lowest floor/);
+    expect(hint()).not.toMatch(/below|dashed/i);
+  });
+
+  it("asks for a plan first on a floor with none", () => {
+    render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    expect(hint()).toMatch(/no plan on this floor/i);
+  });
+});
+
+describe("the measuring hint", () => {
+  it("counts a scale measurement's own points, not a shape's", () => {
+    useEditorStore.getState().setTool("calibrate");
+    render(<PlanCanvas width={800} height={600} />);
+    const surface = screen.getByTestId("plan-surface");
+    fireEvent.click(surface, { clientX: 100, clientY: 100 });
+    expect(screen.getByTestId("drawing-hint").textContent).toContain("(1/2)");
+    fireEvent.click(surface, { clientX: 200, clientY: 100 });
+    expect(screen.getByTestId("drawing-hint").textContent).toContain("Now type the real distance.");
+  });
+});
+
+describe("a plan that is not to scale yet", () => {
+  const url = (id: string) => `/api/level-images/${id}/file`;
+  const WARNING = "! Warning: This plan is not to scale yet. Measure a known distance before you draw on it.";
+
+  it("says so on the canvas, even where the page carries the drawing hint", () => {
+    useEditorStore.getState().setLevelImages([{ ...levelImage, metresPerPixel: null }]);
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} imageUrl={url} showHint={false} />);
+    expect(screen.getByTestId("scale-warning").textContent).toBe(WARNING);
+  });
+
+  it("keeps saying so with the Select tool", () => {
+    useEditorStore.getState().setLevelImages([{ ...levelImage, metresPerPixel: null }]);
+    render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    expect(screen.getByTestId("scale-warning").textContent).toBe(WARNING);
+  });
+
+  it("says nothing once the plan is scaled, or on a floor with no plan", () => {
+    useEditorStore.getState().setLevelImages([levelImage]);
+    const { unmount } = render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    expect(screen.queryByTestId("scale-warning")).toBeNull();
+    unmount();
+    useEditorStore.getState().setLevelImages([]);
+    render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    expect(screen.queryByTestId("scale-warning")).toBeNull();
+  });
+
+  it("sits with the Fit button, not over it or over the drawing hint", () => {
+    useEditorStore.getState().setLevelImages([{ ...levelImage, metresPerPixel: null }]);
+    useEditorStore.getState().setTool("draw-room");
+    render(<PlanCanvas width={800} height={600} imageUrl={url} />);
+    const warning = screen.getByTestId("scale-warning");
+    // Stacked in the same corner column as Fit, so the two can never overlap,
+    // and away from the drawing hint's corner.
+    expect(warning.parentElement).toBe(screen.getByRole("button", { name: /fit/i }).parentElement!.parentElement);
+    expect(screen.getByTestId("drawing-hint").contains(warning)).toBe(false);
   });
 });

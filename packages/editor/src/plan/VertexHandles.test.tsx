@@ -1,6 +1,7 @@
 import { RoomSchema } from "@oth/model";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { SPACE_STROKE } from "./colours";
 import { VertexHandles } from "./VertexHandles";
 import { DEFAULT_VIEWPORT } from "./viewport";
 
@@ -38,6 +39,11 @@ describe("VertexHandles", () => {
   it("renders a handle per vertex", () => {
     setup();
     expect(screen.getAllByTestId(/^vertex-/)).toHaveLength(4);
+  });
+
+  it("rims each handle in the space's own edge colour", () => {
+    setup();
+    expect(screen.getByTestId("vertex-0").getAttribute("stroke")).toBe(SPACE_STROKE);
   });
 
   it("renders a midpoint per edge, for inserting", () => {

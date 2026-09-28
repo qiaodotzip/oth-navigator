@@ -1,6 +1,14 @@
 /** Where a floorplan's top-left pixel sits, in world metres. */
 export type PlanOffset = { offsetX: number; offsetY: number };
 
+/** Below this a press is a click that wobbled, not a drag: it moves nothing and saves nothing. */
+const DRAG_THRESHOLD_PX = 3;
+
+/** Whether the pointer has moved far enough from where it was pressed to be a drag. */
+export function movedEnough(dxPx: number, dyPx: number): boolean {
+  return Math.hypot(dxPx, dyPx) >= DRAG_THRESHOLD_PX;
+}
+
 const toCm = (m: number) => Math.round(m * 100) / 100;
 
 /**

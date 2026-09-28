@@ -6,8 +6,11 @@
 export const SELECTED_STROKE = "#0f766e";
 export const SELECTED_FILL = "#14b8a6";
 
+/** A space's edge, and the rim of its corner handles: stone-600. */
+export const SPACE_STROKE = "#57534e";
+
 /**
- * The floor below's outlines, which a plan is lined up on: stone-600, the
- * same as a space's own edge, drawn dashed and faint so it reads as a guide.
+ * The floor below's outlines, which a plan is lined up on: the same edge as a
+ * space's own, drawn dashed and faint so it reads as a guide.
  */
-export const BELOW_STROKE = "#57534e";
+export const BELOW_STROKE = SPACE_STROKE;
