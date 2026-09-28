@@ -25,3 +25,5 @@
 **Publish** (top right) is for the whole building. It works only once nothing blocks it, and its list says what is left, floor by floor.
 
 **A yellow "isn't filed under a floor" bar** in Survey means footage with no floor. Press *File under …* only if it was filmed on the floor you are on.
+
+**Claude Code:** connect your own from *Team → Claude Code*. See [claude-code.md](claude-code.md).

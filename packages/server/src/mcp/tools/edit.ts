@@ -14,10 +14,23 @@ import { Refusal, count, reply, runTool } from "../results";
 const ID = z.string().min(1).max(120);
 const VERSION = z.number().int().min(0).describe("The version you last read, from get or get_floor.");
 const REMOVABLE = [...ENTITY_TYPES, "keyframe"] as const;
+/**
+ * The types create's description offers: every entity type but a room draft.
+ * The input still takes a draft, so that asking for one is answered with why not.
+ */
+const DRAWN = ENTITY_TYPES.filter(type => type !== "roomDraft");
 
 /** Spec §6.1: a token can't change floor owners. */
 const OWNERS = "A token can't change who owns a floor. A teammate does that on the Floors page.";
 const STATUS = "A place's or a tag's status changes only through review_place, which keeps its tags in step.";
+/**
+ * Part B's drafts are entities, so the generic tools reach them (Ruling 14).
+ * Written from here, a draft could carry a made-up shape and PDF checksum
+ * that a person's accept would stamp on a room as `cad` evidence, or an
+ * acceptedRoomId that hides it from review and points the accept's undo at
+ * any room. get, delete (a reject) and restore still take drafts.
+ */
+export const DRAFTS = "Drafts come from Find rooms in the drawing; a person reviews them in Build.";
 
 /** The row as it stands, deleted or not. */
 async function find(ctx: ToolContext, type: EntityType, id: string): Promise<Row | undefined> {
@@ -40,12 +53,14 @@ export function registerEditTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool("create", {
     title: "Create",
     description:
-      `Adds one thing to the map. type is one of: ${ENTITY_TYPES.join(", ")}. data is the whole thing as the model ` +
+      `Adds one thing to the map. type is one of: ${DRAWN.join(", ")}. data is the whole thing as the model ` +
       "defines it, with an id you choose (letters, digits, hyphen and underscore), such as the room L1-shop-12. " +
-      "Places and tags you add arrive as proposals.",
+      "Places and tags you add arrive as proposals. Room drafts are not made here: they come from Find rooms in " +
+      "the drawing, and a person reviews them in Build.",
     inputSchema: { type: z.enum(ENTITY_TYPES), data: z.record(z.unknown()) },
     annotations: { readOnlyHint: false, destructiveHint: false },
   }, ({ type, data }) => runTool(ctx, async () => {
+    if (type === "roomDraft") throw new Refusal(DRAFTS);
     if (type === "level" && Array.isArray(data.ownerIds) && data.ownerIds.length > 0) throw new Refusal(OWNERS);
     const id = typeof data.id === "string" ? data.id : "";
     const taken = id ? await find(ctx, type, id) : undefined;
@@ -73,10 +88,12 @@ export function registerEditTools(server: McpServer, ctx: ToolContext): void {
     description:
       "Changes some fields of one thing. expectedVersion is its version when you read it: if someone changed it " +
       "since, nothing is saved and you are told what it is now. A field set to null is cleared. A floor's owners " +
-      "can't be changed from here, and a place's or tag's status changes only through review_place.",
+      "can't be changed from here, a place's or tag's status changes only through review_place, and room drafts " +
+      "are not changed here: a person reviews them in Build.",
     inputSchema: { type: z.enum(ENTITY_TYPES), id: ID, expectedVersion: VERSION, data: z.record(z.unknown()) },
     annotations: { readOnlyHint: false, destructiveHint: false },
   }, ({ type, id, expectedVersion, data }) => runTool(ctx, async () => {
+    if (type === "roomDraft") throw new Refusal(DRAFTS);
     if (type === "level" && "ownerIds" in data) throw new Refusal(OWNERS);
     if ((type === "place" || type === "sighting") && ("status" in data || "proposedBy" in data)) throw new Refusal(STATUS);
     await refuseIfLocked(ctx.db, [{ type, id }]);
