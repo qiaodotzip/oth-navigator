@@ -157,4 +157,23 @@ describe("an object", () => {
     expect((screen.getByLabelText(/rotation/i) as HTMLInputElement).value).toBe("0");
     expect((screen.getByLabelText(/scale/i) as HTMLInputElement).value).toBe("1");
   });
+
+  it("links to its kind in its floor's Places tab, where the kind's size and model are changed", () => {
+    show(bin);
+    const link = screen.getByRole("link", { name: "Edit wastebin in Places" });
+    expect(link.getAttribute("href")).toBe("/floors/L1/places");
+    fireEvent.click(link);
+    expect(window.location.pathname).toBe("/floors/L1/places");
+  });
+
+  it("has no such link for a kind since deleted", () => {
+    show({ ...bin, deletedAt: "2026-09-01T00:00:00.000Z" });
+    expect(screen.queryByRole("link", { name: /in Places/ })).toBeNull();
+  });
+
+  it("has none for a plain placement, which has no kind", () => {
+    selectPlacement();
+    render(<PlacementInspector onChange={vi.fn()} />);
+    expect(screen.queryByRole("link", { name: /in Places/ })).toBeNull();
+  });
 });

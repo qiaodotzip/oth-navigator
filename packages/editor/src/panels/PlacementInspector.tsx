@@ -1,4 +1,5 @@
 import { live, placementModelAsset, type Placement } from "@oth/model";
+import { followLink, href } from "../route";
 import { sizeText } from "../survey/tagging";
 import { useEditorStore } from "../state/store";
 
@@ -23,6 +24,10 @@ export function PlacementInspector({
   // The frames Claude placed it from: one tag per frame, as a rule, but counted by frame.
   const tagged = new Set(placement.sightingIds);
   const frames = new Set(live(model.sightings).filter(s => tagged.has(s.id)).map(s => s.keyframeId)).size;
+  // Its kind's row, where the size and the model are changed for every one
+  // of them: in Places, whose Objects section lists every kind on each floor.
+  const floor = model.levels.find(l => l.id === placement.levelId);
+  const kindRow = kind && floor ? href({ name: "floor", code: floor.code, tab: "places", params: {} }) : null;
 
   // Each field is keyed by the value it shows as well as the placement. Keyed
   // by the placement alone, an uncontrolled field keeps showing where it was
@@ -55,6 +60,11 @@ export function PlacementInspector({
         <div>{kind?.nameEn ?? asset?.filename ?? placement.assetId ?? "A kind since deleted"}</div>
         {kind && <p className="text-xs text-stone-600">{sizeText(kind.size)} · shows {shows}</p>}
         {frames > 0 && <p className="text-xs text-stone-600">From {frames} frame{frames === 1 ? "" : "s"}</p>}
+        {kind && kindRow && (
+          <p className="text-xs">
+            <a href={kindRow} onClick={followLink(kindRow)} className="underline">Edit {kind.nameEn} in Places</a>
+          </p>
+        )}
       </div>
 
       <div className="flex gap-2">
