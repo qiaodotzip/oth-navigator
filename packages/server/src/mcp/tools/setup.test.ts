@@ -2,7 +2,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createUser, type User } from "../../auth/users";
-import { auditLog, floorSetup, portalEndpoints, portals, rooms } from "../../db/schema";
+import { auditLog, captures, floorSetup, keyframes, placements, portalEndpoints, portals, rooms } from "../../db/schema";
 import { listDrafts, replaceDrafts } from "../../drafts/service";
 import { createEntity, updateEntity } from "../../entities/repository";
 import { acquireLock } from "../../locks/service";
@@ -181,5 +181,42 @@ describe("step_status and finish_step", () => {
       isError: true, text: "There is no floor L9. list_floors gives every floor.",
     });
     expect(await f.db.select().from(floorSetup)).toEqual([]);
+  });
+});
+
+describe("suggest_object_spots", () => {
+  it("gives each object with the placement to create, ready for create, and reads nothing it writes", async () => {
+    await createEntity(f.db, "room", { id: "L1-corridor", levelId: "oth-L1", kind: "area", footprint: sq(0, 0, 60, 6), heightM: 6, walkable: true }, amy.id);
+    await createEntity(f.db, "room", { id: "L1-a", levelId: "oth-L1", kind: "room", footprint: sq(0, 6, 10, 14), heightM: 6, nameEn: "Unit 1" }, amy.id);
+    await createEntity(f.db, "room", { id: "L1-b", levelId: "oth-L1", kind: "room", footprint: sq(10, 6, 20, 14), heightM: 6, nameEn: "Unit 2" }, amy.id);
+    await f.db.insert(captures).values({ id: "cap_1", kind: "video", filename: "L1 walk.mp4", levelId: "oth-L1" });
+    await f.db.insert(keyframes).values([0, 1].map(i => ({
+      id: `kf_${i}`, captureId: "cap_1", timeMs: i * 1000, imageId: `kf_${i}`, storagePath: "assets/aa/x.jpg", checksum: "x", widthPx: 640, heightPx: 480, sizeBytes: 1,
+    })));
+    await createEntity(f.db, "place", { id: "pl_a", nameEn: "Starbucks", category: "retail", levelId: "oth-L1", roomId: "L1-a" }, amy.id);
+    await createEntity(f.db, "place", { id: "pl_b", nameEn: "Gong Cha", category: "retail", levelId: "oth-L1", roomId: "L1-b" }, amy.id);
+    await createEntity(f.db, "objectKind", { id: "bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }, amy.id);
+    await createEntity(f.db, "place", { id: "pl_bin", nameEn: "wastebin", category: "facility", objectKindId: "bin" }, amy.id);
+    await createEntity(f.db, "sighting", { id: "sg_a", placeId: "pl_a", keyframeId: "kf_0" }, amy.id);
+    await createEntity(f.db, "sighting", { id: "sg_b", placeId: "pl_b", keyframeId: "kf_1" }, amy.id);
+    await createEntity(f.db, "sighting", { id: "sg_bin", placeId: "pl_bin", keyframeId: "kf_0" }, amy.id);
+
+    const { text, isError } = await call(client, "suggest_object_spots", { floor: "L1" });
+    expect(isError).toBe(false);
+    expect(JSON.parse(text)).toEqual({
+      floor: "L1",
+      spots: [{
+        kind: "wastebin", confidence: "high",
+        anchors: [{ id: "L1-a", name: "Starbucks" }, { id: "L1-b", name: "Gong Cha" }],
+        frames: ["kf_0"],
+        placement: {
+          id: "L1-wastebin-1", levelId: "oth-L1", objectKindId: "bin", roomId: "L1-corridor",
+          position: [10, 5.65, 0], rotationDeg: 0, sightingIds: ["sg_bin"],
+        },
+      }],
+      unplaced: [],
+      alreadyPlaced: 0,
+    });
+    expect(await f.db.select().from(placements)).toEqual([]);
   });
 });

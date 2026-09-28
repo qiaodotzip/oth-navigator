@@ -1,6 +1,8 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it, vi } from "vitest";
+import { floor, LEVEL, rect } from "../../paths/testing";
+import { suggestPaths } from "../../paths/suggest";
 import { CLAUDE_STEPS, stepNumber } from "../../setup/steps";
 import type { ToolContext } from "../context";
 import { buildMcpServer } from "../server";
@@ -122,6 +124,45 @@ describe("the four setup prompts", () => {
       const text = promptText(p, "L1");
       expect(text, p.name).toContain("A person checks it in step 8, Check Claude's work, where each change has Undo.");
       expect(text, p.name).toContain("Don't publish: a person does, after step 8.");
+    }
+  });
+});
+
+describe("draw_paths's trimming step names suggest_paths's real fields", () => {
+  it("says 'network', 'fork', 'end' and 'loop' as suggest_paths actually returns them, so a rename in 6D breaks this test", () => {
+    // A hole in a concourse gives one line that loops back on itself, network 0 (the only network).
+    const { lines: loopLines } = suggestPaths(floor([{ footprint: rect(0, 0, 30, 20), holes: [rect(10, 7, 20, 13)] }]), LEVEL);
+    expect(loopLines).toHaveLength(1);
+    expect(loopLines[0]!.ends).toEqual(["loop", "loop"]);
+    expect(loopLines[0]!.network).toBe(0);
+
+    // A side corridor off a main one forks off it: one line ends at the fork, the through line ends "end" at both ends.
+    const tCorridor: [number, number][] = [[0, 0], [24, 0], [24, 4], [13, 4], [13, 9], [11, 9], [11, 4], [0, 4]];
+    const { lines: forkLines } = suggestPaths(floor([{ footprint: tCorridor }]), LEVEL);
+    expect(forkLines.length).toBeGreaterThan(1);
+    const endValues = new Set(forkLines.flatMap(l => l.ends));
+    expect(endValues.has("fork")).toBe(true);
+    expect(endValues.has("end")).toBe(true);
+    for (const v of endValues) expect(["fork", "end", "loop"]).toContain(v);
+    // network 0 is the network with the most length, so the longest line (first, sorted longest-first) is on it.
+    expect(forkLines[0]!.network).toBe(0);
+
+    const text = promptText(drawPaths, "L1");
+    expect(text).toContain("network 0 is the main network");
+    for (const end of ["fork", "end", "loop"] as const) expect(text, end).toContain(`"${end}"`);
+    // These are field values and labels, not tool names: never backticked, so toolsNamed and the real-tools
+    // check below don't mistake them for tools.
+    expect(toolsNamed(text)).not.toContain("network");
+    for (const end of ["fork", "end", "loop"]) expect(toolsNamed(text)).not.toContain(end);
+  });
+});
+
+describe("the prompts against the server's real tools", () => {
+  it("name only tools the server registers, so a renamed tool breaks this test, not a command", async () => {
+    const registered = new Set((await (await connected()).listTools()).tools.map(t => t.name));
+    expect(registered.has("suggest_paths")).toBe(true);
+    for (const p of PROMPTS) {
+      expect(toolsNamed(promptText(p, "L1")).filter(name => !registered.has(name)), p.name).toEqual([]);
     }
   });
 });

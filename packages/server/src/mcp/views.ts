@@ -1,8 +1,9 @@
 import {
-  draftMatch, live, namedLikeAStop, placeLevels,
+  draftMatch, live, namedLikeAStop, placeLevels, pointInPolygon,
   type Level, type MapModel, type Room, type RoomDraft, type ValidationReport,
 } from "@oth/model";
 import type { DraftTally } from "../drafts/service";
+import type { SpotReport } from "../objects/spots";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -163,5 +164,51 @@ export function draftList(
         open: !d.footprint, onMapAs: match.copyOf?.id ?? null, overlaps: match.overRooms, likeAStop: namedLikeAStop(d.nameEn),
       };
     }),
+  };
+}
+
+/**
+ * suggest_object_spots: each object, the rooms that fixed where it stands by
+ * the names people know them by, its frames, and the placement to create as
+ * it is, with a free id. `takenIds` holds every placement id, deleted ones
+ * too, since an id is a primary key.
+ */
+export function spotsView(model: MapModel, level: Level, report: SpotReport, takenIds: ReadonlySet<string>) {
+  const kinds = new Map(live(model.objectKinds).map(k => [k.id, k]));
+  const rooms = live(model.rooms).filter(r => r.levelId === level.id);
+  const roomName = new Map(rooms.map(r => [r.id, r.nameEn]));
+  const bound = new Map(live(model.places).filter(p => p.roomId && !p.objectKindId).map(p => [p.roomId!, p.nameEn]));
+  const frameOf = new Map(live(model.sightings).map(s => [s.id, s.keyframeId]));
+  const taken = new Set(takenIds);
+  const freeId = (kindName: string) => {
+    const base = `${level.code}-${kindName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "object"}`;
+    let n = 1;
+    while (taken.has(`${base}-${n}`)) n++;
+    taken.add(`${base}-${n}`);
+    return `${base}-${n}`;
+  };
+  return {
+    floor: level.code,
+    spots: report.spots.map(s => {
+      const kind = kinds.get(s.objectKindId);
+      const standsIn = rooms.find(r => r.walkable && pointInPolygon(s.position, r.footprint, r.holes));
+      return {
+        kind: kind?.nameEn ?? s.objectKindId,
+        confidence: s.confidence,
+        anchors: s.anchors.map(id => ({ id, name: bound.get(id) ?? (roomName.get(id) || id) })),
+        frames: s.sightingIds.map(id => frameOf.get(id) ?? id),
+        placement: {
+          id: freeId(kind?.nameEn ?? "object"),
+          levelId: level.id,
+          objectKindId: s.objectKindId,
+          ...(standsIn ? { roomId: standsIn.id } : {}),
+          position: [round2(s.position[0]), round2(s.position[1]), 0],
+          rotationDeg: Math.round(s.rotationDeg * 10) / 10,
+          sightingIds: s.sightingIds,
+        },
+      };
+    }),
+    unplaced: report.unplaced.map(u => ({ ...u, kind: kinds.get(u.objectKindId)?.nameEn ?? u.objectKindId })),
+    alreadyPlaced: report.alreadyPlaced,
   };
 }

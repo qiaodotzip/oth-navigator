@@ -1,17 +1,19 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RoomDraftSchema, RoomKindSchema, live, namedLikeAStop, type StopKind } from "@oth/model";
 import { z } from "zod";
+import { placements } from "../../db/schema";
 import {
   DraftRefusedError, MAX_DECISIONS, RoomIdTakenError, decideDrafts, floorDrafts, listDrafts, tallyDrafts, type Decided,
 } from "../../drafts/service";
 import { assembleModel } from "../../model/assemble";
+import { objectSpotReport } from "../../objects/spots";
 import { UnknownFloorError, getSetup, setStep, type SetupCounts, type SetupState } from "../../setup/service";
 import { SETUP_STEPS, STEP_NAMES, isClaudeStep, stepNumber, type ClaudeStepId } from "../../setup/steps";
 import { StopRefusal, makeStop, type MadeStop } from "../../stops/makeStop";
 import type { ToolContext } from "../context";
 import { refuseIfLocked } from "../guards";
 import { Refusal, count, reply, replyJson, runTool, singaporeTime } from "../results";
-import { draftList } from "../views";
+import { draftList, spotsView } from "../views";
 import { FLOOR, READ_ONLY, levelFor, teamNames } from "./read";
 
 const ID = z.string().min(1).max(120);
@@ -196,9 +198,29 @@ function registerStepTools(server: McpServer, ctx: ToolContext): void {
   }));
 }
 
+function registerSpotTools(server: McpServer, ctx: ToolContext): void {
+  server.registerTool("suggest_object_spots", {
+    title: "Suggest where objects stand",
+    description:
+      "Where each object filmed on a floor probably stands, worked out from the survey (spec §5.4): from the rooms " +
+      "bound to places seen near its frame, at the edge of the walkable floor, facing into it. Sightings of one object " +
+      "a few frames apart are merged. Each suggestion gives its frames, the rooms that fixed it, a confidence (low is " +
+      "a guess from filming order), and the placement to create with create, type placement. Sightings already on a " +
+      "placement are skipped. It changes nothing.",
+    inputSchema: { floor: FLOOR },
+    annotations: READ_ONLY,
+  }, ({ floor }) => runTool(ctx, async () => {
+    const model = await assembleModel(ctx.db);
+    const level = levelFor(ctx, model, floor);
+    const taken = new Set((await ctx.db.select({ id: placements.id }).from(placements)).map(p => p.id));
+    return replyJson(spotsView(model, level, objectSpotReport(model, level.id), taken));
+  }));
+}
+
 /** Plan 6C's tools for a floor's guided setup (spec §7.2). Each group registers here. */
 export function registerSetupTools(server: McpServer, ctx: ToolContext): void {
   registerStopTools(server, ctx);
   registerDraftTools(server, ctx);
   registerStepTools(server, ctx);
+  registerSpotTools(server, ctx);
 }
