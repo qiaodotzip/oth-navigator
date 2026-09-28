@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as progress from "../flow/floorProgress";
 import { createSaver } from "../state/save";
@@ -36,12 +36,30 @@ describe("Header", () => {
     expect(tabs.getByRole("link", { name: "Build" }).getAttribute("href")).toBe("/floors/L1/build");
   });
 
+  it("shows Review's waiting count in a pill that is readable at 13 px", () => {
+    // Ruling 13: the proposed blue as 13 px text on its soft fill is 3.57:1, under AA.
+    renderHeader();
+    const tabs = within(screen.getByRole("navigation", { name: "Workspace" }));
+    const pill = within(tabs.getByRole("link", { name: /Review/ })).getByText("1");
+    const classes = pill.className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(["bg-proposed-soft", "border", "border-proposed", "text-stone-900"]));
+    expect(classes).not.toContain("text-proposed");
+  });
+
   it("marks your own floor in the switcher", async () => {
     renderHeader();
     fireEvent.click(screen.getByRole("button", { name: /Floor L1/ }));
     const l1 = await screen.findByRole("link", { name: /^L1/ });
     expect(l1.textContent).toContain("Yours");
     expect(screen.getByRole("link", { name: /^L2/ }).getAttribute("href")).toBe("/floors/L2/survey");
+  });
+
+  it("closes the switcher once you pick a floor", async () => {
+    renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: /Floor L1/ }));
+    fireEvent.click(await screen.findByRole("link", { name: /^L2/ }));
+    expect(window.location.pathname).toBe("/floors/L2/survey");
+    await waitFor(() => expect(screen.queryByRole("link", { name: /^L2/ })).toBeNull());
   });
 
   it("has no floor controls on the floors home", () => {

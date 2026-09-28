@@ -37,12 +37,21 @@ describe("FloorsHome", () => {
     expect(within(screen.getAllByRole("article")[0]!).getByText("Next: add the floorplan and set its scale")).toBeTruthy();
   });
 
-  it("says when the map was last published", async () => {
+  it("says when the map was last published as a date, not as its version id", async () => {
+    // Built from local parts, so the calendar day is 4 Sep in whatever time
+    // zone the test runs; the page shows the day where the reader is.
+    const createdAt = new Date(2026, 8, 4, 17, 7, 35, 19);
+    const now = vi.spyOn(Date, "now").mockReturnValue(createdAt.getTime() + 24 * 86_400_000);
     const api = fakeApi({
-      latestPublished: vi.fn().mockResolvedValue({ version: "v12", createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString(), warningCount: 0 }),
+      latestPublished: vi.fn().mockResolvedValue({ version: "2026-09-04T09-07-35-019Z", createdAt: createdAt.toISOString(), warningCount: 0 }),
     });
-    render(<FloorsHome api={api} saver={fakeSaver()} />);
-    expect(await screen.findByText(/last published v12, 3 days ago/)).toBeTruthy();
+    try {
+      render(<FloorsHome api={api} saver={fakeSaver()} />);
+      const line = await screen.findByText(/last published/);
+      expect(line.textContent).toMatch(/ · last published 4 Sep 2026, 24 days ago$/);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("leaves the published clause out on a failed fetch, rather than saying 'not published yet'", async () => {

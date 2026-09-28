@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Api } from "../api/client";
 import { followLink } from "../route";
 import { useEditorStore } from "../state/store";
@@ -8,13 +9,20 @@ const ITEM = "block w-full rounded px-2 py-1.5 text-left hover:bg-stone-100";
 
 /** You: your name, the team, and signing out. */
 export function AccountMenu({ api }: { api: Api }) {
+  const [open, setOpen] = useState(false);
   const user = useEditorStore(s => s.user);
   const endSession = useEditorStore(s => s.endSession);
-  if (!user) return null;
+  if (!user) {
+    // A session that ends with the menu open must not reopen it on sign-in.
+    if (open) setOpen(false);
+    return null;
+  }
 
   return (
     <Popover
       align="end"
+      open={open}
+      onOpenChange={setOpen}
       trigger={
         <button type="button" aria-label="Account" className="rounded-full">
           <Avatar userId={user.id} name={user.displayName} size={28} />
@@ -26,9 +34,18 @@ export function AccountMenu({ api }: { api: Api }) {
         <div className="font-medium">{user.displayName}</div>
       </div>
       <hr className="my-1 border-stone-200" />
-      <PopoverClose asChild>
-        <a className={ITEM} href="/team" onClick={followLink("/team")}>Team</a>
-      </PopoverClose>
+      <a
+        className={ITEM}
+        href="/team"
+        onClick={event => {
+          // Closed by hand: followLink's preventDefault also stops PopoverClose,
+          // which left the menu open over the Team page.
+          followLink("/team")(event);
+          setOpen(false);
+        }}
+      >
+        Team
+      </a>
       <PopoverClose asChild>
         <button
           type="button"

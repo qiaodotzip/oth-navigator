@@ -41,7 +41,10 @@ export function Toaster() {
           </T.Close>
         </T.Root>
       ))}
-      <T.Viewport className="fixed bottom-4 right-4 z-50 flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 outline-none" />
+      {/* Top right, just under the 48 px header (top-14 leaves 8 px), so it
+          clears Publish and the avatar above and Review's Accept, Reject and
+          Skip — and the list's "Accept N ticked" — at the bottom right. */}
+      <T.Viewport className="fixed top-14 right-4 z-50 flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 outline-none" />
     </T.Provider>
   );
 }

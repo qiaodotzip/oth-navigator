@@ -4,7 +4,7 @@ import { publishBlockers } from "../flow/publishBlockers";
 import { followLink } from "../route";
 import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
-import { Popover, PopoverClose } from "../ui/Popover";
+import { Popover } from "../ui/Popover";
 import { toast } from "../ui/toast";
 
 const SHOWN_PER_FLOOR = 5;
@@ -18,12 +18,13 @@ export function PublishButton({ api }: { api: Api }) {
   const model = useEditorStore(s => s.model);
   const report = useEditorStore(s => s.report);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   if (!report || !report.ok) {
     const groups = publishBlockers(model, report);
     const count = groups.reduce((n, g) => n + g.items.length, 0);
     return (
-      <Popover align="end" trigger={<Button size="sm">Publish ▾</Button>}>
+      <Popover align="end" open={open} onOpenChange={setOpen} trigger={<Button size="sm">Publish ▾</Button>}>
         <div className="w-96">
           <p className="px-2 pb-2 text-xs text-stone-500">
             {report ? `Fix ${count === 1 ? "this" : `these ${count}`} before publishing:` : "Checking the map…"}
@@ -35,12 +36,19 @@ export function PublishButton({ api }: { api: Api }) {
                 {group.items.slice(0, SHOWN_PER_FLOOR).map((item, i) => (
                   <li key={i}>
                     {item.link ? (
-                      <PopoverClose asChild>
-                        <a href={item.link} onClick={followLink(item.link)} className="block rounded px-2 py-1 hover:bg-stone-100">
-                          {item.message}
-                          <span className="text-accent"> → {item.stepLabel}</span>
-                        </a>
-                      </PopoverClose>
+                      <a
+                        href={item.link}
+                        onClick={event => {
+                          // Closed by hand: followLink's preventDefault also stops
+                          // PopoverClose, which left the list open over the fix.
+                          followLink(item.link!)(event);
+                          setOpen(false);
+                        }}
+                        className="block rounded px-2 py-1 hover:bg-stone-100"
+                      >
+                        {item.message}
+                        <span className="text-accent"> → {item.stepLabel}</span>
+                      </a>
                     ) : (
                       <span className="block px-2 py-1">{item.message}</span>
                     )}
@@ -56,6 +64,9 @@ export function PublishButton({ api }: { api: Api }) {
       </Popover>
     );
   }
+
+  // Unblocked with the list open: forget it, or the next blocker reopens it.
+  if (open) setOpen(false);
 
   return (
     <Button

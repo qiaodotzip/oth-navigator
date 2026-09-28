@@ -1,3 +1,4 @@
+import type { ValidationReport } from "@oth/model";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEditorStore } from "../state/store";
@@ -28,6 +29,34 @@ describe("PublishButton", () => {
     expect(link.getAttribute("href")).toBe("/floors/L1/build?step=entrances");
   });
 
+  it("closes the list once you follow a link to the fix", async () => {
+    window.history.pushState({}, "", "/floors");
+    useEditorStore.getState().setReport({
+      ok: false, errorCount: 1, warningCount: 0,
+      issues: [{ severity: "error", code: "entrance.offFloor", message: "Entrance \"Gate 1\" stands on a wall.", entityType: "entrance", entityId: "e1", levelId: "oth-L1" }],
+    });
+    render(<PublishButton api={fakeApi()} />);
+    fireEvent.click(screen.getByRole("button", { name: /publish/i }));
+    fireEvent.click(await screen.findByRole("link", { name: /Gate 1/ }));
+    expect(window.location.pathname + window.location.search).toBe("/floors/L1/build?step=entrances");
+    await waitFor(() => expect(screen.queryByRole("link", { name: /Gate 1/ })).toBeNull());
+  });
+
+  it("does not spring the list open by itself when something blocks again", async () => {
+    const blocked: ValidationReport = {
+      ok: false, errorCount: 1, warningCount: 0,
+      issues: [{ severity: "error", code: "entrance.offFloor", message: "Entrance \"Gate 1\" stands on a wall.", entityType: "entrance", entityId: "e1", levelId: "oth-L1" }],
+    };
+    useEditorStore.getState().setReport(blocked);
+    render(<PublishButton api={fakeApi()} />);
+    fireEvent.click(screen.getByRole("button", { name: /publish/i }));
+    await screen.findByRole("link", { name: /Gate 1/ });
+    // Fixed elsewhere while the list is open, then blocked again later.
+    act(() => useEditorStore.getState().setReport({ ok: true, errorCount: 0, warningCount: 0, issues: [] }));
+    act(() => useEditorStore.getState().setReport(blocked));
+    expect(screen.queryByRole("link", { name: /Gate 1/ })).toBeNull();
+  });
+
   it("publishes when nothing blocks it, and says so", async () => {
     useEditorStore.getState().setReport({ ok: true, errorCount: 0, warningCount: 2, issues: [] });
     const api = fakeApi({ publish: vi.fn().mockResolvedValue({ version: "v13", warningCount: 2 }) });
@@ -43,6 +72,25 @@ describe("AccountMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(await screen.findByText("Stef Chan")).toBeTruthy();
     expect(screen.queryByText(me.email)).toBeNull();
+  });
+
+  it("closes once you choose Team, rather than staying open over the Team page", async () => {
+    window.history.pushState({}, "", "/floors");
+    render(<AccountMenu api={fakeApi()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Team" }));
+    expect(window.location.pathname).toBe("/team");
+    await waitFor(() => expect(screen.queryByText("Stef Chan")).toBeNull());
+    expect(screen.queryByRole("link", { name: "Team" })).toBeNull();
+  });
+
+  it("does not spring open by itself after the session ends with it open and you sign back in", async () => {
+    render(<AccountMenu api={fakeApi()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    await screen.findByRole("link", { name: "Team" });
+    act(() => useEditorStore.getState().endSession("expired"));
+    act(() => useEditorStore.getState().setUser(me));
+    expect(screen.queryByRole("link", { name: "Team" })).toBeNull();
   });
 
   it("signs out as a choice, not as an expiry", async () => {

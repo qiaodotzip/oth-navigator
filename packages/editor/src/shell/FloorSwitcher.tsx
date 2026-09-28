@@ -5,7 +5,7 @@ import { sortedLevels } from "../flow/floors";
 import { followLink, href, type FloorTab } from "../route";
 import { useEditorStore } from "../state/store";
 import { Button } from "../ui/Button";
-import { Popover, PopoverClose } from "../ui/Popover";
+import { Popover } from "../ui/Popover";
 import { Progress } from "../ui/Progress";
 import { YoursTag } from "../ui/YoursTag";
 import { OwnerAvatars } from "./OwnerAvatars";
@@ -49,25 +49,28 @@ export function FloorSwitcher({ current, tab }: { current: Level; tab: FloorTab 
               const build = model ? floorProgress(model, report, levelImages, level.id).build : null;
               return (
                 <li key={level.id}>
-                  <PopoverClose asChild>
-                    <a
-                      href={to}
-                      onClick={followLink(to)}
-                      className={`flex items-center gap-2 rounded px-2 py-1.5 hover:bg-stone-100 ${
-                        level.id === current.id ? "bg-stone-100" : ""
-                      }`}
-                    >
-                      <span className="w-8 font-semibold">{level.code}</span>
-                      <span className="min-w-0 flex-1 truncate text-stone-600">{level.nameEn}</span>
-                      {mine(level) && <YoursTag />}
-                      <OwnerAvatars ids={level.ownerIds} size={20} />
-                      {build && (
-                        <span className="w-14">
-                          <Progress value={build.done} max={build.total} label={`${level.code} build progress`} />
-                        </span>
-                      )}
-                    </a>
-                  </PopoverClose>
+                  <a
+                    href={to}
+                    onClick={event => {
+                      // Closed by hand: followLink's preventDefault also stops
+                      // PopoverClose, which left the list open over the new floor.
+                      followLink(to)(event);
+                      setOpen(false);
+                    }}
+                    className={`flex items-center gap-2 rounded px-2 py-1.5 hover:bg-stone-100 ${
+                      level.id === current.id ? "bg-stone-100" : ""
+                    }`}
+                  >
+                    <span className="w-8 font-semibold">{level.code}</span>
+                    <span className="min-w-0 flex-1 truncate text-stone-600">{level.nameEn}</span>
+                    {mine(level) && <YoursTag />}
+                    <OwnerAvatars ids={level.ownerIds} size={20} />
+                    {build && (
+                      <span className="w-14">
+                        <Progress value={build.done} max={build.total} label={`${level.code} build progress`} />
+                      </span>
+                    )}
+                  </a>
                 </li>
               );
             })}

@@ -26,7 +26,9 @@ export function FloorTabs({ level, tab }: { level: Level; tab: FloorTab | null }
           >
             {LABELS[t]}
             {t === "review" && waiting > 0 && (
-              <span className="rounded-full bg-proposed-soft px-1.5 text-xs text-proposed">{waiting}</span>
+              // Ruling 13: stone text and a proposed border, since the proposed
+              // blue as 13 px text on its soft fill is 3.57:1.
+              <span className="rounded-full border border-proposed bg-proposed-soft px-1.5 text-xs text-stone-900">{waiting}</span>
             )}
           </a>
         );

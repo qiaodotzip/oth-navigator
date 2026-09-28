@@ -9,6 +9,20 @@ import { relativeTime } from "../ui/relativeTime";
 import { recall } from "../ui/remember";
 import { FloorCard } from "./FloorCard";
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * "4 Sep 2026", on the reader's calendar. Spelled out here rather than by Intl,
+ * whose en-GB September is "Sept" on newer ICU and "Sep" on older. Null when
+ * the timestamp cannot be read, so the date is left out rather than shown as
+ * "NaN undefined NaN".
+ */
+function calendarDate(iso: string): string | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
 /**
  * Where everyone lands: your floor one click away, and every floor's owners and
  * progress at a glance — which is what a new teammate otherwise has to ask for.
@@ -40,8 +54,13 @@ export function FloorsHome({ api, saver }: { api: Api; saver: Pick<Saver, "updat
         params: {},
       })
     : null;
+  const publishedOn = latest ? calendarDate(latest.createdAt) : null;
   const published =
-    latest === undefined ? "" : latest ? ` · last published ${latest.version}, ${relativeTime(latest.createdAt)}` : " · not published yet";
+    latest === undefined
+      ? ""
+      : latest
+        ? ` · last published ${publishedOn ? `${publishedOn}, ` : ""}${relativeTime(latest.createdAt)}`
+        : " · not published yet";
 
   return (
     <div className="mx-auto max-w-6xl p-6">

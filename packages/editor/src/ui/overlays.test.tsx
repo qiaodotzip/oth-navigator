@@ -41,6 +41,15 @@ describe("Toaster", () => {
     expect(run).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(useToasts.getState().toasts).toHaveLength(0));
   });
+
+  it("stacks toasts top right, under the header, clear of Review's Accept, Reject and Skip", () => {
+    // jsdom has no layout, so the position is read from the classes. The
+    // header is h-12 (48 px); top-14 leaves an 8 px gap below it.
+    render(<Toaster />);
+    const classes = screen.getByRole("region").querySelector("ol")!.className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(["fixed", "top-14", "right-4", "w-96", "flex-col", "gap-2"]));
+    expect(classes.some(c => c.startsWith("bottom-"))).toBe(false);
+  });
 });
 
 describe("Dialog", () => {
