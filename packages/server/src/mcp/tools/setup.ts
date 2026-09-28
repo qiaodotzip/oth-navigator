@@ -3,8 +3,9 @@ import { RoomDraftSchema, RoomKindSchema, live, namedLikeAStop, type StopKind } 
 import { z } from "zod";
 import { placements } from "../../db/schema";
 import {
-  DraftRefusedError, MAX_DECISIONS, RoomIdTakenError, decideDrafts, floorDrafts, lineUpOf, listDrafts, tallyDrafts, type Decided,
+  DraftRefusedError, MAX_DECISIONS, RoomIdTakenError, decideDrafts, floorDrafts, listDrafts, tallyDrafts, type Decided,
 } from "../../drafts/service";
+import { lineUpOf } from "../../drafts/lineUp";
 import { assembleModel } from "../../model/assemble";
 import { objectSpotReport } from "../../objects/spots";
 import { UnknownFloorError, getSetup, setStep, type SetupCounts, type SetupState } from "../../setup/service";

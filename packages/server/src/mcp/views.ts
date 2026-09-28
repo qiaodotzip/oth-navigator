@@ -2,7 +2,8 @@ import {
   coverage, draftMatch, labelPoint, live, namedLikeAStop, placeLevels, pointInPolygon, ringArea,
   type Level, type MapModel, type Ring, type Room, type RoomDraft, type ValidationReport, type Vec2,
 } from "@oth/model";
-import type { DraftTally, LineCheck } from "../drafts/service";
+import type { LineCheck } from "../drafts/lineUp";
+import type { DraftTally } from "../drafts/service";
 import type { SpotReport } from "../objects/spots";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
