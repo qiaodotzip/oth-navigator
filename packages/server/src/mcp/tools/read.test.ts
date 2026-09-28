@@ -73,6 +73,21 @@ describe("get", () => {
   it("refuses something that does not exist", async () => {
     expect(await call(client, "get", { type: "room", id: "nope" })).toMatchObject({ isError: true, text: "There is no room nope." });
   });
+
+  // The type enum is the only wall between get and every other table, so it is pinned here.
+  it("refuses any type that is not a map entity or a frame, and gives nothing of the row", async () => {
+    const asked: [string, string][] = [
+      ["user", f.wei.id], ["apiToken", f.tokenId], ["levelImage", "li_1"], ["auditLog", "1"], ["session", "s"],
+      ["constructor", "x"], ["__proto__", "x"], ["", "x"],
+    ];
+    for (const [type, id] of asked) {
+      const { text, isError } = await call(client, "get", { type, id });
+      expect(isError, type).toBe(true);
+      expect(text, type).toMatch(/Input validation error/);
+      expect(text, type).not.toContain("wei@example.com");
+      expect(text, type).not.toContain(f.secret);
+    }
+  });
 });
 
 describe("check_floor", () => {
@@ -133,6 +148,24 @@ describe("view_plan", () => {
     const meta = await sharp(Buffer.from(image.data, "base64")).metadata();
     expect([image.mimeType, meta.width, meta.height]).toEqual(["image/jpeg", 300, 300]);
     expect(JSON.parse(legend.text).rooms).toEqual([{ id: "L1-shop-12", name: "Shop 12", kind: "room", box: [100, 100, 100, 100] }]);
+  });
+
+  it("clamps a box that runs past the plan's edge to the plan, and refuses one wholly off it", async () => {
+    // The world runs x 0–100 m and y 0–50 m; this box runs 20 m past the left and 30 m past the top.
+    const { result, isError } = await call(client, "view_plan", { floor: "L1", box: { minX: -20, minY: 30, maxX: 30, maxY: 80 } });
+    expect(isError).toBe(false);
+    const [image, legend] = result.content as [Image, Text];
+    const meta = await sharp(Buffer.from(image.data, "base64")).metadata();
+    expect([image.mimeType, meta.width, meta.height]).toEqual(["image/jpeg", 300, 200]);
+    const { shows, rooms } = JSON.parse(legend.text);
+    expect(shows.minX).toBeCloseTo(0);
+    expect(shows.maxX).toBeCloseTo(30);
+    expect(shows.minY).toBeCloseTo(30);
+    expect(shows.maxY).toBeCloseTo(50);
+    expect(rooms).toEqual([{ id: "L1-shop-12", name: "Shop 12", kind: "room", box: [100, 100, 100, 100] }]);
+    expect(await call(client, "view_plan", { floor: "L1", box: { minX: 200, minY: 0, maxX: 210, maxY: 10 } })).toMatchObject({
+      isError: true, text: "That part of L1 is off its floorplan.",
+    });
   });
 
   it("shows the plan the editor shows when a floor has two: the last saved", async () => {
