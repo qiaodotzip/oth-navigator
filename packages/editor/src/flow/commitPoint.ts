@@ -4,7 +4,7 @@ import type { Tool } from "../state/store";
 import { entranceAt, portalEndpointAt } from "./placePoint";
 
 type Writes = {
-  create: (type: EntityType, data: Record<string, unknown>) => Promise<boolean>;
+  create: (type: EntityType, data: Record<string, unknown>, options?: { retry?: false }) => Promise<boolean>;
   remove: (type: EntityType, id: string, expectedVersion: number) => Promise<boolean>;
 };
 
@@ -35,9 +35,13 @@ export async function commitPoint({
   if (tool === "place-portal") {
     const placed = portalEndpointAt(model, levelId, point, now);
     if (!placed.ok) return say(placed.reason);
-    // The portal first: a stop that points at a lift not yet saved is refused.
+    // The portal first, so its stop never points at nothing. The server would
+    // take such a stop anyway; only the validator flags it, as an error.
     if (placed.portal && !(await saver.create("portal", placed.portal))) return;
-    if (await saver.create("portalEndpoint", placed.endpoint)) {
+    // A new lift's stop gets no Retry: by the time you could press it, the lift
+    // has been taken back out below, and the stop would land on no lift. A stop
+    // joining a lift that is already there keeps its Retry.
+    if (await saver.create("portalEndpoint", placed.endpoint, placed.portal ? { retry: false } : undefined)) {
       say(placed.portal
         ? "New lift placed. Switch level and click its dashed outline to add its next stop."
         : "Joined the lift or stair already at this spot on another level.");

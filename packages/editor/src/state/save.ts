@@ -39,6 +39,7 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
 
   async function guard(
     entityType: string, entityId: string, run: () => Promise<unknown>,
+    { retry }: { retry?: false } = {},
   ): Promise<boolean> {
     try {
       await run();
@@ -54,10 +55,11 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
         return false;
       }
       // Anything else: say so, and offer to send the same write again where
-      // that could work (spec §6).
+      // that could work (spec §6) — unless the caller has already undone what
+      // this write depended on, so that sending it again would land it alone.
       reportFailure(err, {
         doing: "save your change",
-        retry: async () => {
+        retry: retry === false ? undefined : async () => {
           await guard(entityType, entityId, run);
         },
       });
@@ -133,8 +135,9 @@ export function createSaver(api: Api, options: { validate?: boolean } = {}) {
     refresh,
     load,
 
-    create: (type: EntityType, data: Record<string, unknown>) =>
-      guard(type, String(data.id ?? "new"), () => api.createEntity(type, data)),
+    /** `retry: false` leaves Retry off the failure toast, for a create whose caller cleans up after it fails. */
+    create: (type: EntityType, data: Record<string, unknown>, options?: { retry?: false }) =>
+      guard(type, String(data.id ?? "new"), () => api.createEntity(type, data), options),
 
     update: (type: EntityType, id: string, expectedVersion: number, data: Record<string, unknown>) =>
       guard(type, id, () => api.updateEntity(type, id, expectedVersion, data)),

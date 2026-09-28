@@ -171,6 +171,15 @@ describe("saver", () => {
     expect(updateEntity.mock.calls[1]).toEqual(["room", "L1-a", 0, { nameEn: "X" }]);
   });
 
+  it("leaves Retry off a write whose caller asked for none, even when the network failed", async () => {
+    const createEntity = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    expect(await createSaver(fakeApi({ createEntity })).create("portalEndpoint", { id: "ep" }, { retry: false }))
+      .toBe(false);
+    const failed = useToasts.getState().toasts.at(-1)!;
+    expect(failed).toMatchObject({ tone: "error", message: expect.stringMatching(/couldn't save your change/i) });
+    expect(failed.action).toBeUndefined();
+  });
+
   it("gives a refusal in the server's words, with no Retry", async () => {
     const updateEntity = vi.fn(async () => { throw new ApiError(422, { error: "invalid entity" }); });
     await createSaver(fakeApi({ updateEntity })).update("room", "L1-a", 0, {});

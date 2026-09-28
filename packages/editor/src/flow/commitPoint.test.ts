@@ -68,6 +68,27 @@ describe("commitPoint", () => {
     expect(saver.remove).toHaveBeenCalledWith("portal", "portal-9", 0);
   });
 
+  it("never removes a new lift whose stop was saved", async () => {
+    const saver = fakeSaver();
+    await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L1", point: [80, 80], say: vi.fn(), now: 9 });
+    expect(saver.remove).not.toHaveBeenCalled();
+  });
+
+  it("offers no Retry for a new lift's stop, whose lift is taken back out if it fails", async () => {
+    const saver = fakeSaver();
+    await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L1", point: [80, 80], say: vi.fn(), now: 9 });
+    expect(saver.create).toHaveBeenLastCalledWith(
+      "portalEndpoint", expect.objectContaining({ portalId: "portal-9" }), { retry: false },
+    );
+  });
+
+  it("keeps Retry for a stop that joins a lift already there", async () => {
+    const saver = fakeSaver();
+    await commitPoint({ saver, model, tool: "place-portal", levelId: "oth-L2", point: [40, 40], say: vi.fn(), now: 9 });
+    expect(saver.create.mock.calls[0]![0]).toBe("portalEndpoint");
+    expect(saver.create.mock.calls[0]![2]).toBeUndefined();
+  });
+
   it("never removes a lift that already existed when a new stop on it is refused", async () => {
     const saver = fakeSaver();
     saver.create.mockResolvedValueOnce(false);
