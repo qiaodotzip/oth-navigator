@@ -1,9 +1,9 @@
 /**
  * End-to-end check of the Blender round trip against a running server:
- * export context -> treat it as a modeller's upload -> place it -> publish.
+ * export the floor -> treat it as a modeller's upload -> place it -> publish.
  */
 import { parseModel } from "@oth/model";
-import { buildContextGlb } from "@oth/renderer";
+import { buildFloorGlb } from "@oth/renderer";
 import { writeFile } from "node:fs/promises";
 
 const BASE = "http://localhost:3000";
@@ -34,7 +34,7 @@ const level = model.levels.find(l => l.code === "L1")!;
 const rooms = model.rooms.filter(r => r.levelId === level.id);
 console.log(`model: ${model.rooms.length} rooms, exporting ${rooms.length} on ${level.code}`);
 
-const glb = await buildContextGlb(rooms, level);
+const glb = await buildFloorGlb(model, [level.id], async () => null);
 await writeFile("scripts/.context.glb", glb);
 console.log("context export:", glb.byteLength, "bytes");
 
