@@ -46,6 +46,11 @@ export async function exportData(
     const { rows } = await db.execute(sql`select * from ${sql.identifier(table)}`);
     tables[table] = rows as Record<string, unknown>[];
   }
+  // A mistyped DATA_DIR opens a new, empty database there instead of failing,
+  // and an empty export would then import "successfully" on the new server.
+  if (tables.users.length === 0 && tables.levels.length === 0) {
+    throw new ExportRefused(`Nothing to export from ${resolve(dataDir)}: check DATA_DIR points at the data folder.`);
+  }
 
   // Each file once, however many rows name it, and with forward slashes in
   // the rows from here on, so the new server finds it on Linux.

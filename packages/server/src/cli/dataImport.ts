@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { copyFile, cp, mkdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -19,14 +20,29 @@ export class ImportRefused extends Error {
 /** Rows per statement: well inside any parameter limit, and few round trips. */
 const CHUNK = 500;
 
+/** What the rows say a file is: its size, and the sha256 `storeAsset` recorded as its checksum. */
+type Wanted = { size: number; checksums: Set<string> };
+
 /**
- * Every file the rows name, in the data folder at its recorded size. A file
- * already there is left alone, which is the case when the export was
- * uploaded straight into the volume. Anything missing refuses the import
- * before a file is copied or a row is written, and so does a path that
- * `assetFile` refuses as not a plain one inside a data folder: an
- * export.json edited by hand, or not from data:export, could otherwise
- * write anywhere.
+ * Whether the file at this path is the one its rows describe. Size first,
+ * which is cheap, then the bytes: an upload torn or mixed up on the way can
+ * be the right size and still the wrong file.
+ */
+async function inspectFile(path: string, want: Wanted): Promise<"ok" | "missing" | "altered"> {
+  if ((await sizeOf(path)) !== want.size) return "missing";
+  if (want.checksums.size === 0) return "ok";
+  const hash = createHash("sha256").update(await readFile(path)).digest("hex");
+  return [...want.checksums].every(c => c === hash) ? "ok" : "altered";
+}
+
+/**
+ * Every file the rows name, in the data folder at its recorded size and
+ * checksum. A file already there is left alone, which is the case when the
+ * export was uploaded straight into the volume. Anything missing or altered
+ * refuses the import before a file is copied or a row is written, and so
+ * does a path that `assetFile` refuses as not a plain one inside a data
+ * folder: an export.json edited by hand, or not from data:export, could
+ * otherwise write anywhere.
  *
  * The files are placed before the rows' transaction, which cannot take them
  * back, so an import that fails part-way leaves them behind. That is
@@ -34,15 +50,22 @@ const CHUNK = 500;
  * the next run finds them here and counts them as already there.
  */
 async function placeFiles(file: ExportFile, from: string, dataDir: string) {
-  const sizes = new Map<string, number>();
+  // Each file once, however many rows name it; every row's checksum must hold.
+  const wanted = new Map<string, Wanted>();
   for (const table of FILE_TABLES) {
-    for (const row of file.tables[table] ?? []) sizes.set(String(row.storage_path), Number(row.size_bytes));
+    for (const row of file.tables[table] ?? []) {
+      const path = String(row.storage_path);
+      const want = wanted.get(path) ?? { size: Number(row.size_bytes), checksums: new Set<string>() };
+      if (typeof row.checksum === "string" && row.checksum) want.checksums.add(row.checksum);
+      wanted.set(path, want);
+    }
   }
   const toCopy: { source: string; target: string }[] = [];
   const missing: string[] = [];
+  const altered: string[] = [];
   const unsafe: string[] = [];
   let alreadyThere = 0;
-  for (const [path, size] of sizes) {
+  for (const [path, want] of wanted) {
     let target: string;
     let source: string;
     try {
@@ -52,14 +75,27 @@ async function placeFiles(file: ExportFile, from: string, dataDir: string) {
       unsafe.push(JSON.stringify(path));
       continue;
     }
-    if ((await sizeOf(target)) === size) alreadyThere += 1;
-    else if ((await sizeOf(source)) === size) toCopy.push({ source, target });
+    const here = await inspectFile(target, want);
+    if (here === "ok") {
+      alreadyThere += 1;
+      continue;
+    }
+    const there = await inspectFile(source, want);
+    if (there === "ok") toCopy.push({ source, target });
+    else if (here === "altered" || there === "altered") altered.push(path);
     else missing.push(path);
   }
   if (unsafe.length > 0) {
     throw new ImportRefused(
       `export.json names ${unsafe.length} file(s) by a path that isn't a plain one inside the data folder, ` +
         `e.g. ${unsafe.slice(0, 3).join(", ")}. Nothing was imported. Import a folder data:export wrote, unedited.`,
+    );
+  }
+  if (altered.length > 0) {
+    throw new ImportRefused(
+      `${altered.length} file(s) are the right size but not the bytes their rows' checksum records, ` +
+        `e.g. ${altered.slice(0, 3).join(", ")}. Nothing was imported. ` +
+        "Copy or upload the export again, or export again from a fresh copy of the data folder.",
     );
   }
   if (missing.length > 0) {
@@ -73,6 +109,26 @@ async function placeFiles(file: ExportFile, from: string, dataDir: string) {
     await copyFile(source, target);
   }
   return { copied: toCopy.length, alreadyThere };
+}
+
+/**
+ * Publishes whose bundle folder is in neither the data folder nor the
+ * export. Their rows would list a version the app has nothing to serve for.
+ */
+async function missingBundles(file: ExportFile, from: string, dataDir: string): Promise<string[]> {
+  const missing: string[] = [];
+  for (const row of file.tables.published_versions ?? []) {
+    const id = String(row.id);
+    let found = false;
+    try {
+      found = (await sizeOf(assetFile(dataDir, `published/${id}`))) !== null ||
+        (await sizeOf(assetFile(from, `published/${id}`))) !== null;
+    } catch {
+      // An id that isn't a plain folder name has no folder to find.
+    }
+    if (!found) missing.push(id);
+  }
+  return missing;
 }
 
 /**
@@ -96,9 +152,12 @@ async function fileUnfiled(tx: Database, code: string): Promise<string[]> {
 /**
  * Reads a data:export folder into this server's empty database and data
  * folder (spec §13). It refuses rather than merges: any carried table with
- * a row in it stops it. Every row goes in one transaction, and the counts
- * are checked against the export's inside that transaction, so the database
- * gets all of it or none of it (spec §16).
+ * a row in it stops it. Before it writes anything, every file must match
+ * its row's size and checksum, and every publish must have its bundle
+ * folder, since a move by upload can go wrong without a word. Every row
+ * goes in one transaction, and the counts are checked against the export's
+ * inside that transaction, so the database gets all of it or none of it
+ * (spec §16).
  *
  * The files, `published/` included, are copied before that transaction, so
  * a rollback leaves them in the data folder while the database stays empty.
@@ -139,6 +198,13 @@ export async function importData(
   const code = options.fileUnder;
   if (code && !(file.tables.levels ?? []).some(l => l.code === code && l.deleted_at == null)) {
     throw new ImportRefused(`There is no floor ${code} in this export. Nothing was imported.`);
+  }
+  const noBundle = await missingBundles(file, from, dataDir);
+  if (noBundle.length > 0) {
+    throw new ImportRefused(
+      `${noBundle.length} published version(s) have no folder under published/ in ${from} or ${dataDir}, ` +
+        `e.g. ${noBundle.slice(0, 3).join(", ")}. Nothing was imported. Copy published/ along with the export.`,
+    );
   }
 
   // Files first, outside the transaction; see the note above.

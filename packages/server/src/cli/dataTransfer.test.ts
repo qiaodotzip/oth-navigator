@@ -143,6 +143,22 @@ describe("data:export and data:import", () => {
     expect(trail[0]).toMatchObject({ entityType: "capture", action: "update", actorId: null });
   }, 60_000);
 
+  it("files nothing, and says so in what it returns, when all the footage already has a floor", async () => {
+    const { out } = await exported();
+    const path = join(out, "export.json");
+    const doc = JSON.parse(await readFile(path, "utf8")) as ExportFile;
+    // As on the real data: someone pressed File under L1 before the export.
+    doc.tables.captures[0]!.level_id = "oth-L1";
+    await writeFile(path, JSON.stringify(doc));
+
+    const dst = await target();
+    const r = await importData(dst.db, dst.dataDir, out, { fileUnder: "L1" });
+    expect(r).toMatchObject({ filed: [], unfiled: [] });
+    const [cap] = await dst.db.select().from(captures);
+    expect(cap).toMatchObject({ levelId: "oth-L1", version: 0 });
+    expect(await dst.db.select().from(auditLog).where(eq(auditLog.entityId, "cap_1"))).toEqual([]);
+  }, 60_000);
+
   it("refuses a database that already has data, and adds nothing to it", async () => {
     const { out } = await exported();
     const dst = await target();
@@ -157,6 +173,34 @@ describe("data:export and data:import", () => {
     await rm(join(out, kf!.storagePath));
     const dst = await target();
     await expect(importData(dst.db, dst.dataDir, out)).rejects.toBeInstanceOf(ImportRefused);
+    expect(await dst.db.select().from(users)).toEqual([]);
+    expect(await sizeOf(join(dst.dataDir, "assets"))).toBeNull();
+  }, 60_000);
+
+  it("refuses a file whose bytes aren't the ones its row's checksum names, and says which", async () => {
+    const { src, out } = await exported();
+    const [kf] = await src.db.select().from(keyframes).where(eq(keyframes.id, "kf_1"));
+    // The right size and the wrong bytes, as a torn or mixed-up upload leaves it.
+    await writeFile(join(out, kf!.storagePath), new Uint8Array([3, 2, 1]));
+    const dst = await target();
+    // Copied from the export, or already in the data folder after an upload
+    // straight into the volume: checked either way.
+    for (const dataDir of [dst.dataDir, out]) {
+      const err = await importData(dst.db, dataDir, out).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ImportRefused);
+      expect((err as Error).message).toContain(kf!.storagePath);
+    }
+    expect(await dst.db.select().from(users)).toEqual([]);
+    expect(await sizeOf(join(dst.dataDir, "assets"))).toBeNull();
+  }, 60_000);
+
+  it("refuses a publish whose bundle folder isn't there, before writing a row or a file", async () => {
+    const { out } = await exported();
+    await rm(join(out, "published", VERSION), { recursive: true });
+    const dst = await target();
+    const err = await importData(dst.db, dst.dataDir, out).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ImportRefused);
+    expect((err as Error).message).toContain(VERSION);
     expect(await dst.db.select().from(users)).toEqual([]);
     expect(await sizeOf(join(dst.dataDir, "assets"))).toBeNull();
   }, 60_000);
@@ -227,6 +271,16 @@ describe("data:export and data:import", () => {
     const out = await tmp("busy");
     await writeFile(join(out, "note.txt"), "x");
     await expect(exportData(src.db, src.dataDir, out)).rejects.toBeInstanceOf(ExportRefused);
+  }, 60_000);
+
+  it("exports nothing from a data folder with no team and no floors, and says what to check", async () => {
+    // A mistyped DATA_DIR opens a new, empty database there rather than failing.
+    const dataDir = await tmp("typo");
+    const out = join(await tmp("out"), "export");
+    const err = await exportData(await createTestDb(), dataDir, out).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ExportRefused);
+    expect((err as Error).message).toBe(`Nothing to export from ${dataDir}: check DATA_DIR points at the data folder.`);
+    expect(await sizeOf(out)).toBeNull();
   }, 60_000);
 
   it("will not export when a row names a file that isn't there", async () => {
