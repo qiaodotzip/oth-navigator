@@ -32,26 +32,56 @@ Commit the generated SQL. Migrations are source, not build output.
 
 ## Deploying to Railway
 
-1. Create a project and point it at this repository. `railway.json` sets the
-   start command.
-2. Add the **Postgres** plugin. It sets `DATABASE_URL` for you.
-3. Add a **Volume** mounted at `/data`, and set `DATA_DIR=/data`. Uploaded `.glb`
-   assets and published bundles live there — without a volume they vanish on
-   every deploy.
-4. Set `NODE_ENV=production`. This is what makes session cookies `Secure`.
+One service, built from the root `Dockerfile` (`railway.json` says so), beside
+a Postgres database and a volume.
+
+1. Add a **Postgres** database, and on the service set
+   `DATABASE_URL=${{Postgres.DATABASE_URL}}`.
+2. Add a **volume** mounted at `/data`, and set `DATA_DIR=/data`. Frames,
+   plans, models, thumbnails and published bundles live there; without it
+   they vanish on every deploy.
+3. Set `PORT=3000`, and give the service a domain on port 3000.
+4. Set **`TEAM_CODE`** by hand: at least 8 characters (a few words is best),
+   and never committed. Everyone types it once per browser, before the
+   sign-in list. Without it the server refuses to start in production rather
+   than serve the app open. Changing it sends every browser back to the
+   team-code page.
+5. Deploy with `railway up`. Migrations run at boot. `/api/health` is the
+   health check, and the only thing served without the code.
+
+The Dockerfile sets `NODE_ENV=production`, which makes cookies `Secure` and
+keeps error details out of responses (they go to the log).
+
+## Moving the data
+
+```bash
+npm run data:export -- <empty folder>
+npm run data:import -- <that folder> [--file-under L1]
+```
+
+Export writes every row (sessions and locks aside) and every file the rows
+name, laid out like a data folder: `export.json`, `assets/`, `published/`.
+Run it against a *copy* of a PGlite data folder, never one a running server
+holds. Import reads it into an **empty** database; it refuses one with
+anything in it. It checks every file before it writes a row, writes all the
+rows in one transaction, and compares the counts with the export's.
+`--file-under` files footage that has no floor. If the files are already in
+the data folder, for instance uploaded straight into the volume, import leaves
+them where they are.
 
 ## Creating accounts
 
-There is no signup route, by design. Create each teammate's account from a
-Railway shell:
+Add teammates from the app: **Team → Add teammate**, with a name and nothing
+else. There are no passwords: people sign in by picking their name from the
+list. A name already on the team, case-insensitively, is refused rather than
+made twice.
+
+On a server with nobody on it yet, make the first account from a shell on
+the service:
 
 ```bash
-npm run invite --workspace @oth/server -- "Wei"
+railway ssh --service oth-map -- sh -c 'cd /app && npm run invite -- "Wei"'
 ```
-
-There are no passwords: they sign in by picking their name from the list on
-the sign-in screen. A name already on the team, case-insensitively, is
-refused rather than creating a second account.
 
 To disable someone's access, set `disabled_at` on their `users` row. Their
 existing sessions stop resolving immediately.

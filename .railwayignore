@@ -1,0 +1,10 @@
+# What `railway up` need not upload. It already skips what .gitignore does
+# (node_modules, dist, packages/server/data); these are the rest, about 20 MB
+# the build never reads.
+.superpowers/
+.claude/
+docs/
+images/
+legacy/
+research/
+e2e/test-results/

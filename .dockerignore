@@ -1,0 +1,18 @@
+# What the image never needs. node_modules above all: a Windows copy would
+# overwrite the Linux one npm ci has just installed.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.git
+.claude
+.superpowers
+.env
+.env.local
+*.log
+docs
+images
+legacy
+research
+e2e
+packages/server/data
+packages/server/survey-out
