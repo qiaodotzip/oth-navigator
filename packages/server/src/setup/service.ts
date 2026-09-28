@@ -36,7 +36,7 @@ export type SetupCounts = {
   /** waiting leaves out the drafts Claude set aside for a person, which setAside counts. */
   rooms: { waiting: number; setAside: number; accepted: number; rejected: number; stops: number };
   things: { bound: number; unbound: number; objects: { kindId: string; name: string; count: number }[] };
-  /** unreachable: rooms with at least one doorway that no route reaches; null in light mode. */
+  /** unreachable: rooms no route reaches (area.unreachable and room.noAccess, contract v3); null in light mode. */
   paths: { pathways: number; entrances: number; unreachable: number | null };
 };
 
@@ -116,23 +116,17 @@ export async function setStep(
 }
 
 /** The issues that mean a room on the floor has no route: check_floor's own codes. */
-const UNREACHABLE = new Set(["area.unreachable", "room.noAccess"]);
+const UNREACHABLE_CODES = new Set(["area.unreachable", "room.noAccess"]);
 
 /**
- * Rooms on the floor with at least one doorway that no route reaches (contract
- * v2): a room with no door is left out, since a route can't be drawn to it
- * until a person adds one. Counted once each, however many issues it has.
+ * Rooms on the floor that no route reaches (contract v3): each room with an
+ * area.unreachable or room.noAccess issue, as check_floor reports them,
+ * counted once however many it has. v2 counted only rooms with a doorway,
+ * which read 0 on L1, which has none, while 265 rooms had no route.
  */
 function unreachableRooms(model: MapModel, levelId: string): number {
-  const withDoor = new Set<string>();
-  for (const d of live(model.doorways)) {
-    if (d.levelId !== levelId) continue;
-    withDoor.add(d.roomA);
-    withDoor.add(d.roomB);
-  }
-  if (withDoor.size === 0) return 0;
   const cut = new Set(validateModel(model).issues
-    .filter(i => i.levelId === levelId && UNREACHABLE.has(i.code) && withDoor.has(i.entityId))
+    .filter(i => i.levelId === levelId && UNREACHABLE_CODES.has(i.code))
     .map(i => i.entityId));
   return cut.size;
 }

@@ -185,7 +185,7 @@ const LEFT: Record<ClaudeStepId, { noun: string; state: string; n: (c: SetupCoun
   label: { noun: "frame", state: "untagged", n: c => c.label.left },
   rooms: { noun: "draft", state: "waiting", n: c => c.rooms.waiting },
   things: { noun: "place", state: "not bound to a room", n: c => c.things.unbound },
-  paths: { noun: "room", state: "with a door that no route reaches", n: c => c.paths.unreachable ?? 0 },
+  paths: { noun: "room", state: "that no route reaches", n: c => c.paths.unreachable ?? 0 },
 };
 
 function registerStepTools(server: McpServer, ctx: ToolContext): void {
@@ -194,7 +194,7 @@ function registerStepTools(server: McpServer, ctx: ToolContext): void {
     description:
       "Where a floor's guided setup stands: its nine steps in order, as marked (open, done or skipped) and by whom, and " +
       "each step's live counts, such as frames left to tag, drafts waiting and set aside for a person, places not " +
-      "bound (things.unbound), objects placed and rooms with a door that no route reaches. Use these numbers in your " +
+      "bound (things.unbound), objects placed and rooms no route reaches. Use these numbers in your " +
       "report and note. A person's step can read open while the counts show its work done: the app ticks it from the map.",
     inputSchema: { floor: FLOOR },
     annotations: READ_ONLY,

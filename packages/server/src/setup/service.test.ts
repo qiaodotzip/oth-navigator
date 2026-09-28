@@ -114,13 +114,36 @@ describe("setupCounts", () => {
     });
   });
 
-  it("counts a room with a door that no route reaches, and not one with no door", () => {
+  it("counts every room no route reaches, a door or not: check_floor's area.unreachable and room.noAccess (contract v3)", () => {
     const far = { id: "L1-far", levelId: "oth-L1", kind: "room", footprint: sq(60, 60, 70, 70), heightM: 6, nameEn: "Far" };
     const doorless = { id: "L1-shut", levelId: "oth-L1", kind: "room", footprint: sq(80, 60, 90, 70), heightM: 6, nameEn: "Shut" };
+    const island = { id: "L1-island", levelId: "oth-L1", kind: "area", walkable: true, footprint: sq(100, 0, 120, 20), heightM: 6, nameEn: "Island" };
     const door = { id: "L1-far-door", levelId: "oth-L1", roomA: "L1-far", roomB: "L1-hall", segment: [[60, 62], [60, 64]], widthM: 1 };
-    const model = parseModel({ ...world([far, doorless]), doorways: [door] });
-    expect(setupCounts(model, "oth-L1", []).paths.unreachable).toBe(1);
-    expect(setupCounts(world([far, doorless]), "oth-L1", []).paths.unreachable).toBe(0);
+    // Rehearsal 2's L1 has no doorways at all, and 265 rooms no route reaches: the count must not read 0 there.
+    expect(setupCounts(world([far, doorless, island]), "oth-L1", []).paths.unreachable).toBe(3);
+    expect(setupCounts(parseModel({ ...world([far, doorless, island]), doorways: [door] }), "oth-L1", []).paths.unreachable).toBe(3);
+    // Another floor's rooms count on that floor.
+    const upstairs = { ...far, id: "L2-far", levelId: "oth-L2", heightM: 4 };
+    expect(setupCounts(world([upstairs]), "oth-L1", []).paths.unreachable).toBe(0);
+    expect(setupCounts(world([upstairs]), "oth-L2", []).paths.unreachable).toBe(1);
+  });
+
+  it("lists only the kinds of object placed on this floor, each with how many (contract v3)", () => {
+    const model = parseModel({
+      ...world(),
+      objectKinds: [
+        { id: "bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } },
+        { id: "cooler", nameEn: "water cooler", size: { w: 0.4, d: 0.4, h: 1.2 } },
+        { id: "ext", nameEn: "fire extinguisher", size: { w: 0.3, d: 0.3, h: 0.6 } },
+      ],
+      placements: [
+        { id: "L1-wastebin-1", levelId: "oth-L1", objectKindId: "bin", position: [5, 9, 0] },
+        { id: "L1-wastebin-2", levelId: "oth-L1", objectKindId: "bin", position: [9, 9, 0] },
+        { id: "L2-water-cooler-1", levelId: "oth-L2", objectKindId: "cooler", position: [1, 1, 0] },
+      ],
+    });
+    expect(setupCounts(model, "oth-L1", []).things.objects).toEqual([{ kindId: "bin", name: "wastebin", count: 2 }]);
+    expect(setupCounts(model, "oth-L2", []).things.objects).toEqual([{ kindId: "cooler", name: "water cooler", count: 1 }]);
   });
 
   it("leaves unreachable out in light mode, and validates nothing to count it", () => {

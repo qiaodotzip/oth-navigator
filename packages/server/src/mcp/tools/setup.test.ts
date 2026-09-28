@@ -244,6 +244,14 @@ describe("step_status and finish_step", () => {
       .toBe("Marked step 6, Places and objects, done on L1, with your note. Still left: 1 place not bound to a room.");
   });
 
+  it("says how many rooms no route reaches once the paths step is marked, a door or not (contract v3)", async () => {
+    // The fixture's Escalator - 07 is a room with no door and no pathway near it.
+    expect((await call(client, "finish_step", { floor: "L1", step: "paths", note: "Drew 3 pathways" })).text)
+      .toBe("Marked step 7, Pathways and entrances, done on L1, with your note. Still left: 1 room that no route reaches.");
+    const { tools } = await client.listTools();
+    expect(tools.find(t => t.name === "step_status")?.description).toContain("rooms no route reaches");
+  });
+
   it("won't finish the rooms while drafts nobody has decided still wait, and says the set-asides are a person's", async () => {
     const drafts = await replaceDrafts(f.db, "oth-L1", SOURCE, [drafted("Kiosk", sq(0, 20, 4, 24), 16), drafted("Plaza", undefined, 0)], amy.id);
     const idOf = (name: string) => String(drafts.find(d => d.nameEn === name)!.id);

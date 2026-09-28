@@ -66,17 +66,19 @@ const brief = (changes: Awaited<ReturnType<typeof listClaudeChanges>>) =>
   changes.map(c => [c.group, c.summary, c.entityType, c.action, c.undone]);
 
 describe("listClaudeChanges", () => {
-  it("lists each accepted draft once, as the room's create, and a set-aside apart, in plain words", async () => {
-    await claudeDecides();
+  it("lists each accepted draft once, as the room's create, and a set-aside apart, in plain words, each by its draft (contract v3)", async () => {
+    const { shop, plaza } = await claudeDecides();
     const changes = await listClaudeChanges(f.db, "oth-L1", EPOCH);
     expect(brief(changes)).toEqual(expect.arrayContaining([
-      ["rooms", "Made Starbucks from a draft (the drawing said SHOP 12), 100 m²", "room", "create", false],
+      ["rooms", "Made Starbucks from a draft (the drawing said SHOP 12), 100 m²", "roomDraft", "create", false],
       ["drafts", "Set aside Plaza for you: Open on the drawing", "roomDraft", "set-aside", false],
     ]));
     expect(changes).toHaveLength(2);
     const rooms = changes.find(c => c.group === "rooms")!;
     expect(Object.keys(rooms).sort()).toEqual(["action", "at", "auditId", "entityId", "entityType", "group", "summary", "undone"]);
-    expect(rooms.entityId).toBe("L1-starbucks");
+    // Show frames the draft's outline, so the row names the draft, not the room it became.
+    expect(rooms.entityId).toBe(shop);
+    expect(changes.find(c => c.group === "drafts")!.entityId).toBe(plaza);
   });
 
   it("folds a stop's three writes into one row", async () => {
@@ -245,6 +247,7 @@ describe("undoChange", () => {
     const [kiosk] = await replaceDrafts(f.db, "oth-L1", SOURCE, [{ nameEn: "Kiosk", kind: "room", footprint: sq(0, 0, 4, 4), labelPoint: [2, 2], areaM2: 16 }], amy.id);
     await call(client, "decide_drafts", { floor: "L1", items: [{ id: String(kiosk!.id), expectedVersion: 0, decision: "reject" }] });
     const rejected = (await listClaudeChanges(f.db, "oth-L1", EPOCH)).find(c => c.summary === "Rejected the draft Kiosk")!;
+    expect([rejected.entityType, rejected.entityId]).toEqual(["roomDraft", String(kiosk!.id)]);
     await replaceDrafts(f.db, "oth-L1", SOURCE, [{ nameEn: "Cafe", kind: "room", footprint: sq(0, 0, 4, 4), labelPoint: [2, 2], areaM2: 16 }], amy.id);
     await expect(undoChange(f.db, rejected.auditId, amy.id)).rejects.toThrow(
       "Find rooms has run again since, so this draft is from an older search. Change the map by hand instead.",

@@ -64,7 +64,11 @@ export type Folded = {
    * frame it was made for (changes.ts reads both off the frames).
    */
   levelId: string | null;
-  /** The key row's entity and action, as the list reports them. */
+  /**
+   * The entity the list reports: the key row's, except that a room made from
+   * a draft reports its draft (contract v3), as its reject and set-aside do,
+   * so Show frames the draft's outline. action is the key row's.
+   */
   entityType: string;
   entityId: string;
   action: string;
@@ -147,7 +151,7 @@ function inside(footprint: unknown): Vec2 | null {
 }
 
 function made(key: AuditRow, group: ChangeGroup, rows: readonly (AuditRow | undefined)[], parts: {
-  levelId: string | null; undo: UndoStep[] | null; facts: Facts; touches?: Touch[];
+  levelId: string | null; undo: UndoStep[] | null; facts: Facts; touches?: Touch[]; entity?: { type: string; id: string };
 }): Folded {
   const all = rows.filter((r): r is AuditRow => r !== undefined);
   // One entity written twice in a call is left at its last write's version.
@@ -158,7 +162,7 @@ function made(key: AuditRow, group: ChangeGroup, rows: readonly (AuditRow | unde
   }
   return {
     id: key.id, auditIds: all.map(r => r.id), group, at: key.at, actorId: key.actorId, via: key.via ?? "",
-    levelId: parts.levelId, entityType: key.entityType, entityId: key.entityId, action: key.action,
+    levelId: parts.levelId, entityType: parts.entity?.type ?? key.entityType, entityId: parts.entity?.id ?? key.entityId, action: key.action,
     touches: [...touches.values()], undo: parts.undo, facts: parts.facts,
   };
 }
@@ -184,6 +188,7 @@ function foldGroup(rows: readonly AuditRow[]): Folded[] {
     const area = obj(renamed.after).areaM2;
     out.push(made(room, "rooms", use(room, renamed, retired), {
       levelId: str(after.levelId) || null,
+      entity: { type: "roomDraft", id: retired.entityId },
       undo: [{ do: "unaccept", draftId: retired.entityId, draftVersion: version(retired), roomId: room.entityId, roomVersion: version(room) }],
       facts: {
         kind: "fromDraft", roomId: room.entityId, name: str(after.nameEn), drawingName: str(obj(renamed.before).nameEn),
