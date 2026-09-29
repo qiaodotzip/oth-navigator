@@ -97,7 +97,7 @@ describe("wrapTools", () => {
   it("leaves no tool on the map's server unwrapped", () => {
     const server = buildMcpServer(stubContext());
     const tools = (server as unknown as { _registeredTools: Record<string, { handler: unknown }> })._registeredTools;
-    expect(Object.keys(tools)).toContain("list_floors");
+    expect(Object.keys(tools)).toEqual(expect.arrayContaining(["list_floors", "suggest_paths", "connect_rooms"]));
     for (const [name, tool] of Object.entries(tools)) expect(isWrapped(tool.handler), name).toBe(true);
   });
 });

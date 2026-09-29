@@ -1,9 +1,11 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { Database } from "../../db/client";
 import { auditLog, pathways } from "../../db/schema";
 import { createEntity } from "../../entities/repository";
 import { PresenceTracker } from "../../presence/service";
-import { callKinds } from "../limits";
+import { LIMITS, TokenLimits, callKinds } from "../limits";
 import { call, mcpFixture, type McpFixture } from "../testing";
 
 let f: McpFixture;
@@ -101,5 +103,122 @@ describe("suggest_paths", () => {
     expect(tools.find(t => t.name === "suggest_paths")?.annotations?.readOnlyHint).toBe(true);
     expect(callKinds({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "suggest_paths", arguments: { floor: "L1" } } }))
       .toEqual(["read"]);
+  });
+});
+
+/**
+ * Contract v5's connect_rooms, on L2, which the fixture leaves empty: a hall
+ * 20 m deep with its gate and one pathway, reached from the gate, 2 m in along
+ * its south side, and shops standing in it 10 m from that pathway.
+ */
+async function hallWithShops(db: Database, by: string, shops: number, spacingM = 20): Promise<void> {
+  const length = spacingM * shops + 10;
+  await createEntity(db, "room", {
+    id: "L2-hall", levelId: "oth-L2", kind: "area", walkable: true, heightM: 4, nameEn: "Hall",
+    footprint: [[0, 0], [length, 0], [length, 20], [0, 20]],
+  }, by);
+  await createEntity(db, "entrance", { id: "L2-gate", levelId: "oth-L2", roomId: "L2-hall", point: [1, 2], nameEn: "Gate" }, by);
+  await createEntity(db, "pathway", { id: "L2-main", levelId: "oth-L2", polyline: [[1, 2], [length - 1, 2]], widthM: 2 }, by);
+  for (let k = 0; k < shops; k++) {
+    const x = 5 + spacingM * k;
+    await createEntity(db, "room", {
+      id: `L2-shop-${k + 1}`, levelId: "oth-L2", kind: "room", walkable: false, heightM: 4, nameEn: `Shop ${k + 1}`,
+      // Each shop 5 m or more from the next, so one connector never passes within 3 m of two.
+      footprint: [[x, 12], [x + Math.min(6, spacingM - 5), 12], [x + Math.min(6, spacingM - 5), 18], [x, 18]],
+    }, by);
+  }
+}
+
+type Connected = { levelId: string; made: { id: string; roomIds: string[]; lengthM: number }[]; islands: unknown[]; left: number };
+
+describe("connect_rooms (contract v5)", () => {
+  it("makes a pathway for each room it connects, each on the audit log through the token, and says what it made", async () => {
+    await hallWithShops(f.db, f.wei.id, 3);
+    const { text, isError } = await call(client, "connect_rooms", { floor: "L2" });
+    expect(isError, text).toBe(false);
+    const reply = JSON.parse(text) as Connected;
+    expect(reply).toEqual({
+      levelId: "oth-L2",
+      made: expect.arrayContaining([
+        { id: "L2-to-shop-1", roomIds: ["L2-shop-1"], lengthM: expect.any(Number) },
+        { id: "L2-to-shop-2", roomIds: ["L2-shop-2"], lengthM: expect.any(Number) },
+        { id: "L2-to-shop-3", roomIds: ["L2-shop-3"], lengthM: expect.any(Number) },
+      ]),
+      islands: [],
+      left: 0,
+    });
+    expect(reply.made).toHaveLength(3);
+    const ids = reply.made.map(m => m.id).sort();
+    const made = (await f.db.select().from(pathways)).filter(p => p.id !== "L2-main");
+    expect(made.map(p => [p.id, p.levelId, p.version]).sort()).toEqual(ids.map(id => [id, "oth-L2", 0]));
+    for (const p of made) {
+      expect(p.widthM).toBeGreaterThanOrEqual(1);
+      expect(p.widthM).toBeLessThanOrEqual(3);
+    }
+    const trail = await f.db.select().from(auditLog).where(and(eq(auditLog.entityType, "pathway"), eq(auditLog.action, "create")));
+    const through = trail.filter(r => r.via === f.tokenId);
+    expect(through.map(r => [r.entityId, r.actorId]).sort()).toEqual(ids.map(id => [id, f.wei.id]));
+    expect(presence.list()).toContainEqual(expect.objectContaining({ displayName: "Wei (Claude)", levelId: "oth-L2" }));
+    // Run again, nothing is left to connect.
+    expect(JSON.parse((await call(client, "connect_rooms", { floor: "L2" })).text)).toEqual({ levelId: "oth-L2", made: [], islands: [], left: 0 });
+  });
+
+  it("works it all out in a preview, and makes nothing", async () => {
+    await hallWithShops(f.db, f.wei.id, 3);
+    const audited = (await f.db.select().from(auditLog)).length;
+    const reply = JSON.parse((await call(client, "connect_rooms", { floor: "L2", preview: true })).text) as Connected;
+    expect(reply.made.map(m => m.id)).toEqual(["", "", ""]);
+    expect(reply.made.map(m => m.roomIds[0]).sort()).toEqual(["L2-shop-1", "L2-shop-2", "L2-shop-3"]);
+    expect((await f.db.select().from(pathways)).map(p => p.id)).toEqual(["L2-main"]);
+    expect(await f.db.select().from(auditLog)).toHaveLength(audited);
+  });
+
+  it("counts as one write against the token's limit, however many pathways it makes", async () => {
+    expect(callKinds({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "connect_rooms", arguments: { floor: "L2" } } }))
+      .toEqual(["write"]);
+    const g = await mcpFixture({ deps: { mcp: { limits: new TokenLimits({ ...LIMITS, writesPerMinute: 1 }) } } });
+    await hallWithShops(g.db, g.wei.id, 3);
+    const send = (name: string, args: Record<string, unknown>) =>
+      g.raw({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } });
+    expect((await send("connect_rooms", { floor: "L2" })).status).toBe(200);
+    expect((await g.db.select().from(pathways))).toHaveLength(4);
+    expect((await send("delete", { type: "pathway", id: "L2-main", expectedVersion: 0 })).status).toBe(429);
+  });
+
+  it("makes at most 150 in a call, and says how many are left for the next", async () => {
+    await hallWithShops(f.db, f.wei.id, 151, 8);
+    const first = JSON.parse((await call(client, "connect_rooms", { floor: "L2" })).text) as Connected;
+    expect(first.made).toHaveLength(150);
+    expect(first.left).toBe(1);
+    const second = JSON.parse((await call(client, "connect_rooms", { floor: "L2" })).text) as Connected;
+    expect(second.made).toHaveLength(1);
+    expect(second.left).toBe(0);
+    expect(await f.db.select().from(pathways)).toHaveLength(152);
+  }, 30_000);
+
+  it("names the rooms it can't reach as islands, with the gap to cross", async () => {
+    await hallWithShops(f.db, f.wei.id, 1);
+    await createEntity(f.db, "room", {
+      id: "L2-annex", levelId: "oth-L2", kind: "area", walkable: true, heightM: 4, nameEn: "Annex",
+      footprint: [[0, 23], [30, 23], [30, 30], [0, 30]],
+    }, f.wei.id);
+    const reply = JSON.parse((await call(client, "connect_rooms", { floor: "L2" })).text) as Connected;
+    expect(reply.made.map(m => m.roomIds)).toEqual([["L2-shop-1"]]);
+    expect(reply.islands).toEqual([{ roomIds: ["L2-annex"], gapM: expect.any(Number), from: expect.any(Array), to: expect.any(Array) }]);
+  });
+
+  it("refuses a floor with no pathway reached from an entrance to start from", async () => {
+    await createEntity(f.db, "room", {
+      id: "L2-kiosk", levelId: "oth-L2", kind: "room", walkable: false, heightM: 4, nameEn: "Kiosk", footprint: [[0, 0], [2, 0], [2, 2], [0, 2]],
+    }, f.wei.id);
+    const { text, isError } = await call(client, "connect_rooms", { floor: "L2" });
+    expect(isError).toBe(true);
+    expect(text).toBe("Nothing connected on L2. No pathway there is reached from an entrance or a stop yet: add the entrances and the main lines first.");
+    expect(await f.db.select().from(pathways)).toEqual([]);
+  });
+
+  it("is a write that destroys nothing", async () => {
+    const { tools } = await client.listTools();
+    expect(tools.find(t => t.name === "connect_rooms")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
   });
 });

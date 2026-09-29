@@ -1,6 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { live, type Level, type MapModel } from "@oth/model";
+import { z } from "zod";
+import type { Database } from "../../db/client";
+import { pathways } from "../../db/schema";
+import { roomIdFor } from "../../drafts/service";
+import { createEntity } from "../../entities/repository";
 import { assembleModel } from "../../model/assemble";
-import { MAX_LINK_M } from "../../paths/connect";
+import {
+  ACCESS_M, CLOSED_NEAR_M, CONNECT_MAX_M, CONNECTOR_MAX_WIDTH_M, CONNECTOR_MIN_WIDTH_M, CannotConnect, MAX_CONNECTORS,
+  MAX_LINK_M, connectRooms, type Connector,
+} from "../../paths/connect";
 import { GUESS_INSET_M, OUTWARD_M } from "../../paths/entrances";
 import { SurfaceTooLarge } from "../../paths/raster";
 import { CROSS_M, REACH_M } from "../../paths/reach";
@@ -8,6 +17,29 @@ import { suggestPaths } from "../../paths/suggest";
 import type { ToolContext } from "../context";
 import { Refusal, replyJson, runTool } from "../results";
 import { FLOOR, READ_ONLY, levelFor } from "./read";
+
+/**
+ * connect_rooms' writer: the connectors as pathways, in one transaction
+ * through the same create as the create tool, so each has its own audit row,
+ * marked through the token, and its own Undo in the setup's check step. Each
+ * id is read off the room it runs to, as decide_drafts names a room: the
+ * floor's code, "to" and the room's name, then -2, -3… until it is free
+ * (every pathway id, deleted ones too, is taken).
+ */
+async function makeConnectors(ctx: ToolContext, model: MapModel, level: Level, connectors: readonly Connector[]): Promise<string[]> {
+  const names = new Map(live(model.rooms).map(r => [r.id, r.nameEn.trim() || r.id]));
+  return ctx.db.transaction(async t => {
+    const tx = t as unknown as Database;
+    const taken = new Set((await tx.select({ id: pathways.id }).from(pathways)).map(p => p.id));
+    const ids: string[] = [];
+    for (const c of connectors) {
+      const id = roomIdFor(level.code, `to ${names.get(c.roomIds[0]!) ?? c.roomIds[0]!}`, taken);
+      await createEntity(tx, "pathway", { id, levelId: level.id, polyline: c.polyline, widthM: c.widthM }, ctx.user.id);
+      ids.push(id);
+    }
+    return ids;
+  });
+}
 
 /** Spec §7.3: the pathway first pass, for the draw_paths step (§4.1 step 7). */
 export function registerPathTools(server: McpServer, ctx: ToolContext): void {
@@ -49,5 +81,45 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       if (err instanceof SurfaceTooLarge) throw new Refusal(`Nothing suggested for ${level.code}. ${err.message}`);
       throw err;
     }
+  }));
+
+  server.registerTool("connect_rooms", {
+    title: "Connect rooms",
+    description:
+      "Makes the pathways that join the rooms check_floor lists as area.unreachable or room.noAccess to the " +
+      "pathways routes already reach from an entrance or a stop, in one call. Nearest room first, each is the shortest " +
+      `run through walkable floor from that network: into an area, or to within ${CLOSED_NEAR_M} m of a closed room's ` +
+      `outline, at most ${CONNECT_MAX_M} m, ${CONNECTOR_MIN_WIDTH_M} to ${CONNECTOR_MAX_WIDTH_M} m wide. Each one made joins ` +
+      `the network for the next, and a room one already runs into or passes within ${ACCESS_M} m of is not given ` +
+      "another. made lists each pathway's id, the rooms it reaches (roomIds, the one it runs to first) and its lengthM. " +
+      `It makes at most ${MAX_CONNECTORS} a call: left says how many more another call would make. islands are the ` +
+      "rooms no such run reaches, grouped by the floor they stand on: each with gapM, the straight gap from the " +
+      "network (from) to their floor or outline (to), in metres. A person joins an island, or you bridge it with a " +
+      "pathway from to to where view_plan shows open floor there, then call connect_rooms again. preview true works " +
+      "it all out and makes nothing. Every pathway made is on the setup's check step, with Undo. It counts as one " +
+      "change against the token's limit.",
+    inputSchema: {
+      floor: FLOOR,
+      preview: z.boolean().default(false).describe("true: work it out and make nothing; made's ids are then empty."),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  }, ({ floor, preview }) => runTool(ctx, async () => {
+    const model = await assembleModel(ctx.db);
+    const level = levelFor(ctx, model, floor);
+    const found = (() => {
+      try {
+        return connectRooms(model, level.id, MAX_CONNECTORS);
+      } catch (err) {
+        if (err instanceof SurfaceTooLarge || err instanceof CannotConnect) throw new Refusal(`Nothing connected on ${level.code}. ${err.message}`);
+        throw err;
+      }
+    })();
+    const ids = preview ? found.connectors.map(() => "") : await makeConnectors(ctx, model, level, found.connectors);
+    return replyJson({
+      levelId: level.id,
+      made: found.connectors.map((c, k) => ({ id: ids[k]!, roomIds: c.roomIds, lengthM: c.lengthM })),
+      islands: found.islands,
+      left: found.left,
+    });
   }));
 }

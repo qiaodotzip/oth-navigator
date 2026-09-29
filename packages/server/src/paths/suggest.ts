@@ -1,21 +1,19 @@
 import { distancePointToSegment, live, type MapModel, type Pathway, type Vec2 } from "@oth/model";
 import { connect, linkTargets } from "./connect";
-import { distanceToEdge } from "./distance";
+import { distanceToEdge, lineWidth } from "./distance";
 import { entranceGuesses, type EntranceGuess } from "./entrances";
 import { linesThroughForks, pruneSpurs, skeletonGraph } from "./graph";
-import { cellIndex, walkableRaster, type Raster } from "./raster";
+import { walkableRaster } from "./raster";
 import { crossesOf, reachesOf } from "./reach";
 import { simplify } from "./simplify";
 import { thin } from "./thin";
 
+/** The width rule lives beside the distances it reads, so connect_rooms uses it too. */
+export { MAX_WIDTH_M, MIN_WIDTH_M, WIDTH_PERCENTILE, lineWidth } from "./distance";
+
 /** Spec §7.3 step 3. */
 export const SPUR_M = 2;
 export const SIMPLIFY_M = 0.3;
-/** Spec §7.3 step 5. */
-export const MIN_WIDTH_M = 1.2;
-export const MAX_WIDTH_M = 6;
-/** Which of the distances to the edge along a line sets its width: see lineWidth. */
-export const WIDTH_PERCENTILE = 0.25;
 
 /**
  * A line runs along a pathway already drawn when this much of it lies within
@@ -46,23 +44,6 @@ export type PathSuggestion = {
   unconnected: { type: "doorway" | "stop" | "entrance"; id: string; reason: string }[];
   entranceGuesses: EntranceGuess[];
 };
-
-/**
- * Spec §7.3 step 5, but at the 25th percentile where the spec says the median:
- * twice the distance to the edge that a quarter of the line's run is closer
- * than, clamped. A pathway opens its full width all along, so a line from a
- * hall on into a 3 m gap between shops takes the gap's width, not the hall's.
- */
-export function lineWidth(points: readonly Vec2[], r: Raster, toEdge: Float32Array): number {
-  const d = points.map(p => {
-    const i = cellIndex(r, p);
-    return i < 0 ? 0 : toEdge[i]!;
-  }).sort((x, y) => x - y);
-  const rank = (d.length - 1) * WIDTH_PERCENTILE;
-  const below = Math.floor(rank);
-  const quarter = d[below]! + (d[Math.min(below + 1, d.length - 1)]! - d[below]!) * (rank - below);
-  return Math.min(MAX_WIDTH_M, Math.max(MIN_WIDTH_M, 2 * quarter));
-}
 
 const cm = (v: number) => Math.round(v * 100) / 100;
 const at = (p: Vec2): Vec2 => [cm(p[0]), cm(p[1])];

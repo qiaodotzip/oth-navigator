@@ -1,8 +1,10 @@
-import type { Vec2 } from "@oth/model";
+import { distancePointToSegment, type Vec2 } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { connect, linkTargets, REASONS, type Target } from "./connect";
-import { walkableRaster } from "./raster";
-import { doorway, floor, LEVEL, rect } from "./testing";
+import {
+  CONNECT_MAX_M, CannotConnect, ISLAND_JOIN_M, connect, connectRooms, linkTargets, REASONS, type Connector, type Target,
+} from "./connect";
+import { walkableAt, walkableRaster } from "./raster";
+import { doorway, floor, LEVEL, rect, type TestRoom } from "./testing";
 
 const corridor = walkableRaster(floor([{ footprint: rect(0, 0, 20, 4) }]), LEVEL);
 /** The corridor's centre line, as the skeleton would give it. */
@@ -92,5 +94,125 @@ describe("connect", () => {
     const empty = walkableRaster(floor([]), LEVEL);
     const { unconnected } = connect(empty, [], [entrance("gate-4", [1, 1])]);
     expect(unconnected).toEqual([{ type: "entrance", id: "gate-4", reason: REASONS.noSurface }]);
+  });
+});
+
+/**
+ * Contract v5's connect_rooms, on a hall 60 × 20 m: its gate at the west end,
+ * and one pathway, 2 m in along its south side, that routing reaches from it.
+ */
+const HALL: TestRoom = { id: "L1-hall", footprint: rect(0, 0, 60, 20) };
+const GATE = { id: "L1-gate", levelId: LEVEL, roomId: "L1-hall", point: [1, 2], nameEn: "Gate" };
+const MAIN = { id: "L1-main", levelId: LEVEL, polyline: [[1, 2], [59, 2]] as Vec2[], widthM: 2 };
+const shop = (id: string, x0: number, y0: number, x1: number, y1: number): TestRoom =>
+  ({ id, footprint: rect(x0, y0, x1, y1), kind: "room", walkable: false });
+const withGate = (rooms: TestRoom[], pathways: Record<string, unknown>[] = [], hall: TestRoom = HALL) =>
+  floor([hall, ...rooms], { entrances: [GATE], pathways: [MAIN, ...pathways] });
+/** How far a point is from a rectangle [x0, y0, x1, y1], 0 inside it. */
+const fromBox = (p: Vec2, [x0, y0, x1, y1]: number[]) =>
+  Math.hypot(Math.max(x0! - p[0], 0, p[0] - x1!), Math.max(y0! - p[1], 0, p[1] - y1!));
+const fromLine = (p: Vec2, line: readonly Vec2[]) =>
+  Math.min(...line.slice(1).map((b, k) => distancePointToSegment(p, line[k]!, b)));
+const byRoom = (made: Connector[], id: string) => made.find(c => c.roomIds[0] === id)!;
+
+describe("connectRooms (contract v5)", () => {
+  it("runs a connector from the pathway to within 1 m of each shop no pathway passes, one per shop", () => {
+    const boxes: Record<string, number[]> = { "L1-shop-a": [5, 12, 11, 18], "L1-shop-b": [25, 12, 31, 18], "L1-shop-c": [45, 12, 51, 18] };
+    const model = withGate(Object.entries(boxes).map(([id, b]) => shop(id, b[0]!, b[1]!, b[2]!, b[3]!)));
+    const { connectors, islands, left } = connectRooms(model, LEVEL);
+    expect(connectors.map(c => c.roomIds).sort()).toEqual([["L1-shop-a"], ["L1-shop-b"], ["L1-shop-c"]]);
+    const surface = walkableRaster(model, LEVEL);
+    for (const [id, box] of Object.entries(boxes)) {
+      const c = byRoom(connectors, id);
+      expect(fromBox(c.polyline.at(-1)!, box), id).toBeLessThanOrEqual(1);
+      expect(fromLine(c.polyline[0]!, MAIN.polyline), id).toBeLessThan(0.01);
+      expect(c.polyline.slice(1).every(p => walkableAt(surface, p)), id).toBe(true);
+      expect(c.lengthM, id).toBeCloseTo(9.1, 0);
+      expect(c.widthM, id).toBeGreaterThanOrEqual(1);
+      expect(c.widthM, id).toBeLessThanOrEqual(3);
+    }
+    expect(islands).toEqual([]);
+    expect(left).toBe(0);
+  });
+
+  it("skips a shop the connector before it already passes within 3 m of, and names it on that connector", () => {
+    // Shop A is nearer, so its connector comes first and ends below it, within 3 m of shop B's corner.
+    const { connectors } = connectRooms(withGate([shop("L1-shop-a", 10, 10, 11, 16), shop("L1-shop-b", 11.5, 11, 13, 16)]), LEVEL);
+    expect(connectors.map(c => c.roomIds)).toEqual([["L1-shop-a", "L1-shop-b"]]);
+  });
+
+  it("connects the nearest room first, whatever the model's order", () => {
+    const { connectors } = connectRooms(withGate([
+      shop("L1-far", 5, 14, 11, 18), shop("L1-near", 25, 8, 31, 14), shop("L1-mid", 45, 11, 51, 17),
+    ]), LEVEL);
+    expect(connectors.map(c => c.roomIds[0])).toEqual(["L1-near", "L1-mid", "L1-far"]);
+  });
+
+  it(`runs a connector on from the one before when that is nearer, so a room over ${CONNECT_MAX_M} m from the pathway is reached in steps`, () => {
+    const tall: TestRoom = { id: "L1-hall", footprint: rect(0, 0, 60, 80) };
+    const { connectors, islands } = connectRooms(withGate([shop("L1-first", 20, 30, 24, 34), shop("L1-beyond", 30, 64, 34, 68)], [], tall), LEVEL);
+    expect(connectors.map(c => c.roomIds)).toEqual([["L1-first"], ["L1-beyond"]]);
+    expect(fromLine(connectors[1]!.polyline[0]!, connectors[0]!.polyline)).toBeLessThan(0.2);
+    expect(connectors[1]!.lengthM).toBeLessThanOrEqual(CONNECT_MAX_M);
+    expect(islands).toEqual([]);
+  });
+
+  it("makes at most the number asked, and says how many are left", () => {
+    const model = withGate([shop("L1-shop-a", 5, 12, 11, 18), shop("L1-shop-b", 25, 12, 31, 18), shop("L1-shop-c", 45, 12, 51, 18)]);
+    const { connectors, left } = connectRooms(model, LEVEL, 2);
+    expect(connectors).toHaveLength(2);
+    expect(left).toBe(1);
+  });
+
+  it("puts an area 60 m from the network on an island, not a connector, with the straight gap to its floor", () => {
+    const { connectors, islands } = connectRooms(withGate([{ id: "L1-far-hall", footprint: rect(0, 62, 20, 70) }]), LEVEL);
+    expect(connectors).toEqual([]);
+    expect(islands).toHaveLength(1);
+    const [island] = islands;
+    expect(island!.roomIds).toEqual(["L1-far-hall"]);
+    expect(island!.gapM).toBeCloseTo(60.1, 1);
+    expect(fromLine(island!.from, MAIN.polyline)).toBeLessThan(0.01);
+    expect(fromBox(island!.to, [0, 62, 20, 70])).toBe(0);
+  });
+
+  it("gives an island across a wall its straight gap from the network: about 3 m, from the pathway's end over a 2 m wall", () => {
+    const { connectors, islands } = connectRooms(withGate([{ id: "L1-east-hall", footprint: rect(62, 0, 70, 20) }]), LEVEL);
+    expect(connectors).toEqual([]);
+    expect(islands).toHaveLength(1);
+    expect(islands[0]!.roomIds).toEqual(["L1-east-hall"]);
+    expect(islands[0]!.gapM).toBeCloseTo(3.1, 1);
+    expect(islands[0]!.from).toEqual([59, 2]);
+    expect(islands[0]!.to[0]).toBeCloseTo(62.13, 1);
+  });
+
+  it("groups the rooms on one island, and runs nothing from a pathway no route reaches", () => {
+    const island: TestRoom[] = [{ id: "L1-far-hall", footprint: rect(0, 62, 20, 80) }, shop("L1-far-shop", 5, 72, 9, 76)];
+    const stranded = { id: "L1-stranded", levelId: LEVEL, polyline: [[2, 64], [18, 64]], widthM: 2 };
+    const { connectors, islands } = connectRooms(withGate(island, [stranded]), LEVEL);
+    expect(connectors).toEqual([]);
+    expect(islands.map(i => i.roomIds)).toEqual([["L1-far-hall", "L1-far-shop"]]);
+    expect(fromLine(islands[0]!.from, MAIN.polyline)).toBeLessThan(0.01);
+  });
+
+  it(`makes shops standing where no floor is traced one island when they are within ${ISLAND_JOIN_M} m of each other`, () => {
+    // Rehearsal 4's L1: most rooms left stand beyond the traced floor; one island per shop came to 86.
+    const block = [shop("L1-row-1", 10, 30, 16, 36), shop("L1-row-2", 16, 30, 22, 36), shop("L1-row-3", 23.5, 30, 29, 36)];
+    const { connectors, islands } = connectRooms(withGate([...block, shop("L1-apart", 40, 33, 46, 39)]), LEVEL);
+    expect(connectors).toEqual([]);
+    // Nearest first: the row 28 m off, the shop apart 31 m.
+    expect(islands.map(i => i.roomIds)).toEqual([["L1-row-1", "L1-row-2", "L1-row-3"], ["L1-apart"]]);
+    expect(islands[0]!.gapM).toBeCloseTo(28, 0);
+    expect(islands[0]!.to[1]).toBe(30);
+  });
+
+  it("reaches only the rooms check_floor lists: a shop a pathway passes within 3 m of, or one on another floor, is left alone", () => {
+    const served = shop("L1-served", 25, 4.5, 31, 10);
+    const upstairs: TestRoom = { ...shop("L2-shop", 25, 12, 31, 18), levelId: "oth-L2" };
+    expect(connectRooms(withGate([served, upstairs]), LEVEL)).toEqual({ connectors: [], islands: [], left: 0 });
+  });
+
+  it("refuses a floor with rooms to reach but no pathway an entrance or a stop reaches", () => {
+    const model = floor([HALL, shop("L1-shop-a", 5, 12, 11, 18)], { pathways: [MAIN] });
+    expect(() => connectRooms(model, LEVEL)).toThrow(CannotConnect);
   });
 });

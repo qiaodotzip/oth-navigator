@@ -1,5 +1,11 @@
-import { live, ringCentroid, type MapModel, type Vec2 } from "@oth/model";
-import { walkableAt, type Raster } from "./raster";
+import {
+  bboxOfRing, distancePointToSegment, live, pointInPolygon, ringCentroid, segmentsProperlyIntersect, validateModel,
+  type BBox, type MapModel, type Room, type Vec2,
+} from "@oth/model";
+import { distanceToEdge, lineWidth } from "./distance";
+import { polylineLength } from "./graph";
+import { cellCentre, cellIndex, walkableAt, walkableRaster, type Raster } from "./raster";
+import { simplify } from "./simplify";
 
 export type TargetType = "doorway" | "stop" | "entrance";
 /** What spec §7.3 step 4 joins to the lines: where it is, and what it is. */
@@ -139,4 +145,496 @@ export function connect(
     else unconnected.push({ ...from, reason: near.length === 0 ? REASONS.noLine : REASONS.blocked });
   }
   return { links, unconnected };
+}
+
+/* Contract v5's connect_rooms: pathways from the network routing reaches to the rooms it doesn't. */
+
+/** A connector runs at most this far through walkable floor. */
+export const CONNECT_MAX_M = 40;
+/** A connector to a closed room ends this near its outline. */
+export const CLOSED_NEAR_M = 1;
+/** A connector's polyline is simplified this much, like suggest_paths' lines. */
+export const CONNECTOR_SIMPLIFY_M = 0.3;
+/** The width rule's answer for a connector (distance.ts), clamped to these. */
+export const CONNECTOR_MIN_WIDTH_M = 1;
+export const CONNECTOR_MAX_WIDTH_M = 3;
+/** The most connectors one call makes. */
+export const MAX_CONNECTORS = 150;
+/**
+ * Islands with rooms this near each other are one: the rooms' CLOSED_NEAR_M
+ * reaches meet. On rehearsal 4's L1 most rooms left stand where no floor is
+ * traced at all, each an island of its own, 86 in all; joined, 26.
+ */
+export const ISLAND_JOIN_M = 2 * CLOSED_NEAR_M;
+/**
+ * room.noAccess's own distance: a room is served once a pathway passes this
+ * near it. It is the model's ROOM_ACCESS_M (validation/rules/access.ts), which
+ * the model doesn't export; the renderer keeps a copy too.
+ */
+export const ACCESS_M = 3;
+
+/** One pathway to make: from the network to the first of roomIds; the others it reaches on the way. */
+export type Connector = { polyline: Vec2[]; widthM: number; roomIds: string[]; lengthM: number };
+/** Rooms no run of CONNECT_MAX_M reaches, and the straight gap from the network (from) to their floor (to). */
+export type Island = { roomIds: string[]; gapM: number; from: Vec2; to: Vec2 };
+export type RoomConnectors = { connectors: Connector[]; islands: Island[]; left: number };
+
+/** A floor connect_rooms has nothing to run connectors from or through, and why, for a person. */
+export class CannotConnect extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CannotConnect";
+  }
+}
+
+/** check_floor's codes for a room no route reaches (contract v3). */
+const UNREACHED = new Set(["area.unreachable", "room.noAccess"]);
+
+/**
+ * A room check_floor lists. enter (area.unreachable): a connector must run
+ * into it. near (room.noAccess): one must pass within ACCESS_M of it. goals:
+ * the walkable cells a connector to it may end on.
+ */
+type Unreached = { room: Room; box: BBox; enter: boolean; near: boolean; goals: number[] };
+
+const cm = (v: number) => Math.round(v * 100) / 100;
+const at = (p: Vec2): Vec2 => [cm(p[0]), cm(p[1])];
+const round1 = (v: number) => Math.round(v * 10) / 10;
+const padded = (b: BBox, m: number): BBox => ({ minX: b.minX - m, minY: b.minY - m, maxX: b.maxX + m, maxY: b.maxY + m });
+const meet = (a: BBox, b: BBox) => a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
+
+/** A point every `step` or less along a line, both ends included, with the segment it lies on. */
+function along(line: readonly Vec2[], step: number, visit: (p: Vec2, a: Vec2, b: Vec2) => void): void {
+  for (let k = 1; k < line.length; k++) {
+    const a = line[k - 1]!;
+    const b = line[k]!;
+    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+    for (let s = k === 1 ? 0 : 1; s <= n; s++) visit([a[0] + ((b[0] - a[0]) * s) / n, a[1] + ((b[1] - a[1]) * s) / n], a, b);
+  }
+}
+
+/** Each walkable cell the box touches, with its centre. */
+function walkableIn(r: Raster, box: BBox, visit: (i: number, centre: Vec2) => void): void {
+  const c0 = Math.max(0, Math.floor((box.minX - r.originX) / r.cellM));
+  const c1 = Math.min(r.cols - 1, Math.floor((box.maxX - r.originX) / r.cellM));
+  const r0 = Math.max(0, Math.floor((box.minY - r.originY) / r.cellM));
+  const r1 = Math.min(r.rows - 1, Math.floor((box.maxY - r.originY) / r.cellM));
+  for (let row = r0; row <= r1; row++) {
+    for (let col = c0; col <= c1; col++) {
+      const i = row * r.cols + col;
+      if (r.cells[i]) visit(i, [r.originX + (col + 0.5) * r.cellM, r.originY + (row + 0.5) * r.cellM]);
+    }
+  }
+}
+
+function toOutline(p: Vec2, ring: readonly Vec2[]): number {
+  let best = Infinity;
+  for (let k = 0; k < ring.length; k++) best = Math.min(best, distancePointToSegment(p, ring[k]!, ring[(k + 1) % ring.length]!));
+  return best;
+}
+
+/**
+ * Where a connector to the room may end: into an area, on a walkable cell
+ * inside it; to a closed room, or an area with no walkable cell left inside,
+ * on one within CLOSED_NEAR_M of its outline.
+ */
+function goalsOf(r: Raster, room: Room): number[] {
+  const box = bboxOfRing(room.footprint);
+  if (room.walkable) {
+    const inside: number[] = [];
+    walkableIn(r, box, (i, c) => {
+      if (pointInPolygon(c, room.footprint, room.holes)) inside.push(i);
+    });
+    if (inside.length > 0) return inside;
+  }
+  const near: number[] = [];
+  walkableIn(r, padded(box, CLOSED_NEAR_M), (i, c) => {
+    if (toOutline(c, room.footprint) <= CLOSED_NEAR_M) near.push(i);
+  });
+  return near;
+}
+
+/**
+ * room.noAccess's measure, as the model takes it (access.ts's
+ * nearestPathwayDistance): 0 when a point of the line is in the room, else the
+ * least distance between the line's segments and the room's outline.
+ */
+function accessDistance(line: readonly Vec2[], room: Room): number {
+  if (line.some(p => pointInPolygon(p, room.footprint, room.holes))) return 0;
+  const ring = room.footprint;
+  let best = Infinity;
+  for (let i = 1; i < line.length; i++) {
+    const a1 = line[i - 1]!;
+    const a2 = line[i]!;
+    for (let j = 0; j < ring.length; j++) {
+      const b1 = ring[j]!;
+      const b2 = ring[(j + 1) % ring.length]!;
+      const d = segmentsProperlyIntersect(a1, a2, b1, b2) ? 0 : Math.min(
+        distancePointToSegment(a1, b1, b2), distancePointToSegment(a2, b1, b2),
+        distancePointToSegment(b1, a1, a2), distancePointToSegment(b2, a1, a2),
+      );
+      best = Math.min(best, d);
+    }
+  }
+  return best;
+}
+
+/** How far apart two rooms' outlines are, 0 where one overlaps or holds the other. */
+function roomsApart(a: Room, b: Room): number {
+  const closed = (r: Room) => [...r.footprint, r.footprint[0]!];
+  return Math.min(accessDistance(closed(a), b), accessDistance(closed(b), a));
+}
+
+/**
+ * Whether check_floor would stop listing the room once this line is a
+ * pathway joined to the network: it runs into the room when that is what it
+ * lacks, and passes within ACCESS_M of it when that is.
+ */
+function reachedBy(u: Unreached, line: readonly Vec2[], box: BBox, points: readonly Vec2[]): boolean {
+  if (!meet(padded(box, ACCESS_M), u.box)) return false;
+  if (u.enter && !points.some(p => pointInPolygon(p, u.room.footprint, u.room.holes))) return false;
+  return !u.near || accessDistance(line, u.room) <= ACCESS_M;
+}
+
+/** A min-heap of cells by distance, in typed arrays that grow as it fills. */
+class CellQueue {
+  private keys = new Float64Array(4096);
+  private cells = new Int32Array(4096);
+  size = 0;
+
+  /** The distance of the cell pop gives next. */
+  get top(): number {
+    return this.keys[0]!;
+  }
+
+  push(key: number, cell: number): void {
+    if (this.size === this.keys.length) {
+      const keys = new Float64Array(this.size * 2);
+      keys.set(this.keys);
+      this.keys = keys;
+      const cells = new Int32Array(this.size * 2);
+      cells.set(this.cells);
+      this.cells = cells;
+    }
+    let k = this.size++;
+    while (k > 0) {
+      const parent = (k - 1) >> 1;
+      if (this.keys[parent]! <= key) break;
+      this.keys[k] = this.keys[parent]!;
+      this.cells[k] = this.cells[parent]!;
+      k = parent;
+    }
+    this.keys[k] = key;
+    this.cells[k] = cell;
+  }
+
+  pop(): number {
+    const cell = this.cells[0]!;
+    const n = --this.size;
+    const key = this.keys[n]!;
+    const last = this.cells[n]!;
+    let k = 0;
+    for (;;) {
+      let child = 2 * k + 1;
+      if (child >= n) break;
+      if (child + 1 < n && this.keys[child + 1]! < this.keys[child]!) child++;
+      if (this.keys[child]! >= key) break;
+      this.keys[k] = this.keys[child]!;
+      this.cells[k] = this.cells[child]!;
+      k = child;
+    }
+    this.keys[k] = key;
+    this.cells[k] = last;
+    return cell;
+  }
+}
+
+/** The point on the lines nearest `p`. */
+function nearestOn(lines: readonly (readonly Vec2[])[], p: Vec2): Vec2 {
+  let best: Vec2 = lines[0]![0]!;
+  let bestD = Infinity;
+  for (const line of lines) {
+    for (let k = 1; k < line.length; k++) {
+      const q = closestOn(p, line[k - 1]!, line[k]!);
+      const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (d < bestD) {
+        best = q;
+        bestD = d;
+      }
+    }
+  }
+  return best;
+}
+
+/** The point on `line` nearest the lines, and the point on the lines nearest it. */
+function nearestPair(line: readonly Vec2[], lines: readonly (readonly Vec2[])[]): [Vec2, Vec2] {
+  let best: [Vec2, Vec2] = [line[0]!, lines[0]![0]!];
+  let bestD = Infinity;
+  const consider = (p: Vec2, q: Vec2) => {
+    const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    if (d < bestD) {
+      best = [p, q];
+      bestD = d;
+    }
+  };
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    for (const other of lines) {
+      for (let k = 1; k < other.length; k++) {
+        const c = other[k - 1]!;
+        const d = other[k]!;
+        // Two segments that don't cross are nearest at an end of one of them.
+        consider(a, closestOn(a, c, d));
+        consider(b, closestOn(b, c, d));
+        consider(closestOn(c, a, b), c);
+        consider(closestOn(d, a, b), d);
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * The rooms no run reached, grouped by the stretch of floor they lie on that
+ * the search never got to (8-neighbour, as it walks), each stretch with the
+ * straight gap from the network to its cell nearest it. A room with no floor
+ * beside it at all is measured to its outline. Then groups with rooms within
+ * ISLAND_JOIN_M of each other are joined: a block of shops standing where no
+ * floor is traced is one island, not one per shop.
+ */
+function islandsOf(r: Raster, dist: Float64Array, unreached: readonly Unreached[], network: readonly Vec2[][]): Island[] {
+  if (unreached.length === 0) return [];
+  // How far every cell is from the network: the distance to the edge, with the lines as the edge.
+  const off = new Uint8Array(r.cols * r.rows).fill(1);
+  for (const line of network) {
+    along(line, r.cellM / 2, p => {
+      const i = cellIndex(r, p);
+      if (i >= 0) off[i] = 0;
+    });
+  }
+  const away = distanceToEdge({ ...r, cells: off });
+  const label = new Int32Array(r.cols * r.rows).fill(-1);
+  const nearest: number[] = [];
+  const stretchOf = (seed: number): number => {
+    if (label[seed]! >= 0) return label[seed]!;
+    const id = nearest.length;
+    let best = seed;
+    label[seed] = id;
+    const stack = [seed];
+    while (stack.length > 0) {
+      const i = stack.pop()!;
+      if (away[i]! < away[best]!) best = i;
+      const col = i % r.cols;
+      const row = (i - col) / r.cols;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const c = col + dc;
+          const w = row + dr;
+          if (c < 0 || w < 0 || c >= r.cols || w >= r.rows) continue;
+          const j = w * r.cols + c;
+          if (!r.cells[j] || dist[j] !== Infinity || label[j]! >= 0) continue;
+          label[j] = id;
+          stack.push(j);
+        }
+      }
+    }
+    nearest.push(best);
+    return id;
+  };
+  const byKey = new Map<string, { members: Unreached[]; to: Vec2 }>();
+  for (const u of unreached) {
+    let key: string;
+    let to: Vec2;
+    if (u.goals.length > 0) {
+      const stretch = stretchOf(u.goals.reduce((b, i) => (away[i]! < away[b]! ? i : b)));
+      key = `floor ${stretch}`;
+      to = cellCentre(r, nearest[stretch]!);
+    } else {
+      key = `room ${u.room.id}`;
+      to = nearestPair([...u.room.footprint, u.room.footprint[0]!], network)[0];
+    }
+    const group = byKey.get(key) ?? { members: [], to };
+    group.members.push(u);
+    byKey.set(key, group);
+  }
+  const groups = [...byKey.values()].map(g => {
+    const from = nearestOn(network, g.to);
+    return { ...g, from, gap: Math.hypot(g.to[0] - from[0], g.to[1] - from[1]) };
+  });
+  // Groups with rooms within ISLAND_JOIN_M of each other are one island, measured where it is nearest.
+  const parent = groups.map((_, k) => k);
+  const root = (k: number): number => (parent[k] === k ? k : (parent[k] = root(parent[k]!)));
+  for (let a = 0; a < groups.length; a++) {
+    for (let b = a + 1; b < groups.length; b++) {
+      if (root(a) === root(b)) continue;
+      const near = groups[a]!.members.some(x => groups[b]!.members.some(y =>
+        meet(padded(x.box, ISLAND_JOIN_M), y.box) && roomsApart(x.room, y.room) <= ISLAND_JOIN_M));
+      if (near) parent[root(a)] = root(b);
+    }
+  }
+  const islands = new Map<number, Island & { gap: number }>();
+  groups.forEach((g, k) => {
+    const had = islands.get(root(k));
+    const roomIds = [...(had?.roomIds ?? []), ...g.members.map(u => u.room.id)];
+    const nearer = !had || g.gap < had.gap;
+    islands.set(root(k), nearer
+      ? { roomIds, gap: g.gap, gapM: round1(g.gap), from: at(g.from), to: at(g.to) }
+      : { ...had, roomIds });
+  });
+  return [...islands.values()]
+    .map(({ gap: _gap, ...island }): Island => ({ ...island, roomIds: island.roomIds.sort() }))
+    .sort((a, b) => a.gapM - b.gapM || a.roomIds[0]!.localeCompare(b.roomIds[0]!));
+}
+
+/**
+ * Contract v5's connect_rooms, worked out; nothing is saved here.
+ *
+ * Targets are the rooms on the floor that check_floor lists as area.unreachable
+ * or room.noAccess, from the model's own validation (validation reports no
+ * unreached stop, so there are none of those). Sources are the floor's live
+ * pathways routing reaches from an entrance or a stop: every one but those the
+ * same validation calls pathway.disconnected, none while the building has no
+ * entrance.
+ *
+ * One multi-source search walks suggest_paths' walkable raster (8-neighbour,
+ * never cutting a blocked corner) out from the sources, CONNECT_MAX_M at most.
+ * The first cell it takes where a connector to an unreached room may end (goalsOf)
+ * makes that room's connector: nearest room first. The connector starts at the
+ * foot of its first cell on the line it leaves, is simplified by
+ * CONNECTOR_SIMPLIFY_M, takes the width rule clamped to 1–3 m, and becomes a
+ * source itself, so the search carries on from it too; every room check_floor
+ * would then stop listing (reachedBy) goes on it and is skipped. What the search
+ * never reaches is on an island (islandsOf).
+ *
+ * Every connector is worked out, so `left` says how many past `max` a second
+ * call would make; the islands are measured from all of them.
+ */
+export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECTORS): RoomConnectors {
+  const rooms = new Map(live(model.rooms).filter(r => r.levelId === levelId).map(r => [r.id, r]));
+  const issues = validateModel(model).issues.filter(i => i.levelId === levelId);
+  const codes = new Map<string, Set<string>>();
+  for (const i of issues) {
+    if (UNREACHED.has(i.code) && rooms.has(i.entityId)) codes.set(i.entityId, (codes.get(i.entityId) ?? new Set()).add(i.code));
+  }
+  if (codes.size === 0) return { connectors: [], islands: [], left: 0 };
+
+  const cut = new Set(issues.filter(i => i.code === "pathway.disconnected").map(i => i.entityId));
+  const reached = live(model.entrances).length === 0
+    ? []
+    : live(model.pathways).filter(p => p.levelId === levelId && !cut.has(p.id));
+  if (reached.length === 0) {
+    throw new CannotConnect("No pathway there is reached from an entrance or a stop yet: add the entrances and the main lines first.");
+  }
+  const raster = walkableRaster(model, levelId);
+  if (raster.cols === 0) throw new CannotConnect("It has no walkable area to run a pathway through.");
+
+  const { cols, rows, cells, cellM } = raster;
+  const n = cols * rows;
+  const toEdge = distanceToEdge(raster);
+  const dist = new Float64Array(n).fill(Infinity);
+  const prev = new Int32Array(n).fill(-1);
+  /** For each cell a line runs through, where a connector leaving it starts: the foot of its centre on the line. */
+  const start = new Map<number, Vec2>();
+  const queue = new CellQueue();
+  const network: Vec2[][] = [];
+  const seed = (line: readonly Vec2[]) => {
+    network.push([...line]);
+    along(line, cellM / 2, (p, a, b) => {
+      const i = cellIndex(raster, p);
+      if (i < 0 || !cells[i] || dist[i] === 0) return;
+      dist[i] = 0;
+      prev[i] = -1;
+      start.set(i, closestOn(cellCentre(raster, i), a, b));
+      queue.push(0, i);
+    });
+  };
+  for (const p of reached) seed(p.polyline);
+
+  const targets: Unreached[] = [...codes.keys()].sort().map(id => {
+    const room = rooms.get(id)!;
+    const has = codes.get(id)!;
+    return {
+      room, box: bboxOfRing(room.footprint), enter: has.has("area.unreachable"), near: has.has("room.noAccess"), goals: goalsOf(raster, room),
+    };
+  });
+  // Which targets may end at each cell, as linked lists.
+  const goalHead = new Int32Array(n).fill(-1);
+  const goalNext: number[] = [];
+  const goalOf: number[] = [];
+  targets.forEach((t, k) => {
+    for (const i of t.goals) {
+      goalOf.push(k);
+      goalNext.push(goalHead[i]!);
+      goalHead[i] = goalOf.length - 1;
+    }
+  });
+
+  const done = new Uint8Array(targets.length);
+  let open = targets.length;
+  const connectors: Connector[] = [];
+  const diagonal = cellM * Math.SQRT2;
+  while (queue.size > 0 && open > 0) {
+    const d = queue.top;
+    const i = queue.pop();
+    if (d > dist[i]!) continue;
+    let hit = -1;
+    for (let e = goalHead[i]!; e >= 0 && hit < 0; e = goalNext[e]!) if (!done[goalOf[e]!]) hit = goalOf[e]!;
+    if (hit >= 0) {
+      done[hit] = 1;
+      open--;
+      const path: Vec2[] = [];
+      let c = i;
+      for (; dist[c]! > 0; c = prev[c]!) path.push(cellCentre(raster, c));
+      // A room whose goal lies on a line already needs no connector; the search carries on from here.
+      if (path.length > 0) {
+        const raw = [start.get(c)!, ...path.reverse()];
+        const polyline = simplify(raw, CONNECTOR_SIMPLIFY_M).map(at);
+        const box = bboxOfRing(polyline);
+        const points: Vec2[] = [];
+        along(polyline, cellM / 2, p => points.push(p));
+        const roomIds = [targets[hit]!.room.id];
+        targets.forEach((u, k) => {
+          if (done[k] || !reachedBy(u, polyline, box, points)) return;
+          done[k] = 1;
+          open--;
+          roomIds.push(u.room.id);
+        });
+        connectors.push({
+          polyline,
+          widthM: round1(lineWidth(raw, raster, toEdge, CONNECTOR_MIN_WIDTH_M, CONNECTOR_MAX_WIDTH_M)),
+          roomIds,
+          lengthM: round1(polylineLength(polyline)),
+        });
+        // The connector's own cells go in at 0, this one's included: it is taken again from there.
+        seed(polyline);
+        continue;
+      }
+    }
+    const col = i % cols;
+    const row = (i - col) / cols;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dc === 0 && dr === 0) continue;
+        const cc = col + dc;
+        const rr = row + dr;
+        if (cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
+        const j = rr * cols + cc;
+        if (!cells[j]) continue;
+        // A diagonal step passes between its two side cells: both must be floor.
+        if (dc !== 0 && dr !== 0 && (!cells[row * cols + cc] || !cells[rr * cols + col])) continue;
+        const nd = d + (dc !== 0 && dr !== 0 ? diagonal : cellM);
+        if (nd > CONNECT_MAX_M || nd >= dist[j]!) continue;
+        dist[j] = nd;
+        prev[j] = i;
+        queue.push(nd, j);
+      }
+    }
+  }
+
+  return {
+    connectors: connectors.slice(0, max),
+    islands: islandsOf(raster, dist, targets.filter((_, k) => !done[k]), network),
+    left: Math.max(0, connectors.length - max),
+  };
 }

@@ -478,6 +478,7 @@ describe("MCP end to end", () => {
       "list_floors", "get_floor", "get", "check_floor", "list_frames", "view_frame", "view_plan",
       "tag_frame", "review_place", "bind_place", "create", "update", "delete", "restore",
       "list_drafts", "decide_drafts", "make_stop", "suggest_object_spots", "step_status", "finish_step", "suggest_paths",
+      "connect_rooms",
     ]));
     await createEntity(f.db, "room", ROOM, f.wei.id);
     await updateEntity(f.db, "room", ROOM.id, 0, { nameEn: "Starbucks" }, f.wei.id);
