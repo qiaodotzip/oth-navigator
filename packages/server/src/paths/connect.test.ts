@@ -205,6 +205,14 @@ describe("connectRooms (contract v5)", () => {
     expect(islands[0]!.to[1]).toBe(30);
   });
 
+  it("measures an island that has walkable floor to that floor, though a shop on it with no floor beside it is nearer", () => {
+    // The shop is 28 m off and 1.5 m from the far hall: one island. A bridge to its floor lets connect_rooms reach the rest.
+    const { islands } = connectRooms(withGate([{ id: "L1-far-hall", footprint: rect(0, 62, 20, 80) }, shop("L1-between", 5, 30, 9, 60.5)]), LEVEL);
+    expect(islands.map(i => i.roomIds)).toEqual([["L1-between", "L1-far-hall"]]);
+    expect(islands[0]!.gapM).toBeCloseTo(60.1, 1);
+    expect(fromBox(islands[0]!.to, [0, 62, 20, 80])).toBe(0);
+  });
+
   it("reaches only the rooms check_floor lists: a shop a pathway passes within 3 m of, or one on another floor, is left alone", () => {
     const served = shop("L1-served", 25, 4.5, 31, 10);
     const upstairs: TestRoom = { ...shop("L2-shop", 25, 12, 31, 18), levelId: "oth-L2" };

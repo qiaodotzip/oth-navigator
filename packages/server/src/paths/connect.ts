@@ -401,7 +401,8 @@ function nearestPair(line: readonly Vec2[], lines: readonly (readonly Vec2[])[])
  * straight gap from the network to its cell nearest it. A room with no floor
  * beside it at all is measured to its outline. Then groups with rooms within
  * ISLAND_JOIN_M of each other are joined: a block of shops standing where no
- * floor is traced is one island, not one per shop.
+ * floor is traced is one island, not one per shop. A joined island is
+ * measured to its nearest floor, or to its nearest outline when it has none.
  */
 function islandsOf(r: Raster, dist: Float64Array, unreached: readonly Unreached[], network: readonly Vec2[][]): Island[] {
   if (unreached.length === 0) return [];
@@ -442,7 +443,7 @@ function islandsOf(r: Raster, dist: Float64Array, unreached: readonly Unreached[
     nearest.push(best);
     return id;
   };
-  const byKey = new Map<string, { members: Unreached[]; to: Vec2 }>();
+  const byKey = new Map<string, { members: Unreached[]; to: Vec2; floor: boolean }>();
   for (const u of unreached) {
     let key: string;
     let to: Vec2;
@@ -454,7 +455,7 @@ function islandsOf(r: Raster, dist: Float64Array, unreached: readonly Unreached[
       key = `room ${u.room.id}`;
       to = nearestPair([...u.room.footprint, u.room.footprint[0]!], network)[0];
     }
-    const group = byKey.get(key) ?? { members: [], to };
+    const group = byKey.get(key) ?? { members: [], to, floor: u.goals.length > 0 };
     group.members.push(u);
     byKey.set(key, group);
   }
@@ -462,7 +463,9 @@ function islandsOf(r: Raster, dist: Float64Array, unreached: readonly Unreached[
     const from = nearestOn(network, g.to);
     return { ...g, from, gap: Math.hypot(g.to[0] - from[0], g.to[1] - from[1]) };
   });
-  // Groups with rooms within ISLAND_JOIN_M of each other are one island, measured where it is nearest.
+  // Groups with rooms within ISLAND_JOIN_M of each other are one island, measured to its floor where it has
+  // some, nearest first: a bridge there lets connect_rooms reach the rest of it. L1's hawker centre was one
+  // with shops standing where no floor is traced, and read 6.7 m off, to a shop, not 29.7 m, to its floor.
   const parent = groups.map((_, k) => k);
   const root = (k: number): number => (parent[k] === k ? k : (parent[k] = root(parent[k]!)));
   for (let a = 0; a < groups.length; a++) {
@@ -473,17 +476,17 @@ function islandsOf(r: Raster, dist: Float64Array, unreached: readonly Unreached[
       if (near) parent[root(a)] = root(b);
     }
   }
-  const islands = new Map<number, Island & { gap: number }>();
+  const islands = new Map<number, Island & { gap: number; floor: boolean }>();
   groups.forEach((g, k) => {
     const had = islands.get(root(k));
     const roomIds = [...(had?.roomIds ?? []), ...g.members.map(u => u.room.id)];
-    const nearer = !had || g.gap < had.gap;
-    islands.set(root(k), nearer
-      ? { roomIds, gap: g.gap, gapM: round1(g.gap), from: at(g.from), to: at(g.to) }
+    const better = !had || (g.floor && !had.floor) || (g.floor === had.floor && g.gap < had.gap);
+    islands.set(root(k), better
+      ? { roomIds, gap: g.gap, floor: g.floor, gapM: round1(g.gap), from: at(g.from), to: at(g.to) }
       : { ...had, roomIds });
   });
   return [...islands.values()]
-    .map(({ gap: _gap, ...island }): Island => ({ ...island, roomIds: island.roomIds.sort() }))
+    .map(({ gap: _gap, floor: _floor, ...island }): Island => ({ ...island, roomIds: island.roomIds.sort() }))
     .sort((a, b) => a.gapM - b.gapM || a.roomIds[0]!.localeCompare(b.roomIds[0]!));
 }
 
