@@ -347,10 +347,20 @@ describe("what rehearsal 4 taught draw_paths (Task 13): the server connects the 
 
   it("bridges an island only where view_plan shows open floor, and names the rest for a person with their gap", () => {
     expect(text).toContain(
-      "For each island, look with `view_plan` at a box round its from and to: only where it shows open floor between them, " +
-      "`create` a bridge, a pathway with polyline [from, to], then call `connect_rooms` again. Otherwise name the island for a person, " +
-      "with its rooms and gapM.",
+      "For another island, look with `view_plan` at a box round its from and to: only where it shows open floor between them, " +
+      "`create` a bridge, a pathway with polyline [from, to]. After either, call `connect_rooms` again. " +
+      "Name each island left for a person, with its rooms and gapM.",
     );
+  });
+
+  it("makes the closed room an island lies inside an area, walkable, names it in the report, then connects again (contract v5 amendment)", () => {
+    expect(text).toContain(
+      'An island with inside lies in a room traced closed round open floor: `update` that room to kind "area" and walkable true, ' +
+      'and name each in your report: "made Commercial & F&B North an area so routes reach the 14 rooms inside it". ',
+    );
+    // Before the bridges: a container made an area needs no bridge over its own floor.
+    expect(text.indexOf("An island with inside")).toBeLessThan(text.indexOf("For another island"));
+    expect(text).not.toContain("`inside`");
   });
 
   it("no longer draws the rooms' pathways by hand in rounds of check_floor: the server does it", () => {
