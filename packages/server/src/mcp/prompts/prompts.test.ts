@@ -265,7 +265,7 @@ describe("what the re-review and rehearsal 2 taught each prompt (Task 10)", () =
 
   it("draw_paths draws no link twice, and stops by check_floor's codes", () => {
     const text = promptText(drawPaths, "L1");
-    expect(text).toContain("Create each link as a short pathway too, unless `get_floor`'s pathways already has one between the same two points.");
+    expect(text).toContain("as a short pathway, unless `get_floor`'s pathways already has one between the same two points");
     expect(text).toContain(
       'Stop when `check_floor` with floor "L1" and codes ["area.unreachable", "room.noAccess"] gives none, or only ones a person must fix: ' +
       "give how many, and name up to 20.",
@@ -326,31 +326,50 @@ describe("what rehearsal 3 taught draw_paths (Task 12): the whole first pass", (
     expect(text).not.toContain('keep it only if a link ends on it;');
   });
 
-  it("loops check_floor as its own step, at most 5 rounds, and doesn't stop while a room can still be reached", () => {
-    expect(text).toContain(
-      '7. The loop: call `check_floor` with floor "L1" and codes ["area.unreachable", "room.noAccess"]. ' +
-      "For each room it lists, draw a line you left out only when it is on network 0, its crosses is empty and its reaches has that room. ",
-    );
-    expect(text).toContain(
-      "Then call `check_floor` again: that is one round. Do at most 5 rounds, and stop early only when a round reaches no new room: " +
-      "don't stop while `check_floor` lists a room you can still reach.",
-    );
-    // Rooms only a person can fix meet the stop rule at once: no sentence may say one check is never a finished run.
-    expect(text).not.toContain("One `check_floor` and stop is not a finished run.");
-  });
-
-  it("brings back a line the trim left out only as the trim allows, and bridges to an island only over open floor", () => {
-    expect(text).toContain(
-      "For a room on an island, first draw a short bridge from the nearest drawn line, only where `view_plan` shows open floor between them, " +
-      "then that island's lines. Otherwise draw a short pathway into the room, or name it for a person.",
-    );
-    // The field names are words, not tools: never backticked, so the tool checks don't take them for tools.
-    for (const field of ["entranceGuesses", "reaches", "crosses"]) expect(text).not.toContain(`\`${field}\``);
-  });
-
   it("stays about as long as it was: sentences replaced, not piled on", () => {
     // Its steps ran to 3,356 characters before Task 12.
     expect(drawPaths.steps("L1").join("\n").length).toBeLessThan(3356 * 1.15);
+  });
+});
+
+describe("what rehearsal 4 taught draw_paths (Task 13): the server connects the rooms", () => {
+  const text = promptText(drawPaths, "L1");
+
+  it("calls connect_rooms after the lines and entrances, again while left is above 0, then check_floor once", () => {
+    expect(drawPaths.tools).toContain("connect_rooms");
+    expect(text).toContain(
+      '7. Rooms no route reaches: call `connect_rooms` with floor "L1". It makes their pathways itself, nearest first, ' +
+      "and gives islands: rooms it can't reach, each with gapM, the gap from the network (from) to their floor (to). " +
+      'Call it again while left is above 0. Then call `check_floor` once with floor "L1" and codes ["area.unreachable", "room.noAccess"].',
+    );
+    expect(text.indexOf("call `connect_rooms`")).toBeGreaterThan(text.indexOf("5. Check them over the drawing"));
+  });
+
+  it("bridges an island only where view_plan shows open floor, and names the rest for a person with their gap", () => {
+    expect(text).toContain(
+      "For each island, look with `view_plan` at a box round its from and to: only where it shows open floor between them, " +
+      "`create` a bridge, a pathway with polyline [from, to], then call `connect_rooms` again. Otherwise name the island for a person, " +
+      "with its rooms and gapM.",
+    );
+  });
+
+  it("no longer draws the rooms' pathways by hand in rounds of check_floor: the server does it", () => {
+    expect(text).not.toContain("7. The loop");
+    expect(text).not.toContain("For each room it lists, draw a line you left out");
+    expect(text).not.toContain("Do at most 5 rounds");
+    expect(text).not.toContain("Otherwise draw a short pathway into the room");
+  });
+
+  it("creates a link only onto a line that is drawn, asking suggest_paths again once the lines are in", () => {
+    expect(text).toContain(
+      'Then call `suggest_paths` with floor "L1" again, and `create` each link whose ontoDrawn is true as a short pathway, ' +
+      "unless `get_floor`'s pathways already has one between the same two points.",
+    );
+    expect(text).not.toContain("Create each link as a short pathway too");
+    // The field names are words, not tools: never backticked, so the tool checks don't take them for tools.
+    for (const field of ["entranceGuesses", "reaches", "crosses", "ontoDrawn", "gapM", "left", "islands"]) {
+      expect(text).not.toContain(`\`${field}\``);
+    }
   });
 });
 
