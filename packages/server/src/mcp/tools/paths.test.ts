@@ -37,7 +37,7 @@ describe("suggest_paths", () => {
       lines: [{
         polyline: [[2.13, 1.88], [17.88, 1.88]], widthM: 3.8, ends: ["end", "end"], network: 0, drawn: false, reaches: [], crosses: [],
       }],
-      links: [{ from: { type: "doorway", id: "L1-door-shop" }, segment: [[10, 4], [10, 1.88]] }],
+      links: [{ from: { type: "doorway", id: "L1-door-shop" }, segment: [[10, 4], [10, 1.88]], ontoDrawn: false }],
       unconnected: [{ type: "entrance", id: "L1-gate-4", reason: "It is not on or beside a walkable area." }],
       entranceGuesses: [],
     });
@@ -92,7 +92,8 @@ describe("suggest_paths", () => {
       "only at a fork", "longest first", "ends", "network", "blocks Publish", "no width", "view_plan", "50 m", "lift, escalator or stair stop", "levelId",
       "drawn is true", "70%", "within 30°", "crosses",
       "reaches lists the rooms", "within 1 m", "less the rooms its midpoint lies in", "crosses lists the rooms of kind room", "more than 2 m",
-      "entranceGuesses", "0.5 m inside", "no room 1 m beyond it", "a person moves in Check",
+      "entranceGuesses", "1 m inside", "further in, up to 3 m", "at least 3 m apart", "no room 1 m beyond it", "a person moves in Check",
+      "ontoDrawn",
     ]) {
       expect(description).toContain(words);
     }

@@ -206,6 +206,17 @@ describe("suggestPaths", () => {
     expect(lines.map(l => l.drawn)).toEqual([true, false]);
   });
 
+  it("says a link is ontoDrawn when the line it ends on is drawn already (contract v5)", () => {
+    // The plus again, its main corridor drawn: a doorway on the main corridor's wall links onto the drawn line,
+    // one at the far end of the cross corridor onto the line not drawn.
+    const plus: Pt[] = [[0, 16], [27, 16], [27, 12], [33, 12], [33, 16], [60, 16], [60, 24], [33, 24], [33, 28], [27, 28], [27, 24], [0, 24]];
+    const { links } = suggest([{ footprint: plus }], {
+      pathways: [{ id: "pw-main", levelId: LEVEL, widthM: 6, polyline: [[0, 20], [60, 20]] }],
+      doorways: [doorway("door-main", [[9, 16], [11, 16]]), doorway("door-cross", [[29, 28], [31, 28]])],
+    });
+    expect(links.map(l => [l.from.id, l.ontoDrawn])).toEqual([["door-cross", false], ["door-main", true]]);
+  });
+
   it("does a floor the size of L1 with 36 courtyards in well under 2 s, each aisle one line", () => {
     const holes: Pt[][] = [];
     for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) holes.push(rect(10 + i * 32, 10 + j * 35, 30 + i * 32, 30 + j * 35));

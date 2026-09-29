@@ -14,7 +14,9 @@ export const placeThings: SetupPrompt = {
     "2. For each confirmed place not bound yet, and not an object (objectKindId) or a walkway (pathwayKindId), find its room: match the survey's name against the rooms' names, and look with `view_plan` around the room. " +
       "Where the names alone don't settle it, look at the place's frames with `view_frame` (`get_floor`'s places give up to 3 for each). " +
       "Bind when they agree: `bind_place`, with both versions (a version `get_floor` leaves out is 0).",
-    "3. Leave a place you can't place with confidence, and name it in your report.",
+    "3. Don't bind a feature that stands in an area, such as a piano, a staircase or a sign: name it for a person, as an object kind or a stop. " +
+      "When `bind_place` refuses because the room already has a place, don't try again: name it. " +
+      "Name too any other place you can't place with confidence.",
     "Objects:",
     `4. Call \`suggest_object_spots\` with floor "${floor}". Each suggestion is one object, with the frames it was seen in, the rooms that fixed where it is (anchors), a confidence, and the placement you would pass to \`create\`. It skips what is on the map already, so asking again gives only what is left. unplaced lists the sightings it couldn't place, each with why: name them in your report.`,
     "5. Check each one against its frames (`view_frame`) and the drawing (`view_plan` around one of its rooms). Low confidence is a guess: look hardest at those. A suggestion with no anchors was placed from a frame nearby that had some; if several share one position, don't place them, and name them.",

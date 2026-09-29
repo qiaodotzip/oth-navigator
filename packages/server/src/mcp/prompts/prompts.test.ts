@@ -354,6 +354,23 @@ describe("what rehearsal 3 taught draw_paths (Task 12): the whole first pass", (
   });
 });
 
+describe("what rehearsal 4 taught place_things (Task 13)", () => {
+  const text = promptText(placeThings, "L1");
+
+  it("doesn't bind a feature standing in an area, and names it for a person as an object kind or a stop", () => {
+    expect(text).toContain(
+      "3. Don't bind a feature that stands in an area, such as a piano, a staircase or a sign: name it for a person, " +
+      "as an object kind or a stop.",
+    );
+  });
+
+  it("doesn't retry a bind refused because the room already has a place, and replaces the old sentence rather than adding to it", () => {
+    expect(text).toContain("When `bind_place` refuses because the room already has a place, don't try again: name it.");
+    expect(text).toContain("Name too any other place you can't place with confidence.");
+    expect(text).not.toContain("Leave a place you can't place with confidence, and name it in your report.");
+  });
+});
+
 describe("draw_paths's trimming step names suggest_paths's real fields", () => {
   it("says 'network', 'fork', 'end' and 'loop' as suggest_paths actually returns them, so a rename in 6D breaks this test", () => {
     // A hole in a concourse gives one line that loops back on itself, network 0 (the only network).

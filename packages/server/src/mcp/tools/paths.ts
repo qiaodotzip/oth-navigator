@@ -10,7 +10,7 @@ import {
   ACCESS_M, CLOSED_NEAR_M, CONNECT_MAX_M, CONNECTOR_MAX_WIDTH_M, CONNECTOR_MIN_WIDTH_M, CannotConnect, MAX_CONNECTORS,
   MAX_LINK_M, connectRooms, type Connector,
 } from "../../paths/connect";
-import { GUESS_INSET_M, OUTWARD_M } from "../../paths/entrances";
+import { GUESS_APART_M, GUESS_INSET_M, GUESS_MAX_INSET_M, OUTWARD_M } from "../../paths/entrances";
 import { SurfaceTooLarge } from "../../paths/raster";
 import { CROSS_M, REACH_M } from "../../paths/reach";
 import { suggestPaths } from "../../paths/suggest";
@@ -62,12 +62,14 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       `room's way in. crosses lists the rooms of kind room a line runs more than ${CROSS_M} m ` +
       "inside: a pathway there opens the room's walls. " +
       "links join each doorway, lift, escalator or stair stop, and entrance to the nearest point on a line it can " +
-      `reach in a straight line, within ${MAX_LINK_M} m. Links have no width. unconnected lists the ones that could ` +
+      `reach in a straight line, within ${MAX_LINK_M} m. Links have no width; ontoDrawn is true when the line a link ` +
+      "ends on is drawn already. unconnected lists the ones that could " +
       "not be joined, and why. Only entrances that exist are linked, so call it again after creating them. " +
       "entranceGuesses gives each confirmed place named as a gate, entrance, exit or way in (not in parentheses), bound to a room and with " +
-      `no entrance of its name yet, a point ${GUESS_INSET_M} m inside that room on its longest stretch of outline with ` +
-      `no room ${OUTWARD_M} m beyond it, the building's outside: a guess a person moves in Check when the drawing shows ` +
-      "nothing better. " +
+      `no entrance of its name yet, a point ${GUESS_INSET_M} m inside that room (further in, up to ${GUESS_MAX_INSET_M} m, ` +
+      `where routing can't start nearer the edge) on its longest stretch of outline with no room ${OUTWARD_M} m beyond ` +
+      `it, the building's outside. Guesses on one stretch are at least ${GUESS_APART_M} m apart; the rest go on the next ` +
+      "longest. Each is a guess a person moves in Check when the drawing shows nothing better. " +
       "Check it over view_plan, then create the pathways you agree with: type pathway, with the reply's levelId, " +
       "a polyline and a widthM.",
     inputSchema: { floor: FLOOR },

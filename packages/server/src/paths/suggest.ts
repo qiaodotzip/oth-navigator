@@ -34,13 +34,14 @@ const DRAWN_STEP_M = 1;
  * it already. Contract v4: `reaches` are the rooms its "end" ends reach,
  * `crosses` the rooms of kind room it runs through (reach.ts), and
  * `entranceGuesses` where the floor's gate places probably are (entrances.ts).
+ * Contract v5: a link is `ontoDrawn` when the line it ends on is drawn.
  */
 export type PathSuggestion = {
   lines: {
     polyline: Vec2[]; widthM: number; ends: ["fork" | "end" | "loop", "fork" | "end" | "loop"]; network: number; drawn: boolean;
     reaches: string[]; crosses: string[];
   }[];
-  links: { from: { type: "doorway" | "stop" | "entrance"; id: string }; segment: [Vec2, Vec2] }[];
+  links: { from: { type: "doorway" | "stop" | "entrance"; id: string }; segment: [Vec2, Vec2]; ontoDrawn: boolean }[];
   unconnected: { type: "doorway" | "stop" | "entrance"; id: string; reason: string }[];
   entranceGuesses: EntranceGuess[];
 };
@@ -121,7 +122,7 @@ export function drawnAlready(line: readonly Vec2[], pathways: readonly Pathway[]
  * Read-only and pure: the floor is rasterised, thinned to its skeleton, pruned,
  * vectorised, run on through the forks where it bends gently, and simplified,
  * and every doorway, stop and entrance is joined to the result or listed with
- * why not. Longest line first; coordinates to the centimetre and widths to
+ * why not; a link onto a line the floor has drawn already is ontoDrawn. Longest line first; coordinates to the centimetre and widths to
  * 0.1 m, since the plan is traced no finer.
  *
  * Throws SurfaceTooLarge when the floor's walkable areas span more than a
@@ -152,9 +153,12 @@ export function suggestPaths(model: MapModel, levelId: string): PathSuggestion {
       });
   }
   const { links, unconnected } = connect(raster, lines.map(l => l.polyline), targets);
+  // A link ends on a point of a line, as connect found it; where lines meet, on any of them.
+  const ontoDrawn = (q: Vec2) =>
+    lines.some(l => l.drawn && l.polyline.some((b, k) => k > 0 && distancePointToSegment(q, l.polyline[k - 1]!, b) < 1e-6));
   return {
     lines,
-    links: links.map(l => ({ from: l.from, segment: [at(l.segment[0]), at(l.segment[1])] })),
+    links: links.map(l => ({ from: l.from, segment: [at(l.segment[0]), at(l.segment[1])], ontoDrawn: ontoDrawn(l.segment[1]) })),
     unconnected,
     entranceGuesses: entranceGuesses(model, levelId),
   };

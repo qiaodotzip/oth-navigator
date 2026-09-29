@@ -1,10 +1,33 @@
-import { bboxOfRing, live, pointInPolygon, type MapModel, type Room, type Vec2 } from "@oth/model";
+import {
+  NAV_CELL_SIZE_M, bakeNavGrid, bboxOfRing, live, navGridWalkableAt, pointInPolygon, type MapModel, type NavGrid, type Room, type Vec2,
+} from "@oth/model";
 
 /** Contract v4: where a gate place is probably, for draw_paths to make its entrance. */
 export type EntranceGuess = { placeId: string; name: string; roomId: string; point: Vec2 };
 
-/** A guess stands this far inside its room (contract v4). */
-export const GUESS_INSET_M = 0.5;
+/**
+ * A guess stands this far inside its room (contract v5; v4's 0.5 m put Gate 6
+ * 0.2 m from the concourse's other edge, and entrance.offFloor refused it).
+ */
+export const GUESS_INSET_M = 1;
+/**
+ * Where routing can't start from that point (entrance.offFloor: the nav cell
+ * there is closed), the guess moves further in, a nav cell at a time, up to
+ * this far; past it there is no guess.
+ */
+export const GUESS_MAX_INSET_M = 3;
+/**
+ * Guesses on one run stand at least this far apart; the places a run is too
+ * short for go to the next longest (contract v5). Rehearsal 4 had Gates 2–4
+ * 1.2–1.4 m apart on 5.5 m of run.
+ */
+export const GUESS_APART_M = 3;
+/**
+ * On a corner, going further in runs along the room's other edge and never
+ * leaves it: then the spot moves along its run, a nav cell at a time, up to
+ * this far either way, as v4's guess moved off a notch.
+ */
+export const GUESS_SHIFT_M = 1;
 /**
  * A room's outline is the building's outside where the point this far out
  * from it, away from the room, lies in no room on the floor (contract v4,
@@ -66,64 +89,86 @@ function piecesOf(room: Room, floorRooms: readonly Room[]): Piece[] {
   return out;
 }
 
-/** The longest run of outside pieces, going round the ring; the whole ring when all of it is outside, none when none is. */
-function longestRun(pieces: readonly Piece[]): Piece[] {
+/** A run of outside pieces, in order along the outline, and its length. */
+type Run = { pieces: Piece[]; length: number };
+
+/**
+ * Every run of outside pieces, going round the ring, longest first (the one
+ * met first on a tie); the whole ring when all of it is outside.
+ */
+function outsideRuns(pieces: readonly Piece[]): Run[] {
   const start = pieces.findIndex(p => !p.outside);
-  if (start < 0) return [...pieces];
-  let best: Piece[] = [];
-  let bestLength = 0;
-  let run: Piece[] = [];
-  let runLength = 0;
+  if (start < 0) return [{ pieces: [...pieces], length: pieces.reduce((sum, p) => sum + p.length, 0) }];
+  const runs: Run[] = [];
+  let run: Run | null = null;
   for (let k = 1; k <= pieces.length; k++) {
     const p = pieces[(start + k) % pieces.length]!;
     if (!p.outside) {
-      run = [];
-      runLength = 0;
+      run = null;
       continue;
     }
-    run.push(p);
-    runLength += p.length;
-    if (runLength > bestLength) {
-      best = run;
-      bestLength = runLength;
+    if (!run) {
+      run = { pieces: [], length: 0 };
+      runs.push(run);
     }
+    run.pieces.push(p);
+    run.length += p.length;
   }
-  return best;
+  return runs.sort((a, b) => b.length - a.length);
 }
 
 /**
- * The point GUESS_INSET_M inside the room from `s` metres along the run. A
- * sharp corner or a notch can put that step outside the room again: then the
- * nearest piece of the run whose middle steps inside, or null.
+ * How many guesses a run holds, spread evenly and GUESS_APART_M apart: one on
+ * any run, and n when the run's n + 1 equal parts are each that long.
  */
-function insideAt(run: readonly Piece[], s: number, room: Room): Vec2 | null {
-  const inset = (p: Vec2, inward: Vec2): Vec2 => [p[0] + inward[0] * GUESS_INSET_M, p[1] + inward[1] * GUESS_INSET_M];
-  const inRoom = (p: Vec2) => pointInPolygon(p, room.footprint, room.holes);
+const holds = (run: Run) => Math.max(1, Math.floor(run.length / GUESS_APART_M) - 1);
+
+/** The point `s` metres along the run, and which way is into the room there. */
+function along(run: Run, s: number): { edge: Vec2; inward: Vec2 } {
   let acc = 0;
-  const middles: { at: number; point: Vec2 }[] = [];
-  let exact: Vec2 | null = null;
-  for (const p of run) {
-    if (exact === null && s <= acc + p.length) {
-      const t = s - acc;
-      exact = inset([p.from[0] + p.dir[0] * t, p.from[1] + p.dir[1] * t], p.inward);
-    }
-    const half = p.length / 2;
-    middles.push({ at: acc + half, point: inset([p.from[0] + p.dir[0] * half, p.from[1] + p.dir[1] * half], p.inward) });
+  const piece = run.pieces.find(p => {
+    if (s <= acc + p.length) return true;
     acc += p.length;
-  }
-  if (exact && inRoom(exact)) return exact;
-  return middles.sort((x, y) => Math.abs(x.at - s) - Math.abs(y.at - s)).find(m => inRoom(m.point))?.point ?? null;
+    return false;
+  }) ?? run.pieces.at(-1)!;
+  const t = Math.min(s - acc, piece.length);
+  return { edge: [piece.from[0] + piece.dir[0] * t, piece.from[1] + piece.dir[1] * t], inward: piece.inward };
 }
 
 /**
- * Contract v4's entranceGuesses. For each confirmed place bound to a room on
- * this floor whose name reads as a way in (WAY_IN), with no live entrance of
- * that name on the floor: a point GUESS_INSET_M inside the room on its
- * longest outside run, the stretch of its outline where OUTWARD_M out from it
- * is in no room on the floor. Several such places in one room stand evenly along
- * that run, in the order of their names. A room with no outside run gives
- * its places no guess. Rehearsal 3's Claude placed no entrance at all, since
- * a place has no point of its own; a person moves a guess in Check.
+ * The guess `s` metres along the run: GUESS_INSET_M inside the room, or
+ * further in, a nav cell at a time up to GUESS_MAX_INSET_M, until the point is
+ * in the room and routing can start there (entrance.offFloor's own test: the
+ * nav cell under it is open). Where none is, the same from a spot moved along
+ * the run, nearest first, up to GUESS_SHIFT_M. Null when none is either.
+ */
+function guessAt(run: Run, s: number, room: Room, grid: NavGrid): Vec2 | null {
+  const shifts = Math.round(GUESS_SHIFT_M / NAV_CELL_SIZE_M);
+  for (let k = 0; k <= 2 * shifts; k++) {
+    // 0, then a cell on, a cell back, two on, two back…
+    const at = s + (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * NAV_CELL_SIZE_M;
+    if (at < 0 || at > run.length) continue;
+    const { edge, inward } = along(run, at);
+    for (let inset = GUESS_INSET_M; inset <= GUESS_MAX_INSET_M + 1e-9; inset += NAV_CELL_SIZE_M) {
+      // Checked as it is sent, to the centimetre: rounding moved L1's Gate 6 onto the next cell, a closed one.
+      const p: Vec2 = [cm(edge[0] + inward[0] * inset), cm(edge[1] + inward[1] * inset)];
+      if (pointInPolygon(p, room.footprint, room.holes) && navGridWalkableAt(grid, p)) return p;
+    }
+  }
+  return null;
+}
+
+/**
+ * Contract v4's entranceGuesses, as v5 amends them. For each confirmed place
+ * bound to a room on this floor whose name reads as a way in (WAY_IN), with no
+ * live entrance of that name on the floor: a point GUESS_INSET_M inside the
+ * room (guessAt) on its longest outside run, the stretch of its outline where
+ * OUTWARD_M out from it is in no room on the floor. Several such places in one
+ * room stand evenly along that run, in the order of their names, at least
+ * GUESS_APART_M apart; the places it is too short for go on the next longest
+ * run, and so on. A place with no run left, or whose spot has no floor routing
+ * can start on, gets no guess. Rehearsal 3's Claude placed no entrance at all,
+ * since a place has no point of its own; a person moves a guess in Check.
  */
 export function entranceGuesses(model: MapModel, levelId: string): EntranceGuess[] {
   const rooms = live(model.rooms).filter(r => r.levelId === levelId);
@@ -136,16 +181,20 @@ export function entranceGuesses(model: MapModel, levelId: string): EntranceGuess
     inRoom.set(p.roomId, [...(inRoom.get(p.roomId) ?? []), p]);
   }
   const out: EntranceGuess[] = [];
+  if (inRoom.size === 0) return out;
+  // entrance.offFloor's grid: the one the reachability rule bakes for this floor.
+  const grid = bakeNavGrid(model, levelId);
   for (const roomId of [...inRoom.keys()].sort()) {
     const room = byId.get(roomId)!;
-    const run = longestRun(piecesOf(room, rooms));
-    if (run.length === 0) continue;
-    const length = run.reduce((sum, p) => sum + p.length, 0);
-    const places = inRoom.get(roomId)!.sort((a, b) => a.nameEn.localeCompare(b.nameEn, "en", { numeric: true }) || a.id.localeCompare(b.id));
-    places.forEach((p, k) => {
-      const point = insideAt(run, (length * (k + 1)) / (places.length + 1), room);
-      if (point) out.push({ placeId: p.id, name: p.nameEn, roomId, point: [cm(point[0]), cm(point[1])] });
-    });
+    const waiting = inRoom.get(roomId)!.sort((a, b) => a.nameEn.localeCompare(b.nameEn, "en", { numeric: true }) || a.id.localeCompare(b.id));
+    for (const run of outsideRuns(piecesOf(room, rooms))) {
+      const here = waiting.splice(0, holds(run));
+      here.forEach((p, k) => {
+        const point = guessAt(run, (run.length * (k + 1)) / (here.length + 1), room, grid);
+        if (point) out.push({ placeId: p.id, name: p.nameEn, roomId, point });
+      });
+      if (waiting.length === 0) break;
+    }
   }
   return out;
 }

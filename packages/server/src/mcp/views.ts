@@ -353,12 +353,15 @@ export function draftList(
 /**
  * suggest_object_spots: each object, the rooms that fixed where it stands by
  * the names people know them by, its frames, and the placement to create as
- * it is, with a free id. `takenIds` holds every placement id, deleted ones
- * too, since an id is a primary key.
+ * it is, with a free id, and the room it stands in as its roomId: the anchor
+ * room that holds it, else the first walkable room that does (contract v5).
+ * `takenIds` holds every placement id, deleted ones too, since an id is a
+ * primary key.
  */
 export function spotsView(model: MapModel, level: Level, report: SpotReport, takenIds: ReadonlySet<string>) {
   const kinds = new Map(live(model.objectKinds).map(k => [k.id, k]));
   const rooms = live(model.rooms).filter(r => r.levelId === level.id);
+  const roomById = new Map(rooms.map(r => [r.id, r]));
   const roomName = new Map(rooms.map(r => [r.id, r.nameEn]));
   const bound = new Map(live(model.places).filter(p => p.roomId && !p.objectKindId).map(p => [p.roomId!, p.nameEn]));
   const frameOf = new Map(live(model.sightings).map(s => [s.id, s.keyframeId]));
@@ -374,7 +377,9 @@ export function spotsView(model: MapModel, level: Level, report: SpotReport, tak
     floor: level.code,
     spots: report.spots.map(s => {
       const kind = kinds.get(s.objectKindId);
-      const standsIn = rooms.find(r => r.walkable && pointInPolygon(s.position, r.footprint, r.holes));
+      // L1's Stadium, traced over the West Concourses and first in the model, took a spot anchored on and standing in one.
+      const holds = (r: Room | undefined): r is Room => r !== undefined && pointInPolygon(s.position, r.footprint, r.holes);
+      const standsIn = s.anchors.map(id => roomById.get(id)).find(holds) ?? rooms.find(r => r.walkable && holds(r));
       return {
         kind: kind?.nameEn ?? s.objectKindId,
         confidence: s.confidence,

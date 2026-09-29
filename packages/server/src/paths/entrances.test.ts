@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GUESS_INSET_M, entranceGuesses } from "./entrances";
+import { GUESS_APART_M, GUESS_INSET_M, GUESS_MAX_INSET_M, GUESS_SHIFT_M, entranceGuesses } from "./entrances";
 import { floor, LEVEL, rect, type TestRoom } from "./testing";
 
 /**
@@ -22,13 +22,13 @@ const guesses = (places: Record<string, unknown>[], extra: Record<string, unknow
 describe("entranceGuesses (contract v4)", () => {
   it(`puts a gate bound to a concourse ${GUESS_INSET_M} m inside it, halfway along the side that is the building's outside`, () => {
     expect(guesses([place("pl-gate-5", "Gate 5")])).toEqual([
-      { placeId: "pl-gate-5", name: "Gate 5", roomId: "L1-west-concourse", point: [0.5, 20] },
+      { placeId: "pl-gate-5", name: "Gate 5", roomId: "L1-west-concourse", point: [1, 20] },
     ]);
   });
 
   it("spreads three gates in one room evenly along its outside run, in the order of their names", () => {
     const got = guesses([place("pl-gate-4", "Gate 4"), place("pl-gate-2", "Gate 2"), place("pl-gate-3", "Gate 3")]);
-    expect(got.map(g => [g.name, g.point])).toEqual([["Gate 2", [0.5, 30]], ["Gate 3", [0.5, 20]], ["Gate 4", [0.5, 10]]]);
+    expect(got.map(g => [g.name, g.point])).toEqual([["Gate 2", [1, 30]], ["Gate 3", [1, 20]], ["Gate 4", [1, 10]]]);
   });
 
   it("finds the outside of a concourse traced inside a larger stadium: the west edge they share, not the sides facing into the stadium", () => {
@@ -39,14 +39,14 @@ describe("entranceGuesses (contract v4)", () => {
       { id: "L1-west-concourse", footprint: rect(0, 10, 10, 50) },
     ];
     const got = guesses([place("pl-gate-2", "Gate 2"), place("pl-gate-3", "Gate 3"), place("pl-gate-4", "Gate 4")], {}, inStadium);
-    expect(got.map(g => [g.name, g.point])).toEqual([["Gate 2", [0.5, 40]], ["Gate 3", [0.5, 30]], ["Gate 4", [0.5, 20]]]);
+    expect(got.map(g => [g.name, g.point])).toEqual([["Gate 2", [1, 40]], ["Gate 3", [1, 30]], ["Gate 4", [1, 20]]]);
   });
 
   it("gives no guess for a place the floor has an entrance of that name for already, capitals and spacing aside", () => {
     const got = guesses([place("pl-gate-1", "Gate 1"), place("pl-gate-2", "Gate 2")], {
       entrances: [{ id: "L1-gate-1", levelId: LEVEL, roomId: "L1-west-concourse", point: [0.5, 30], nameEn: "gate  1" }],
     });
-    expect(got.map(g => [g.name, g.point])).toEqual([["Gate 2", [0.5, 20]]]);
+    expect(got.map(g => [g.name, g.point])).toEqual([["Gate 2", [1, 20]]]);
   });
 
   it("gives no guess for a place nobody has confirmed, or one not bound to a room on this floor", () => {
@@ -71,11 +71,43 @@ describe("entranceGuesses (contract v4)", () => {
 
   it("finds the same outside whichever way the room's outline runs", () => {
     const clockwise: TestRoom[] = [{ id: "L1-west-concourse", footprint: [[0, 0], [0, 40], [10, 40], [10, 0]] }, ...CONCOURSE.slice(1)];
-    expect(guesses([place("pl-gate-5", "Gate 5")], {}, clockwise).map(g => g.point)).toEqual([[0.5, 20]]);
+    expect(guesses([place("pl-gate-5", "Gate 5")], {}, clockwise).map(g => g.point)).toEqual([[1, 20]]);
   });
 
   it("gives no guess for a place whose room has no outside run: a metre out from every side of it is in another room", () => {
     const inner = { id: "L1-kiosk-court", footprint: rect(14, 14, 20, 20) };
     expect(guesses([place("pl-gate-9", "Gate 9", { roomId: "L1-kiosk-court" })], {}, [...CONCOURSE, inner])).toEqual([]);
+  });
+});
+
+describe("entranceGuesses (contract v5)", () => {
+  it(`moves a guess further in, a nav cell at a time up to ${GUESS_MAX_INSET_M} m, until routing can start there (entrance.offFloor)`, () => {
+    // An area traced inside the concourse walls off the floor along its edge, 1 m in from the building's outside.
+    const walled = [...CONCOURSE, { id: "L1-seating", footprint: rect(1, 10, 5, 30) }];
+    expect(guesses([place("pl-gate-5", "Gate 5")], {}, walled).map(g => g.point)).toEqual([[1.25, 20]]);
+  });
+
+  it(`moves a spot on a corner along its run, up to ${GUESS_SHIFT_M} m, when going further in only runs along the other edge`, () => {
+    // A corridor standing alone is outside all round; halfway round its outline is its north-east corner (30, 4).
+    const alone: TestRoom[] = [{ id: "L1-west-concourse", footprint: rect(0, 0, 30, 4) }];
+    expect(guesses([place("pl-gate-4", "Gate 4")], {}, alone).map(g => g.point)).toEqual([[29.5, 3]]);
+  });
+
+  it(`gives no guess where nothing up to ${GUESS_MAX_INSET_M} m in is floor routing can start on`, () => {
+    const holed = [{ id: "L1-west-concourse", footprint: rect(0, 0, 10, 40), holes: [rect(0.5, 15, 4, 25)] }, ...CONCOURSE.slice(1)];
+    expect(guesses([place("pl-gate-5", "Gate 5")], {}, holed)).toEqual([]);
+  });
+
+  it(`keeps guesses on one run at least ${GUESS_APART_M} m apart, and puts the rest on the next longest run`, () => {
+    // Rehearsal 4: Gates 2–4 sat 1.2–1.4 m apart on 5.5 m of outside run. Here the concourse's outside is its north
+    // side (10 m) and the last 5.5 m of its west side; a building stands along the rest of the west side.
+    const twoRuns: TestRoom[] = [
+      { id: "L1-west-concourse", footprint: rect(0, 0, 10, 40) },
+      { id: "L1-shops", footprint: rect(10, 0, 30, 40), kind: "room", walkable: false },
+      { id: "L1-south", footprint: rect(-10, -10, 30, 0), kind: "service", walkable: false },
+      { id: "L1-west-block", footprint: rect(-10, 5.5, 0, 50), kind: "service", walkable: false },
+    ];
+    const got = guesses([place("pl-gate-4", "Gate 4"), place("pl-gate-2", "Gate 2"), place("pl-gate-3", "Gate 3")], {}, twoRuns);
+    expect(got.map(g => [g.name, g.point])).toEqual([["Gate 2", [6.67, 39]], ["Gate 3", [3.33, 39]], ["Gate 4", [1, 2.75]]]);
   });
 });

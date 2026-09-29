@@ -1,6 +1,6 @@
 import { parseModel, type ValidationReport } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { findLevel, floorIssues, floorPart, frameList, frameTags, summariseFloors } from "./views";
+import { findLevel, floorIssues, floorPart, frameList, frameTags, spotsView, summariseFloors } from "./views";
 
 const square = [[0, 0], [4, 0], [4, 4], [0, 4]];
 
@@ -285,6 +285,30 @@ describe("frameList", () => {
     expect(frameList(survey, "oth-L1", "all", 1, 1)).toEqual({
       total: 3, offset: 1, frames: [{ id: "kf_2", captureId: "cap_1", timeMs: 2000, tags: 1, proposed: 1 }],
     });
+  });
+});
+
+describe("spotsView", () => {
+  it("gives a spot its anchor room when it stands inside it, not the first walkable room that holds it (contract v5)", () => {
+    // Rehearsal 3's L1 in small: the Stadium's rectangle, first in the model, is traced right over the West
+    // Concourse, and a wastebin anchored on the concourse (Gate 5's room) stands in both.
+    const stadium = parseModel({
+      building: { id: "oth", name: "OTH", anchorLat: 1.35, anchorLng: 103.94 },
+      levels: [{ id: "oth-L1", buildingId: "oth", code: "L1", ordinal: 1, nameEn: "Level 1", nameZh: "一楼", elevationM: 0, heightM: 6 }],
+      rooms: [
+        { id: "L1-stadium", levelId: "oth-L1", kind: "area", walkable: true, footprint: [[0, 0], [40, 0], [40, 60], [0, 60]], heightM: 6 },
+        { id: "L1-west-concourse-1", levelId: "oth-L1", kind: "area", walkable: true, footprint: [[0, 10], [10, 10], [10, 50], [0, 50]], heightM: 6 },
+      ],
+      places: [{ id: "pl-gate-5", nameEn: "Gate 5", category: "facility", levelId: "oth-L1", roomId: "L1-west-concourse-1" }],
+      objectKinds: [{ id: "bin", nameEn: "wastebin", size: { w: 0.5, d: 0.5, h: 1 } }],
+    });
+    const spot = (position: [number, number], anchors: string[]) => spotsView(stadium, findLevel(stadium, "L1")!, {
+      spots: [{ objectKindId: "bin", position, rotationDeg: 0, sightingIds: ["sg_1"], confidence: "low", anchors }],
+      unplaced: [], alreadyPlaced: 0,
+    }, new Set()).spots[0]!.placement.roomId;
+    expect(spot([0.5, 30], ["L1-west-concourse-1"])).toBe("L1-west-concourse-1");
+    // Outside its anchor, it keeps the walkable room that holds it.
+    expect(spot([20, 30], ["L1-west-concourse-1"])).toBe("L1-stadium");
   });
 });
 
