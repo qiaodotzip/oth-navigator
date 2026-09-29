@@ -19,7 +19,7 @@ export const GUESS_MAX_INSET_M = 3;
 /**
  * Guesses on one run stand at least this far apart; the places a run is too
  * short for go to the next longest (contract v5). Rehearsal 4 had Gates 2–4
- * 1.2–1.4 m apart on 5.5 m of run.
+ * 1.2–1.4 m apart on 5.5 m of run. A run too short for two still holds one.
  */
 export const GUESS_APART_M = 3;
 /**
@@ -118,10 +118,22 @@ function outsideRuns(pieces: readonly Piece[]): Run[] {
 }
 
 /**
- * How many guesses a run holds, spread evenly and GUESS_APART_M apart: one on
- * any run, and n when the run's n + 1 equal parts are each that long.
+ * How many guesses a run holds with GUESS_APART_M between each two (contract
+ * v5 amendment: the spacing is between guesses, not from the run's ends): one
+ * on a run too short for two, and one more for each GUESS_APART_M of it.
  */
-const holds = (run: Run) => Math.max(1, Math.floor(run.length / GUESS_APART_M) - 1);
+const holds = (run: Run) => Math.floor(run.length / GUESS_APART_M) + 1;
+
+/**
+ * Where `n` guesses stand along a run: evenly, the ends of the run as far off
+ * as the spaces between them, while those spaces are GUESS_APART_M or more;
+ * else GUESS_APART_M apart, about its middle. One stands at its middle.
+ */
+function spread(run: Run, n: number): number[] {
+  const apart = Math.max(GUESS_APART_M, run.length / (n + 1));
+  const first = (run.length - (n - 1) * apart) / 2;
+  return Array.from({ length: n }, (_, k) => first + k * apart);
+}
 
 /** The point `s` metres along the run, and which way is into the room there. */
 function along(run: Run, s: number): { edge: Vec2; inward: Vec2 } {
@@ -140,10 +152,13 @@ function along(run: Run, s: number): { edge: Vec2; inward: Vec2 } {
  * further in, a nav cell at a time up to GUESS_MAX_INSET_M, until the point is
  * in the room and routing can start there (entrance.offFloor's own test: the
  * nav cell under it is open). Where none is, the same from a spot moved along
- * the run, nearest first, up to GUESS_SHIFT_M. Null when none is either.
+ * the run, nearest first, up to GUESS_SHIFT_M. A point nearer than
+ * GUESS_APART_M, in a straight line, to a guess already on the run is no
+ * guess: L1's run bends, and Gates 2 and 3 came to 2.63 m. Null when none is.
  */
-function guessAt(run: Run, s: number, room: Room, grid: NavGrid): Vec2 | null {
+function guessAt(run: Run, s: number, placed: readonly Vec2[], room: Room, grid: NavGrid): Vec2 | null {
   const shifts = Math.round(GUESS_SHIFT_M / NAV_CELL_SIZE_M);
+  const apart = (p: Vec2) => placed.every(q => Math.hypot(q[0] - p[0], q[1] - p[1]) >= GUESS_APART_M - 1e-9);
   for (let k = 0; k <= 2 * shifts; k++) {
     // 0, then a cell on, a cell back, two on, two back…
     const at = s + (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * NAV_CELL_SIZE_M;
@@ -151,8 +166,8 @@ function guessAt(run: Run, s: number, room: Room, grid: NavGrid): Vec2 | null {
     const { edge, inward } = along(run, at);
     for (let inset = GUESS_INSET_M; inset <= GUESS_MAX_INSET_M + 1e-9; inset += NAV_CELL_SIZE_M) {
       // Checked as it is sent, to the centimetre: rounding moved L1's Gate 6 onto the next cell, a closed one.
-      const p: Vec2 = [cm(edge[0] + inward[0] * inset), cm(edge[1] + inward[1] * inset)];
-      if (pointInPolygon(p, room.footprint, room.holes) && navGridWalkableAt(grid, p)) return p;
+      const point: Vec2 = [cm(edge[0] + inward[0] * inset), cm(edge[1] + inward[1] * inset)];
+      if (pointInPolygon(point, room.footprint, room.holes) && navGridWalkableAt(grid, point) && apart(point)) return point;
     }
   }
   return null;
@@ -189,9 +204,13 @@ export function entranceGuesses(model: MapModel, levelId: string): EntranceGuess
     const waiting = inRoom.get(roomId)!.sort((a, b) => a.nameEn.localeCompare(b.nameEn, "en", { numeric: true }) || a.id.localeCompare(b.id));
     for (const run of outsideRuns(piecesOf(room, rooms))) {
       const here = waiting.splice(0, holds(run));
+      const at = spread(run, here.length);
+      const placed: Vec2[] = [];
       here.forEach((p, k) => {
-        const point = guessAt(run, (run.length * (k + 1)) / (here.length + 1), room, grid);
-        if (point) out.push({ placeId: p.id, name: p.nameEn, roomId, point });
+        const point = guessAt(run, at[k]!, placed, room, grid);
+        if (!point) return;
+        placed.push(point);
+        out.push({ placeId: p.id, name: p.nameEn, roomId, point });
       });
       if (waiting.length === 0) break;
     }

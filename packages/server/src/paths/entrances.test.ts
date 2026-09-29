@@ -98,16 +98,41 @@ describe("entranceGuesses (contract v5)", () => {
     expect(guesses([place("pl-gate-5", "Gate 5")], {}, holed)).toEqual([]);
   });
 
-  it(`keeps guesses on one run at least ${GUESS_APART_M} m apart, and puts the rest on the next longest run`, () => {
-    // Rehearsal 4: Gates 2–4 sat 1.2–1.4 m apart on 5.5 m of outside run. Here the concourse's outside is its north
-    // side (10 m) and the last 5.5 m of its west side; a building stands along the rest of the west side.
+  it(`keeps guesses on one run at least ${GUESS_APART_M} m apart, the rest on the next run, where a run too short for two holds one at its middle`, () => {
+    // Rehearsal 4's West Concourse (middle): 5.5 m and 1.9 m of outside run, and Gates 2–4, which sat 1.2–1.4 m apart.
+    // Here the concourse's outside is the last 5.5 m of its west side and the first 2 m of its north side; a
+    // building stands along the rest of each.
     const twoRuns: TestRoom[] = [
       { id: "L1-west-concourse", footprint: rect(0, 0, 10, 40) },
       { id: "L1-shops", footprint: rect(10, 0, 30, 40), kind: "room", walkable: false },
       { id: "L1-south", footprint: rect(-10, -10, 30, 0), kind: "service", walkable: false },
       { id: "L1-west-block", footprint: rect(-10, 5.5, 0, 50), kind: "service", walkable: false },
+      { id: "L1-north-block", footprint: rect(2, 40, 30, 50), kind: "service", walkable: false },
     ];
     const got = guesses([place("pl-gate-4", "Gate 4"), place("pl-gate-2", "Gate 2"), place("pl-gate-3", "Gate 3")], {}, twoRuns);
-    expect(got.map(g => [g.name, g.point])).toEqual([["Gate 2", [6.67, 39]], ["Gate 3", [3.33, 39]], ["Gate 4", [1, 2.75]]]);
+    // Two on the 5.5 m run, 3 m apart about its middle; the third at the middle of the 2 m run.
+    expect(got.map(g => [g.name, g.point])).toEqual([["Gate 2", [1, 4.25]], ["Gate 3", [1, 1.25]], ["Gate 4", [1, 39]]]);
+  });
+
+  it(`keeps a moved guess ${GUESS_APART_M} m in a straight line from the others on its run, going further in if it must`, () => {
+    // Rehearsal 4's L1: moved along a run that bends, Gates 2 and 3 came to stand 2.63 m apart. Here a hole in the
+    // floor moves Gate 3 back towards Gate 2: 1 m in it would be 2.5 m from it, so it stands 2.75 m in, 3.05 m off.
+    const holed: TestRoom[] = [
+      { id: "L1-west-concourse", footprint: rect(0, 0, 10, 40), holes: [rect(0.5, 0.1, 4, 1.4)] },
+      { id: "L1-shops", footprint: rect(10, 0, 30, 40), kind: "room", walkable: false },
+      { id: "L1-south", footprint: rect(-10, -10, 30, 0), kind: "service", walkable: false },
+      { id: "L1-west-block", footprint: rect(-10, 5.5, 0, 50), kind: "service", walkable: false },
+      { id: "L1-north-block", footprint: rect(2, 40, 30, 50), kind: "service", walkable: false },
+    ];
+    const got = guesses([place("pl-gate-2", "Gate 2"), place("pl-gate-3", "Gate 3"), place("pl-gate-4", "Gate 4")], {}, holed);
+    expect(got.map(g => [g.name, g.point])).toEqual([["Gate 2", [1, 4.25]], ["Gate 3", [2.75, 1.75]], ["Gate 4", [1, 39]]]);
+    const [two, three] = got;
+    expect(Math.hypot(two!.point[0] - three!.point[0], two!.point[1] - three!.point[1])).toBeGreaterThanOrEqual(GUESS_APART_M);
+  });
+
+  it(`spreads guesses on a long run evenly, as far apart as its length allows`, () => {
+    // Before the amendment: three on the concourse's 40 m west side stand 10 m apart, not 3.
+    const got = guesses([place("pl-gate-2", "Gate 2"), place("pl-gate-3", "Gate 3"), place("pl-gate-4", "Gate 4")]);
+    expect(got.map(g => g.point)).toEqual([[1, 30], [1, 20], [1, 10]]);
   });
 });
