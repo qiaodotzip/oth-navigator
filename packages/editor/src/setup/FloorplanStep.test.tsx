@@ -9,6 +9,8 @@ import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
 import { FloorplanStep } from "./FloorplanStep";
+import { useSetupStore } from "./sync";
+import { setupState } from "./testing";
 
 vi.mock("../pdf/findInDrawing", async importOriginal => ({
   ...(await importOriginal<typeof import("../pdf/findInDrawing")>()),
@@ -66,6 +68,7 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   measure = null;
   useDrafts.getState().reset();
+  useSetupStore.getState().reset();
   const s = useEditorStore.getState();
   s.reset();
   s.setModel(model);
@@ -222,6 +225,25 @@ describe("FloorplanStep", () => {
     const line = guide().getByText("Couldn't check the drawing against L2's 2 rooms: look before step 5.");
     expect(line.textContent).toBe("Couldn't check the drawing against L2's 2 rooms: look before step 5.");
     expect(screen.queryByText(/already has/)).toBeNull();
+  });
+
+  it("says no 'Couldn't check' line once the rooms step (5) is done: nothing there is left to decide", () => {
+    useEditorStore.getState().setModel(withRooms);
+    useSetupStore.getState().put("oth-L2", setupState({ rooms: { status: "done" } }));
+    open([plan()]);
+    act(() => useDrafts.getState().setDrafts("oth-L2", [found]));
+    expect(screen.queryByText(/Couldn't check/)).toBeNull();
+    expect(screen.queryByText(/already has/)).toBeNull();
+  });
+
+  it("still says the plan moved once the rooms step (5) is done: a moved plan matters even after it", () => {
+    useEditorStore.getState().setModel(withRooms);
+    useSetupStore.getState().put("oth-L2", setupState({ rooms: { status: "done" } }));
+    open([plan()]);
+    act(() => useDrafts.getState().setDrafts("oth-L2", [found], undefined, { pairs: 162 }));
+    act(() => useDrafts.getState().planChanged("oth-L2"));
+    expect(guide().getByText(moved)).toBeTruthy();
+    expect(screen.queryByText(/Couldn't check/)).toBeNull();
   });
 
   it("warns with the drawing's own offset once its drafts show one, in place of the generic warning", () => {

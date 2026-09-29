@@ -17,7 +17,7 @@ import { useElementSize } from "../plan/useElementSize";
 import { useEditorStore } from "../state/store";
 import { imageForLevel } from "../state/underlay";
 import { useRefuseWindowFileDrop } from "../ui/fileDrop";
-import { roomsFound } from "./progress";
+import { roomsFound, stepDone } from "./progress";
 import { useStepContext } from "./sync";
 
 /**
@@ -44,6 +44,9 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
   const linedUp = useLinedUp(level.id);
   const found = ctx !== null && roomsFound(ctx);
   const moved = found && ctx?.planChanged === true;
+  // Once the rooms step (5) is done, every draft has been decided: there is
+  // nothing left for "Couldn't check…" to send the person to look at.
+  const roomsDone = ctx !== null && stepDone("rooms", ctx);
   const existingRooms = useMemo(
     () => (model ? live(model.rooms).filter(r => r.levelId === level.id).length : 0),
     [model, level.id],
@@ -90,7 +93,7 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
             ) : linedUp ? (
               <p className="text-xs text-stone-600">{linedUpWords(level.code)}</p>
             ) : existingRooms === 0 ? null : found ? (
-              <p className="text-xs text-stone-600">{notCheckedWords(level.code, existingRooms)}</p>
+              roomsDone ? null : <p className="text-xs text-stone-600">{notCheckedWords(level.code, existingRooms)}</p>
             ) : (
               <LineUpWarning>{alreadyHasRoomsWords(level.code, existingRooms)}</LineUpWarning>
             )}
