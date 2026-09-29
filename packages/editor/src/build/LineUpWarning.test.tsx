@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { alreadyHasRoomsWords, linedUpWords, LineUpWarning, lineUpWords, notCheckedWords } from "./LineUpWarning";
+import { alreadyHasRoomsWords, linedUpWords, LineUpWarning, lineUpWords, notCheckedWords, planMovedWords } from "./LineUpWarning";
 
 describe("lineUpWords", () => {
   it("says how far east/west and north/south the drawing sits, rounded to 0.1 m", () => {
@@ -47,6 +47,12 @@ describe("notCheckedWords", () => {
   it("says the drawing couldn't be checked against the floor's rooms, and to look before step 5, singular for one", () => {
     expect(notCheckedWords("L1", 228)).toBe("Couldn't check the drawing against L1's 228 rooms: look before step 5.");
     expect(notCheckedWords("L2", 1)).toBe("Couldn't check the drawing against L2's 1 room: look before step 5.");
+  });
+});
+
+describe("planMovedWords", () => {
+  it("says the plan moved since Find rooms ran, and to run it again", () => {
+    expect(planMovedWords()).toBe("The plan moved since Find rooms ran. Run Find rooms again to check it lines up.");
   });
 });
 

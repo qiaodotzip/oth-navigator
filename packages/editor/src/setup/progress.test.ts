@@ -138,6 +138,13 @@ describe("a step's tick", () => {
     expect(stepDone("floorplan", off)).toBe(false);
     expect(notDoneLine("floorplan", off)).toBe("The drawing doesn't line up with L1's rooms yet.");
     expect(stepDone("floorplan", on("L1", found))).toBe(true);
+    // The plan changed since Find rooms ran: that outranks what the old drafts said, either way.
+    const moved = on("L1", { ...found, planChanged: true, lineUp: { dx: 11.7, dy: -4.8, pairs: 5 } });
+    expect(stepDone("floorplan", moved)).toBe(false);
+    expect(notDoneLine("floorplan", moved)).toBe("The plan moved since Find rooms ran. Run it again.");
+    expect(notDoneLine("floorplan", on("L1", { ...found, planChanged: true }))).toBe("The plan moved since Find rooms ran. Run it again.");
+    // With no search yet, Find rooms is what's missing, however often the plan moved.
+    expect(notDoneLine("floorplan", on("L1", { levelImages: [plan()], planChanged: true }))).toBe("Find rooms hasn't run on this plan yet.");
     // Marked done by hand, it is done: a person's word stands, as for every step.
     expect(stepDone("floorplan", on("L1", { ...found, lineUp: { dx: 11.7, dy: -4.8, pairs: 5 }, setup: setupState({ floorplan: done }) })))
       .toBe(true);

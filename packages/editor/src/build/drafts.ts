@@ -1,9 +1,10 @@
 import { bboxOfRing, draftMatch, live, type BBox, type Room, type RoomDraft } from "@oth/model";
 import { useEffect } from "react";
 import { create } from "zustand";
-import type { Api, LinedUp, LineUp, RoomDraftRow } from "../api/client";
+import type { Api, LevelImage, LinedUp, LineUp, RoomDraftRow } from "../api/client";
 import { draftNameSpot, type DraftShape } from "../plan/DraftLayer";
 import { useEditorStore } from "../state/store";
+import { imageForLevel } from "../state/underlay";
 import { reportFailure } from "../ui/failure";
 
 type DraftsState = {
@@ -141,6 +142,39 @@ export function useLineUp(levelId: string | null): LineUp | undefined {
  */
 export function useLinedUp(levelId: string | null): LinedUp | undefined {
   return useDrafts(s => (levelId ? s.linedUpByLevel[levelId] : undefined));
+}
+
+/**
+ * Whether the floor's plan was saved after its drafts waiting were found:
+ * after the oldest of them. A search saves its drafts all at once, retiring
+ * the ones before, and a draft waiting is touched later only by an undo, so
+ * the oldest is the search's own time. False when either side has no time,
+ * or nothing waits.
+ *
+ * The plan's `updatedAt` moves on any save, an opacity change as well as a
+ * move: the image row can't tell them apart, so an opacity change counts as a
+ * move. That errs towards asking for Find rooms again, never towards saying
+ * a plan nobody checked lines up.
+ */
+export function planNewerThanDrafts(
+  image: Pick<LevelImage, "updatedAt"> | null, drafts: readonly Pick<RoomDraftRow, "updatedAt">[],
+): boolean {
+  const planAt = image?.updatedAt ? Date.parse(image.updatedAt) : NaN;
+  const times = drafts.map(d => (d.updatedAt ? Date.parse(d.updatedAt) : NaN));
+  if (Number.isNaN(planAt) || times.length === 0 || times.some(Number.isNaN)) return false;
+  return planAt > Math.min(...times);
+}
+
+/**
+ * Whether the floor's plan has changed since Find rooms last ran on it: this
+ * tab's own mark, the moment a change lands, or else the times the server
+ * gave (`planNewerThanDrafts`), which outlast a reload.
+ */
+export function usePlanChanged(levelId: string | null): boolean {
+  const marked = useDrafts(s => (levelId ? s.planChangedByLevel[levelId] === true : false));
+  const drafts = useDrafts(s => (levelId ? s.byLevel[levelId] : undefined));
+  const image = useEditorStore(s => imageForLevel(s.levelImages, levelId));
+  return marked || planNewerThanDrafts(image, drafts ?? NO_DRAFTS);
 }
 
 export type DraftView = {

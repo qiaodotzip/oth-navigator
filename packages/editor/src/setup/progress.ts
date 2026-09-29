@@ -22,6 +22,12 @@ export type StepContext = {
    * drafts aren't loaded, as on the Floors home.
    */
   lineUp?: LineUp;
+  /**
+   * The floor's plan changed since Find rooms last ran on it (the drafts
+   * store's `usePlanChanged`): what its drafts say about lining up was said of
+   * the plan before. Left out where the drafts aren't loaded, as on the Floors home.
+   */
+  planChanged?: boolean;
 };
 
 /** "Every change there is": the since sent before a run has a start. */
@@ -58,6 +64,8 @@ export function floorplanGap(ctx: StepContext): string | null {
   if (!image.source) return "This plan came from an image. Add the floor's PDF to find rooms in it.";
   if (image.metresPerPixel == null) return "The plan isn't scaled yet.";
   if (!roomsFound(ctx)) return "Find rooms hasn't run on this plan yet.";
+  // Before lineUp: the old drafts' word, either way, was about the plan before.
+  if (ctx.planChanged) return "The plan moved since Find rooms ran. Run it again.";
   if (ctx.lineUp) return `The drawing doesn't line up with ${ctx.levelCode}'s rooms yet.`;
   return null;
 }

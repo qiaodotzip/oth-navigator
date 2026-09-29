@@ -46,6 +46,8 @@ const withRooms = parseModel({
     { id: "L2-b", levelId: "oth-L2", kind: "room", footprint: [[20, 0], [30, 0], [30, 10], [20, 10]], heightM: 3 },
   ],
 });
+/** The line once the plan has moved since Find rooms ran. */
+const moved = "The plan moved since Find rooms ran. Run Find rooms again to check it lines up.";
 /** A draft Find rooms left on L2. */
 const found: RoomDraft = RoomDraftSchema.parse({
   id: "rd_a", levelId: "oth-L2", nameEn: "Shop", kind: "room", footprint: [[40, 0], [50, 0], [50, 10], [40, 10]],
@@ -148,7 +150,7 @@ describe("FloorplanStep", () => {
     expect(screen.queryByText(/Couldn't check/)).toBeNull();
   });
 
-  it("drops the lines-up line once the plan moves, and keeps it dropped as the step reloads, until Find rooms runs again", async () => {
+  it("says to run Find rooms again once the plan moves, in place of the lines-up line, as the step reloads too, until it does", async () => {
     useEditorStore.getState().setModel(withRooms);
     const lines = "The drawing lines up with L2's rooms.";
     const api = fakeApi({
@@ -161,18 +163,56 @@ describe("FloorplanStep", () => {
       await patchPlan(api, plan(), { offsetX: 3, offsetY: 0 }, { doing: "move the plan" });
     });
     expect(screen.queryByText(lines)).toBeNull();
-    expect(guide().getByText("Couldn't check the drawing against L2's 2 rooms: look before step 5.")).toBeTruthy();
+    // Amber, as the line-up warning is: there is something to do.
+    expect(guide().getByText(moved).textContent).toBe(`! ${moved}`);
+    expect(screen.queryByText(/Couldn't check/)).toBeNull();
     // Back, then Next: the step loads the floor's drafts afresh, and the server still says they line up.
     unmount();
     open(useEditorStore.getState().levelImages, api);
     await waitFor(() => expect(api.listRoomDrafts).toHaveBeenCalledTimes(2));
     await act(async () => {});
     expect(screen.queryByText(lines)).toBeNull();
+    expect(guide().getByText(moved)).toBeTruthy();
     // Find rooms on the plan where it sits now: the answer counts again.
     (findRoomsInDrawing as unknown as Mock).mockResolvedValue({ drafts: [found], rooms: 1, open: 0, skipped: [] });
     fireEvent.click(guide().getByRole("button", { name: "Find rooms in the drawing" }));
     fireEvent.click(await guide().findByRole("button", { name: "Find again" }));
     expect(await guide().findByText(lines)).toBeTruthy();
+    expect(screen.queryByText(moved)).toBeNull();
+  });
+
+  it("knows the plan moved after a reload, with no mark, from the plan saved after the drafts were found; a new Find rooms clears it", async () => {
+    useEditorStore.getState().setModel(withRooms);
+    const lines = "The drawing lines up with L2's rooms.";
+    const foundAt = (updatedAt: string): RoomDraft => ({ ...found, updatedAt });
+    // The server still pairs the old drafts with the rooms: it never looks at the plan.
+    const api = fakeApi({ listRoomDrafts: vi.fn().mockResolvedValue({ drafts: [foundAt("2026-09-29T10:00:00.000Z")], linedUp: { pairs: 162 } }) });
+    open([plan({ updatedAt: "2026-09-29T10:05:00.000Z" })], api);
+    expect(await guide().findByText(moved)).toBeTruthy();
+    expect(screen.queryByText(lines)).toBeNull();
+    // Find rooms on the plan as it sits: its drafts are newer than the plan.
+    (api.listRoomDrafts as unknown as Mock).mockResolvedValue({ drafts: [foundAt("2026-09-29T10:10:00.000Z")], linedUp: { pairs: 162 } });
+    (findRoomsInDrawing as unknown as Mock).mockResolvedValue({ drafts: [foundAt("2026-09-29T10:10:00.000Z")], rooms: 1, open: 0, skipped: [] });
+    fireEvent.click(guide().getByRole("button", { name: "Find rooms in the drawing" }));
+    fireEvent.click(await guide().findByRole("button", { name: "Find again" }));
+    expect(await guide().findByText(lines)).toBeTruthy();
+    expect(screen.queryByText(moved)).toBeNull();
+  });
+
+  it("takes an opacity change after Find rooms for a move too: the plan's updatedAt can't tell them apart, and asking again is the safe side", () => {
+    useEditorStore.getState().setModel(withRooms);
+    // The plan's only change since the search was its opacity; the image row says only when it was saved.
+    open([plan({ opacity: 0.8, updatedAt: "2026-09-29T10:05:00.000Z" })]);
+    act(() => useDrafts.getState().setDrafts("oth-L2", [{ ...found, updatedAt: "2026-09-29T10:00:00.000Z" }], undefined, { pairs: 162 }));
+    expect(guide().getByText(moved)).toBeTruthy();
+  });
+
+  it("says nothing of a move with no earlier search: the floor's rooms are what to line up with", () => {
+    useEditorStore.getState().setModel(withRooms);
+    open([plan()]);
+    act(() => useDrafts.getState().planChanged("oth-L2"));
+    expect(screen.queryByText(moved)).toBeNull();
+    expect(guide().getByText(/L2 already has 2 rooms/)).toBeTruthy();
   });
 
   it("says plainly it couldn't check the drawing, once Find rooms has run and neither answer came", () => {

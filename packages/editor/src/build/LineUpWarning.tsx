@@ -56,6 +56,16 @@ export function notCheckedWords(floorCode: string, roomCount: number): string {
   return `Couldn't check the drawing against ${floorCode}'s ${roomCount} room${roomCount === 1 ? "" : "s"}: look before step 5.`;
 }
 
+/**
+ * Said, amber, on the Floorplan step once the plan has been added, moved or
+ * rescaled since Find rooms ran on the floor: the drafts were found on the
+ * plan as it was, so neither what they said about lining up nor any silence
+ * holds for the plan as it is.
+ */
+export function planMovedWords(): string {
+  return "The plan moved since Find rooms ran. Run Find rooms again to check it lines up.";
+}
+
 /** The amber line-up warning box, worded the same wherever it shows. */
 export function LineUpWarning({ children }: { children: ReactNode }) {
   return (

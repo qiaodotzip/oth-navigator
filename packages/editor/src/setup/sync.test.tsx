@@ -154,4 +154,11 @@ describe("useStepContext", () => {
     act(() => useDrafts.getState().setDrafts("oth-L1", []));
     expect(result.current?.lineUp).toBeUndefined();
   });
+
+  it("carries whether the plan changed since Find rooms ran, so the Floorplan step's tick holds", () => {
+    const { result } = renderHook(() => useStepContext({ id: "oth-L1", code: "L1" }));
+    expect(result.current?.planChanged).toBe(false);
+    act(() => useDrafts.getState().planChanged("oth-L1"));
+    expect(result.current?.planChanged).toBe(true);
+  });
 });

@@ -5,7 +5,9 @@ import { loadDrafts, useLinedUp } from "../build/drafts";
 import { DraftsFind } from "../build/DraftsFind";
 import { DraftsOnPlan } from "../build/DraftsOnPlan";
 import { FloorplanTools, PlanDropZone, patchPlan } from "../build/FloorplanTools";
-import { alreadyHasRoomsWords, linedUpWords, LineUpWarning, lineUpWords, notCheckedWords } from "../build/LineUpWarning";
+import {
+  alreadyHasRoomsWords, linedUpWords, LineUpWarning, lineUpWords, notCheckedWords, planMovedWords,
+} from "../build/LineUpWarning";
 import { StepGuide } from "../build/StepGuide";
 import { belowRingsFor, levelBelow } from "../flow/floors";
 import { roomLabels } from "../places/labels";
@@ -33,12 +35,15 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
   const belowRings = useMemo(() => belowRingsFor(model, below), [model, below]);
   const labels = useMemo(() => (model ? roomLabels(model, level.id) : []), [model, level.id]);
   // One line under the tools says whether the drawing lines up with the rooms
-  // already on the floor: it doesn't (amber), it does, or, once Find rooms
-  // has run and neither was said, that it couldn't be checked.
+  // already on the floor. First, once Find rooms has run, whether the plan
+  // changed since (amber): then the drafts' word was about the plan before.
+  // Else it doesn't line up (amber), it does, or, once Find rooms has run and
+  // neither was said, that it couldn't be checked.
   const ctx = useStepContext(level);
   const lineUp = ctx?.lineUp;
   const linedUp = useLinedUp(level.id);
   const found = ctx !== null && roomsFound(ctx);
+  const moved = found && ctx?.planChanged === true;
   const existingRooms = useMemo(
     () => (model ? live(model.rooms).filter(r => r.levelId === level.id).length : 0),
     [model, level.id],
@@ -78,7 +83,9 @@ export function FloorplanStep({ api, level }: { api: Api; level: Level }) {
         extras={<>
           <FloorplanTools api={api} />
           <div className="space-y-2 border-t border-stone-200 pt-2">
-            {lineUp ? (
+            {moved ? (
+              <LineUpWarning>{planMovedWords()}</LineUpWarning>
+            ) : lineUp ? (
               <LineUpWarning>{lineUpWords(lineUp, level.code)}</LineUpWarning>
             ) : linedUp ? (
               <p className="text-xs text-stone-600">{linedUpWords(level.code)}</p>

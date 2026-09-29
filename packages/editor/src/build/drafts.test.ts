@@ -6,7 +6,9 @@ import { draftNameSpot } from "../plan/DraftLayer";
 import { useEditorStore } from "../state/store";
 import { fakeApi } from "../testing/fakeApi";
 import { useToasts } from "../ui/toast";
-import { draftBox, draftView, loadDrafts, useDraftView, useDrafts, useLinedUp, useLineUp, useRoomDrafts } from "./drafts";
+import {
+  draftBox, draftView, loadDrafts, planNewerThanDrafts, useDraftView, useDrafts, useLinedUp, useLineUp, usePlanChanged, useRoomDrafts,
+} from "./drafts";
 
 const draft = (id: string): RoomDraft => RoomDraftSchema.parse({
   id, levelId: "oth-L2", nameEn: id, kind: "room", footprint: [[0, 0], [10, 0], [10, 10], [0, 10]],
@@ -155,6 +157,52 @@ const room = (id: string, ring: [number, number][], kind: Room["kind"] = "room")
   RoomSchema.parse({ id, levelId: "oth-L2", kind, footprint: ring, heightM: 4 });
 const shaped = (id: string, ring: [number, number][] | undefined, over: Partial<RoomDraft> = {}): RoomDraft =>
   ({ ...draft(id), footprint: ring, ...over });
+
+describe("whether the plan changed since Find rooms ran", () => {
+  const at = (iso: string) => ({ ...draft("rd_a"), updatedAt: iso });
+  const found = "2026-09-29T10:00:00.000Z";
+
+  it("reads it from the plan saved after the floor's drafts waiting were found, as after a reload", () => {
+    expect(planNewerThanDrafts({ updatedAt: "2026-09-29T10:05:00.000Z" }, [at(found)])).toBe(true);
+    expect(planNewerThanDrafts({ updatedAt: "2026-09-29T09:55:00.000Z" }, [at(found)])).toBe(false);
+    expect(planNewerThanDrafts({ updatedAt: found }, [at(found)])).toBe(false);
+  });
+
+  it("goes by the oldest draft waiting: a search saves them all at once, and only a later undo touches one", () => {
+    const restored = { ...at("2026-09-29T10:20:00.000Z"), id: "rd_b" };
+    expect(planNewerThanDrafts({ updatedAt: "2026-09-29T10:05:00.000Z" }, [restored, at(found)])).toBe(true);
+  });
+
+  it("can't tell with no drafts waiting, or no times to go by", () => {
+    expect(planNewerThanDrafts({ updatedAt: "2026-09-29T10:05:00.000Z" }, [])).toBe(false);
+    expect(planNewerThanDrafts({}, [at(found)])).toBe(false);
+    expect(planNewerThanDrafts({ updatedAt: "2026-09-29T10:05:00.000Z" }, [draft("rd_a")])).toBe(false);
+    expect(planNewerThanDrafts(null, [at(found)])).toBe(false);
+  });
+
+  it("says so from this tab's mark at once, or from the times with no mark, and not once Find rooms runs again", () => {
+    const plan = (updatedAt: string) => ({
+      id: "img_2", levelId: "oth-L2", filename: "L2.png", widthPx: 1, heightPx: 1, sizeBytes: 1,
+      metresPerPixel: 0.05, offsetX: 0, offsetY: 0, opacity: 0.6, version: 2, updatedAt,
+    });
+    useEditorStore.getState().setLevelImages([plan("2026-09-29T09:55:00.000Z")]);
+    act(() => useDrafts.getState().setDrafts("oth-L2", [at(found)]));
+    const { result } = renderHook(() => usePlanChanged("oth-L2"));
+    expect(result.current).toBe(false);
+    act(() => useDrafts.getState().planChanged("oth-L2"));
+    expect(result.current).toBe(true);
+    // A reload: no mark, and the plan saved after the drafts were found.
+    act(() => {
+      useDrafts.getState().reset();
+      useEditorStore.getState().setLevelImages([plan("2026-09-29T10:05:00.000Z")]);
+      useDrafts.getState().setDrafts("oth-L2", [at(found)]);
+    });
+    expect(result.current).toBe(true);
+    // Find rooms again: its drafts are newer than the plan.
+    act(() => useDrafts.getState().searched("oth-L2", [at("2026-09-29T10:10:00.000Z")]));
+    expect(result.current).toBe(false);
+  });
+});
 
 describe("draftView", () => {
   it("sorts drafts into those to review, those already on the map, and open spaces to draw by hand", () => {
