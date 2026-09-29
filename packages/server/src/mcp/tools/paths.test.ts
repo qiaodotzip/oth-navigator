@@ -222,4 +222,12 @@ describe("connect_rooms (contract v5)", () => {
     const { tools } = await client.listTools();
     expect(tools.find(t => t.name === "connect_rooms")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
   });
+
+  it("tells Claude what an island's inside is, and how making that room an area lets it reach the rooms (contract v5 amendment)", async () => {
+    const { tools } = await client.listTools();
+    const description = tools.find(t => t.name === "connect_rooms")?.description ?? "";
+    for (const words of ["inside names the room of kind room", "90% or more inside", 'kind "area" and walkable true', "preview true"]) {
+      expect(description).toContain(words);
+    }
+  });
 });

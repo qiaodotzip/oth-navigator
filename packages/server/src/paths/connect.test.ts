@@ -1,7 +1,7 @@
 import { distancePointToSegment, type Vec2 } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import {
-  CONNECT_MAX_M, CannotConnect, ISLAND_JOIN_M, connect, connectRooms, linkTargets, REASONS, type Connector, type Target,
+  CONNECT_MAX_M, CONTAINER_SHARE, CannotConnect, ISLAND_JOIN_M, connect, connectRooms, linkTargets, REASONS, type Connector, type Target,
 } from "./connect";
 import { walkableAt, walkableRaster } from "./raster";
 import { doorway, floor, LEVEL, rect, type TestRoom } from "./testing";
@@ -203,6 +203,63 @@ describe("connectRooms (contract v5)", () => {
     expect(islands.map(i => i.roomIds)).toEqual([["L1-row-1", "L1-row-2", "L1-row-3"], ["L1-apart"]]);
     expect(islands[0]!.gapM).toBeCloseTo(28, 0);
     expect(islands[0]!.to[1]).toBe(30);
+  });
+
+  describe("inside (contract v5 amendment)", () => {
+    // Rehearsal 4's L1: Commercial & F&B (North) is a room of kind room traced closed round the shops in it. An old
+    // pathway inside it, which nothing reaches, serves the block itself (it passes within 3 m), not the shops.
+    const block: TestRoom = { id: "L1-block", nameEn: "Commercial block", footprint: rect(10, 30, 40, 50), kind: "room", walkable: false };
+    const shops = [shop("L1-in-1", 12, 38, 18, 46), shop("L1-in-2", 20, 38, 26, 46), shop("L1-in-3", 28, 38, 34, 46)];
+    const old = { id: "L1-old", levelId: LEVEL, polyline: [[11, 31], [39, 31]], widthM: 2 };
+
+    it(`names the closed room an island lies inside: three shops in a block, each ${CONTAINER_SHARE * 100}% or more inside it`, () => {
+      const { islands } = connectRooms(withGate([block, ...shops], [old]), LEVEL);
+      expect(islands).toHaveLength(1);
+      expect(islands[0]).toMatchObject({ roomIds: ["L1-in-1", "L1-in-2", "L1-in-3"], inside: { roomId: "L1-block", name: "Commercial block" } });
+    });
+
+    it("names the smaller of two containers, one inside the other", () => {
+      const outer: TestRoom = { id: "L1-outer", nameEn: "Outer", footprint: rect(5, 28, 50, 55), kind: "room", walkable: false };
+      const { islands } = connectRooms(withGate([outer, block, ...shops], [old]), LEVEL);
+      expect(islands.map(i => i.inside?.roomId)).toEqual(["L1-block"]);
+    });
+
+    it("gives no inside to an island on open floor, or to a lone shop, which is no container of itself", () => {
+      const { islands } = connectRooms(withGate([{ id: "L1-far-hall", footprint: rect(0, 62, 20, 80) }, shop("L1-alone", 45, 30, 51, 36)]), LEVEL);
+      expect(islands.map(i => i.roomIds)).toEqual([["L1-alone"], ["L1-far-hall"]]);
+      for (const island of islands) expect(island).not.toHaveProperty("inside");
+    });
+
+    it("joins no room inside a container with one outside it, however near: L1's Commercial & F&B (North) sits by the hawker centre", () => {
+      const lastInside = shop("L1-in-4", 35, 38, 39.5, 46);
+      const justOutside = shop("L1-next", 40.5, 38, 45, 46);
+      const { islands } = connectRooms(withGate([block, ...shops, lastInside, justOutside], [old]), LEVEL);
+      expect(islands.map(i => [i.roomIds, i.inside?.roomId])).toEqual([
+        [["L1-in-1", "L1-in-2", "L1-in-3", "L1-in-4"], "L1-block"],
+        [["L1-next"], undefined],
+      ]);
+    });
+
+    it("keeps a shop inside a container off the island of the floor outside it, though the shop's 1 m reaches that floor", () => {
+      // L1: rooms on Commercial & F&B (North)'s edge reach floor outside it, which put them on the hawker group's island.
+      const yard: TestRoom = { id: "L1-yard", footprint: rect(0, 62, 20, 80) };
+      const block2: TestRoom = { id: "L1-block2", nameEn: "Block two", footprint: rect(20, 62, 40, 80), kind: "room", walkable: false };
+      const old2 = { id: "L1-old2", levelId: LEVEL, polyline: [[21, 63], [39, 63]], widthM: 2 };
+      const { islands } = connectRooms(withGate([yard, block2, shop("L1-in-a", 20.5, 68, 26, 74), shop("L1-in-b", 28, 68, 34, 74)], [old2]), LEVEL);
+      expect(islands.map(i => [i.roomIds, i.inside?.roomId])).toEqual([
+        [["L1-in-a", "L1-in-b"], "L1-block2"],
+        [["L1-yard"], undefined],
+      ]);
+    });
+
+    it(`counts a shop straddling the container's wall, under ${CONTAINER_SHARE * 100}% inside it, as outside: an island of its own, inside nothing`, () => {
+      const straddling = shop("L1-straddle", 36, 38, 46, 46);
+      const { islands } = connectRooms(withGate([block, ...shops, straddling], [old]), LEVEL);
+      expect(islands.map(i => [i.roomIds, i.inside?.roomId])).toEqual([
+        [["L1-in-1", "L1-in-2", "L1-in-3"], "L1-block"],
+        [["L1-straddle"], undefined],
+      ]);
+    });
   });
 
   it("measures an island that has walkable floor to that floor, though a shop on it with no floor beside it is nearer", () => {

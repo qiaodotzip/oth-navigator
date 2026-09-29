@@ -1,5 +1,5 @@
 import {
-  bboxOfRing, distancePointToSegment, live, pointInPolygon, ringCentroid, segmentsProperlyIntersect, validateModel,
+  bboxOfRing, coverage, distancePointToSegment, live, pointInPolygon, ringArea, ringCentroid, segmentsProperlyIntersect, validateModel,
   type BBox, type MapModel, type Room, type Vec2,
 } from "@oth/model";
 import { distanceToEdge, lineWidth } from "./distance";
@@ -167,6 +167,12 @@ export const MAX_CONNECTORS = 150;
  */
 export const ISLAND_JOIN_M = 2 * CLOSED_NEAR_M;
 /**
+ * An island lies inside a room of kind room when each of its rooms lies this
+ * much inside that room's outline (contract v5 amendment): a closed
+ * "container" traced round open floor, as L1's Commercial & F&B (North) is.
+ */
+export const CONTAINER_SHARE = 0.9;
+/**
  * room.noAccess's own distance: a room is served once a pathway passes this
  * near it. It is the model's ROOM_ACCESS_M (validation/rules/access.ts), which
  * the model doesn't export; the renderer keeps a copy too.
@@ -175,8 +181,12 @@ export const ACCESS_M = 3;
 
 /** One pathway to make: from the network to the first of roomIds; the others it reaches on the way. */
 export type Connector = { polyline: Vec2[]; widthM: number; roomIds: string[]; lengthM: number };
-/** Rooms no run of CONNECT_MAX_M reaches, and the straight gap from the network (from) to their floor (to). */
-export type Island = { roomIds: string[]; gapM: number; from: Vec2; to: Vec2 };
+/**
+ * Rooms no run of CONNECT_MAX_M reaches, and the straight gap from the network
+ * (from) to their floor (to). inside is the container they all lie in, when
+ * there is one (containerOf).
+ */
+export type Island = { roomIds: string[]; gapM: number; from: Vec2; to: Vec2; inside?: { roomId: string; name: string } };
 export type RoomConnectors = { connectors: Connector[]; islands: Island[]; left: number };
 
 /** A floor connect_rooms has nothing to run connectors from or through, and why, for a person. */
@@ -366,6 +376,33 @@ function nearestOn(lines: readonly (readonly Vec2[])[], p: Vec2): Vec2 {
   return best;
 }
 
+/**
+ * Contract v5 amendment: the smallest live room of kind room on the floor that
+ * every room of the island lies CONTAINER_SHARE or more inside (its outline;
+ * a hole cut round a shop inside it still holds the shop). A room of the
+ * island may be the container of the others, but a room is no container of
+ * itself alone: it must hold at least one other.
+ */
+type Container = { r: Room; box: BBox };
+/** The floor's rooms of kind room, smallest first: what containerOf tries. */
+const containersOf = (rooms: readonly Room[]): Container[] => rooms.filter(r => r.kind === "room")
+  .map(r => ({ r, area: Math.abs(ringArea(r.footprint)), box: bboxOfRing(r.footprint) }))
+  .sort((a, b) => a.area - b.area);
+/** The smallest room of kind room, not the room itself, that it lies CONTAINER_SHARE or more inside. */
+function enclosureOf(room: Room, containers: readonly Container[]): Room | undefined {
+  const box = bboxOfRing(room.footprint);
+  return containers.find(({ r, box: c }) =>
+    r.id !== room.id && meet(c, box) && coverage({ footprint: r.footprint, holes: [] }, room) >= CONTAINER_SHARE)?.r;
+}
+
+function containerOf(members: readonly Room[], containers: readonly Container[]): Room | undefined {
+  return containers.find(({ r, box }) => {
+    const others = members.filter(m => m.id !== r.id);
+    return others.length > 0 &&
+      others.every(m => meet(box, bboxOfRing(m.footprint)) && coverage({ footprint: r.footprint, holes: [] }, m) >= CONTAINER_SHARE);
+  })?.r;
+}
+
 /** The point on `line` nearest the lines, and the point on the lines nearest it. */
 function nearestPair(line: readonly Vec2[], lines: readonly (readonly Vec2[])[]): [Vec2, Vec2] {
   let best: [Vec2, Vec2] = [line[0]!, lines[0]![0]!];
@@ -401,11 +438,18 @@ function nearestPair(line: readonly Vec2[], lines: readonly (readonly Vec2[])[])
  * straight gap from the network to its cell nearest it. A room with no floor
  * beside it at all is measured to its outline. Then groups with rooms within
  * ISLAND_JOIN_M of each other are joined: a block of shops standing where no
- * floor is traced is one island, not one per shop. A joined island is
- * measured to its nearest floor, or to its nearest outline when it has none.
+ * floor is traced is one island, not one per shop. Rooms share a stretch, or
+ * join, only when the same container holds both, or none holds either
+ * (enclosureOf). A joined island is
+ * measured to its nearest floor, or to its nearest outline when it has none,
+ * and names the container it lies inside, if any (containerOf).
  */
-function islandsOf(r: Raster, dist: Float64Array, unreached: readonly Unreached[], network: readonly Vec2[][]): Island[] {
+function islandsOf(
+  r: Raster, dist: Float64Array, unreached: readonly Unreached[], network: readonly Vec2[][], floorRooms: readonly Room[],
+): Island[] {
   if (unreached.length === 0) return [];
+  const room = new Map(unreached.map(u => [u.room.id, u.room]));
+  const containers = containersOf(floorRooms);
   // How far every cell is from the network: the distance to the edge, with the lines as the edge.
   const off = new Uint8Array(r.cols * r.rows).fill(1);
   for (const line of network) {
@@ -443,13 +487,17 @@ function islandsOf(r: Raster, dist: Float64Array, unreached: readonly Unreached[
     nearest.push(best);
     return id;
   };
+  // Rooms group, and later join, only inside the same container, or both in none: the shops on the edge of
+  // L1's Commercial & F&B (North) reach floor outside it, and the rest of it stands within 2 m of the hawker
+  // group; mixed in with those, they lay inside no one room.
+  const enclosure = new Map(unreached.map(u => [u.room.id, enclosureOf(u.room, containers)?.id]));
   const byKey = new Map<string, { members: Unreached[]; to: Vec2; floor: boolean }>();
   for (const u of unreached) {
     let key: string;
     let to: Vec2;
     if (u.goals.length > 0) {
       const stretch = stretchOf(u.goals.reduce((b, i) => (away[i]! < away[b]! ? i : b)));
-      key = `floor ${stretch}`;
+      key = `floor ${stretch} in ${enclosure.get(u.room.id) ?? ""}`;
       to = cellCentre(r, nearest[stretch]!);
     } else {
       key = `room ${u.room.id}`;
@@ -472,6 +520,7 @@ function islandsOf(r: Raster, dist: Float64Array, unreached: readonly Unreached[
     for (let b = a + 1; b < groups.length; b++) {
       if (root(a) === root(b)) continue;
       const near = groups[a]!.members.some(x => groups[b]!.members.some(y =>
+        enclosure.get(x.room.id) === enclosure.get(y.room.id) &&
         meet(padded(x.box, ISLAND_JOIN_M), y.box) && roomsApart(x.room, y.room) <= ISLAND_JOIN_M));
       if (near) parent[root(a)] = root(b);
     }
@@ -486,7 +535,10 @@ function islandsOf(r: Raster, dist: Float64Array, unreached: readonly Unreached[
       : { ...had, roomIds });
   });
   return [...islands.values()]
-    .map(({ gap: _gap, floor: _floor, ...island }): Island => ({ ...island, roomIds: island.roomIds.sort() }))
+    .map(({ gap: _gap, floor: _floor, ...island }): Island => {
+      const container = containerOf(island.roomIds.map(id => room.get(id)!), containers);
+      return { ...island, roomIds: island.roomIds.sort(), ...(container ? { inside: { roomId: container.id, name: container.nameEn || container.id } } : {}) };
+    })
     .sort((a, b) => a.gapM - b.gapM || a.roomIds[0]!.localeCompare(b.roomIds[0]!));
 }
 
@@ -637,7 +689,7 @@ export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECT
 
   return {
     connectors: connectors.slice(0, max),
-    islands: islandsOf(raster, dist, targets.filter((_, k) => !done[k]), network),
+    islands: islandsOf(raster, dist, targets.filter((_, k) => !done[k]), network, [...rooms.values()]),
     left: Math.max(0, connectors.length - max),
   };
 }

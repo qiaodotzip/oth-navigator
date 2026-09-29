@@ -17,6 +17,7 @@ export type TestRoom = {
   walkable?: boolean;
   levelId?: string;
   deletedAt?: string;
+  nameEn?: string;
 };
 
 /**
@@ -40,6 +41,7 @@ export function floor(rooms: TestRoom[], extra: Record<string, unknown> = {}): M
       footprint: r.footprint,
       holes: r.holes ?? [],
       deletedAt: r.deletedAt,
+      nameEn: r.nameEn,
     })),
     ...extra,
   });

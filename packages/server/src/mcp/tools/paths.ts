@@ -7,7 +7,7 @@ import { roomIdFor } from "../../drafts/service";
 import { createEntity } from "../../entities/repository";
 import { assembleModel } from "../../model/assemble";
 import {
-  ACCESS_M, CLOSED_NEAR_M, CONNECT_MAX_M, CONNECTOR_MAX_WIDTH_M, CONNECTOR_MIN_WIDTH_M, CannotConnect, MAX_CONNECTORS,
+  ACCESS_M, CLOSED_NEAR_M, CONNECT_MAX_M, CONNECTOR_MAX_WIDTH_M, CONNECTOR_MIN_WIDTH_M, CONTAINER_SHARE, CannotConnect, MAX_CONNECTORS,
   MAX_LINK_M, connectRooms, type Connector,
 } from "../../paths/connect";
 import { GUESS_APART_M, GUESS_INSET_M, GUESS_MAX_INSET_M, OUTWARD_M } from "../../paths/entrances";
@@ -96,7 +96,9 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       "another. made lists each pathway's id, the rooms it reaches (roomIds, the one it runs to first) and its lengthM. " +
       `It makes at most ${MAX_CONNECTORS} a call: left says how many more another call would make. islands are the ` +
       "rooms no such run reaches, grouped by the floor they stand on: each with gapM, the straight gap from the " +
-      "network (from) to their floor or outline (to), in metres. A person joins an island, or you bridge it with a " +
+      `network (from) to their floor or outline (to), in metres. inside names the room of kind room an island's rooms each lie ` +
+      `${CONTAINER_SHARE * 100}% or more inside, when there is one: a closed block traced round open floor. With update, ` +
+      'kind "area" and walkable true, its rooms can be reached. A person joins an island, or you bridge it with a ' +
       "pathway from to to where view_plan shows open floor there, then call connect_rooms again. preview true works " +
       "it all out and makes nothing. Every pathway made is on the setup's check step, with Undo. It counts as one " +
       "change against the token's limit.",
