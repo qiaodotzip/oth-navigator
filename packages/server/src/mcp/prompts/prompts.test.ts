@@ -383,6 +383,27 @@ describe("what rehearsal 4 taught draw_paths (Task 13): the server connects the 
   });
 });
 
+describe("what rehearsal 5 taught draw_paths (Task 13, fix round 2)", () => {
+  const text = promptText(drawPaths, "L1");
+
+  it("checks the floor again after the last connect_rooms, since step 7 checks it before the containers and bridges", () => {
+    expect(text).toContain(
+      "Call it again after your last `connect_rooms` call, not only at step 7: opening a container or drawing a bridge " +
+      "changes the counts.",
+    );
+    expect(text.indexOf("Call it again after your last `connect_rooms` call")).toBeGreaterThan(text.indexOf("\nStop when "));
+  });
+
+  it("says the islands come nearest gap first, so the round it does attempt starts with the nearest", () => {
+    expect(text).toContain("The islands come nearest gap first, so work through them in that order.");
+  });
+
+  it("leaves the steps alone: both lines are in the stop rule, which the length pin doesn't cover", () => {
+    expect(drawPaths.steps("L1").join("\n")).not.toContain("nearest gap first");
+    expect(drawPaths.steps("L1").join("\n").length).toBeLessThan(3356 * 1.15);
+  });
+});
+
 describe("what rehearsal 4 taught place_things (Task 13)", () => {
   const text = promptText(placeThings, "L1");
 

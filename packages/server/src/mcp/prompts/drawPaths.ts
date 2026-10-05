@@ -37,6 +37,7 @@ export const drawPaths: SetupPrompt = {
   ],
   stop: floor =>
     `\`check_floor\` with floor "${floor}" and codes ["area.unreachable", "room.noAccess"] gives none, or only ones a person must fix: ` +
-    "give how many, and name up to 20",
+    "give how many, and name up to 20. Call it again after your last `connect_rooms` call, not only at step 7: opening a container " +
+    "or drawing a bridge changes the counts. The islands come nearest gap first, so work through them in that order",
   example: "Drew 14 pathways (the concourse, the link bridge) and 3 entrances; 2 rooms need a person",
 };
