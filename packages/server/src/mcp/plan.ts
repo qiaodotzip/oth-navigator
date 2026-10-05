@@ -25,6 +25,17 @@ export type PlanView = {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/**
+ * The pixel of the stored plan a world point falls on. Image y runs down while
+ * world y runs north, so (x, y) is at ((x − offsetX) / m, (offsetY − y) / m),
+ * as in the editor's plan/calibration.ts. Every reader of a plan's pixels goes
+ * through this, so the mapping is written once: `planView` for the picture
+ * view_plan sends, `paths/ink.ts` for the ink along a run.
+ */
+export function planPixel(image: PlanImage, [x, y]: readonly [number, number]): [number, number] {
+  return [(x - image.offsetX) / image.metresPerPixel, (image.offsetY - y) / image.metresPerPixel];
+}
+
 export function padded(box: BBox, by: number): BBox {
   return { minX: box.minX - by, minY: box.minY - by, maxX: box.maxX + by, maxY: box.maxY + by };
 }
@@ -47,10 +58,12 @@ export function planView(
   let right = image.widthPx;
   let bottom = image.heightPx;
   if (focus) {
-    left = clamp(Math.floor((focus.minX - image.offsetX) / m), 0, image.widthPx);
-    right = clamp(Math.ceil((focus.maxX - image.offsetX) / m), 0, image.widthPx);
-    top = clamp(Math.floor((image.offsetY - focus.maxY) / m), 0, image.heightPx);
-    bottom = clamp(Math.ceil((image.offsetY - focus.minY) / m), 0, image.heightPx);
+    const [x0, y1] = planPixel(image, [focus.minX, focus.maxY]);
+    const [x1, y0] = planPixel(image, [focus.maxX, focus.minY]);
+    left = clamp(Math.floor(x0), 0, image.widthPx);
+    right = clamp(Math.ceil(x1), 0, image.widthPx);
+    top = clamp(Math.floor(y1), 0, image.heightPx);
+    bottom = clamp(Math.ceil(y0), 0, image.heightPx);
   }
   const cropWidth = right - left;
   const cropHeight = bottom - top;
@@ -59,10 +72,10 @@ export function planView(
   const scale = Math.min(1, maxSide / Math.max(cropWidth, cropHeight));
   const width = Math.max(1, Math.round(cropWidth * scale));
   const height = Math.max(1, Math.round(cropHeight * scale));
-  const toPicture = ([x, y]: readonly [number, number]): [number, number] => [
-    ((x - image.offsetX) / m - left) * scale,
-    ((image.offsetY - y) / m - top) * scale,
-  ];
+  const toPicture = (p: readonly [number, number]): [number, number] => {
+    const [px, py] = planPixel(image, p);
+    return [(px - left) * scale, (py - top) * scale];
+  };
 
   const shown: PlanView["rooms"] = [];
   const outlines: string[] = [];
