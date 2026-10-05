@@ -166,17 +166,36 @@ describe("foldChanges", () => {
     ]);
   });
 
-  it("folds make_stop's 'finish opening it' into stops, not names", () => {
+  it("folds make_stop's 'finish opening it' into stops, not names, while the room has a stop", () => {
     const folded = foldChanges([
       row({
         id: "o1", entityType: "room", entityId: "L1-esc", action: "update",
         before: { nameEn: "Escalator - 07", kind: "service", walkable: false },
         after: { id: "L1-esc", version: 1, nameEn: "Escalator - 07", kind: "area", walkable: true },
       }),
-    ]);
+    ], id => id === "L1-esc");
     expect(folded).toMatchObject([{
       group: "stops", entityType: "room", entityId: "L1-esc",
       facts: { kind: "stopOpened", roomId: "L1-esc", roomName: "Escalator - 07" },
+    }]);
+    expect(folded[0]?.undo).toEqual([{ do: "patch", type: "room", id: "L1-esc", version: 1, patch: { kind: "service", walkable: false } }]);
+  });
+
+  it("folds draw_paths' opened container into names, as areaOpened, when the room has no stop (contract v5 amendment 3)", () => {
+    const folded = foldChanges([
+      row({
+        id: "o2", entityType: "room", entityId: "L1-commercial-n", action: "update",
+        before: { nameEn: "Commercial & F&B (North)", kind: "room", walkable: false },
+        after: { id: "L1-commercial-n", version: 12, nameEn: "Commercial & F&B (North)", kind: "area", walkable: true },
+      }),
+    ], () => false);
+    expect(folded).toMatchObject([{
+      group: "names", entityType: "room", entityId: "L1-commercial-n",
+      facts: { kind: "areaOpened", roomId: "L1-commercial-n", roomName: "Commercial & F&B (North)" },
+    }]);
+    // The undo is the same one row either way: both fields back as they were.
+    expect(folded[0]?.undo).toEqual([{
+      do: "patch", type: "room", id: "L1-commercial-n", version: 12, patch: { kind: "room", walkable: false },
     }]);
   });
 
@@ -264,6 +283,7 @@ describe("summarise", () => {
     portalKind: () => null,
     near: (_levelId, _at, except) => (except === "L1-starbucks" ? null : "Starbucks"),
     frame: id => (id === "kf_3" ? "frame 3 of L1 walk.mp4" : id),
+    hasStop: () => false,
   };
   const line = (rows: AuditRow[]) => foldChanges(rows).map(c => summarise(c, names));
 
@@ -299,5 +319,17 @@ describe("summarise", () => {
     expect(drew("pw_1")).toEqual(["Drew Main Corridor, 184 m, near Starbucks"]);
     expect(drew("pw_2")).toEqual(["Drew a pathway, 184 m, near Starbucks"]);
     expect(drew("pw_3")).toEqual(["Drew a pathway, 184 m, near Starbucks"]);
+  });
+
+  it("says a container was opened as an area, and only a room with a stop as a stop (contract v5 amendment 3)", () => {
+    const opened = [row({
+      entityType: "room", entityId: "L1-commercial-n", action: "update",
+      before: { nameEn: "Commercial & F&B (North)", kind: "room", walkable: false },
+      after: { id: "L1-commercial-n", version: 12, nameEn: "Commercial & F&B (North)", kind: "area", walkable: true },
+    })];
+    expect(foldChanges(opened, () => false).map(c => summarise(c, names)))
+      .toEqual(["Made Commercial & F&B (North) an area so routes can cross it"]);
+    expect(foldChanges(opened, () => true).map(c => summarise(c, names)))
+      .toEqual(["Finished opening Commercial & F&B (North) as a stop"]);
   });
 });

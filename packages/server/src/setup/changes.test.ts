@@ -138,6 +138,19 @@ describe("listClaudeChanges", () => {
       .toEqual([["stops", "Finished opening Escalator - 07 as a stop", "room", "update", false]]);
   });
 
+  it("files draw_paths' opened container under names, not stops, and undoes it whole (contract v5 amendment 3)", async () => {
+    // A closed block traced round open floor, with no stop on it: connect_rooms can route through it once it is an area.
+    await createEntity(f.db, "room", {
+      id: "L1-commercial-n", levelId: "oth-L1", kind: "room", footprint: sq(0, 0, 30, 20), heightM: 6, walkable: false,
+      nameEn: "Commercial & F&B (North)",
+    }, amy.id);
+    await call(client, "update", { type: "room", id: "L1-commercial-n", expectedVersion: 0, data: { kind: "area", walkable: true } });
+    expect(brief(await listClaudeChanges(f.db, "oth-L1", EPOCH)))
+      .toEqual([["names", "Made Commercial & F&B (North) an area so routes can cross it", "room", "update", false]]);
+    await undoChange(f.db, (await one("names")).auditId, amy.id);
+    expect((await f.db.select().from(rooms).where(eq(rooms.id, "L1-commercial-n")))[0]).toMatchObject({ kind: "room", walkable: false });
+  });
+
   it("lists Claude's survey labels on the floor of their frame", async () => {
     await frameOnL1();
     await call(client, "tag_frame", { frameId: "kf_1", nameEn: "Gong Cha", category: "retail" });

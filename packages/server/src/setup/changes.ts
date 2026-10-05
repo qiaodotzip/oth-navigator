@@ -89,6 +89,7 @@ export function namesFrom(model: MapModel, frames: ReadonlyMap<string, FrameInfo
   const bound = new Map(live(model.places).filter(p => p.roomId && !p.objectKindId).map(p => [p.roomId!, p.nameEn]));
   const kinds = new Map(live(model.objectKinds).map(k => [k.id, k.nameEn]));
   const portals = new Map(live(model.portals).map(p => [p.id, p.kind]));
+  const stopRooms = new Set(live(model.portalEndpoints).map(e => e.roomId));
   const now: Record<string, ReadonlyMap<string, string>> = {
     room: new Map(rooms.map(r => [r.id, r.nameEn.trim()])),
     place: places,
@@ -115,6 +116,7 @@ export function namesFrom(model: MapModel, frames: ReadonlyMap<string, FrameInfo
       return rooms.find(r => r.levelId === levelId && r.id !== except && r.walkable && pointInPolygon(at, r.footprint, r.holes))?.nameEn.trim() || null;
     },
     frame: id => frames.get(id)?.name ?? "a frame",
+    hasStop: roomId => stopRooms.has(roomId),
   };
 }
 
@@ -300,7 +302,10 @@ export async function listClaudeChanges(db: Database, levelId: string, since: Da
     .where(and(isNotNull(auditLog.via), gte(auditLog.at, since)))
     .orderBy(desc(auditLog.at));
   const model = await assembleModel(db);
-  const folded = foldChanges(rows);
+  // The fold needs hasStop, and frameInfo needs the folded rows to know which
+  // frames to ask about, so the names are built twice: once off the model
+  // alone for the fold, then again with the frames for the lines.
+  const folded = foldChanges(rows, namesFrom(model).hasStop);
   const frames = await frameInfo(db, framesOf(folded));
   // The limit is applied here, right after the floor filter — as early as it
   // can be, since folding and the floor test both need the full window's
@@ -468,13 +473,13 @@ export async function undoChange(db: Database, auditId: string, actorId: string)
     gte(auditLog.at, new Date(key.at.getTime() - 1)),
     lte(auditLog.at, new Date(key.at.getTime() + 1)),
   ));
-  const change = foldChanges(siblings).find(c => c.id === auditId);
+  const model = await assembleModel(db);
+  const change = foldChanges(siblings, namesFrom(model).hasStop).find(c => c.id === auditId);
   if (!change) throw new ChangeNotFoundError();
   const steps = change.undo;
   // A label is a proposal, and Review is where proposals are decided, with their tags.
   if (steps === null) throw new UndoRefusedError("Claude's labels are proposals: accept or reject them in Review.");
 
-  const model = await assembleModel(db);
   const names = namesFrom(model, await frameInfo(db, framesOf([change])));
   const draftNames = new Map([...(await draftInfo(db, change.touches))].map(([id, d]) => [id, d.name]));
   const label = labelsFrom(model, names, draftNames);
