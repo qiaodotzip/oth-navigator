@@ -2,7 +2,7 @@ import { inspect } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
 import type { Database } from "../db/client";
-import { objectKinds } from "../db/schema";
+import { objectKinds, placements } from "../db/schema";
 import { createTestDb } from "../testing/harness";
 import { redactError, redactSecrets } from "./redact";
 
@@ -38,13 +38,11 @@ describe("redactError", () => {
     expect(out.stack ?? "").not.toContain(SECRET);
   });
 
-  it("hides a token in whatever else the error carries: pg's detail, a cause, a plain object", () => {
-    const pg = Object.assign(new Error("duplicate key value violates unique constraint"), {
-      code: "23505", detail: `Key (name)=(${SECRET}) already exists.`,
-    });
-    const caused = new Error("save failed", { cause: pg });
-    const thrown = { detail: SECRET };
-    for (const err of [pg, caused, thrown]) {
+  it("hides a token in whatever else the error carries: a cause, a plain object, a property of its own", () => {
+    const upstream = Object.assign(new Error(`upstream refused ${SECRET}`), { code: "401" });
+    const caused = new Error("save failed", { cause: upstream });
+    const thrown = { refusal: `token ${SECRET} is unknown` };
+    for (const err of [upstream, caused, thrown]) {
       const out = redactError(err);
       expect(out).not.toBe(err);
       // What console.error prints for it, and deeper.
@@ -52,7 +50,7 @@ describe("redactError", () => {
       expect(printed).toContain("[redacted]");
       expect(printed).not.toContain(SECRET);
     }
-    expect((redactError(pg) as Error).message).toBe("duplicate key value violates unique constraint");
+    expect((redactError(caused) as Error).message).toBe("save failed");
   });
 
   it("hides a token in the error's name too", () => {
@@ -63,10 +61,12 @@ describe("redactError", () => {
 });
 
 /**
- * Since drizzle 0.45 a failed query carries the values it was given: at the
- * end of the message, after the SQL, and in a `params` property. A session id
- * is a credential and is not token-shaped, so no pattern would catch it —
- * the values go as a whole, whatever they are.
+ * A failed query carries the values it was given in two places: since drizzle
+ * 0.45, the end of its message and a `params` property of its own; and in
+ * pg's `detail`, which for a not-null (23502) or check (23514) violation is
+ * `Failing row contains (…)` — every column of the row, not one key's value.
+ * A session id is a credential and is not token-shaped, so no pattern would
+ * catch it, nor would one catch a value nobody thought of: both go as a whole.
  */
 describe("the values a failed query was given", () => {
   /** A session id's shape. Nothing about it matches a token pattern. */
@@ -84,6 +84,37 @@ describe("the values a failed query was given", () => {
     // Still enough to act on: which query, and why the database refused it.
     expect(printed).toContain("object_kinds");
     expect(printed).toContain("duplicate key value violates unique constraint");
+  });
+
+  it("are not printed for a real check violation, where pg's detail is the whole failing row", async () => {
+    const db = await createTestDb();
+    // A placement with neither a model nor a kind: the CHECK in the database
+    // refuses it, and pg's detail is every column of the row it refused. A
+    // client posting that placement reaches this from the API.
+    const err: unknown = await db.insert(placements)
+      .values({ id: CANARY, levelId: "oth-L1", position: [1, 2, 0] })
+      .catch((e: unknown) => e);
+    const printed = inspect(redactError(err), { depth: 5 });
+    expect(printed).not.toContain(CANARY);
+    expect(printed).not.toContain("Failing row contains");
+    // Still enough to act on: which constraint, which table, the SQLSTATE.
+    expect(printed).toContain("placements_asset_or_kind");
+    expect(printed).toContain("23514");
+    expect(printed).toContain("placements");
+  });
+
+  it("are not printed from pg's detail even when nothing carries params", () => {
+    const pg = Object.assign(new Error("new row for relation \"sessions\" violates check constraint"), {
+      code: "23514", constraint: "sessions_ck", table: "sessions", schema: "public", routine: "ExecConstraints",
+      detail: `Failing row contains (${CANARY}, u_amy, 2026-10-05 15:48:53.98+00).`,
+    });
+    const printed = inspect(redactError(pg), { depth: 5 });
+    expect(printed).not.toContain(CANARY);
+    expect(printed).not.toContain("Failing row contains");
+    for (const kept of ["23514", "sessions_ck", "sessions", "public", "ExecConstraints"]) {
+      expect(printed).toContain(kept);
+    }
+    expect((redactError(pg) as Error).message).toBe("new row for relation \"sessions\" violates check constraint");
   });
 
   it("go whatever shape they are in, and wherever in the chain they sit", () => {
@@ -136,7 +167,7 @@ describe("the server's error log", () => {
     expect(printed).not.toContain(SECRET);
   });
 
-  it("never prints a token from pg's detail either", async () => {
+  it("never prints pg's detail, with or without a token in it", async () => {
     vi.stubEnv("RAILWAY_ENVIRONMENT_NAME", "production");
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const broken = {
@@ -147,7 +178,9 @@ describe("the server's error log", () => {
     const res = await createApp({ db: broken }).request("/api/auth/people");
     expect(res.status).toBe(500);
     const printed = logged.mock.calls.flat().map(a => inspect(a, { depth: 5 })).join("\n");
-    expect(printed).toContain("[redacted]");
+    // Hidden whole rather than redacted, so there is no token left to find.
+    expect(printed).toContain("[hidden]");
     expect(printed).not.toContain(SECRET);
+    expect(printed).toContain("duplicate key value");
   });
 });

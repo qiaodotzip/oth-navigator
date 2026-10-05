@@ -15,13 +15,20 @@ export function redactSecrets(text: string): string {
 const HIDDEN = "[hidden]";
 
 /**
- * Where drizzle puts the values a failed query was given: at the end of the
- * message, after the SQL, and in a `params` property of its own.
+ * Where a failed query puts the values it was given, and which this hides as a
+ * whole rather than matching for secrets:
  *
- * They are hidden as a whole rather than matched for secrets. A session id is
- * a credential and looks like nothing in particular, so a pattern would let it
- * through — as would any value nobody thought of. Everything from "params:" to
- * the end of the message goes, because a value may hold a newline itself.
+ * - since drizzle 0.45, the end of the message, after the SQL, and a `params`
+ *   property of its own;
+ * - pg's `detail`, which for a not-null (23502) or check (23514) violation is
+ *   `Failing row contains (…)` — every column of the row, not one key's value.
+ *   `placements_asset_or_kind` fires from a plain insert, so a client posting a
+ *   placement with neither a model nor a kind reaches it from the API.
+ *
+ * A session id is a credential and looks like nothing in particular, so a
+ * pattern would let it through — as would any value nobody thought of.
+ * Everything from "params:" to the end of the message goes, because a value
+ * may hold a newline itself.
  */
 const PARAMS_TAIL = /\nparams:[\s\S]*/;
 
@@ -38,17 +45,28 @@ function* chain(err: unknown): Generator<unknown> {
   }
 }
 
-function carriesQueryParams(err: unknown): boolean {
-  for (const e of chain(err)) if (typeof e === "object" && e !== null && "params" in e) return true;
+function carriesQueryValues(err: unknown): boolean {
+  for (const e of chain(err)) {
+    if (typeof e !== "object" || e === null) continue;
+    if ("params" in e) return true;
+    if ("detail" in e && (e as { detail?: unknown }).detail != null) return true;
+  }
   return false;
 }
 
-/** Everything the error carries but its cause, which the walk prints itself. */
+/**
+ * Everything the error carries but its cause, which the walk prints itself,
+ * and but the values. What is left is what an operator acts on: pg's `code`,
+ * `constraint`, `table`, `column`, `schema`, `routine`, and drizzle's SQL.
+ */
 function detailsOf(err: object): Record<string, unknown> {
   const details: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(err)) {
     if (key === "cause") continue;
-    details[key] = key === "params" ? `${Array.isArray(value) ? value.length : 1} ${HIDDEN}` : value;
+    if (key === "params") details.params = `${Array.isArray(value) ? value.length : 1} ${HIDDEN}`;
+    // An absent detail says so, rather than reading as one that was hidden.
+    else if (key === "detail") details.detail = value == null ? value : HIDDEN;
+    else details[key] = value;
   }
   return details;
 }
@@ -63,10 +81,10 @@ function framesOf(err: unknown): string {
 /**
  * The error written out as console.error would, but by hand, so that the
  * values never reach the text: each error in the chain gives its name, its
- * message without them, and its other properties with `params` replaced by a
- * count. The outermost stack's frames follow.
+ * message up to "params:", and its other properties with `params` and `detail`
+ * hidden. The outermost stack's frames follow.
  */
-function printWithoutQueryParams(err: unknown): string {
+function printWithoutQueryValues(err: unknown): string {
   const parts: string[] = [];
   for (const e of chain(err)) {
     if (e instanceof Error) {
@@ -93,8 +111,8 @@ function printWithoutQueryParams(err: unknown): string {
  */
 export function redactError(err: unknown): unknown {
   if (typeof err === "string") return redactSecrets(err);
-  const values = carriesQueryParams(err);
-  const full = values ? printWithoutQueryParams(err) : inspect(err, { depth: 5 });
+  const values = carriesQueryValues(err);
+  const full = values ? printWithoutQueryValues(err) : inspect(err, { depth: 5 });
   const hidden = redactSecrets(full);
   if (!values && hidden === full) return err;
   if (!(err instanceof Error)) return hidden;
