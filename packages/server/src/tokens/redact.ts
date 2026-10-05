@@ -36,17 +36,35 @@ function messageWithoutParams(message: string): string {
   return message.replace(PARAMS_TAIL, `\nparams: ${HIDDEN}`);
 }
 
-/** The error and every cause behind it, each once: a cause may lead back. */
+/**
+ * The error and every error behind it, each once: whatever is its `cause`,
+ * and the `errors` an AggregateError holds beside it. A cause may lead back,
+ * so each is yielded once.
+ */
 function* chain(err: unknown): Generator<unknown> {
   const seen = new Set<unknown>();
-  for (let e: unknown = err; e != null && !seen.has(e); e = (e as { cause?: unknown }).cause) {
+  const queue: unknown[] = [err];
+  while (queue.length) {
+    const e = queue.shift();
+    if (e == null || seen.has(e)) continue;
     seen.add(e);
     yield e;
+    queue.push((e as { cause?: unknown }).cause);
+    const held = (e as { errors?: unknown }).errors;
+    if (Array.isArray(held)) queue.push(...held);
   }
 }
 
+/**
+ * Whether anything here can carry the values a query was given: the `params`
+ * property on any error in the chain, pg's `detail`, or — when something has
+ * re-wrapped a failed query's message and left the property behind — the
+ * "params:" tail in a message. Nothing in this repo re-wraps a message that
+ * way, but this runs on the error path, where being sure is the point.
+ */
 function carriesQueryValues(err: unknown): boolean {
   for (const e of chain(err)) {
+    if (PARAMS_TAIL.test(messageOf(e))) return true;
     if (typeof e !== "object" || e === null) continue;
     if ("params" in e) return true;
     if ("detail" in e && (e as { detail?: unknown }).detail != null) return true;
@@ -54,15 +72,21 @@ function carriesQueryValues(err: unknown): boolean {
   return false;
 }
 
+/** An error's message, which needn't be a string and needn't even be readable. */
+function messageOf(err: unknown): string {
+  const message = (err as { message?: unknown } | null)?.message;
+  return typeof message === "string" ? message : "";
+}
+
 /**
- * Everything the error carries but its cause, which the walk prints itself,
- * and but the values. What is left is what an operator acts on: pg's `code`,
- * `constraint`, `table`, `column`, `schema`, `routine`, and drizzle's SQL.
+ * Everything the error carries but the errors behind it, which the walk prints
+ * itself, and but the values. What is left is what an operator acts on: pg's
+ * `code`, `constraint`, `table`, `column`, `schema`, `routine`, and the SQL.
  */
 function detailsOf(err: object): Record<string, unknown> {
   const details: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(err)) {
-    if (key === "cause") continue;
+    if (key === "cause" || key === "errors") continue;
     if (key === "params") details.params = `${Array.isArray(value) ? value.length : 1} ${HIDDEN}`;
     // An absent detail says so, rather than reading as one that was hidden.
     else if (key === "detail") details.detail = value == null ? value : HIDDEN;

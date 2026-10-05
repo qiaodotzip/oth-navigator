@@ -134,6 +134,28 @@ describe("the values a failed query was given", () => {
     expect(printed).toContain("violates not-null constraint");
   });
 
+  /** As drizzle throws it: the values in the message and in a property. */
+  const failedQuery = () => Object.assign(
+    new Error(`Failed query: insert into "sessions" ("id") values ($1)\nparams: ${CANARY}`),
+    { query: 'insert into "sessions" ("id") values ($1)', params: [CANARY] },
+  );
+
+  it("go when something re-wraps the message alone, with no params property to find", () => {
+    const rewrapped = new Error(failedQuery().message);
+    const out = redactError(rewrapped);
+    expect(out).not.toBe(rewrapped);
+    expect(inspect(out, { depth: 5 })).not.toContain(CANARY);
+    expect((out as Error).message).not.toContain(CANARY);
+    expect((out as Error).message).toContain("insert into \"sessions\"");
+  });
+
+  it("go when the failed query is held beside others, not behind a cause", () => {
+    const printed = inspect(redactError(new AggregateError([failedQuery()], "every attempt failed")), { depth: 5 });
+    expect(printed).not.toContain(CANARY);
+    expect(printed).toContain("every attempt failed");
+    expect(printed).toContain("insert into \"sessions\"");
+  });
+
   it("are gone from the log the server writes when a request fails", async () => {
     vi.stubEnv("RAILWAY_ENVIRONMENT_NAME", "production");
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
