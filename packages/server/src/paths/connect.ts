@@ -243,9 +243,11 @@ const UNREACHED = new Set(["area.unreachable", "room.noAccess"]);
 /**
  * A room check_floor lists. enter (area.unreachable): a connector must run
  * into it. near (room.noAccess): one must pass within ACCESS_M of it. goals:
- * the walkable cells a connector to it may end on.
+ * the walkable cells a connector to it may end on. fallback: those cells are
+ * the band outside its outline, not floor inside it, so ending on one is no
+ * proof the room is reached (contract v5 amendment 4).
  */
-type Unreached = { room: Room; box: BBox; enter: boolean; near: boolean; goals: number[] };
+type Unreached = { room: Room; box: BBox; enter: boolean; near: boolean; goals: number[]; fallback: boolean };
 
 const cm = (v: number) => Math.round(v * 100) / 100;
 const at = (p: Vec2): Vec2 => [cm(p[0]), cm(p[1])];
@@ -286,22 +288,22 @@ function toOutline(p: Vec2, ring: readonly Vec2[]): number {
 /**
  * Where a connector to the room may end: into an area, on a walkable cell
  * inside it; to a closed room, or an area with no walkable cell left inside,
- * on one within CLOSED_NEAR_M of its outline.
+ * on one within CLOSED_NEAR_M of its outline (`fallback`).
  */
-function goalsOf(r: Raster, room: Room): number[] {
+function goalsOf(r: Raster, room: Room): { goals: number[]; fallback: boolean } {
   const box = bboxOfRing(room.footprint);
   if (room.walkable) {
     const inside: number[] = [];
     walkableIn(r, box, (i, c) => {
       if (pointInPolygon(c, room.footprint, room.holes)) inside.push(i);
     });
-    if (inside.length > 0) return inside;
+    if (inside.length > 0) return { goals: inside, fallback: false };
   }
   const near: number[] = [];
   walkableIn(r, padded(box, CLOSED_NEAR_M), (i, c) => {
     if (toOutline(c, room.footprint) <= CLOSED_NEAR_M) near.push(i);
   });
-  return near;
+  return { goals: near, fallback: true };
 }
 
 /**
@@ -599,8 +601,9 @@ function islandsOf(
  * foot of its first cell on the line it leaves, is simplified by
  * CONNECTOR_SIMPLIFY_M without leaving the floor (simplifyOnFloor), takes the width rule clamped to 1–3 m, and becomes a
  * source itself, so the search carries on from it too; every room check_floor
- * would then stop listing (reachedBy) goes on it and is skipped. What the search
- * never reaches is on an island (islandsOf).
+ * would then stop listing (reachedBy) goes on it and is skipped. A room whose
+ * goals are the band outside its outline goes on it only once reachedBy says
+ * so. What the search never reaches is on an island (islandsOf).
  *
  * Every connector is worked out, so `left` says how many past `max` a second
  * call would make; the islands are measured from all of them.
@@ -650,7 +653,8 @@ export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECT
     const room = rooms.get(id)!;
     const has = codes.get(id)!;
     return {
-      room, box: bboxOfRing(room.footprint), enter: has.has("area.unreachable"), near: has.has("room.noAccess"), goals: goalsOf(raster, room),
+      room, box: bboxOfRing(room.footprint), enter: has.has("area.unreachable"), near: has.has("room.noAccess"),
+      ...goalsOf(raster, room),
     };
   });
   // Which targets may end at each cell, as linked lists.
@@ -666,6 +670,12 @@ export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECT
   });
 
   const done = new Uint8Array(targets.length);
+  /**
+   * Targets left to islandsOf (contract v5 amendment 4): a fallback-goal room
+   * the run beside it never reached. Nothing more is searched for them, and a
+   * later connector that does reach one still names it.
+   */
+  const givenUp = new Uint8Array(targets.length);
   let open = targets.length;
   const connectors: Connector[] = [];
   const diagonal = cellM * Math.SQRT2;
@@ -674,36 +684,52 @@ export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECT
     const i = queue.pop();
     if (d > dist[i]!) continue;
     let hit = -1;
-    for (let e = goalHead[i]!; e >= 0 && hit < 0; e = goalNext[e]!) if (!done[goalOf[e]!]) hit = goalOf[e]!;
+    for (let e = goalHead[i]!; e >= 0 && hit < 0; e = goalNext[e]!) {
+      const k = goalOf[e]!;
+      if (!done[k] && !givenUp[k]) hit = k;
+    }
     if (hit >= 0) {
-      done[hit] = 1;
-      open--;
       const path: Vec2[] = [];
       let c = i;
       for (; dist[c]! > 0; c = prev[c]!) path.push(cellCentre(raster, c));
       // A room whose goal lies on a line already needs no connector; the search carries on from here.
-      if (path.length > 0) {
+      if (path.length === 0) {
+        done[hit] = 1;
+        open--;
+      } else {
         const raw = [start.get(c)!, ...path.reverse()];
         const polyline = simplifyOnFloor(raw, raster, CONNECTOR_SIMPLIFY_M).map(at);
         const box = bboxOfRing(polyline);
         const points: Vec2[] = [];
         along(polyline, cellM / 2, p => points.push(p));
-        const roomIds = [targets[hit]!.room.id];
-        targets.forEach((u, k) => {
-          if (done[k] || !reachedBy(u, polyline, box, points)) return;
-          done[k] = 1;
+        const target = targets[hit]!;
+        // Amendment 4: its goals are the band outside its outline, so the run
+        // can end beside a room check_floor still lists. Named only once
+        // reachedBy says so; otherwise nothing is drawn for it and it is
+        // islandsOf's, never claimed as connected.
+        if (target.fallback && !reachedBy(target, polyline, box, points)) {
+          givenUp[hit] = 1;
           open--;
-          roomIds.push(u.room.id);
-        });
-        connectors.push({
-          polyline,
-          widthM: round1(lineWidth(raw, raster, toEdge, CONNECTOR_MIN_WIDTH_M, CONNECTOR_MAX_WIDTH_M)),
-          roomIds,
-          lengthM: round1(polylineLength(polyline)),
-        });
-        // The connector's own cells go in at 0, this one's included: it is taken again from there.
-        seed(polyline);
-        continue;
+        } else {
+          done[hit] = 1;
+          open--;
+          const roomIds = [target.room.id];
+          targets.forEach((u, k) => {
+            if (done[k] || !reachedBy(u, polyline, box, points)) return;
+            done[k] = 1;
+            if (!givenUp[k]) open--;
+            roomIds.push(u.room.id);
+          });
+          connectors.push({
+            polyline,
+            widthM: round1(lineWidth(raw, raster, toEdge, CONNECTOR_MIN_WIDTH_M, CONNECTOR_MAX_WIDTH_M)),
+            roomIds,
+            lengthM: round1(polylineLength(polyline)),
+          });
+          // The connector's own cells go in at 0, this one's included: it is taken again from there.
+          seed(polyline);
+          continue;
+        }
       }
     }
     const col = i % cols;

@@ -300,6 +300,18 @@ describe("connectRooms (contract v5)", () => {
     });
   });
 
+  it("leaves a fallback-goal room to the islands rather than naming it on a connector that never reaches it (contract v5 amendment 4)", () => {
+    // An area with no walkable cell inside it: four smaller voids tiled over it, so the raster blocks all of it
+    // (the smaller room wins). Its goals fall back to the 1 m band outside its outline, where a run cannot
+    // enter it — and area.unreachable asks for a run that does.
+    const area: TestRoom = { id: "L1-void-area", footprint: rect(30, 10, 34, 14) };
+    const tiles: TestRoom[] = [[30, 10], [32, 10], [30, 12], [32, 12]].map(([x, y], k) =>
+      ({ id: `L1-tile-${k}`, footprint: rect(x!, y!, x! + 2, y! + 2), kind: "void", walkable: false }));
+    const { connectors, islands } = connectRooms(withGate([area, ...tiles]), LEVEL);
+    expect(connectors).toEqual([]);
+    expect(islands.map(i => i.roomIds)).toEqual([["L1-void-area"]]);
+  });
+
   it("measures an island that has walkable floor to that floor, though a shop on it with no floor beside it is nearer", () => {
     // The shop is 28 m off and 1.5 m from the far hall: one island. A bridge to its floor lets connect_rooms reach the rest.
     const { islands } = connectRooms(withGate([{ id: "L1-far-hall", footprint: rect(0, 62, 20, 80) }, shop("L1-between", 5, 30, 9, 60.5)]), LEVEL);
