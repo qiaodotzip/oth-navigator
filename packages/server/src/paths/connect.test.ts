@@ -1,8 +1,8 @@
 import { distancePointToSegment, type Vec2 } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import {
-  CONNECT_MAX_M, CONNECTOR_SIMPLIFY_M, CONTAINER_SHARE, CannotConnect, ISLAND_JOIN_M, clearLine, connect, connectRooms, linkTargets,
-  REASONS, simplifyOnFloor, type Connector, type Target,
+  CONNECT_MAX_M, CONNECTOR_SIMPLIFY_M, CONTAINER_SHARE, CannotConnect, ISLAND_JOIN_M, MAX_CONNECTORS, clearLine, connect, connectRooms,
+  linkTargets, REASONS, simplifyOnFloor, type Connector, type Target,
 } from "./connect";
 import { walkableAt, walkableRaster, type Raster } from "./raster";
 import { simplify } from "./simplify";
@@ -298,6 +298,28 @@ describe("connectRooms (contract v5)", () => {
         [["L1-straddle"], undefined],
       ]);
     });
+  });
+
+  it("measures the islands from the connectors the call kept, and from the drawn lines alone with preview (contract v5 amendment 4)", () => {
+    const tall: TestRoom = { id: "L1-hall", footprint: rect(0, 0, 60, 60) };
+    const far: TestRoom = { id: "L1-far", footprint: rect(20, 62, 30, 70) };
+    const model = withGate([shop("L1-a", 20, 20, 24, 24), shop("L1-b", 20, 45, 24, 49), far], [], tall);
+    const all = connectRooms(model, LEVEL);
+    expect(all.connectors.map(c => c.roomIds[0])).toEqual(["L1-a", "L1-b"]);
+    expect(all.islands[0]).toMatchObject({ roomIds: ["L1-far"], gapM: 18 });
+    expect(fromLine(all.islands[0]!.from, all.connectors[1]!.polyline)).toBeLessThan(0.01);
+
+    // The cap drops L1-b's connector, so the island is measured to L1-a's, the last line this call leaves.
+    const capped = connectRooms(model, LEVEL, 1);
+    expect(capped.left).toBe(1);
+    expect(capped.islands[0]!.from).toEqual(all.connectors[0]!.polyline.at(-1));
+    expect(capped.islands[0]!.gapM).toBeCloseTo(43, 0);
+
+    // preview writes nothing at all, so its islands are measured from the pathway that was there already.
+    const previewed = connectRooms(model, LEVEL, MAX_CONNECTORS, true);
+    expect(previewed.connectors.map(c => c.roomIds[0])).toEqual(["L1-a", "L1-b"]);
+    expect(fromLine(previewed.islands[0]!.from, MAIN.polyline)).toBeLessThan(0.01);
+    expect(previewed.islands[0]!.gapM).toBeCloseTo(60.1, 1);
   });
 
   it("leaves a fallback-goal room to the islands rather than naming it on a connector that never reaches it (contract v5 amendment 4)", () => {

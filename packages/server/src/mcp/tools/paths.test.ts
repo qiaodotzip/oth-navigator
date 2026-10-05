@@ -230,4 +230,10 @@ describe("connect_rooms (contract v5)", () => {
       expect(description).toContain(words);
     }
   });
+
+  it("says the islands are measured from the connectors this call made (contract v5 amendment 4)", async () => {
+    const { tools } = await client.listTools();
+    expect(tools.find(t => t.name === "connect_rooms")?.description ?? "")
+      .toContain("The islands are measured from the connectors this call made, so bridge one only once left is 0.");
+  });
 });

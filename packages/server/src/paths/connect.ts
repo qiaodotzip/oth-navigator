@@ -484,7 +484,9 @@ function nearestPair(line: readonly Vec2[], lines: readonly (readonly Vec2[])[])
  * join, only when the same container holds both, or none holds either
  * (enclosureOf). A joined island is
  * measured to its nearest floor, or to its nearest outline when it has none,
- * and names the container it lies inside, if any (containerOf).
+ * and names the container it lies inside, if any (containerOf). `network` is
+ * the lines the call leaves on the floor, which every gap is measured from
+ * (contract v5 amendment 4).
  */
 function islandsOf(
   r: Raster, dist: Float64Array, unreached: readonly Unreached[], network: readonly Vec2[][], floorRooms: readonly Room[],
@@ -606,9 +608,11 @@ function islandsOf(
  * so. What the search never reaches is on an island (islandsOf).
  *
  * Every connector is worked out, so `left` says how many past `max` a second
- * call would make; the islands are measured from all of them.
+ * call would make; the islands are measured from the lines the call leaves on
+ * the floor — its sources and the connectors it keeps, and with `preview`, which
+ * writes nothing, its sources alone (contract v5 amendment 4).
  */
-export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECTORS): RoomConnectors {
+export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECTORS, preview = false): RoomConnectors {
   const rooms = new Map(live(model.rooms).filter(r => r.levelId === levelId).map(r => [r.id, r]));
   const issues = validateModel(model).issues.filter(i => i.levelId === levelId);
   const codes = new Map<string, Set<string>>();
@@ -648,6 +652,8 @@ export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECT
     });
   };
   for (const p of reached) seed(p.polyline);
+  /** How many of `network` were there before this call: seed appends one entry per connector after them. */
+  const sources = network.length;
 
   const targets: Unreached[] = [...codes.keys()].sort().map(id => {
     const room = rooms.get(id)!;
@@ -753,9 +759,14 @@ export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECT
     }
   }
 
+  const made = connectors.slice(0, max);
+  // Amendment 4: the islands are measured from the lines this call leaves on
+  // the floor, so an island's `from` is never a point on a line nobody wrote —
+  // a bridge laid from it would be pathway.disconnected.
+  const drawn = network.slice(0, sources + (preview ? 0 : made.length));
   return {
-    connectors: connectors.slice(0, max),
-    islands: islandsOf(raster, dist, targets.filter((_, k) => !done[k]), network, [...rooms.values()]),
+    connectors: made,
+    islands: islandsOf(raster, dist, targets.filter((_, k) => !done[k]), drawn, [...rooms.values()]),
     left: Math.max(0, connectors.length - max),
   };
 }

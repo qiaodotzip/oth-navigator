@@ -98,7 +98,8 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       "rooms no such run reaches, grouped by the floor they stand on: each with gapM, the straight gap from the " +
       `network (from) to their floor or outline (to), in metres. inside names the room of kind room an island's rooms each lie ` +
       `${CONTAINER_SHARE * 100}% or more inside, when there is one: a closed block traced round open floor. With update, ` +
-      'kind "area" and walkable true, its rooms can be reached. A person joins an island, or you bridge it with a ' +
+      'kind "area" and walkable true, its rooms can be reached. The islands are measured from the connectors this call ' +
+      "made, so bridge one only once left is 0. A person joins an island, or you bridge it with a " +
       "pathway from to to where view_plan shows open floor there, then call connect_rooms again. preview true works " +
       "it all out and makes nothing. Every pathway made is on the setup's check step, with Undo. It counts as one " +
       "change against the token's limit.",
@@ -112,7 +113,7 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
     const level = levelFor(ctx, model, floor);
     const found = (() => {
       try {
-        return connectRooms(model, level.id, MAX_CONNECTORS);
+        return connectRooms(model, level.id, MAX_CONNECTORS, preview);
       } catch (err) {
         if (err instanceof SurfaceTooLarge || err instanceof CannotConnect) throw new Refusal(`Nothing connected on ${level.code}. ${err.message}`);
         throw err;
