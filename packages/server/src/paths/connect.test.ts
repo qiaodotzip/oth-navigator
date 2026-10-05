@@ -1,9 +1,11 @@
 import { distancePointToSegment, type Vec2 } from "@oth/model";
 import { describe, expect, it } from "vitest";
 import {
-  CONNECT_MAX_M, CONTAINER_SHARE, CannotConnect, ISLAND_JOIN_M, connect, connectRooms, linkTargets, REASONS, type Connector, type Target,
+  CONNECT_MAX_M, CONNECTOR_SIMPLIFY_M, CONTAINER_SHARE, CannotConnect, ISLAND_JOIN_M, clearLine, connect, connectRooms, linkTargets,
+  REASONS, simplifyOnFloor, type Connector, type Target,
 } from "./connect";
-import { walkableAt, walkableRaster } from "./raster";
+import { walkableAt, walkableRaster, type Raster } from "./raster";
+import { simplify } from "./simplify";
 import { doorway, floor, LEVEL, rect, type TestRoom } from "./testing";
 
 const corridor = walkableRaster(floor([{ footprint: rect(0, 0, 20, 4) }]), LEVEL);
@@ -114,6 +116,40 @@ const fromBox = (p: Vec2, [x0, y0, x1, y1]: number[]) =>
 const fromLine = (p: Vec2, line: readonly Vec2[]) =>
   Math.min(...line.slice(1).map((b, k) => distancePointToSegment(p, line[k]!, b)));
 const byRoom = (made: Connector[], id: string) => made.find(c => c.roomIds[0] === id)!;
+const onFloor = (line: readonly Vec2[], r: Raster) => line.slice(1).every((b, k) => clearLine(r, line[k]!, b, 0));
+
+describe("simplifyOnFloor (contract v5 amendment 4)", () => {
+  /**
+   * Real L1's Commercial & F&B (Central): one 0.25 m row of floor between the
+   * restaurant fronts, with the cell a connector may end on one row above its
+   * east end. 40 cells is the 9.75 m segment the measurement found off the floor.
+   */
+  const strip = (): Raster => {
+    const cells = new Uint8Array(40 * 3);
+    for (let col = 0; col < 40; col++) cells[40 + col] = 1;
+    cells[2 * 40 + 39] = 1;
+    return { originX: 0, originY: 0, cols: 40, rows: 3, cellM: 0.25, cells };
+  };
+  /** The run the search walks: every cell of the strip, then the goal cell above its end. */
+  const raw: Vec2[] = [...Array(40).keys()].map((col): Vec2 => [0.125 + col * 0.25, 0.375]).concat([[9.875, 0.625]]);
+
+  it("keeps back the corner the plain simplify cuts, since the chord over it leaves the floor", () => {
+    const r = strip();
+    // Douglas–Peucker drops the corner: it lies 0.25 m off the chord, under the 0.3 m tolerance.
+    const plain = simplify(raw, CONNECTOR_SIMPLIFY_M);
+    expect(plain).toEqual([[0.125, 0.375], [9.875, 0.625]]);
+    expect(onFloor(plain, r)).toBe(false);
+
+    const kept = simplifyOnFloor(raw, r, CONNECTOR_SIMPLIFY_M);
+    expect(kept).toEqual([[0.125, 0.375], [9.875, 0.375], [9.875, 0.625]]);
+    expect(onFloor(kept, r)).toBe(true);
+  });
+
+  it("drops what it can: a straight run comes back as its two ends", () => {
+    const r = strip();
+    expect(simplifyOnFloor(raw.slice(0, 40), r, CONNECTOR_SIMPLIFY_M)).toEqual([[0.125, 0.375], [9.875, 0.375]]);
+  });
+});
 
 describe("connectRooms (contract v5)", () => {
   it("runs a connector from the pathway to within 1 m of each shop no pathway passes, one per shop", () => {
@@ -127,6 +163,8 @@ describe("connectRooms (contract v5)", () => {
       expect(fromBox(c.polyline.at(-1)!, box), id).toBeLessThanOrEqual(1);
       expect(fromLine(c.polyline[0]!, MAIN.polyline), id).toBeLessThan(0.01);
       expect(c.polyline.slice(1).every(p => walkableAt(surface, p)), id).toBe(true);
+      // Amendment 4: the segments between the points stay on the floor too, not only the points.
+      expect(onFloor(c.polyline, surface), id).toBe(true);
       expect(c.lengthM, id).toBeCloseTo(9.1, 0);
       expect(c.widthM, id).toBeGreaterThanOrEqual(1);
       expect(c.widthM, id).toBeLessThanOrEqual(3);

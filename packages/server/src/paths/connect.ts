@@ -92,6 +92,46 @@ export function clearLine(r: Raster, a: Vec2, b: Vec2, slackM: number): boolean 
   return true;
 }
 
+/**
+ * Contract v5 amendment 4: the run simplified, with any vertex kept back whose
+ * dropping takes the line off the floor. connect_rooms' runs hug wall corners,
+ * unlike suggest_paths' medial-axis lines, so a chord over dropped vertices can
+ * leave a narrow strip of floor — on real L1, 9.75 m of one connector lay inside
+ * a restaurant. Douglas–Peucker keeps whatever `clearLine` (the test the links
+ * use, with no slack) refuses, farthest from the chord first, and stops at the
+ * run's own steps, which are always on the floor.
+ */
+export function simplifyOnFloor(raw: readonly Vec2[], r: Raster, toleranceM: number): Vec2[] {
+  const simplified = simplify(raw, toleranceM);
+  const keep = new Uint8Array(raw.length);
+  const kept: number[] = [];
+  for (let i = 0, k = 0; i < raw.length && k < simplified.length; i++) {
+    const p = simplified[k]!;
+    if (raw[i]![0] !== p[0] || raw[i]![1] !== p[1]) continue;
+    keep[i] = 1;
+    kept.push(i);
+    k++;
+  }
+  const stack: Array<[number, number]> = [];
+  for (let k = 1; k < kept.length; k++) stack.push([kept[k - 1]!, kept[k]!]);
+  while (stack.length > 0) {
+    const [from, to] = stack.pop()!;
+    if (to <= from + 1 || clearLine(r, raw[from]!, raw[to]!, 0)) continue;
+    let far = from + 1;
+    let farthest = -1;
+    for (let i = from + 1; i < to; i++) {
+      const d = distancePointToSegment(raw[i]!, raw[from]!, raw[to]!);
+      if (d > farthest) {
+        farthest = d;
+        far = i;
+      }
+    }
+    keep[far] = 1;
+    stack.push([from, far], [far, to]);
+  }
+  return raw.filter((_, i) => keep[i] === 1);
+}
+
 /** The foot of `p` on segment a–b. */
 function closestOn(p: Vec2, a: Vec2, b: Vec2): Vec2 {
   const vx = b[0] - a[0];
@@ -557,7 +597,7 @@ function islandsOf(
  * The first cell it takes where a connector to an unreached room may end (goalsOf)
  * makes that room's connector: nearest room first. The connector starts at the
  * foot of its first cell on the line it leaves, is simplified by
- * CONNECTOR_SIMPLIFY_M, takes the width rule clamped to 1–3 m, and becomes a
+ * CONNECTOR_SIMPLIFY_M without leaving the floor (simplifyOnFloor), takes the width rule clamped to 1–3 m, and becomes a
  * source itself, so the search carries on from it too; every room check_floor
  * would then stop listing (reachedBy) goes on it and is skipped. What the search
  * never reaches is on an island (islandsOf).
@@ -644,7 +684,7 @@ export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECT
       // A room whose goal lies on a line already needs no connector; the search carries on from here.
       if (path.length > 0) {
         const raw = [start.get(c)!, ...path.reverse()];
-        const polyline = simplify(raw, CONNECTOR_SIMPLIFY_M).map(at);
+        const polyline = simplifyOnFloor(raw, raster, CONNECTOR_SIMPLIFY_M).map(at);
         const box = bboxOfRing(polyline);
         const points: Vec2[] = [];
         along(polyline, cellM / 2, p => points.push(p));
