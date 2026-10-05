@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { createTestDb } from "../testing/harness";
+import { createTestDb, whyRejected } from "../testing/harness";
 import { buildings, floorSetup, levelImages, levels, objectKinds, placements, places, rooms } from "./schema";
 
 describe("entity tables", () => {
@@ -81,8 +81,8 @@ describe("objects", () => {
 
   it("refuses, in the database itself, a placement with neither a model nor a kind", async () => {
     const db = await createTestDb();
-    await expect(db.insert(placements).values({ id: "L1-x", levelId: "oth-L1", position: [1, 2, 0] }))
-      .rejects.toThrow(/placements_asset_or_kind/);
+    expect(await whyRejected(db.insert(placements).values({ id: "L1-x", levelId: "oth-L1", position: [1, 2, 0] })))
+      .toMatch(/placements_asset_or_kind/);
   });
 
   it("marks a place as a kind of object", async () => {
@@ -107,6 +107,6 @@ describe("floorSetup", () => {
     const db = await createTestDb();
     await db.insert(floorSetup).values({ levelId: "oth-L1", step: 2 });
     await db.insert(floorSetup).values({ levelId: "oth-L2", step: 2 });
-    await expect(db.insert(floorSetup).values({ levelId: "oth-L1", step: 2 })).rejects.toThrow(/duplicate key/);
+    expect(await whyRejected(db.insert(floorSetup).values({ levelId: "oth-L1", step: 2 }))).toMatch(/duplicate key/);
   });
 });

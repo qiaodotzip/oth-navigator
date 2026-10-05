@@ -9,7 +9,7 @@ import {
   auditLog, captures, floorSetup, keyframes, levelImages, objectKinds, places, placements, planPdfs,
   publishedVersions, roomDrafts, sessions, sightings, users,
 } from "../db/schema";
-import { createTestDb } from "../testing/harness";
+import { createTestDb, whyRejected } from "../testing/harness";
 import { exportData, ExportRefused } from "./dataExport";
 import { importData, ImportRefused } from "./dataImport";
 import { CARRIED_TABLES, countRows, sizeOf, unknownTables, type ExportFile } from "./dataTables";
@@ -271,7 +271,7 @@ describe("data:export and data:import", () => {
     await writeFile(path, JSON.stringify(doc));
 
     const dst = await target();
-    await expect(importData(dst.db, dst.dataDir, out)).rejects.toThrow(/duplicate key/);
+    expect(await whyRejected(importData(dst.db, dst.dataDir, out))).toMatch(/duplicate key/);
     expect(await dst.db.select().from(users)).toEqual([]);
     expect(await countRows(dst.db)).toEqual(Object.fromEntries(CARRIED_TABLES.map(t => [t, 0])));
 

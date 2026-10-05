@@ -20,6 +20,30 @@ export async function createTestDb(): Promise<Database> {
 }
 
 /**
+ * Why the database refused a query, in its own words.
+ *
+ * Since drizzle 0.45 a failed query throws with the SQL and its parameters in
+ * the message and the database's error as the `cause`, so a test that wants
+ * Postgres's words — a constraint's name, "duplicate key" — reads the whole
+ * chain here rather than the message it is handed.
+ */
+export async function whyRejected(query: PromiseLike<unknown>): Promise<string> {
+  try {
+    await query;
+  } catch (err) {
+    const words: string[] = [];
+    // A cause that leads back to itself would otherwise loop forever.
+    const seen = new Set<unknown>();
+    for (let e: unknown = err; e != null && !seen.has(e); e = (e as { cause?: unknown }).cause) {
+      seen.add(e);
+      words.push(String((e as { message?: unknown }).message ?? e));
+    }
+    return words.join("\n");
+  }
+  throw new Error("the query was expected to be rejected, and it was not");
+}
+
+/**
  * Hono's `Response.json()` is typed `unknown`. Tests assert on shapes they
  * already know, so this keeps them readable without an assertion on every line.
  */

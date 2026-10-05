@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { RoomDraftInputSchema, type DraftSource, type Ring, type RoomKind, type Vec2 } from "@oth/model";
 import type { Database } from "../db/client";
+import { isUniqueViolation } from "../db/errors";
 import { toModelRow, type Row } from "../db/rows";
 import { auditLog, levels, roomDrafts, rooms } from "../db/schema";
 import {
@@ -30,11 +31,6 @@ export class RoomIdTakenError extends Error {
     super("Someone added a room with the same name just now. Accept again, and yours is numbered after theirs.");
     this.name = "RoomIdTakenError";
   }
-}
-
-/** Postgres's unique_violation, from pg and PGlite alike. A room's one unique key is its id. */
-function isUniqueViolation(err: unknown): boolean {
-  return (err as { code?: unknown } | null)?.code === "23505";
 }
 
 /**

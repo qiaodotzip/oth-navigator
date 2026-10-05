@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { isUniqueViolation } from "../../db/errors";
 import type { Row } from "../../db/rows";
 import { ENTITY_TYPES, entityRegistry, type EntityType } from "../../entities/registry";
 import { createEntity, restoreEntity, softDeleteEntity, updateEntity } from "../../entities/repository";
@@ -38,11 +39,6 @@ async function find(ctx: ToolContext, type: EntityType, id: string): Promise<Row
   return ((await ctx.db.select().from(table).where(eq(table.id, id))) as Row[])[0];
 }
 
-/** Postgres's unique_violation, from pg and PGlite alike. An entity table's only unique key is its id. */
-function isDuplicate(err: unknown): boolean {
-  return (err as { code?: unknown } | null)?.code === "23505";
-}
-
 function onFloor(ctx: ToolContext, row: Row): void {
   if (typeof row.levelId === "string") ctx.seenOn(row.levelId);
 }
@@ -76,7 +72,7 @@ export function registerEditTools(server: McpServer, ctx: ToolContext): void {
       row = await createEntity(ctx.db, type, input, ctx.user.id);
     } catch (err) {
       // Someone added the same id between the look above and this write.
-      if (isDuplicate(err)) throw new Refusal(`Not saved: ${type} ${id} already exists, added while this ran. Read it with get, then choose another id or update that one.`);
+      if (isUniqueViolation(err)) throw new Refusal(`Not saved: ${type} ${id} already exists, added while this ran. Read it with get, then choose another id or update that one.`);
       throw err;
     }
     onFloor(ctx, row);
