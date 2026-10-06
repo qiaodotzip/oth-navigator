@@ -1,6 +1,6 @@
 import type { Vec2 } from "@oth/model";
 import { describe, expect, it } from "vitest";
-import { BRIDGE_MAX_M, bridgeAcross, type Gap } from "./bridge";
+import { BRIDGE_MAX_M, BRIDGE_MAX_RUN_M, bridgeAcross, type Gap } from "./bridge";
 import type { PlanInk } from "./ink";
 import { floor, rect, type TestRoom } from "./testing";
 
@@ -48,6 +48,18 @@ describe("bridgeAcross (contract v6)", () => {
   it(`lays nothing across more than ${BRIDGE_MAX_M} m of unlabelled space`, () => {
     const far = bridgeAcross({ from: [59, 2], to: [75.5, 2], roomIds: ["L1-annex"] }, roomsOf([], rect(75, 0, 85, 20)), sayOpen());
     expect(far).toBeNull();
+  });
+
+  it(`lays nothing longer than ${BRIDGE_MAX_RUN_M} m end to end, however little of it is unlabelled`, () => {
+    // The real case: a line 48.4 m long over floor the map already has, bridging 2.2 m of untraced
+    // ground at its far end. The drawing showed it open, and it is still too much line to hand a person.
+    const hall = { id: "L1-hall", footprint: rect(0, 0, 60, 20) };
+    const annex = { id: "L1-annex", footprint: rect(62, 0, 80, 20), nameEn: "Annex" };
+    const rooms = floor([hall, annex]).rooms;
+    const near = bridgeAcross({ from: [45, 2], to: [63, 2], roomIds: ["L1-annex"] }, rooms, sayOpen());
+    expect(near).toMatchObject({ lengthM: 18, openM: 2 });
+    const long = bridgeAcross({ from: [40, 2], to: [63, 2], roomIds: ["L1-annex"] }, rooms, sayOpen());
+    expect(long).toBeNull();
   });
 
   it("never crosses a live room of kind room: the crosses rule, unchanged", () => {

@@ -7,7 +7,7 @@ import { pathways } from "../../db/schema";
 import { roomIdFor } from "../../drafts/service";
 import { createEntity, recordAudit } from "../../entities/repository";
 import { assembleModel } from "../../model/assemble";
-import { BRIDGE_MAX_M, BRIDGE_WIDTH_M, BRIDGED, type Bridge } from "../../paths/bridge";
+import { BRIDGE_MAX_M, BRIDGE_MAX_RUN_M, BRIDGE_WIDTH_M, BRIDGED, type Bridge } from "../../paths/bridge";
 import {
   ACCESS_M, CLOSED_NEAR_M, CONNECT_MAX_M, CONNECTOR_MAX_WIDTH_M, CONNECTOR_MIN_WIDTH_M, CONTAINER_SHARE, CannotConnect, MAX_CONNECTORS,
   MAX_LINK_M, connectRooms, type Connector,
@@ -132,7 +132,8 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       "only where opening it would help, and frees says how many of the island's rooms a connector would then reach: " +
       'open it with update, kind "area" and walkable true. The islands are measured from the connectors this call ' +
       "made. Once left is 0 it reads the floorplan itself along each island's gap, nearest first, and bridges the ones " +
-      `the drawing shows as open floor: at most ${BRIDGE_MAX_M} m of ground no room covers, never across a room. bridges ` +
+      `the drawing shows as open floor: at most ${BRIDGE_MAX_M} m of ground no room covers and ${BRIDGE_MAX_RUN_M} m of line ` +
+      "end to end, never across a room. bridges " +
       "lists each one it laid (id, from, to, toRoomId, toName, lengthM, and openM, the ground it crosses), and a bridged " +
       "island leaves islands. What the drawing does not show as open floor is left for a person: name those islands, with " +
       "their rooms and gapM. preview true works the connectors out and makes nothing, and bridges nothing. " +

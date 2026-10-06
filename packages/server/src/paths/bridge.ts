@@ -11,6 +11,19 @@ import { CROSS_M, crossesOf, lengthInside } from "./reach";
 
 /** The most unlabelled space one bridge crosses: longer than any corridor on these floors. */
 export const BRIDGE_MAX_M = 12;
+/**
+ * The most line one bridge is, end to end, however little of it is unlabelled.
+ * The cap above bounds the untraced ground a wrong bridge crosses; this bounds
+ * how much pathway a wrong bridge leaves on the floor for a person to check.
+ *
+ * 20 m, from L1's own gaps: 12 of its 22 islands stand within it, the drawing
+ * round a 20 m line fits in one `view_plan` box (PLAN_MARGIN_M is 10 m), and it
+ * is half the 40 m a connector may run — a connector follows floor the map has,
+ * a bridge only what the drawing shows. It excludes one real bridge: a 48.4 m
+ * line over Town Square to Studio (East 1), bridging 2.2 m of untraced ground
+ * at its far end, which is now an island named for a person.
+ */
+export const BRIDGE_MAX_RUN_M = 20;
 /** A bridge's width. The drawing shows open floor, not how wide a walk it is, so: the narrowest. */
 export const BRIDGE_WIDTH_M = 1;
 /** How finely the run is cut into the stretches rooms cover and the stretches they don't. */
@@ -62,9 +75,10 @@ function unlabelled(a: Vec2, b: Vec2, rooms: readonly Room[]): Array<[number, nu
 
 /**
  * The bridge for one island's gap, or null where none may be laid. Null when:
- * the run crosses a live room of kind room (contract v4's `crosses`, unchanged)
- * or any other space no one walks — a void, a service block; when it would
- * cross more than BRIDGE_MAX_M of unlabelled space; when there is no unlabelled
+ * the run is longer than BRIDGE_MAX_RUN_M end to end; when it crosses a live
+ * room of kind room (contract v4's `crosses`, unchanged) or any other space no
+ * one walks — a void, a service block; when it would cross more than
+ * BRIDGE_MAX_M of unlabelled space; when there is no unlabelled
  * space at all, since a bridge crosses what no room covers; and when the
  * drawing does not show open floor along every unlabelled stretch of it.
  *
@@ -75,7 +89,7 @@ function unlabelled(a: Vec2, b: Vec2, rooms: readonly Room[]): Array<[number, nu
 export function bridgeAcross(gap: Gap, rooms: readonly Room[], ink: PlanInk): Bridge | null {
   const { from, to } = gap;
   const lengthM = Math.hypot(to[0] - from[0], to[1] - from[1]);
-  if (lengthM === 0) return null;
+  if (lengthM === 0 || lengthM > BRIDGE_MAX_RUN_M) return null;
   const line: Vec2[] = [from, to];
   if (crossesOf(line, rooms).length > 0) return null;
   if (rooms.some(r => !r.walkable && lengthInside(line, r.footprint, r.holes) > CROSS_M)) return null;
