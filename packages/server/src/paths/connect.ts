@@ -691,8 +691,12 @@ function searcher(raster: Raster, targets: readonly Unreached[]) {
         let c = i;
         for (; dist[c]! > 0; c = prev[c]!) path.push(cellCentre(raster, c));
         // A room whose goal lies on a line already needs no connector; the search carries on from here.
+        // Unless its goals are the band outside its outline (fallback), where a line can lie without
+        // reaching the room at all: marked done with no connector and no reachedBy, it fell out of both
+        // made and islands while check_floor went on listing it. It is islandsOf's instead.
         if (path.length === 0) {
-          done[hit] = 1;
+          if (targets[hit]!.fallback) givenUp[hit] = 1;
+          else done[hit] = 1;
           open--;
         } else {
           const raw = [start.get(c)!, ...path.reverse()];
