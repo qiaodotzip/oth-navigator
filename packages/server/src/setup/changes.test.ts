@@ -1,8 +1,9 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
+import { storeAsset } from "../assets/storage";
 import { createUser, type User } from "../auth/users";
-import { auditLog, captures, keyframes, objectKinds, placements, places, portalEndpoints, portals, rooms, sightings } from "../db/schema";
+import { auditLog, captures, keyframes, levelImages, objectKinds, pathways, placements, places, portalEndpoints, portals, rooms, sightings } from "../db/schema";
 import { listDrafts, replaceDrafts } from "../drafts/service";
 import { createEntity, softDeleteEntity, updateEntity } from "../entities/repository";
 import { call, mcpFixture, type McpFixture } from "../mcp/testing";
@@ -149,6 +150,31 @@ describe("listClaudeChanges", () => {
       .toEqual([["names", "Made Commercial & F&B (North) an area so routes can cross it", "room", "update", false]]);
     await undoChange(f.db, (await one("names")).auditId, amy.id);
     expect((await f.db.select().from(rooms).where(eq(rooms.id, "L1-commercial-n")))[0]).toMatchObject({ kind: "room", walkable: false });
+  });
+
+  it("reads a bridge connect_rooms laid as a bridge, and undoes it by taking the pathway away (contract v6)", async () => {
+    // A hall with a gate and a line routing reaches, and a second hall 2 m east with untraced ground between.
+    await createEntity(f.db, "room", { id: "L1-hall", levelId: "oth-L1", kind: "area", footprint: sq(0, 0, 60, 20), heightM: 6, walkable: true }, amy.id);
+    await createEntity(f.db, "room", {
+      id: "L1-east-hall", levelId: "oth-L1", kind: "area", footprint: sq(62, 0, 70, 20), heightM: 6, walkable: true, nameEn: "East hall",
+    }, amy.id);
+    await createEntity(f.db, "entrance", { id: "L1-gate", levelId: "oth-L1", roomId: "L1-hall", point: [1, 2], nameEn: "Gate" }, amy.id);
+    await createEntity(f.db, "pathway", { id: "L1-main", levelId: "oth-L1", polyline: [[1, 2], [59, 2]], widthM: 2 }, amy.id);
+    // A sheet of blank paper over the floor: every run on it reads as open floor.
+    const sharp = (await import("sharp")).default;
+    const png = await sharp({ create: { width: 800, height: 300, channels: 3, background: "#ffffff" } }).png().toBuffer();
+    const { storagePath, checksum } = await storeAsset(f.dataDir, new Uint8Array(png), "png");
+    await f.db.insert(levelImages).values({
+      id: "img_l1", levelId: "oth-L1", filename: "plan.png", storagePath, checksum,
+      widthPx: 800, heightPx: 300, sizeBytes: png.length, metresPerPixel: 0.1, offsetX: -5, offsetY: 25, uploadedBy: amy.id,
+    });
+
+    await call(client, "connect_rooms", { floor: "L1" });
+    expect(brief(await listClaudeChanges(f.db, "oth-L1", EPOCH)))
+      .toEqual([["pathways", "Bridged to East hall across 2 m the drawing shows as open floor", "pathway", "create", false]]);
+    const row = (await listClaudeChanges(f.db, "oth-L1", EPOCH))[0]!;
+    await undoChange(f.db, row.auditId, amy.id);
+    expect((await f.db.select().from(pathways)).filter(p => p.deletedAt === null).map(p => p.id)).toEqual(["L1-main"]);
   });
 
   it("lists Claude's survey labels on the floor of their frame", async () => {
