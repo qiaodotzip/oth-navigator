@@ -32,11 +32,22 @@ export class LiveTokens {
     return this.read(at).hashes;
   }
 
-  /** A token just made. With nothing held, the next read will find it. */
+  /**
+   * A token just made. With nothing held, the next read will find it.
+   *
+   * The rejection handler is not decoration: a promise this consumes and never
+   * catches is an unhandled rejection, which Node exits the process over. The
+   * held read catches its own failure today, so this cannot fire — the handler
+   * is here so that the next thing to throw in there cannot take the server
+   * down. Losing the hash is harmless: the next read finds the token anyway.
+   */
   add(hash: string): void {
-    void this.held?.hashes.then(set => {
-      set?.add(hash);
-    });
+    void this.held?.hashes.then(
+      set => {
+        set?.add(hash);
+      },
+      () => {},
+    );
   }
 
   private read(at: number): Read {

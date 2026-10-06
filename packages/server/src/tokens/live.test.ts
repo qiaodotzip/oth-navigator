@@ -36,6 +36,27 @@ describe("LiveTokens", () => {
     expect((await live.hashes(1))?.has("fresh-hash")).toBe(true);
   });
 
+  it("adding a hash onto a read that rejects is not an unhandled rejection", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      const live = new LiveTokens(await createTestDb());
+      await live.hashes(0);
+      // What the held read would look like if its own catch ever stopped
+      // catching: add() must not be the thing that takes the process down.
+      (live as unknown as { held: { at: number; failed: boolean; hashes: Promise<Set<string> | null> } }).held = {
+        at: 0,
+        failed: false,
+        hashes: Promise.reject(new Error("the read blew up after its catch")),
+      };
+      live.add("fresh-hash");
+      await new Promise(resolve => setImmediate(resolve));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+
   it("answers null after a failed read, and reads again only five seconds on", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     let tries = 0;
