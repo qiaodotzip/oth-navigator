@@ -344,6 +344,17 @@ describe("connectRooms (contract v5)", () => {
         expect(connectRooms(withGate([block, ...shops], [old]), LEVEL).containersLeft).toBe(0);
       });
 
+      it("treats a container it cannot raster as freeing nothing, rather than losing the whole call (review M2)", () => {
+        // Opening a container widens the floor's walkable bbox, and one drawn far from the rest takes
+        // it past what a raster can hold. That threw SurfaceTooLarge out of connect_rooms, after the
+        // connectors had been worked out and before anything was written.
+        const far: TestRoom = { id: "L1-far-block", nameEn: "Far block", footprint: rect(2000, 2000, 2030, 2020), kind: "room", walkable: false };
+        const inside = [shop("L1-far-1", 2002, 2008, 2008, 2016), shop("L1-far-2", 2010, 2008, 2016, 2016)];
+        const got = connectRooms(withGate([far, ...inside]), LEVEL);
+        expect(got.islands.flatMap(i => i.roomIds)).toEqual(expect.arrayContaining(["L1-far-1", "L1-far-2"]));
+        for (const island of got.islands) expect(island).not.toHaveProperty("inside");
+      });
+
       it("writes nothing while it works that out: the model it was handed is untouched", () => {
         const model = withGate([block, ...shops], [old]);
         const before = JSON.parse(JSON.stringify(model));

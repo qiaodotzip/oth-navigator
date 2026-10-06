@@ -6,7 +6,7 @@ import { BRIDGES_ON, bridgeAcross, type Bridge } from "./bridge";
 import { distanceToEdge, lineWidth } from "./distance";
 import { polylineLength } from "./graph";
 import type { PlanInk } from "./ink";
-import { cellCentre, cellIndex, walkableAt, walkableRaster, type Raster } from "./raster";
+import { SurfaceTooLarge, cellCentre, cellIndex, walkableAt, walkableRaster, type Raster } from "./raster";
 import { simplify } from "./simplify";
 
 export type TargetType = "doorway" | "stop" | "entrance";
@@ -791,7 +791,16 @@ function freesOf(
   codes: ReadonlyMap<string, Set<string>>, lines: readonly (readonly Vec2[])[],
 ): Set<string> {
   const open = (r: Room): Room => (r.id === container.id ? { ...r, kind: "area", walkable: true } : r);
-  const raster = walkableRaster({ ...model, rooms: model.rooms.map(open) }, levelId);
+  let raster: Raster;
+  try {
+    raster = walkableRaster({ ...model, rooms: model.rooms.map(open) }, levelId);
+  } catch (err) {
+    // Opening a container widens the floor's walkable bbox, and one drawn far from the rest takes it
+    // past what a raster can hold. That is this container's problem, not the call's: it frees nothing
+    // (review M2 — it used to throw out of connect_rooms with the connectors worked out and unwritten).
+    if (err instanceof SurfaceTooLarge) return new Set();
+    throw err;
+  }
   if (raster.cols === 0) return new Set();
   const run = searcher(raster, targetsOn(raster, new Map([...rooms].map(([id, r]) => [id, open(r)])), codes));
   for (const line of lines) run.seed(line);
