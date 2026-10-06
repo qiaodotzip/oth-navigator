@@ -5,6 +5,7 @@ import { storeAsset } from "../assets/storage";
 import { createUser, type User } from "../auth/users";
 import { auditLog, captures, keyframes, levelImages, objectKinds, pathways, placements, places, portalEndpoints, portals, rooms, sightings } from "../db/schema";
 import { listDrafts, replaceDrafts } from "../drafts/service";
+import { BRIDGES_ON } from "../paths/bridge";
 import { createEntity, softDeleteEntity, updateEntity } from "../entities/repository";
 import { call, mcpFixture, type McpFixture } from "../mcp/testing";
 import { ChangeNotFoundError, UndoRefusedError, listClaudeChanges, undoChange } from "./changes";
@@ -152,7 +153,8 @@ describe("listClaudeChanges", () => {
     expect((await f.db.select().from(rooms).where(eq(rooms.id, "L1-commercial-n")))[0]).toMatchObject({ kind: "room", walkable: false });
   });
 
-  it("reads a bridge connect_rooms laid as a bridge, and undoes it by taking the pathway away (contract v6)", async () => {
+  // Kept whole against the day BRIDGES_ON goes back on; the fold's own tests cover the row meanwhile.
+  it.runIf(BRIDGES_ON)("reads a bridge connect_rooms laid as a bridge, and undoes it by taking the pathway away (contract v6)", async () => {
     // A hall with a gate and a line routing reaches, and a second hall 2 m east with untraced ground between.
     await createEntity(f.db, "room", { id: "L1-hall", levelId: "oth-L1", kind: "area", footprint: sq(0, 0, 60, 20), heightM: 6, walkable: true }, amy.id);
     await createEntity(f.db, "room", {

@@ -7,7 +7,7 @@ import { pathways } from "../../db/schema";
 import { roomIdFor } from "../../drafts/service";
 import { createEntity, recordAudit } from "../../entities/repository";
 import { assembleModel } from "../../model/assemble";
-import { BRIDGE_MAX_M, BRIDGE_MAX_RUN_M, BRIDGE_WIDTH_M, BRIDGED, type Bridge } from "../../paths/bridge";
+import { BRIDGES_ON, BRIDGE_WIDTH_M, BRIDGED, type Bridge } from "../../paths/bridge";
 import {
   ACCESS_M, CLOSED_NEAR_M, CONNECT_MAX_M, CONNECTOR_MAX_WIDTH_M, CONNECTOR_MIN_WIDTH_M, CONTAINER_SHARE, CannotConnect, MAX_CONNECTORS,
   MAX_LINK_M, connectRooms, type Connector,
@@ -133,13 +133,8 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       'open it with update, kind "area" and walkable true. Working that out costs a pass of the floor each, so it does ' +
       "at most four a call, those with most to free first: containersLeft says how many it had no time to try, and " +
       "their islands are named with no container at all. Open the ones it named and call it again for the rest. " +
-      "The islands are measured from the connectors this call " +
-      "made. Once left is 0 it reads the floorplan itself along each island's gap, nearest first, and bridges the ones " +
-      `the drawing shows as open floor: at most ${BRIDGE_MAX_M} m of ground no room covers and ${BRIDGE_MAX_RUN_M} m of line ` +
-      "end to end, never across a room. bridges " +
-      "lists each one it laid (id, from, to, toRoomId, toName, lengthM, and openM, the ground it crosses), and a bridged " +
-      "island leaves islands. What the drawing does not show as open floor is left for a person: name those islands, with " +
-      "their rooms and gapM. preview true works the connectors out and makes nothing, and bridges nothing. " +
+      "The islands are measured from the connectors this call made. An island no container helps is a person's: " +
+      "name it, with its rooms and gapM. preview true works it all out and makes nothing. " +
       "Every pathway made is on the setup's check step, with Undo. It counts as one change against the token's limit.",
     inputSchema: {
       floor: FLOOR,
@@ -161,12 +156,15 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
     const { ids, bridgeIds } = preview
       ? { ids: found.connectors.map(() => ""), bridgeIds: [] }
       : await makeConnectors(ctx, model, level, found.connectors, found.bridges);
+    // While BRIDGES_ON is off there are none, and the reply says nothing about them: a field the
+    // description does not explain is a field Claude would have to guess at.
+    const bridges = found.bridges.map((b, k) => ({
+      id: bridgeIds[k]!, from: b.from, to: b.to, toRoomId: b.toRoomId, toName: b.toName, lengthM: b.lengthM, openM: b.openM,
+    }));
     return replyJson({
       levelId: level.id,
       made: found.connectors.map((c, k) => ({ id: ids[k]!, roomIds: c.roomIds, lengthM: c.lengthM })),
-      bridges: found.bridges.map((b, k) => ({
-        id: bridgeIds[k]!, from: b.from, to: b.to, toRoomId: b.toRoomId, toName: b.toName, lengthM: b.lengthM, openM: b.openM,
-      })),
+      ...(BRIDGES_ON ? { bridges } : {}),
       islands: found.islands,
       left: found.left,
       containersLeft: found.containersLeft,

@@ -24,8 +24,8 @@ export const drawPaths: SetupPrompt = {
       `Then call \`suggest_paths\` with floor "${floor}" again, and \`create\` each link whose ontoDrawn is true as a short pathway, unless \`get_floor\`'s pathways already has one between the same two points.`,
     `6. Call \`check_floor\` with floor "${floor}". Fix any entrance.offFloor error first: move that entrance off the wall, into the open part of its room. ` +
       "`check_floor` lists at most 100 problems and says the total; pass codes to see just those.",
-    `7. Rooms no route reaches: call \`connect_rooms\` with floor "${floor}". It makes their pathways itself, nearest first; it reads the drawing ` +
-      "and bridges the islands it shows open floor to; and it gives the islands left: rooms no route reaches, each with gapM, the gap from the " +
+    `7. Rooms no route reaches: call \`connect_rooms\` with floor "${floor}". It makes their pathways itself, nearest first, ` +
+      "and gives the islands left: rooms no route reaches, each with gapM, the gap from the " +
       "network (from) to their floor (to). Call it again while left or containersLeft is above 0. " +
       'An island with inside lies in a room traced closed round open floor, and frees says how many of its rooms opening that room reaches: `update` it to kind "area" ' +
       'and walkable true, and name each in your report: "made Commercial & F&B North an area so routes reach the 14 rooms inside it". ' +
@@ -37,7 +37,7 @@ export const drawPaths: SetupPrompt = {
   ],
   stop: floor =>
     `\`check_floor\` with floor "${floor}" and codes ["area.unreachable", "room.noAccess"] gives none, or only ones a person must fix: ` +
-    "give how many, and name up to 20. Call it again after your last `connect_rooms` call, not only at step 7: opening a container, " +
-    "and the bridges `connect_rooms` lays, change the counts. The islands come nearest gap first, so name them in that order",
+    "give how many, and name up to 20. Call it again after your last `connect_rooms` call, not only at step 7: opening a container " +
+    "changes the counts. The islands come nearest gap first, so name them in that order",
   example: "Drew 14 pathways (the concourse, the link bridge) and 3 entrances; 2 rooms need a person",
 };

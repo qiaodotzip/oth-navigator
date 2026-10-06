@@ -4,6 +4,7 @@ import {
   CONNECT_MAX_M, CONNECTOR_SIMPLIFY_M, CONTAINER_SHARE, CannotConnect, ISLAND_JOIN_M, MAX_CONNECTORS, clearLine, connect, connectRooms,
   linkTargets, REASONS, simplifyOnFloor, type Connector, type Target,
 } from "./connect";
+import { BRIDGES_ON } from "./bridge";
 import type { PlanInk } from "./ink";
 import { walkableAt, walkableRaster, type Raster } from "./raster";
 import { simplify } from "./simplify";
@@ -423,7 +424,24 @@ describe("connectRooms (contract v5)", () => {
   });
 });
 
-describe("the bridging phase (contract v6)", () => {
+describe("the bridging phase, held back for deploy 10 (BRIDGES_ON)", () => {
+  const EAST: TestRoom = { id: "L1-east-hall", footprint: rect(62, 0, 70, 20), nameEn: "East hall" };
+  const willing: PlanInk = {
+    run: (a, b) => ({ open: true, openM: Math.hypot(b[0] - a[0], b[1] - a[1]), runM: Math.hypot(b[0] - a[0], b[1] - a[1]), why: "" }),
+    crossed: (a, b) => ({ open: true, openM: Math.hypot(b[0] - a[0], b[1] - a[1]), runM: Math.hypot(b[0] - a[0], b[1] - a[1]), why: "" }),
+  };
+
+  it("lays nothing, whatever the drawing says, and names the island as contract v5 does", () => {
+    const { bridges, islands } = connectRooms(withGate([EAST]), LEVEL, MAX_CONNECTORS, false, willing);
+    expect(BRIDGES_ON).toBe(false);
+    expect(bridges).toEqual([]);
+    expect(islands.map(i => i.roomIds)).toEqual([["L1-east-hall"]]);
+    expect(islands[0]!.gapM).toBeCloseTo(3.1, 1);
+  });
+});
+
+// The phase's own tests, kept whole against the day the switch goes back on.
+describe.runIf(BRIDGES_ON)("the bridging phase (contract v6)", () => {
   /** The drawing says open floor with nothing across it, and counts what it was asked about. */
   const sayOpen = (): PlanInk & { asked: number } => {
     const answer = (a: Vec2, b: Vec2) => {

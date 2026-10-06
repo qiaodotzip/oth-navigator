@@ -2,7 +2,7 @@ import {
   bboxOfRing, coverage, distancePointToSegment, live, pointInPolygon, ringArea, ringCentroid, segmentsProperlyIntersect, validateModel,
   type BBox, type MapModel, type Room, type Vec2,
 } from "@oth/model";
-import { bridgeAcross, type Bridge } from "./bridge";
+import { BRIDGES_ON, bridgeAcross, type Bridge } from "./bridge";
 import { distanceToEdge, lineWidth } from "./distance";
 import { polylineLength } from "./graph";
 import type { PlanInk } from "./ink";
@@ -870,8 +870,8 @@ export function connectRooms(
   // name, bridged where the drawing shows open floor, nearest gap first
   // (islandsOf sorts them). Only while nothing was capped, so a bridge is laid
   // from the whole network, and never on a preview, which writes nothing a
-  // bridge could stand on.
-  if (ink && !preview && connectors.length <= max) {
+  // bridge could stand on. Held back for deploy 10: see BRIDGES_ON.
+  if (BRIDGES_ON && ink && !preview && connectors.length <= max) {
     for (const island of standing()) {
       const bridge = bridgeAcross(island, floorRooms, ink);
       if (bridge) bridges.push(bridge);

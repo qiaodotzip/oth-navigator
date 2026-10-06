@@ -9,6 +9,33 @@ import { CROSS_M, crossesOf, lengthInside } from "./reach";
  * floor the map already has; a bridge is what crosses the ground nobody traced.
  */
 
+/**
+ * Whether `connect_rooms` lays bridges at all. **Off for deploy 10** (controller,
+ * after rehearsal 6 and the review), and this is a hold, not a revert: every
+ * line below, and `paths/ink.ts`, stay tested and ready.
+ *
+ * Why it is off. On L1 it is worth nothing measured: the one bridge the floor
+ * can have (Studio (East 3)) exists only once that container is opened, and
+ * `frees` — which simulates the connector phase alone — rightly declines to
+ * suggest opening it, so end to end the phase fired on nothing. Against that
+ * stands review C1: `INK_GREY` is a hard cut with no readability check, so a
+ * plan whose linework is lighter than it — a faded scan, a screened layer —
+ * reads as blank paper, blank paper is this probe's definition of open floor,
+ * and with no cap on bridges per call one call could write a pathway per island,
+ * each telling the person "the drawing shows as open floor".
+ *
+ * What has to be true to turn it on:
+ * - C1's guards: the plan shown to be readable before its paper is taken for
+ *   floor, and a bound on how many bridges one call may lay;
+ * - I1: a wall 2 px across (0.14 m — the thin end of this drawing's walls) is
+ *   invisible to both questions, and the i10 fixture currently pins that;
+ * - I2: `crossed` sees nothing more than about 15° off perpendicular, however
+ *   thick, which is the only guard on the 2 m clipping allowance;
+ * - `frees` counting what a **bridge** would reach, not only a connector, which
+ *   is what would have let Studio (East 3) through in the first place.
+ */
+export const BRIDGES_ON = false;
+
 /** The most unlabelled space one bridge crosses: longer than any corridor on these floors. */
 export const BRIDGE_MAX_M = 12;
 /**

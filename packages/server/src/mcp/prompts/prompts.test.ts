@@ -6,6 +6,7 @@ import { suggestPaths } from "../../paths/suggest";
 import { CLAUDE_STEPS, stepNumber } from "../../setup/steps";
 import type { ToolContext } from "../context";
 import { buildMcpServer } from "../server";
+import { BRIDGES_ON } from "../../paths/bridge";
 import { drawPaths } from "./drawPaths";
 import { FINAL_LINE, PROMPTS, SLOW_DOWN, promptText, toolsNamed } from "./index";
 import { labelSurvey } from "./labelSurvey";
@@ -338,8 +339,8 @@ describe("what rehearsal 4 taught draw_paths (Task 13): the server connects the 
   it("calls connect_rooms after the lines and entrances, again while left is above 0, then check_floor once", () => {
     expect(drawPaths.tools).toContain("connect_rooms");
     expect(text).toContain(
-      '7. Rooms no route reaches: call `connect_rooms` with floor "L1". It makes their pathways itself, nearest first; it reads the drawing ' +
-      "and bridges the islands it shows open floor to; and it gives the islands left: rooms no route reaches, each with gapM, the gap from the " +
+      '7. Rooms no route reaches: call `connect_rooms` with floor "L1". It makes their pathways itself, nearest first, ' +
+      "and gives the islands left: rooms no route reaches, each with gapM, the gap from the " +
       "network (from) to their floor (to). Call it again while left or containersLeft is above 0.",
     );
     expect(text).toContain('Then call `connect_rooms` once more, and `check_floor` once with floor "L1" and codes ["area.unreachable", "room.noAccess"].');
@@ -380,10 +381,9 @@ describe("what rehearsal 4 taught draw_paths (Task 13): the server connects the 
 describe("what rehearsal 5 taught draw_paths (Task 13, fix round 2)", () => {
   const text = promptText(drawPaths, "L1");
 
-  it("checks the floor again after the last connect_rooms, since step 7 checks it before the containers and bridges", () => {
+  it("checks the floor again after the last connect_rooms, since step 7 checks it before the containers are opened", () => {
     expect(text).toContain(
-      "Call it again after your last `connect_rooms` call, not only at step 7: opening a container, and the bridges " +
-      "`connect_rooms` lays, change the counts.",
+      "Call it again after your last `connect_rooms` call, not only at step 7: opening a container changes the counts.",
     );
     expect(text.indexOf("Call it again after your last `connect_rooms` call")).toBeGreaterThan(text.indexOf("\nStop when "));
   });
@@ -408,9 +408,16 @@ describe("what rehearsal 5 taught draw_paths (Task 14): the server does the look
     expect(text).not.toContain("box round its from and to");
   });
 
-  it("says connect_rooms reads the drawing and bridges, and leaves the rest to be named for a person", () => {
-    expect(text).toContain("it reads the drawing and bridges the islands it shows open floor to");
+  it("says what connect_rooms gives back, and leaves every island it cannot reach to be named for a person", () => {
+    expect(text).toContain("and gives the islands left: rooms no route reaches, each with gapM");
     expect(text).toContain("Name every island still left for a person, with its rooms and gapM.");
+  });
+
+  it("promises no bridge while the phase is held back (BRIDGES_ON)", () => {
+    expect(BRIDGES_ON).toBe(false);
+    // The instructions and the stop rule, not the example, whose "link bridge" is a kind of walkway.
+    // "open floor" stays: it is what a container is traced round, which has nothing to do with bridges.
+    expect(`${drawPaths.steps("L1").join("\n")}\n${drawPaths.stop("L1")}`).not.toMatch(/bridge/i);
   });
 
   it("still fits its length pin", () => {
