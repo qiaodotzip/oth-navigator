@@ -845,7 +845,9 @@ export function connectRooms(
   const drawn = () => (preview
     ? network.slice(0, sources)
     : [...network.slice(0, sources), ...connectors.slice(0, max).map(c => c.polyline), ...bridges.map((b): Vec2[] => [b.from, b.to])]);
-  const standing = () => islandsOf(raster, dist, targets.filter((_, k) => !done[k]), drawn(), floorRooms);
+  /** The islands as the floor stands. Held, since the bridging phase asks before and after, and only a bridge changes the answer. */
+  let grouped: Grouped[] | null = null;
+  const standing = () => (grouped ??= islandsOf(raster, dist, targets.filter((_, k) => !done[k]), drawn(), floorRooms));
 
   // Contract v6's second phase: the islands this call would otherwise just
   // name, bridged where the drawing shows open floor, nearest gap first
@@ -860,6 +862,7 @@ export function connectRooms(
     if (bridges.length > 0) {
       for (const b of bridges) run.seed([b.from, b.to]);
       run.search();
+      grouped = null;
     }
   }
 
