@@ -57,17 +57,32 @@ export type InkRun = {
   why: string;
 };
 
-/** The probe `connect_rooms` carries: one plan, any number of runs. */
-export type PlanInk = { run: (a: Vec2, b: Vec2) => InkRun };
+/**
+ * The probe `connect_rooms` carries: one plan, any number of runs, two
+ * questions.
+ *
+ * `run` is the whole question — does the drawing show open floor here? — and is
+ * for ground no room covers. `crossed` is the narrower one — does anything the
+ * drawing shows cross this line? — and is for ground the map already calls
+ * floor, where the first question is the wrong one: a room is drawn full of its
+ * own furniture, fixtures and name, none of which stops anyone walking, while a
+ * partition drawn across it does. A bridge must pass both: `crossed` along the
+ * whole of it, `run` along every stretch no room covers.
+ */
+export type PlanInk = {
+  run: (a: Vec2, b: Vec2) => InkRun;
+  crossed: (a: Vec2, b: Vec2) => InkRun;
+};
 
 const shut = (openM: number, runM: number, why: string): InkRun => ({ open: false, openM, runM, why });
 
 /**
  * What the drawing shows along the straight run from `a` to `b`, in metres.
  * Sampled every half pixel, which is finer than any line the plan is drawn
- * with, so no wall is stepped over.
+ * with, so no wall is stepped over. With `density` off, only the second reading
+ * is taken: what crosses the run, not how much ink is about (see PlanInk).
  */
-export function inkRun(grey: PlanGrey, image: PlanImage, a: Vec2, b: Vec2): InkRun {
+function walk(grey: PlanGrey, image: PlanImage, a: Vec2, b: Vec2, density: boolean): InkRun {
   const runM = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (runM === 0) return { open: true, openM: 0, runM: 0, why: "" };
   const ux = (b[0] - a[0]) / runM;
@@ -96,18 +111,20 @@ export function inkRun(grey: PlanGrey, image: PlanImage, a: Vec2, b: Vec2): InkR
     const x = a[0] + ux * t;
     const y = a[1] + uy * t;
 
-    let dark = 0;
-    for (let i = 0; i <= window; i++) {
-      const along = -INK_WINDOW_M / 2 + (INK_WINDOW_M * i) / window;
-      for (let j = 0; j <= window; j++) {
-        const side = -INK_WINDOW_M / 2 + (INK_WINDOW_M * j) / window;
-        const g = at(x + ux * along - uy * side, y + uy * along + ux * side);
-        if (g === null) return shut(t, runM, `off the plan ${t.toFixed(1)} m along`);
-        if (g <= INK_GREY) dark++;
+    if (density) {
+      let dark = 0;
+      for (let i = 0; i <= window; i++) {
+        const along = -INK_WINDOW_M / 2 + (INK_WINDOW_M * i) / window;
+        for (let j = 0; j <= window; j++) {
+          const side = -INK_WINDOW_M / 2 + (INK_WINDOW_M * j) / window;
+          const g = at(x + ux * along - uy * side, y + uy * along + ux * side);
+          if (g === null) return shut(t, runM, `off the plan ${t.toFixed(1)} m along`);
+          if (g <= INK_GREY) dark++;
+        }
       }
+      const share = dark / ((window + 1) * (window + 1));
+      if (share > INK_SHARE) return shut(t, runM, `${Math.round(share * 100)}% of the drawing is ink ${t.toFixed(1)} m along`);
     }
-    const share = dark / ((window + 1) * (window + 1));
-    if (share > INK_SHARE) return shut(t, runM, `${Math.round(share * 100)}% of the drawing is ink ${t.toFixed(1)} m along`);
 
     let across = 0;
     for (let i = 0; i <= band; i++) {
@@ -131,6 +148,16 @@ export function inkRun(grey: PlanGrey, image: PlanImage, a: Vec2, b: Vec2): InkR
   return { open: true, openM: runM, runM, why: "" };
 }
 
+/** Does the drawing show open floor all along this run? For ground no room covers. */
+export function inkRun(grey: PlanGrey, image: PlanImage, a: Vec2, b: Vec2): InkRun {
+  return walk(grey, image, a, b, true);
+}
+
+/** Does anything the drawing shows cross this run? For ground the map already calls floor. */
+export function inkCrossed(grey: PlanGrey, image: PlanImage, a: Vec2, b: Vec2): InkRun {
+  return walk(grey, image, a, b, false);
+}
+
 /**
  * The probe for one floor's plan: its bytes read as grey pixels, the way
  * `renderPlan` reads them for the picture. It throws on bytes that are no
@@ -139,5 +166,8 @@ export function inkRun(grey: PlanGrey, image: PlanImage, a: Vec2, b: Vec2): InkR
 export async function planInk(plan: Uint8Array, image: PlanImage): Promise<PlanInk> {
   const { data, info } = await sharp(plan).greyscale().raw().toBuffer({ resolveWithObject: true });
   const grey: PlanGrey = { data: new Uint8Array(data.buffer, data.byteOffset, data.length), widthPx: info.width, heightPx: info.height };
-  return { run: (a, b) => inkRun(grey, image, a, b) };
+  return {
+    run: (a, b) => inkRun(grey, image, a, b),
+    crossed: (a, b) => inkCrossed(grey, image, a, b),
+  };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlanImage } from "../mcp/plan";
-import { INK_GREY, INK_PAIR_M, INK_SHARE, INK_SPAN_M, inkRun, planInk, type PlanGrey } from "./ink";
+import { INK_GREY, INK_PAIR_M, INK_SHARE, INK_SPAN_M, inkCrossed, inkRun, planInk, type PlanGrey } from "./ink";
 
 /**
  * A sheet 10 × 10 m at 0.05 m a pixel, placed so world (0, 0) is its
@@ -81,6 +81,32 @@ describe("the ink probe (contract v6)", () => {
   });
 });
 
+describe("what crosses a run, asked of floor the map already has", () => {
+  it("is not stopped by the ink a room is drawn with, which `run` refuses", () => {
+    // The same block of ink beside the run that the open-floor question refuses: inside a room the
+    // map already calls floor, furniture, fixtures and a printed name are not a reason to stop.
+    const sheet = draw(paper(), 5, 5.1, 6.2, 5.5);
+    expect(across(sheet).open).toBe(false);
+    expect(inkCrossed(sheet, IMAGE, [1, 5], [9, 5])).toMatchObject({ open: true, why: "" });
+  });
+
+  it("is stopped by a wall across it, wherever the model thinks the floor is", () => {
+    const run = inkCrossed(draw(paper(), 4.9, 0, 5.1, 10), IMAGE, [1, 5], [9, 5]);
+    expect(run.open).toBe(false);
+    expect(run.openM).toBeGreaterThan(3.3);
+    expect(run.openM).toBeLessThanOrEqual(3.9);
+  });
+
+  it("is stopped by a partition drawn as two thin lines, and not by one of them", () => {
+    expect(inkCrossed(draw(draw(paper(), 4.97, 0, 5.03, 10), 5.22, 0, 5.28, 10), IMAGE, [1, 5], [9, 5]).open).toBe(false);
+    expect(inkCrossed(draw(paper(), 4.97, 0, 5.03, 10), IMAGE, [1, 5], [9, 5]).open).toBe(true);
+  });
+
+  it("fails closed off the plan, as the open-floor question does", () => {
+    expect(inkCrossed(paper(), IMAGE, [1, 5], [12, 5])).toMatchObject({ open: false });
+  });
+});
+
 describe("planInk", () => {
   it("reads the plan's own bytes, as view_plan does, and answers the same as the pixels", async () => {
     const sharp = (await import("sharp")).default;
@@ -89,6 +115,8 @@ describe("planInk", () => {
     const ink = await planInk(new Uint8Array(png), IMAGE);
     expect(ink.run([1, 5], [9, 5]).open).toBe(false);
     expect(ink.run([1, 1], [4, 1]).open).toBe(true);
+    expect(ink.crossed([1, 5], [9, 5]).open).toBe(false);
+    expect(ink.crossed([1, 1], [4, 1]).open).toBe(true);
   });
 
   it("gives no probe at all for bytes that are no picture, so nothing is bridged", async () => {

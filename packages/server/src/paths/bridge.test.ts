@@ -4,19 +4,32 @@ import { BRIDGE_MAX_M, BRIDGE_MAX_RUN_M, bridgeAcross, type Gap } from "./bridge
 import type { PlanInk } from "./ink";
 import { floor, rect, type TestRoom } from "./testing";
 
-/** A probe that says the drawing shows open floor, and remembers what it was asked. */
-function sayOpen(): PlanInk & { asked: Array<[Vec2, Vec2]> } {
+const open = (a: Vec2, b: Vec2) => {
+  const runM = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  return { open: true, openM: runM, runM, why: "" };
+};
+const shut = (a: Vec2, b: Vec2) => ({ open: false, openM: 0, runM: Math.hypot(b[0] - a[0], b[1] - a[1]), why: "a wall" });
+
+/** A probe that says the drawing shows open floor and nothing across it, and remembers what it was asked. */
+function sayOpen(): PlanInk & { asked: Array<[Vec2, Vec2]>; whole: Array<[Vec2, Vec2]> } {
   const asked: Array<[Vec2, Vec2]> = [];
+  const whole: Array<[Vec2, Vec2]> = [];
   return {
     asked,
+    whole,
     run: (a, b) => {
       asked.push([a, b]);
-      const runM = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      return { open: true, openM: runM, runM, why: "" };
+      return open(a, b);
+    },
+    crossed: (a, b) => {
+      whole.push([a, b]);
+      return open(a, b);
     },
   };
 }
-const sayShut: PlanInk = { run: (a, b) => ({ open: false, openM: 0, runM: Math.hypot(b[0] - a[0], b[1] - a[1]), why: "a wall" }) };
+const sayShut: PlanInk = { run: shut, crossed: open };
+/** The drawing shows open floor where no room covers it, but something crosses the run elsewhere. */
+const sayCrossed: PlanInk = { run: open, crossed: shut };
 
 /** A hall with a pathway along it, and an annex standing off its east end with untraced ground between. */
 const roomsOf = (extra: TestRoom[] = [], annex = rect(70, 0, 80, 20)) =>
@@ -43,6 +56,14 @@ describe("bridgeAcross (contract v6)", () => {
 
   it("lays nothing where the drawing does not show open floor", () => {
     expect(bridgeAcross(gap(), roomsOf(), sayShut)).toBeNull();
+  });
+
+  it("lays nothing where something crosses the run on floor the map already has: a partition in an opened block", () => {
+    const ink = sayOpen();
+    expect(bridgeAcross(gap(), roomsOf(), sayCrossed)).toBeNull();
+    // The whole run is asked that question, not only the unlabelled stretch of it.
+    bridgeAcross(gap(), roomsOf(), ink);
+    expect(ink.whole).toEqual([[[59, 2], [70.5, 2]]]);
   });
 
   it(`lays nothing across more than ${BRIDGE_MAX_M} m of unlabelled space`, () => {

@@ -424,19 +424,18 @@ describe("connectRooms (contract v5)", () => {
 });
 
 describe("the bridging phase (contract v6)", () => {
-  /** The drawing says open floor, and counts what it was asked about. */
+  /** The drawing says open floor with nothing across it, and counts what it was asked about. */
   const sayOpen = (): PlanInk & { asked: number } => {
-    const probe = {
-      asked: 0,
-      run: (a: Vec2, b: Vec2) => {
-        probe.asked++;
-        const runM = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        return { open: true, openM: runM, runM, why: "" };
-      },
+    const answer = (a: Vec2, b: Vec2) => {
+      probe.asked++;
+      const runM = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      return { open: true, openM: runM, runM, why: "" };
     };
+    const probe = { asked: 0, run: answer, crossed: answer };
     return probe;
   };
-  const sayShut: PlanInk = { run: (a, b) => ({ open: false, openM: 0, runM: Math.hypot(b[0] - a[0], b[1] - a[1]), why: "a wall" }) };
+  const no = (a: Vec2, b: Vec2) => ({ open: false, openM: 0, runM: Math.hypot(b[0] - a[0], b[1] - a[1]), why: "a wall" });
+  const sayShut: PlanInk = { run: no, crossed: no };
   /** A hall of its own, 2 m east of the network's, as the "island across a wall" test has it. */
   const EAST: TestRoom = { id: "L1-east-hall", footprint: rect(62, 0, 70, 20), nameEn: "East hall" };
 

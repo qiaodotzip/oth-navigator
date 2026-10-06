@@ -340,7 +340,7 @@ describe("what rehearsal 4 taught draw_paths (Task 13): the server connects the 
     expect(text).toContain(
       '7. Rooms no route reaches: call `connect_rooms` with floor "L1". It makes their pathways itself, nearest first; it reads the drawing ' +
       "and bridges the islands it shows open floor to; and it gives the islands left: rooms no route reaches, each with gapM, the gap from the " +
-      "network (from) to their floor (to). Call it again while left is above 0.",
+      "network (from) to their floor (to). Call it again while left or containersLeft is above 0.",
     );
     expect(text).toContain('Then call `connect_rooms` once more, and `check_floor` once with floor "L1" and codes ["area.unreachable", "room.noAccess"].');
     expect(text.indexOf("call `connect_rooms`")).toBeGreaterThan(text.indexOf("5. Check them over the drawing"));

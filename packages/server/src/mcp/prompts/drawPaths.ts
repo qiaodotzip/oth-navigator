@@ -26,7 +26,7 @@ export const drawPaths: SetupPrompt = {
       "`check_floor` lists at most 100 problems and says the total; pass codes to see just those.",
     `7. Rooms no route reaches: call \`connect_rooms\` with floor "${floor}". It makes their pathways itself, nearest first; it reads the drawing ` +
       "and bridges the islands it shows open floor to; and it gives the islands left: rooms no route reaches, each with gapM, the gap from the " +
-      "network (from) to their floor (to). Call it again while left is above 0. " +
+      "network (from) to their floor (to). Call it again while left or containersLeft is above 0. " +
       'An island with inside lies in a room traced closed round open floor, and frees says how many of its rooms opening that room reaches: `update` it to kind "area" ' +
       'and walkable true, and name each in your report: "made Commercial & F&B North an area so routes reach the 14 rooms inside it". ' +
       `Then call \`connect_rooms\` once more, and \`check_floor\` once with floor "${floor}" and codes ["area.unreachable", "room.noAccess"]. ` +

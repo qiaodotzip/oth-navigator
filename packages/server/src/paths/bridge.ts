@@ -79,12 +79,15 @@ function unlabelled(a: Vec2, b: Vec2, rooms: readonly Room[]): Array<[number, nu
  * room of kind room (contract v4's `crosses`, unchanged) or any other space no
  * one walks — a void, a service block; when it would cross more than
  * BRIDGE_MAX_M of unlabelled space; when there is no unlabelled
- * space at all, since a bridge crosses what no room covers; and when the
- * drawing does not show open floor along every unlabelled stretch of it.
+ * space at all, since a bridge crosses what no room covers; when the drawing
+ * shows something crossing the run anywhere along it; and when the drawing does
+ * not show open floor along every unlabelled stretch of it.
  *
- * The drawing is asked only about the unlabelled stretches: the rest is floor
- * the map already carries, drawn over with the furniture, text and dimension
- * lines of the rooms it belongs to.
+ * Two questions, because they are different questions (PlanInk): along the
+ * whole run, does anything cross it — a wall, a partition in a block someone
+ * opened; and along the ground no room covers, is it drawn as open floor at
+ * all. Asking the second of a room's own interior would refuse every bridge,
+ * since a room is drawn full of its furniture, fixtures and name.
  */
 export function bridgeAcross(gap: Gap, rooms: readonly Room[], ink: PlanInk): Bridge | null {
   const { from, to } = gap;
@@ -97,6 +100,10 @@ export function bridgeAcross(gap: Gap, rooms: readonly Room[], ink: PlanInk): Br
   const stretches = unlabelled(from, to, rooms);
   const openM = stretches.reduce((sum, [s, e]) => sum + e - s, 0);
   if (openM === 0 || openM > BRIDGE_MAX_M) return null;
+  // The whole run, including the floor the map already has: a container opened because `frees` said
+  // it connects rooms may still be drawn full of partitions, and a pathway through those is what a
+  // person would see and stop trusting. Then the open-floor question, on the ground no room covers.
+  if (!ink.crossed(from, to).open) return null;
   const point = (t: number): Vec2 => [from[0] + ((to[0] - from[0]) * t) / lengthM, from[1] + ((to[1] - from[1]) * t) / lengthM];
   for (const [s, e] of stretches) {
     if (!ink.run(point(s), point(e)).open) return null;
