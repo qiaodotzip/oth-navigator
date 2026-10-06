@@ -17,3 +17,14 @@ survey-out/frames/
 
 # Playwright's output from the smoke test
 e2e/test-results/
+
+# Planning notes, scratch and the brainstorm server's local state — none of it
+# belongs to anyone but the machine it was written on, and `.last-token` in
+# there is a credential. The test lock script is the exception: it is the only
+# supported way to run the suite, so it has to survive a fresh clone.
+.superpowers/*
+!.superpowers/run-tests.sh
+
+# Python bytecode from the helper scripts
+__pycache__/
+*.pyc
