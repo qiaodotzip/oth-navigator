@@ -273,6 +273,42 @@ describe("foldChanges", () => {
   });
 });
 
+describe("a bridge connect_rooms laid (contract v6)", () => {
+  const laid = () => [
+    row({ id: "g1", entityType: "pathway", entityId: "L1-to-hawker-centre", action: "create", after: {
+      id: "L1-to-hawker-centre", version: 0, levelId: "oth-L1", nameEn: "", polyline: [[99.4, 201.6], [99.4, 216.4]],
+    } }),
+    row({ id: "g2", entityType: "pathway", entityId: "L1-to-hawker-centre", action: "bridged", after: {
+      roomId: "L1-hawker-centre", roomName: "Hawker Centre", openM: 8.3,
+    } }),
+  ];
+
+  it("is one row on the check step, under pathways, that Undo takes away", () => {
+    const folded = foldChanges(laid());
+    expect(folded).toHaveLength(1);
+    expect(folded[0]).toMatchObject({
+      id: "g1", group: "pathways", levelId: "oth-L1", entityType: "pathway", entityId: "L1-to-hawker-centre", action: "create",
+      auditIds: ["g1", "g2"],
+      touches: [{ type: "pathway", id: "L1-to-hawker-centre", version: 0 }],
+      undo: [{ do: "delete", type: "pathway", id: "L1-to-hawker-centre", version: 0 }],
+      facts: { kind: "bridgedTo", roomId: "L1-hawker-centre", roomName: "Hawker Centre", openM: 8.3 },
+    });
+  });
+
+  it("reads as a bridge, not as a line someone drew", () => {
+    const names: Names = {
+      room: id => id, current: () => null, place: id => id, objectKind: () => "", portalKind: () => null,
+      near: () => null, frame: id => id, hasStop: () => false,
+    };
+    expect(foldChanges(laid()).map(c => summarise(c, names)))
+      .toEqual(["Bridged to Hawker Centre across 8.3 m the drawing shows as open floor"]);
+  });
+
+  it("leaves a bridge's mark out of the list when its pathway's own row is not there to carry it", () => {
+    expect(foldChanges([laid()[1]!])).toEqual([]);
+  });
+});
+
 describe("summarise", () => {
   /** The map as it is now: pw_1 renamed by hand since Claude drew it, pw_2 gone, and one frame. */
   const names: Names = {

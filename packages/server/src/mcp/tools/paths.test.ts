@@ -1,8 +1,9 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
+import { storeAsset } from "../../assets/storage";
 import type { Database } from "../../db/client";
-import { auditLog, pathways } from "../../db/schema";
+import { auditLog, levelImages, pathways } from "../../db/schema";
 import { createEntity } from "../../entities/repository";
 import { PresenceTracker } from "../../presence/service";
 import { LIMITS, TokenLimits, callKinds } from "../limits";
@@ -145,6 +146,7 @@ describe("connect_rooms (contract v5)", () => {
         { id: "L2-to-shop-2", roomIds: ["L2-shop-2"], lengthM: expect.any(Number) },
         { id: "L2-to-shop-3", roomIds: ["L2-shop-3"], lengthM: expect.any(Number) },
       ]),
+      bridges: [],
       islands: [],
       left: 0,
     });
@@ -161,7 +163,8 @@ describe("connect_rooms (contract v5)", () => {
     expect(through.map(r => [r.entityId, r.actorId]).sort()).toEqual(ids.map(id => [id, f.wei.id]));
     expect(presence.list()).toContainEqual(expect.objectContaining({ displayName: "Wei (Claude)", levelId: "oth-L2" }));
     // Run again, nothing is left to connect.
-    expect(JSON.parse((await call(client, "connect_rooms", { floor: "L2" })).text)).toEqual({ levelId: "oth-L2", made: [], islands: [], left: 0 });
+    expect(JSON.parse((await call(client, "connect_rooms", { floor: "L2" })).text))
+      .toEqual({ levelId: "oth-L2", made: [], bridges: [], islands: [], left: 0 });
   });
 
   it("works it all out in a preview, and makes nothing", async () => {
@@ -233,7 +236,76 @@ describe("connect_rooms (contract v5)", () => {
 
   it("says the islands are measured from the connectors this call made (contract v5 amendment 4)", async () => {
     const { tools } = await client.listTools();
-    expect(tools.find(t => t.name === "connect_rooms")?.description ?? "")
-      .toContain("The islands are measured from the connectors this call made, so bridge one only once left is 0.");
+    const description = tools.find(t => t.name === "connect_rooms")?.description ?? "";
+    // Contract v6 moved the bridging into the call, so the sentence no longer tells Claude to wait for left 0:
+    // the server does, and says so in the sentence after it.
+    expect(description).toContain("The islands are measured from the connectors this call made.");
+    expect(description).toContain("Once left is 0 it reads the floorplan itself along each island's gap");
+  });
+});
+
+/**
+ * Contract v6: the hall above with a second hall 2 m east of it, which no
+ * connector can reach, and a plan to read the ground between them from.
+ */
+async function hallAndAnnex(db: Database, by: string): Promise<void> {
+  await createEntity(db, "room", {
+    id: "L2-hall", levelId: "oth-L2", kind: "area", walkable: true, heightM: 4, nameEn: "Hall",
+    footprint: [[0, 0], [60, 0], [60, 20], [0, 20]],
+  }, by);
+  await createEntity(db, "entrance", { id: "L2-gate", levelId: "oth-L2", roomId: "L2-hall", point: [1, 2], nameEn: "Gate" }, by);
+  await createEntity(db, "pathway", { id: "L2-main", levelId: "oth-L2", polyline: [[1, 2], [59, 2]], widthM: 2 }, by);
+  await createEntity(db, "room", {
+    id: "L2-east-hall", levelId: "oth-L2", kind: "area", walkable: true, heightM: 4, nameEn: "East hall",
+    footprint: [[62, 0], [70, 0], [70, 20], [62, 20]],
+  }, by);
+}
+
+/** A sheet of blank paper over that floor, placed to the metre: every run on it reads as open floor. */
+async function blankPlan(f: McpFixture): Promise<void> {
+  const sharp = (await import("sharp")).default;
+  const png = await sharp({ create: { width: 800, height: 300, channels: 3, background: "#ffffff" } }).png().toBuffer();
+  const { storagePath, checksum } = await storeAsset(f.dataDir, new Uint8Array(png), "png");
+  await f.db.insert(levelImages).values({
+    id: "img_l2", levelId: "oth-L2", filename: "plan.png", storagePath, checksum,
+    widthPx: 800, heightPx: 300, sizeBytes: png.length, metresPerPixel: 0.1, offsetX: -5, offsetY: 25, uploadedBy: f.wei.id,
+  });
+}
+
+type Bridged = Connected & { bridges: { id: string; from: number[]; to: number[]; toRoomId: string; toName: string; lengthM: number; openM: number }[] };
+
+describe("connect_rooms bridges the islands it can (contract v6)", () => {
+  it("lays a bridge where the drawing shows open floor, as a pathway of its own with its own check row", async () => {
+    await hallAndAnnex(f.db, f.wei.id);
+    await blankPlan(f);
+    const { text, isError } = await call(client, "connect_rooms", { floor: "L2" });
+    expect(isError, text).toBe(false);
+    const reply = JSON.parse(text) as Bridged;
+    expect(reply.bridges).toEqual([{
+      id: "L2-to-east-hall", from: [59, 2], to: expect.any(Array), toRoomId: "L2-east-hall", toName: "East hall",
+      lengthM: expect.any(Number), openM: 2,
+    }]);
+    expect(reply.islands).toEqual([]);
+    const made = (await f.db.select().from(pathways)).find(p => p.id === "L2-to-east-hall");
+    expect(made).toMatchObject({ levelId: "oth-L2", version: 0, widthM: 1 });
+    expect(made!.polyline).toEqual([[59, 2], reply.bridges[0]!.to]);
+    const trail = (await f.db.select().from(auditLog)).filter(r => r.entityId === "L2-to-east-hall");
+    expect(trail.map(r => [r.action, r.via]).sort()).toEqual([["bridged", f.tokenId], ["create", f.tokenId]]);
+    // A second call has nothing left to bridge: the island is reached now.
+    expect((JSON.parse((await call(client, "connect_rooms", { floor: "L2" })).text) as Bridged).bridges).toEqual([]);
+  });
+
+  it("names the island and bridges nothing on a floor with no plan to read", async () => {
+    await hallAndAnnex(f.db, f.wei.id);
+    const reply = JSON.parse((await call(client, "connect_rooms", { floor: "L2" })).text) as Bridged;
+    expect(reply.bridges).toEqual([]);
+    expect(reply.islands.map(i => (i as { roomIds: string[] }).roomIds)).toEqual([["L2-east-hall"]]);
+    expect((await f.db.select().from(pathways)).map(p => p.id)).toEqual(["L2-main"]);
+  });
+
+  it("tells Claude it does the looking, and what a bridge is", async () => {
+    const { tools } = await client.listTools();
+    const description = tools.find(t => t.name === "connect_rooms")?.description ?? "";
+    for (const words of ["bridges", "the drawing shows as open floor", "12 m"]) expect(description).toContain(words);
   });
 });

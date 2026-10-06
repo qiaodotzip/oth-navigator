@@ -2,6 +2,7 @@ import { insidePoint, type Ring, type Vec2 } from "@oth/model";
 import type { Row } from "../db/rows";
 import type { auditLog } from "../db/schema";
 import { SET_ASIDE } from "../drafts/service";
+import { BRIDGED } from "../paths/bridge";
 import type { EntityType } from "../entities/registry";
 import { count } from "../mcp/results";
 
@@ -45,6 +46,7 @@ export type Facts =
   | { kind: "object"; objectKindId: string; sightingIds: string[]; at: Vec2 }
   | { kind: "kindMade"; kindId: string; name: string; size: { w: number; d: number; h: number }; frameId: string | null }
   | { kind: "pathway"; pathwayId: string; name: string; lengthM: number; mid: Vec2 | null }
+  | { kind: "bridgedTo"; pathwayId: string; roomId: string; roomName: string; openM: number }
   | { kind: "entrance"; entranceId: string; name: string; roomId: string }
   | { kind: "label"; placeId: string; placeName: string; frameId: string; newPlace: boolean; object: boolean }
   | { kind: "binned"; frameId: string; tags: number }
@@ -227,6 +229,22 @@ function foldGroup(rows: readonly AuditRow[], hasStop: Names["hasStop"]): Folded
       facts: {
         kind: "stop", roomId, roomName: str(obj(opened?.after).nameEn), portalId,
         stopKind: str(portalAfter.kind) || null, joined: !created && !kinded,
+      },
+    }));
+  }
+
+  // Bridges (contract v6, paths/bridge.ts): the pathway, with the row beside it saying what it
+  // bridged to. One row, worded as a bridge rather than as a line someone drew.
+  for (const mark of rows.filter(r => r.entityType === "pathway" && r.action === BRIDGED)) {
+    const line = free("pathway", mark.entityId, "create");
+    if (!line) continue;
+    const after = obj(mark.after);
+    out.push(made(line, "pathways", use(line, mark), {
+      levelId: str(obj(line.after).levelId) || null,
+      undo: [{ do: "delete", ...ref(line) }],
+      touches: [ref(line)],
+      facts: {
+        kind: "bridgedTo", pathwayId: mark.entityId, roomId: str(after.roomId), roomName: str(after.roomName), openM: num(after.openM),
       },
     }));
   }
@@ -451,6 +469,8 @@ export function summarise(change: Folded, names: Names): string {
       const near = change.levelId && f.mid ? names.near(change.levelId, f.mid) : null;
       return `Drew ${name || "a pathway"}, ${Math.round(f.lengthM)} m${near ? `, near ${near}` : ""}`;
     }
+    case "bridgedTo":
+      return `Bridged to ${names.current("room", f.roomId) || f.roomName || names.room(f.roomId)} across ${metres(f.openM)} m the drawing shows as open floor`;
     case "entrance": {
       const name = names.current("entrance", f.entranceId) ?? f.name;
       return name ? `Added the entrance ${name}, in ${names.room(f.roomId)}` : `Added an entrance in ${names.room(f.roomId)}`;

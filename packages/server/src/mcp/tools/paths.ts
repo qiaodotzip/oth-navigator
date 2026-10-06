@@ -1,22 +1,25 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { live, type Level, type MapModel } from "@oth/model";
 import { z } from "zod";
+import { readAsset } from "../../assets/storage";
 import type { Database } from "../../db/client";
 import { pathways } from "../../db/schema";
 import { roomIdFor } from "../../drafts/service";
-import { createEntity } from "../../entities/repository";
+import { createEntity, recordAudit } from "../../entities/repository";
 import { assembleModel } from "../../model/assemble";
+import { BRIDGE_MAX_M, BRIDGE_WIDTH_M, BRIDGED, type Bridge } from "../../paths/bridge";
 import {
   ACCESS_M, CLOSED_NEAR_M, CONNECT_MAX_M, CONNECTOR_MAX_WIDTH_M, CONNECTOR_MIN_WIDTH_M, CONTAINER_SHARE, CannotConnect, MAX_CONNECTORS,
   MAX_LINK_M, connectRooms, type Connector,
 } from "../../paths/connect";
+import { planInk, type PlanInk } from "../../paths/ink";
 import { GUESS_APART_M, GUESS_INSET_M, GUESS_MAX_INSET_M, OUTWARD_M } from "../../paths/entrances";
 import { SurfaceTooLarge } from "../../paths/raster";
 import { CROSS_M, REACH_M } from "../../paths/reach";
 import { suggestPaths } from "../../paths/suggest";
 import type { ToolContext } from "../context";
 import { Refusal, replyJson, runTool } from "../results";
-import { FLOOR, READ_ONLY, levelFor } from "./read";
+import { FLOOR, READ_ONLY, levelFor, livePlan } from "./read";
 
 /**
  * connect_rooms' writer: the connectors as pathways, in one transaction
@@ -26,7 +29,9 @@ import { FLOOR, READ_ONLY, levelFor } from "./read";
  * floor's code, "to" and the room's name, then -2, -3… until it is free
  * (every pathway id, deleted ones too, is taken).
  */
-async function makeConnectors(ctx: ToolContext, model: MapModel, level: Level, connectors: readonly Connector[]): Promise<string[]> {
+async function makeConnectors(
+  ctx: ToolContext, model: MapModel, level: Level, connectors: readonly Connector[], bridges: readonly Bridge[],
+): Promise<{ ids: string[]; bridgeIds: string[] }> {
   const names = new Map(live(model.rooms).map(r => [r.id, r.nameEn.trim() || r.id]));
   return ctx.db.transaction(async t => {
     const tx = t as unknown as Database;
@@ -37,8 +42,34 @@ async function makeConnectors(ctx: ToolContext, model: MapModel, level: Level, c
       await createEntity(tx, "pathway", { id, levelId: level.id, polyline: c.polyline, widthM: c.widthM }, ctx.user.id);
       ids.push(id);
     }
-    return ids;
+    const bridgeIds: string[] = [];
+    for (const b of bridges) {
+      const id = roomIdFor(level.code, `to ${b.toName}`, taken);
+      await createEntity(tx, "pathway", { id, levelId: level.id, polyline: [b.from, b.to], widthM: BRIDGE_WIDTH_M }, ctx.user.id);
+      // Contract v6: a row of its own beside the create, so the check step reads
+      // the line as a bridge over ground nobody traced, not as a connector.
+      await recordAudit(tx, "pathway", id, BRIDGED, ctx.user.id, null, { roomId: b.toRoomId, roomName: b.toName, openM: b.openM });
+      bridgeIds.push(id);
+    }
+    return { ids, bridgeIds };
   });
+}
+
+/**
+ * The floor's plan as the ink probe reads it (contract v6), or null where there
+ * is nothing to read: no plan, no scale set on it, or bytes sharp cannot
+ * decode. `connect_rooms` then bridges nothing and reports its islands as
+ * contract v5 does — bridging is an improvement on the report, never a
+ * precondition for it.
+ */
+async function planProbe(ctx: ToolContext, levelId: string): Promise<PlanInk | null> {
+  const image = await livePlan(ctx, levelId);
+  if (!image || image.metresPerPixel == null) return null;
+  try {
+    return await planInk(await readAsset(ctx.dataDir, image.storagePath), { ...image, metresPerPixel: image.metresPerPixel });
+  } catch {
+    return null;
+  }
 }
 
 /** Spec §7.3: the pathway first pass, for the draw_paths step (§4.1 step 7). */
@@ -97,12 +128,14 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       `It makes at most ${MAX_CONNECTORS} a call: left says how many more another call would make. islands are the ` +
       "rooms no such run reaches, grouped by the floor they stand on: each with gapM, the straight gap from the " +
       `network (from) to their floor or outline (to), in metres. inside names the room of kind room an island's rooms each lie ` +
-      `${CONTAINER_SHARE * 100}% or more inside, when there is one: a closed block traced round open floor. With update, ` +
-      'kind "area" and walkable true, its rooms can be reached. The islands are measured from the connectors this call ' +
-      "made, so bridge one only once left is 0. A person joins an island, or you bridge it with a " +
-      "pathway from to to where view_plan shows open floor there, then call connect_rooms again. preview true works " +
-      "it all out and makes nothing. Every pathway made is on the setup's check step, with Undo. It counts as one " +
-      "change against the token's limit.",
+      `${CONTAINER_SHARE * 100}% or more inside, when there is one: a closed block traced round open floor, whose rooms ` +
+      'opening it would reach: `update` it to kind "area" and walkable true. The islands are measured from the connectors this call ' +
+      "made. Once left is 0 it reads the floorplan itself along each island's gap, nearest first, and bridges the ones " +
+      `the drawing shows as open floor: at most ${BRIDGE_MAX_M} m of ground no room covers, never across a room. bridges ` +
+      "lists each one it laid (id, from, to, toRoomId, toName, lengthM, and openM, the ground it crosses), and a bridged " +
+      "island leaves islands. What the drawing does not show as open floor is left for a person: name those islands, with " +
+      "their rooms and gapM. preview true works the connectors out and makes nothing, and bridges nothing. " +
+      "Every pathway made is on the setup's check step, with Undo. It counts as one change against the token's limit.",
     inputSchema: {
       floor: FLOOR,
       preview: z.boolean().default(false).describe("true: work it out and make nothing; made's ids are then empty."),
@@ -111,18 +144,24 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
   }, ({ floor, preview }) => runTool(ctx, async () => {
     const model = await assembleModel(ctx.db);
     const level = levelFor(ctx, model, floor);
+    const ink = preview ? null : await planProbe(ctx, level.id);
     const found = (() => {
       try {
-        return connectRooms(model, level.id, MAX_CONNECTORS, preview);
+        return connectRooms(model, level.id, MAX_CONNECTORS, preview, ink);
       } catch (err) {
         if (err instanceof SurfaceTooLarge || err instanceof CannotConnect) throw new Refusal(`Nothing connected on ${level.code}. ${err.message}`);
         throw err;
       }
     })();
-    const ids = preview ? found.connectors.map(() => "") : await makeConnectors(ctx, model, level, found.connectors);
+    const { ids, bridgeIds } = preview
+      ? { ids: found.connectors.map(() => ""), bridgeIds: [] }
+      : await makeConnectors(ctx, model, level, found.connectors, found.bridges);
     return replyJson({
       levelId: level.id,
       made: found.connectors.map((c, k) => ({ id: ids[k]!, roomIds: c.roomIds, lengthM: c.lengthM })),
+      bridges: found.bridges.map((b, k) => ({
+        id: bridgeIds[k]!, from: b.from, to: b.to, toRoomId: b.toRoomId, toName: b.toName, lengthM: b.lengthM, openM: b.openM,
+      })),
       islands: found.islands,
       left: found.left,
     });

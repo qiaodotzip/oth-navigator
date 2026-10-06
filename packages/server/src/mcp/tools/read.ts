@@ -35,6 +35,20 @@ export function levelFor(ctx: ToolContext, model: MapModel, floor: string) {
   return level;
 }
 
+/**
+ * The plan the editor shows for a floor (its `imageForLevel`): the last saved,
+ * then the greater id. A floor should have one live plan, but one left with two
+ * must show Claude the drawing its people see, not whichever row came first.
+ * `view_plan` draws it; `connect_rooms` reads its ink (paths/ink.ts).
+ */
+export async function livePlan(ctx: ToolContext, levelId: string) {
+  const [image] = await ctx.db.select().from(levelImages)
+    .where(and(eq(levelImages.levelId, levelId), isNull(levelImages.deletedAt)))
+    .orderBy(desc(levelImages.updatedAt), desc(levelImages.id))
+    .limit(1);
+  return image ?? null;
+}
+
 async function getRow(ctx: ToolContext, type: (typeof GET_TYPES)[number], id: string): Promise<Row | null> {
   if (type === "keyframe") {
     const [row] = await ctx.db.select().from(keyframes).where(eq(keyframes.id, id));
@@ -173,13 +187,7 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
   }, ({ floor, around, box }) => runTool(ctx, async () => {
     const model = await assembleModel(ctx.db);
     const level = levelFor(ctx, model, floor);
-    // The plan the editor shows (its `imageForLevel`): the last saved, then the
-    // greater id. A floor should have one live plan, but one left with two must
-    // show Claude the drawing its people see, not whichever row came first.
-    const [image] = await ctx.db.select().from(levelImages)
-      .where(and(eq(levelImages.levelId, level.id), isNull(levelImages.deletedAt)))
-      .orderBy(desc(levelImages.updatedAt), desc(levelImages.id))
-      .limit(1);
+    const image = await livePlan(ctx, level.id);
     if (!image) throw new Refusal(`${level.code} has no floorplan yet.`);
     if (image.metresPerPixel == null) {
       throw new Refusal(`${level.code}'s floorplan has no scale yet, so the rooms can't be drawn on it. Someone sets it in Build, on the Floorplan step.`);

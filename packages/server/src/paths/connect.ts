@@ -2,8 +2,10 @@ import {
   bboxOfRing, coverage, distancePointToSegment, live, pointInPolygon, ringArea, ringCentroid, segmentsProperlyIntersect, validateModel,
   type BBox, type MapModel, type Room, type Vec2,
 } from "@oth/model";
+import { bridgeAcross, type Bridge } from "./bridge";
 import { distanceToEdge, lineWidth } from "./distance";
 import { polylineLength } from "./graph";
+import type { PlanInk } from "./ink";
 import { cellCentre, cellIndex, walkableAt, walkableRaster, type Raster } from "./raster";
 import { simplify } from "./simplify";
 
@@ -227,7 +229,7 @@ export type Connector = { polyline: Vec2[]; widthM: number; roomIds: string[]; l
  * there is one (containerOf).
  */
 export type Island = { roomIds: string[]; gapM: number; from: Vec2; to: Vec2; inside?: { roomId: string; name: string } };
-export type RoomConnectors = { connectors: Connector[]; islands: Island[]; left: number };
+export type RoomConnectors = { connectors: Connector[]; bridges: Bridge[]; islands: Island[]; left: number };
 
 /** A floor connect_rooms has nothing to run connectors from or through, and why, for a person. */
 export class CannotConnect extends Error {
@@ -612,14 +614,16 @@ function islandsOf(
  * the floor — its sources and the connectors it keeps, and with `preview`, which
  * writes nothing, its sources alone (contract v5 amendment 4).
  */
-export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECTORS, preview = false): RoomConnectors {
+export function connectRooms(
+  model: MapModel, levelId: string, max = MAX_CONNECTORS, preview = false, ink: PlanInk | null = null,
+): RoomConnectors {
   const rooms = new Map(live(model.rooms).filter(r => r.levelId === levelId).map(r => [r.id, r]));
   const issues = validateModel(model).issues.filter(i => i.levelId === levelId);
   const codes = new Map<string, Set<string>>();
   for (const i of issues) {
     if (UNREACHED.has(i.code) && rooms.has(i.entityId)) codes.set(i.entityId, (codes.get(i.entityId) ?? new Set()).add(i.code));
   }
-  if (codes.size === 0) return { connectors: [], islands: [], left: 0 };
+  if (codes.size === 0) return { connectors: [], bridges: [], islands: [], left: 0 };
 
   const cut = new Set(issues.filter(i => i.code === "pathway.disconnected").map(i => i.entityId));
   const reached = live(model.entrances).length === 0
@@ -685,88 +689,119 @@ export function connectRooms(model: MapModel, levelId: string, max = MAX_CONNECT
   let open = targets.length;
   const connectors: Connector[] = [];
   const diagonal = cellM * Math.SQRT2;
-  while (queue.size > 0 && open > 0) {
-    const d = queue.top;
-    const i = queue.pop();
-    if (d > dist[i]!) continue;
-    let hit = -1;
-    for (let e = goalHead[i]!; e >= 0 && hit < 0; e = goalNext[e]!) {
-      const k = goalOf[e]!;
-      if (!done[k] && !givenUp[k]) hit = k;
-    }
-    if (hit >= 0) {
-      const path: Vec2[] = [];
-      let c = i;
-      for (; dist[c]! > 0; c = prev[c]!) path.push(cellCentre(raster, c));
-      // A room whose goal lies on a line already needs no connector; the search carries on from here.
-      if (path.length === 0) {
-        done[hit] = 1;
-        open--;
-      } else {
-        const raw = [start.get(c)!, ...path.reverse()];
-        const polyline = simplifyOnFloor(raw, raster, CONNECTOR_SIMPLIFY_M).map(at);
-        const box = bboxOfRing(polyline);
-        const points: Vec2[] = [];
-        along(polyline, cellM / 2, p => points.push(p));
-        const target = targets[hit]!;
-        // Amendment 4: its goals are the band outside its outline, so the run
-        // can end beside a room check_floor still lists. Named only once
-        // reachedBy says so; otherwise nothing is drawn for it and it is
-        // islandsOf's, never claimed as connected.
-        if (target.fallback && !reachedBy(target, polyline, box, points)) {
-          givenUp[hit] = 1;
-          open--;
-        } else {
+  /**
+   * The search, out from whatever is seeded: the sources first, and again from
+   * the bridges once they are laid (contract v6), so a bridge's island gets its
+   * connectors in the same call rather than waiting for the next.
+   */
+  const search = () => {
+    while (queue.size > 0 && open > 0) {
+      const d = queue.top;
+      const i = queue.pop();
+      if (d > dist[i]!) continue;
+      let hit = -1;
+      for (let e = goalHead[i]!; e >= 0 && hit < 0; e = goalNext[e]!) {
+        const k = goalOf[e]!;
+        if (!done[k] && !givenUp[k]) hit = k;
+      }
+      if (hit >= 0) {
+        const path: Vec2[] = [];
+        let c = i;
+        for (; dist[c]! > 0; c = prev[c]!) path.push(cellCentre(raster, c));
+        // A room whose goal lies on a line already needs no connector; the search carries on from here.
+        if (path.length === 0) {
           done[hit] = 1;
           open--;
-          const roomIds = [target.room.id];
-          targets.forEach((u, k) => {
-            if (done[k] || !reachedBy(u, polyline, box, points)) return;
-            done[k] = 1;
-            if (!givenUp[k]) open--;
-            roomIds.push(u.room.id);
-          });
-          connectors.push({
-            polyline,
-            widthM: round1(lineWidth(raw, raster, toEdge, CONNECTOR_MIN_WIDTH_M, CONNECTOR_MAX_WIDTH_M)),
-            roomIds,
-            lengthM: round1(polylineLength(polyline)),
-          });
-          // The connector's own cells go in at 0, this one's included: it is taken again from there.
-          seed(polyline);
-          continue;
+        } else {
+          const raw = [start.get(c)!, ...path.reverse()];
+          const polyline = simplifyOnFloor(raw, raster, CONNECTOR_SIMPLIFY_M).map(at);
+          const box = bboxOfRing(polyline);
+          const points: Vec2[] = [];
+          along(polyline, cellM / 2, p => points.push(p));
+          const target = targets[hit]!;
+          // Amendment 4: its goals are the band outside its outline, so the run
+          // can end beside a room check_floor still lists. Named only once
+          // reachedBy says so; otherwise nothing is drawn for it and it is
+          // islandsOf's, never claimed as connected.
+          if (target.fallback && !reachedBy(target, polyline, box, points)) {
+            givenUp[hit] = 1;
+            open--;
+          } else {
+            done[hit] = 1;
+            open--;
+            const roomIds = [target.room.id];
+            targets.forEach((u, k) => {
+              if (done[k] || !reachedBy(u, polyline, box, points)) return;
+              done[k] = 1;
+              if (!givenUp[k]) open--;
+              roomIds.push(u.room.id);
+            });
+            connectors.push({
+              polyline,
+              widthM: round1(lineWidth(raw, raster, toEdge, CONNECTOR_MIN_WIDTH_M, CONNECTOR_MAX_WIDTH_M)),
+              roomIds,
+              lengthM: round1(polylineLength(polyline)),
+            });
+            // The connector's own cells go in at 0, this one's included: it is taken again from there.
+            seed(polyline);
+            continue;
+          }
+        }
+      }
+      const col = i % cols;
+      const row = (i - col) / cols;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dc === 0 && dr === 0) continue;
+          const cc = col + dc;
+          const rr = row + dr;
+          if (cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
+          const j = rr * cols + cc;
+          if (!cells[j]) continue;
+          // A diagonal step passes between its two side cells: both must be floor.
+          if (dc !== 0 && dr !== 0 && (!cells[row * cols + cc] || !cells[rr * cols + col])) continue;
+          const nd = d + (dc !== 0 && dr !== 0 ? diagonal : cellM);
+          if (nd > CONNECT_MAX_M || nd >= dist[j]!) continue;
+          dist[j] = nd;
+          prev[j] = i;
+          queue.push(nd, j);
         }
       }
     }
-    const col = i % cols;
-    const row = (i - col) / cols;
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
-        if (dc === 0 && dr === 0) continue;
-        const cc = col + dc;
-        const rr = row + dr;
-        if (cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
-        const j = rr * cols + cc;
-        if (!cells[j]) continue;
-        // A diagonal step passes between its two side cells: both must be floor.
-        if (dc !== 0 && dr !== 0 && (!cells[row * cols + cc] || !cells[rr * cols + col])) continue;
-        const nd = d + (dc !== 0 && dr !== 0 ? diagonal : cellM);
-        if (nd > CONNECT_MAX_M || nd >= dist[j]!) continue;
-        dist[j] = nd;
-        prev[j] = i;
-        queue.push(nd, j);
-      }
-    }
-  }
+  };
+  search();
 
-  const made = connectors.slice(0, max);
+  const floorRooms = [...rooms.values()];
+  const bridges: Bridge[] = [];
   // Amendment 4: the islands are measured from the lines this call leaves on
   // the floor, so an island's `from` is never a point on a line nobody wrote —
   // a bridge laid from it would be pathway.disconnected.
-  const drawn = network.slice(0, sources + (preview ? 0 : made.length));
+  const drawn = () => (preview
+    ? network.slice(0, sources)
+    : [...network.slice(0, sources), ...connectors.slice(0, max).map(c => c.polyline), ...bridges.map((b): Vec2[] => [b.from, b.to])]);
+  const standing = () => islandsOf(raster, dist, targets.filter((_, k) => !done[k]), drawn(), floorRooms);
+
+  // Contract v6's second phase: the islands this call would otherwise just
+  // name, bridged where the drawing shows open floor, nearest gap first
+  // (islandsOf sorts them). Only while nothing was capped, so a bridge is laid
+  // from the whole network, and never on a preview, which writes nothing a
+  // bridge could stand on.
+  if (ink && !preview && connectors.length <= max) {
+    for (const island of standing()) {
+      const bridge = bridgeAcross(island, floorRooms, ink);
+      if (bridge) bridges.push(bridge);
+    }
+    if (bridges.length > 0) {
+      for (const b of bridges) seed([b.from, b.to]);
+      search();
+    }
+  }
+
+  const bridged = new Set(bridges.flatMap(b => b.roomIds));
   return {
-    connectors: made,
-    islands: islandsOf(raster, dist, targets.filter((_, k) => !done[k]), drawn, [...rooms.values()]),
+    connectors: connectors.slice(0, max),
+    bridges,
+    islands: standing().filter(i => !i.roomIds.every(id => bridged.has(id))),
     left: Math.max(0, connectors.length - max),
   };
 }

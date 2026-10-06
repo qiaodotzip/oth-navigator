@@ -4,6 +4,7 @@ import {
   CONNECT_MAX_M, CONNECTOR_SIMPLIFY_M, CONTAINER_SHARE, CannotConnect, ISLAND_JOIN_M, MAX_CONNECTORS, clearLine, connect, connectRooms,
   linkTargets, REASONS, simplifyOnFloor, type Connector, type Target,
 } from "./connect";
+import type { PlanInk } from "./ink";
 import { walkableAt, walkableRaster, type Raster } from "./raster";
 import { simplify } from "./simplify";
 import { doorway, floor, LEVEL, rect, type TestRoom } from "./testing";
@@ -345,11 +346,78 @@ describe("connectRooms (contract v5)", () => {
   it("reaches only the rooms check_floor lists: a shop a pathway passes within 3 m of, or one on another floor, is left alone", () => {
     const served = shop("L1-served", 25, 4.5, 31, 10);
     const upstairs: TestRoom = { ...shop("L2-shop", 25, 12, 31, 18), levelId: "oth-L2" };
-    expect(connectRooms(withGate([served, upstairs]), LEVEL)).toEqual({ connectors: [], islands: [], left: 0 });
+    expect(connectRooms(withGate([served, upstairs]), LEVEL)).toEqual({ connectors: [], bridges: [], islands: [], left: 0 });
   });
 
   it("refuses a floor with rooms to reach but no pathway an entrance or a stop reaches", () => {
     const model = floor([HALL, shop("L1-shop-a", 5, 12, 11, 18)], { pathways: [MAIN] });
     expect(() => connectRooms(model, LEVEL)).toThrow(CannotConnect);
+  });
+});
+
+describe("the bridging phase (contract v6)", () => {
+  /** The drawing says open floor, and counts what it was asked about. */
+  const sayOpen = (): PlanInk & { asked: number } => {
+    const probe = {
+      asked: 0,
+      run: (a: Vec2, b: Vec2) => {
+        probe.asked++;
+        const runM = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        return { open: true, openM: runM, runM, why: "" };
+      },
+    };
+    return probe;
+  };
+  const sayShut: PlanInk = { run: (a, b) => ({ open: false, openM: 0, runM: Math.hypot(b[0] - a[0], b[1] - a[1]), why: "a wall" }) };
+  /** A hall of its own, 2 m east of the network's, as the "island across a wall" test has it. */
+  const EAST: TestRoom = { id: "L1-east-hall", footprint: rect(62, 0, 70, 20), nameEn: "East hall" };
+
+  it("bridges an island the drawing shows open floor to, and that island leaves islands", () => {
+    const { bridges, islands } = connectRooms(withGate([EAST]), LEVEL, MAX_CONNECTORS, false, sayOpen());
+    expect(bridges).toHaveLength(1);
+    const [bridge] = bridges;
+    expect(bridge!.from).toEqual([59, 2]);
+    expect(fromBox(bridge!.to, [62, 0, 70, 20])).toBeLessThanOrEqual(1);
+    expect(bridge).toMatchObject({ toRoomId: "L1-east-hall", toName: "East hall" });
+    // 2 m of the 3.1 m run is ground no room covers; the rest is the two halls' own floor.
+    expect(bridge!.openM).toBeCloseTo(2, 1);
+    expect(islands).toEqual([]);
+  });
+
+  it("carries the search on from the bridge, so the island's own rooms get their connectors in the same call", () => {
+    const { connectors, bridges } = connectRooms(withGate([EAST, shop("L1-east-shop", 64, 5, 68, 15)]), LEVEL, MAX_CONNECTORS, false, sayOpen());
+    expect(bridges).toHaveLength(1);
+    expect(connectors.map(c => c.roomIds)).toEqual([["L1-east-shop"]]);
+    expect(fromLine(connectors[0]!.polyline[0]!, [bridges[0]!.from, bridges[0]!.to])).toBeLessThan(0.3);
+  });
+
+  it("names the island as contract v5 does where the drawing shows no open floor", () => {
+    const { bridges, islands } = connectRooms(withGate([EAST]), LEVEL, MAX_CONNECTORS, false, sayShut);
+    expect(bridges).toEqual([]);
+    expect(islands.map(i => i.roomIds)).toEqual([["L1-east-hall"]]);
+    expect(islands[0]!.gapM).toBeCloseTo(3.1, 1);
+  });
+
+  it("asks the drawing nothing, and bridges nothing, while left is above 0", () => {
+    const ink = sayOpen();
+    const { bridges, islands, left } = connectRooms(
+      withGate([EAST, shop("L1-shop-a", 5, 12, 11, 18), shop("L1-shop-b", 25, 12, 31, 18)]), LEVEL, 1, false, ink,
+    );
+    expect(left).toBe(1);
+    expect(ink.asked).toBe(0);
+    expect(bridges).toEqual([]);
+    expect(islands.map(i => i.roomIds)).toEqual([["L1-east-hall"]]);
+  });
+
+  it("is contract v5 exactly on a floor with no plan to read", () => {
+    const { bridges, islands } = connectRooms(withGate([EAST]), LEVEL);
+    expect(bridges).toEqual([]);
+    expect(islands.map(i => i.roomIds)).toEqual([["L1-east-hall"]]);
+  });
+
+  it("bridges nothing on a preview, which writes nothing a bridge could stand on", () => {
+    const { bridges, islands } = connectRooms(withGate([EAST]), LEVEL, MAX_CONNECTORS, true, sayOpen());
+    expect(bridges).toEqual([]);
+    expect(islands.map(i => i.roomIds)).toEqual([["L1-east-hall"]]);
   });
 });
