@@ -36,8 +36,20 @@ export const INK_WINDOW_M = 1;
 export const INK_SHARE = 0.2;
 /** How far across the run the probe looks for something spanning it. */
 export const INK_BAND_M = 1;
-/** This share of the band dark at one step: something spans the run there. */
-export const INK_SPAN = 0.5;
+/**
+ * This share of the band dark at one step: something spans the run there.
+ *
+ * 0.8, calibrated on L1's drawing rather than guessed. Half the band was too
+ * little: it counts a dash-dot grid line as spanning, and the pair rule then
+ * reads a grid line and the one-pixel slab edge beside it as one wall's two
+ * faces — which refused every bridge on both real floors, the known-good Studio
+ * (East 3) run included (its blocker, cropped at 4×, is exactly that pair in
+ * open Town Square). The walls here are filled black and two to four pixels
+ * wide, and they darken the whole band. Above 0.8 a partition stops counting
+ * too: at 0.9 the cubicles inside the opened Public Service Centre let a bridge
+ * through. The three runs that hold it there are in ink.test.ts.
+ */
+export const INK_SPAN = 0.8;
 /** A span this long along the run is a wall, not a line drawn across the floor. */
 export const INK_SPAN_M = 0.15;
 /** Two spans this close are one wall drawn as two lines with white between. */

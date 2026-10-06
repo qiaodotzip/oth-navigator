@@ -107,6 +107,54 @@ describe("what crosses a run, asked of floor the map already has", () => {
   });
 });
 
+/**
+ * What INK_SPAN is set to, held in place by the three runs that set it. The shapes are the ones
+ * measured on real L1's crops, at the plan's own 0.07 m a pixel, and the three names are the
+ * islands they come from (the gaps rehearsal 5 left, numbered as the report's table numbers them).
+ * Move INK_SPAN and one of these fails: 0.5 shuts the Studio (East 3) run, 0.9 opens the cubicles.
+ */
+describe("INK_SPAN, calibrated on real L1's drawing", () => {
+  /** L1's plan scale. The run is 17 m west to east, 10.5 m up a 21 m sheet. */
+  const PLAN: PlanImage = { widthPx: 300, heightPx: 300, metresPerPixel: 0.07, offsetX: 0, offsetY: 21 };
+  const blank = (): PlanGrey => ({ data: new Uint8Array(300 * 300).fill(255), widthPx: 300, heightPx: 300 });
+  const at = (m: number) => Math.round(m / 0.07);
+  /**
+   * A line across the run at `x`: `thickM` along the run, covering `reachM` of the 1 m band the
+   * probe looks across. `dashed` leaves the gaps of a dash-dot line, which is why a grid line
+   * darkens less of the band than a wall does.
+   */
+  function line(sheet: PlanGrey, x: number, thickM: number, reachM: number, dashed = false): PlanGrey {
+    for (let col = at(x); col < at(x + thickM) + 1; col++) {
+      for (let row = at(21 - 10.5 - reachM / 2); row < at(21 - 10.5 + reachM / 2); row++) {
+        if (dashed && row % 10 >= 7) continue;
+        sheet.data[row * 300 + col] = 0;
+      }
+    }
+    return sheet;
+  }
+  const crossing = (sheet: PlanGrey) => inkCrossed(sheet, PLAN, [2, 10.5], [19, 10.5]);
+
+  it("lets the Studio (East 3) run through: a dash-dot grid line and a thin slab edge 0.31 m apart, in open Town Square", () => {
+    // At 0.5 the grid line counts as spanning the run, the pair rule reads the two as one wall's
+    // faces, and this run — the one bridge L1 has — is refused 10.2 m along.
+    const townSquare = line(line(blank(), 8, 0.07, 3, true), 8.31, 0.07, 3);
+    expect(crossing(townSquare)).toMatchObject({ open: true, why: "" });
+  });
+
+  it("still refuses the cubicles inside the opened Public Service Centre (island i17)", () => {
+    // A partition 0.2 m thick across most, not all, of the band: it spans the run at 0.8 and stops
+    // the bridge. At 0.9 it does not, which is the setting this test exists to refuse.
+    const cubicle = crossing(line(blank(), 8, 0.2, 0.85));
+    expect(cubicle.open).toBe(false);
+    expect(cubicle.why).toContain("a line along");
+  });
+
+  it("still refuses the hawker centre's planter (island i09)", () => {
+    // Its kerb is solid and crosses the whole band: no setting of INK_SPAN lets this through.
+    expect(crossing(line(blank(), 8, 0.2, 1.2)).open).toBe(false);
+  });
+});
+
 describe("planInk", () => {
   it("reads the plan's own bytes, as view_plan does, and answers the same as the pixels", async () => {
     const sharp = (await import("sharp")).default;
