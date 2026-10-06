@@ -228,8 +228,23 @@ export type Connector = { polyline: Vec2[]; widthM: number; roomIds: string[]; l
  * (from) to their floor (to). inside is the container they all lie in, when
  * there is one (containerOf).
  */
-export type Island = { roomIds: string[]; gapM: number; from: Vec2; to: Vec2; inside?: { roomId: string; name: string } };
+export type Island = {
+  roomIds: string[];
+  gapM: number;
+  from: Vec2;
+  to: Vec2;
+  /**
+   * The closed room the island lies in, when opening it would help: `frees` is
+   * how many of the island's rooms a connector would then reach (contract v6).
+   * A container that frees none is not named at all, so draw_paths never opens
+   * one for nothing.
+   */
+  inside?: { roomId: string; name: string; frees: number };
+};
 export type RoomConnectors = { connectors: Connector[]; bridges: Bridge[]; islands: Island[]; left: number };
+
+/** An island as the grouping leaves it: its container named, before the simulation says whether opening it helps. */
+type Grouped = Omit<Island, "inside"> & { inside?: { roomId: string; name: string } };
 
 /** A floor connect_rooms has nothing to run connectors from or through, and why, for a person. */
 export class CannotConnect extends Error {
@@ -492,7 +507,7 @@ function nearestPair(line: readonly Vec2[], lines: readonly (readonly Vec2[])[])
  */
 function islandsOf(
   r: Raster, dist: Float64Array, unreached: readonly Unreached[], network: readonly Vec2[][], floorRooms: readonly Room[],
-): Island[] {
+): Grouped[] {
   if (unreached.length === 0) return [];
   const room = new Map(unreached.map(u => [u.room.id, u.room]));
   const containers = containersOf(floorRooms);
@@ -571,7 +586,7 @@ function islandsOf(
       if (near) parent[root(a)] = root(b);
     }
   }
-  const islands = new Map<number, Island & { gap: number; floor: boolean }>();
+  const islands = new Map<number, Grouped & { gap: number; floor: boolean }>();
   groups.forEach((g, k) => {
     const had = islands.get(root(k));
     const roomIds = [...(had?.roomIds ?? []), ...g.members.map(u => u.room.id)];
@@ -581,7 +596,7 @@ function islandsOf(
       : { ...had, roomIds });
   });
   return [...islands.values()]
-    .map(({ gap: _gap, floor: _floor, ...island }): Island => {
+    .map(({ gap: _gap, floor: _floor, ...island }): Grouped => {
       const container = containerOf(island.roomIds.map(id => room.get(id)!), containers);
       return { ...island, roomIds: island.roomIds.sort(), ...(container ? { inside: { roomId: container.id, name: container.nameEn || container.id } } : {}) };
     })
@@ -589,52 +604,30 @@ function islandsOf(
 }
 
 /**
- * Contract v5's connect_rooms, worked out; nothing is saved here.
- *
- * Targets are the rooms on the floor that check_floor lists as area.unreachable
- * or room.noAccess, from the model's own validation (validation reports no
- * unreached stop, so there are none of those). Sources are the floor's live
- * pathways routing reaches from an entrance or a stop: every one but those the
- * same validation calls pathway.disconnected, none while the building has no
- * entrance.
- *
- * One multi-source search walks suggest_paths' walkable raster (8-neighbour,
- * never cutting a blocked corner) out from the sources, CONNECT_MAX_M at most.
- * The first cell it takes where a connector to an unreached room may end (goalsOf)
- * makes that room's connector: nearest room first. The connector starts at the
- * foot of its first cell on the line it leaves, is simplified by
- * CONNECTOR_SIMPLIFY_M without leaving the floor (simplifyOnFloor), takes the width rule clamped to 1–3 m, and becomes a
- * source itself, so the search carries on from it too; every room check_floor
- * would then stop listing (reachedBy) goes on it and is skipped. A room whose
- * goals are the band outside its outline goes on it only once reachedBy says
- * so. What the search never reaches is on an island (islandsOf).
- *
- * Every connector is worked out, so `left` says how many past `max` a second
- * call would make; the islands are measured from the lines the call leaves on
- * the floor — its sources and the connectors it keeps, and with `preview`, which
- * writes nothing, its sources alone (contract v5 amendment 4).
+ * The floor's unreached rooms as targets on one raster. The goal cells are that
+ * raster's, so a simulated raster (a container opened, freesOf) is handed its
+ * own targets rather than the real floor's.
  */
-export function connectRooms(
-  model: MapModel, levelId: string, max = MAX_CONNECTORS, preview = false, ink: PlanInk | null = null,
-): RoomConnectors {
-  const rooms = new Map(live(model.rooms).filter(r => r.levelId === levelId).map(r => [r.id, r]));
-  const issues = validateModel(model).issues.filter(i => i.levelId === levelId);
-  const codes = new Map<string, Set<string>>();
-  for (const i of issues) {
-    if (UNREACHED.has(i.code) && rooms.has(i.entityId)) codes.set(i.entityId, (codes.get(i.entityId) ?? new Set()).add(i.code));
-  }
-  if (codes.size === 0) return { connectors: [], bridges: [], islands: [], left: 0 };
+function targetsOn(raster: Raster, rooms: ReadonlyMap<string, Room>, codes: ReadonlyMap<string, Set<string>>): Unreached[] {
+  return [...codes.keys()].sort().map(id => {
+    const room = rooms.get(id)!;
+    const has = codes.get(id)!;
+    return {
+      room, box: bboxOfRing(room.footprint), enter: has.has("area.unreachable"), near: has.has("room.noAccess"),
+      ...goalsOf(raster, room),
+    };
+  });
+}
 
-  const cut = new Set(issues.filter(i => i.code === "pathway.disconnected").map(i => i.entityId));
-  const reached = live(model.entrances).length === 0
-    ? []
-    : live(model.pathways).filter(p => p.levelId === levelId && !cut.has(p.id));
-  if (reached.length === 0) {
-    throw new CannotConnect("No pathway there is reached from an entrance or a stop yet: add the entrances and the main lines first.");
-  }
-  const raster = walkableRaster(model, levelId);
-  if (raster.cols === 0) throw new CannotConnect("It has no walkable area to run a pathway through.");
-
+/**
+ * One multi-source search over one raster: seed the lines it starts from, run
+ * it, and read off the connectors it made. It is a factory rather than a plain
+ * function because the search is run more than once over the same state — again
+ * from the bridges once they are laid (contract v6) — and a second, throwaway
+ * one runs over a simulated raster to answer whether opening a container would
+ * help (freesOf).
+ */
+function searcher(raster: Raster, targets: readonly Unreached[]) {
   const { cols, rows, cells, cellM } = raster;
   const n = cols * rows;
   const toEdge = distanceToEdge(raster);
@@ -655,18 +648,7 @@ export function connectRooms(
       queue.push(0, i);
     });
   };
-  for (const p of reached) seed(p.polyline);
-  /** How many of `network` were there before this call: seed appends one entry per connector after them. */
-  const sources = network.length;
 
-  const targets: Unreached[] = [...codes.keys()].sort().map(id => {
-    const room = rooms.get(id)!;
-    const has = codes.get(id)!;
-    return {
-      room, box: bboxOfRing(room.footprint), enter: has.has("area.unreachable"), near: has.has("room.noAccess"),
-      ...goalsOf(raster, room),
-    };
-  });
   // Which targets may end at each cell, as linked lists.
   const goalHead = new Int32Array(n).fill(-1);
   const goalNext: number[] = [];
@@ -769,7 +751,87 @@ export function connectRooms(
       }
     }
   };
-  search();
+  return { seed, search, connectors, network, dist, done };
+}
+
+/**
+ * Contract v6: which of an island's rooms a connector would reach if its
+ * container were opened — the room made kind "area" and walkable, which is what
+ * draw_paths does with an `inside`. It is worked out in memory, over a raster
+ * built from a copy of the model: nothing here is written, and the model handed
+ * in is not touched.
+ *
+ * Rehearsal 5 is why: opening Commercial & F&B (North) and Studio (East 3)
+ * turned them into unreached areas inside bigger islands — 20 rooms no better
+ * off, and two rooms needlessly areas.
+ */
+function freesOf(
+  container: Room, model: MapModel, levelId: string, rooms: ReadonlyMap<string, Room>,
+  codes: ReadonlyMap<string, Set<string>>, lines: readonly (readonly Vec2[])[],
+): Set<string> {
+  const open = (r: Room): Room => (r.id === container.id ? { ...r, kind: "area", walkable: true } : r);
+  const raster = walkableRaster({ ...model, rooms: model.rooms.map(open) }, levelId);
+  if (raster.cols === 0) return new Set();
+  const run = searcher(raster, targetsOn(raster, new Map([...rooms].map(([id, r]) => [id, open(r)])), codes));
+  for (const line of lines) run.seed(line);
+  run.search();
+  return new Set(run.connectors.flatMap(c => c.roomIds));
+}
+
+/**
+ * Contract v5's connect_rooms, worked out; nothing is saved here.
+ *
+ * Targets are the rooms on the floor that check_floor lists as area.unreachable
+ * or room.noAccess, from the model's own validation (validation reports no
+ * unreached stop, so there are none of those). Sources are the floor's live
+ * pathways routing reaches from an entrance or a stop: every one but those the
+ * same validation calls pathway.disconnected, none while the building has no
+ * entrance.
+ *
+ * One multi-source search walks suggest_paths' walkable raster (8-neighbour,
+ * never cutting a blocked corner) out from the sources, CONNECT_MAX_M at most.
+ * The first cell it takes where a connector to an unreached room may end (goalsOf)
+ * makes that room's connector: nearest room first. The connector starts at the
+ * foot of its first cell on the line it leaves, is simplified by
+ * CONNECTOR_SIMPLIFY_M without leaving the floor (simplifyOnFloor), takes the width rule clamped to 1–3 m, and becomes a
+ * source itself, so the search carries on from it too; every room check_floor
+ * would then stop listing (reachedBy) goes on it and is skipped. A room whose
+ * goals are the band outside its outline goes on it only once reachedBy says
+ * so. What the search never reaches is on an island (islandsOf).
+ *
+ * Every connector is worked out, so `left` says how many past `max` a second
+ * call would make; the islands are measured from the lines the call leaves on
+ * the floor — its sources and the connectors it keeps, and with `preview`, which
+ * writes nothing, its sources alone (contract v5 amendment 4).
+ */
+export function connectRooms(
+  model: MapModel, levelId: string, max = MAX_CONNECTORS, preview = false, ink: PlanInk | null = null,
+): RoomConnectors {
+  const rooms = new Map(live(model.rooms).filter(r => r.levelId === levelId).map(r => [r.id, r]));
+  const issues = validateModel(model).issues.filter(i => i.levelId === levelId);
+  const codes = new Map<string, Set<string>>();
+  for (const i of issues) {
+    if (UNREACHED.has(i.code) && rooms.has(i.entityId)) codes.set(i.entityId, (codes.get(i.entityId) ?? new Set()).add(i.code));
+  }
+  if (codes.size === 0) return { connectors: [], bridges: [], islands: [], left: 0 };
+
+  const cut = new Set(issues.filter(i => i.code === "pathway.disconnected").map(i => i.entityId));
+  const reached = live(model.entrances).length === 0
+    ? []
+    : live(model.pathways).filter(p => p.levelId === levelId && !cut.has(p.id));
+  if (reached.length === 0) {
+    throw new CannotConnect("No pathway there is reached from an entrance or a stop yet: add the entrances and the main lines first.");
+  }
+  const raster = walkableRaster(model, levelId);
+  if (raster.cols === 0) throw new CannotConnect("It has no walkable area to run a pathway through.");
+
+  const targets = targetsOn(raster, rooms, codes);
+  const run = searcher(raster, targets);
+  for (const p of reached) run.seed(p.polyline);
+  /** How many of `network` were there before this call: seed appends one entry per connector after them. */
+  const sources = run.network.length;
+  run.search();
+  const { connectors, network, dist, done } = run;
 
   const floorRooms = [...rooms.values()];
   const bridges: Bridge[] = [];
@@ -792,16 +854,25 @@ export function connectRooms(
       if (bridge) bridges.push(bridge);
     }
     if (bridges.length > 0) {
-      for (const b of bridges) seed([b.from, b.to]);
-      search();
+      for (const b of bridges) run.seed([b.from, b.to]);
+      run.search();
     }
   }
 
   const bridged = new Set(bridges.flatMap(b => b.roomIds));
-  return {
-    connectors: connectors.slice(0, max),
-    bridges,
-    islands: standing().filter(i => !i.roomIds.every(id => bridged.has(id))),
-    left: Math.max(0, connectors.length - max),
-  };
+  // Contract v6: a container is named only with how many of the island's rooms
+  // opening it would free, and not at all when that is none. One simulation per
+  // container, however many islands lie in it.
+  const freed = new Map<string, Set<string>>();
+  const islands = standing()
+    .filter(i => !i.roomIds.every(id => bridged.has(id)))
+    .map(({ inside, ...island }): Island => {
+      if (!inside) return island;
+      if (!freed.has(inside.roomId)) {
+        freed.set(inside.roomId, freesOf(rooms.get(inside.roomId)!, model, levelId, rooms, codes, drawn()));
+      }
+      const frees = island.roomIds.filter(id => freed.get(inside.roomId)!.has(id)).length;
+      return frees > 0 ? { ...island, inside: { ...inside, frees } } : island;
+    });
+  return { connectors: connectors.slice(0, max), bridges, islands, left: Math.max(0, connectors.length - max) };
 }

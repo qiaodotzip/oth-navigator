@@ -128,8 +128,9 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       `It makes at most ${MAX_CONNECTORS} a call: left says how many more another call would make. islands are the ` +
       "rooms no such run reaches, grouped by the floor they stand on: each with gapM, the straight gap from the " +
       `network (from) to their floor or outline (to), in metres. inside names the room of kind room an island's rooms each lie ` +
-      `${CONTAINER_SHARE * 100}% or more inside, when there is one: a closed block traced round open floor, whose rooms ` +
-      'opening it would reach: `update` it to kind "area" and walkable true. The islands are measured from the connectors this call ' +
+      `${CONTAINER_SHARE * 100}% or more inside, when there is one: a closed block traced round open floor. It is named ` +
+      "only where opening it would help, and frees says how many of the island's rooms a connector would then reach: " +
+      'open it with update, kind "area" and walkable true. The islands are measured from the connectors this call ' +
       "made. Once left is 0 it reads the floorplan itself along each island's gap, nearest first, and bridges the ones " +
       `the drawing shows as open floor: at most ${BRIDGE_MAX_M} m of ground no room covers, never across a room. bridges ` +
       "lists each one it laid (id, from, to, toRoomId, toName, lengthM, and openM, the ground it crosses), and a bridged " +

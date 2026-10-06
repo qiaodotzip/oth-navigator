@@ -229,7 +229,11 @@ describe("connect_rooms (contract v5)", () => {
   it("tells Claude what an island's inside is, and how making that room an area lets it reach the rooms (contract v5 amendment)", async () => {
     const { tools } = await client.listTools();
     const description = tools.find(t => t.name === "connect_rooms")?.description ?? "";
-    for (const words of ["inside names the room of kind room", "90% or more inside", 'kind "area" and walkable true', "preview true"]) {
+    for (const words of [
+      "inside names the room of kind room", "90% or more inside", 'kind "area" and walkable true', "preview true",
+      // Contract v6: and only where opening it would help, with how much it would help.
+      "frees says how many of the island's rooms a connector would then reach",
+    ]) {
       expect(description).toContain(words);
     }
   });

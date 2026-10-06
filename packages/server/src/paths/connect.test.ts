@@ -247,7 +247,9 @@ describe("connectRooms (contract v5)", () => {
   describe("inside (contract v5 amendment)", () => {
     // Rehearsal 4's L1: Commercial & F&B (North) is a room of kind room traced closed round the shops in it. An old
     // pathway inside it, which nothing reaches, serves the block itself (it passes within 3 m), not the shops.
-    const block: TestRoom = { id: "L1-block", nameEn: "Commercial block", footprint: rect(10, 30, 40, 50), kind: "room", walkable: false };
+    // Its south wall stands on the hall's north edge, so opening it is worth doing: contract v6 reports a
+    // container only when a connector would then reach a room it cannot reach now.
+    const block: TestRoom = { id: "L1-block", nameEn: "Commercial block", footprint: rect(10, 20, 40, 50), kind: "room", walkable: false };
     const shops = [shop("L1-in-1", 12, 38, 18, 46), shop("L1-in-2", 20, 38, 26, 46), shop("L1-in-3", 28, 38, 34, 46)];
     const old = { id: "L1-old", levelId: LEVEL, polyline: [[11, 31], [39, 31]], widthM: 2 };
 
@@ -258,7 +260,7 @@ describe("connectRooms (contract v5)", () => {
     });
 
     it("names the smaller of two containers, one inside the other", () => {
-      const outer: TestRoom = { id: "L1-outer", nameEn: "Outer", footprint: rect(5, 28, 50, 55), kind: "room", walkable: false };
+      const outer: TestRoom = { id: "L1-outer", nameEn: "Outer", footprint: rect(5, 18, 50, 55), kind: "room", walkable: false };
       const { islands } = connectRooms(withGate([outer, block, ...shops], [old]), LEVEL);
       expect(islands.map(i => i.inside?.roomId)).toEqual(["L1-block"]);
     });
@@ -285,8 +287,10 @@ describe("connectRooms (contract v5)", () => {
       const block2: TestRoom = { id: "L1-block2", nameEn: "Block two", footprint: rect(20, 62, 40, 80), kind: "room", walkable: false };
       const old2 = { id: "L1-old2", levelId: LEVEL, polyline: [[21, 63], [39, 63]], widthM: 2 };
       const { islands } = connectRooms(withGate([yard, block2, shop("L1-in-a", 20.5, 68, 26, 74), shop("L1-in-b", 28, 68, 34, 74)], [old2]), LEVEL);
+      // Both islands stand 42 m off the hall, so opening Block two would free nothing and contract v6
+      // leaves it unnamed — rehearsal 5's Commercial & F&B (North) exactly. The grouping is the point here.
       expect(islands.map(i => [i.roomIds, i.inside?.roomId])).toEqual([
-        [["L1-in-a", "L1-in-b"], "L1-block2"],
+        [["L1-in-a", "L1-in-b"], undefined],
         [["L1-yard"], undefined],
       ]);
     });
@@ -298,6 +302,30 @@ describe("connectRooms (contract v5)", () => {
         [["L1-in-1", "L1-in-2", "L1-in-3"], "L1-block"],
         [["L1-straddle"], undefined],
       ]);
+    });
+
+    describe("only when opening it helps (contract v6)", () => {
+      it("says how many of the island's rooms opening the container would free", () => {
+        const { islands } = connectRooms(withGate([block, ...shops], [old]), LEVEL);
+        expect(islands[0]!.inside).toEqual({ roomId: "L1-block", name: "Commercial block", frees: 3 });
+      });
+
+      it("leaves out a container whose opening would free none of them: rehearsal 5's Commercial & F&B (North)", () => {
+        // The same block, moved 10 m off the hall. Opened, it is walkable floor no route reaches —
+        // 18 rooms no better off, and a room needlessly an area.
+        const adrift: TestRoom = { ...block, footprint: rect(10, 30, 40, 50) };
+        const { islands } = connectRooms(withGate([adrift, ...shops], [old]), LEVEL);
+        expect(islands.map(i => i.roomIds)).toEqual([["L1-in-1", "L1-in-2", "L1-in-3"]]);
+        expect(islands[0]).not.toHaveProperty("inside");
+      });
+
+      it("writes nothing while it works that out: the model it was handed is untouched", () => {
+        const model = withGate([block, ...shops], [old]);
+        const before = JSON.parse(JSON.stringify(model));
+        connectRooms(model, LEVEL);
+        expect(JSON.parse(JSON.stringify(model))).toEqual(before);
+        expect(model.rooms.find(r => r.id === "L1-block")).toMatchObject({ kind: "room", walkable: false });
+      });
     });
   });
 
