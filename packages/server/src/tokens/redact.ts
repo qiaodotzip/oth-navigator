@@ -49,8 +49,8 @@ function* chain(err: unknown): Generator<unknown> {
     if (e == null || seen.has(e)) continue;
     seen.add(e);
     yield e;
-    queue.push((e as { cause?: unknown }).cause);
-    const held = (e as { errors?: unknown }).errors;
+    queue.push(readOf(e, "cause"));
+    const held = readOf(e, "errors");
     if (Array.isArray(held)) queue.push(...held);
   }
 }
@@ -67,14 +67,40 @@ function carriesQueryValues(err: unknown): boolean {
     if (PARAMS_TAIL.test(messageOf(e))) return true;
     if (typeof e !== "object" || e === null) continue;
     if ("params" in e) return true;
-    if ("detail" in e && (e as { detail?: unknown }).detail != null) return true;
+    if ("detail" in e && readOf(e, "detail") != null) return true;
   }
   return false;
 }
 
+/**
+ * A property of something thrown.
+ *
+ * Reading it runs whatever getter defined it, and a getter can throw. This
+ * whole file runs on the error path, and `tokens/live.ts` logs from a promise
+ * nobody awaits, so a throw from here would end the process rather than print
+ * a line. Nothing pg, PGlite, drizzle or Node raises is made that way; being
+ * sure is cheaper than relying on that.
+ */
+function readOf(err: unknown, key: string): unknown {
+  try {
+    return (err as Record<string, unknown> | null | undefined)?.[key];
+  } catch {
+    return undefined;
+  }
+}
+
+/** Anything at all as text, for a log line that must be written regardless. */
+function asText(value: unknown): string {
+  try {
+    return String(value);
+  } catch {
+    return "an error that cannot be read";
+  }
+}
+
 /** An error's message, which needn't be a string and needn't even be readable. */
 function messageOf(err: unknown): string {
-  const message = (err as { message?: unknown } | null)?.message;
+  const message = readOf(err, "message");
   return typeof message === "string" ? message : "";
 }
 
@@ -106,7 +132,7 @@ function detailsOf(err: object): Record<string, unknown> {
  * no frames are taken from it.
  */
 function framesOf(err: unknown): string {
-  const stack = (err as { stack?: unknown } | null)?.stack;
+  const stack = readOf(err, "stack");
   if (typeof stack !== "string") return "";
   const message = messageOf(err);
   let header: number;
@@ -128,20 +154,34 @@ function framesOf(err: unknown): string {
  * values never reach the text: each error in the chain gives its name, its
  * message up to "params:", and its other properties with `params` and `detail`
  * hidden. The outermost stack's frames follow.
+ *
+ * Reading the properties can throw where console.error would not: a getter of
+ * the error's own runs here, through Object.entries. A log line is written
+ * either way, from what the error says of itself, with the values still cut.
  */
 function printWithoutQueryValues(err: unknown): string {
-  const parts: string[] = [];
-  for (const e of chain(err)) {
-    if (e instanceof Error) {
-      const details = detailsOf(e);
-      const rest = Object.keys(details).length ? ` ${inspect(details, { depth: 4 })}` : "";
-      parts.push(`${e.name}: ${messageWithoutParams(e.message)}${rest}`);
-    } else {
-      parts.push(inspect(typeof e === "object" && e !== null ? detailsOf(e) : e, { depth: 4 }));
+  try {
+    const parts: string[] = [];
+    for (const e of chain(err)) {
+      if (e instanceof Error) {
+        const details = detailsOf(e);
+        const rest = Object.keys(details).length ? ` ${inspect(details, { depth: 4 })}` : "";
+        parts.push(`${nameOf(e)}: ${messageWithoutParams(messageOf(e))}${rest}`);
+      } else {
+        parts.push(inspect(typeof e === "object" && e !== null ? detailsOf(e) : e, { depth: 4 }));
+      }
     }
+    const frames = framesOf(err);
+    return frames ? `${parts.join("\ncaused by: ")}\n${frames}` : parts.join("\ncaused by: ");
+  } catch {
+    return messageWithoutParams(asText(err));
   }
-  const frames = framesOf(err);
-  return frames ? `${parts.join("\ncaused by: ")}\n${frames}` : parts.join("\ncaused by: ");
+}
+
+/** An error's name, which needn't be readable either. */
+function nameOf(err: unknown): string {
+  const name = readOf(err, "name");
+  return typeof name === "string" ? name : "Error";
 }
 
 /**
@@ -161,8 +201,8 @@ export function redactError(err: unknown): unknown {
   const hidden = redactSecrets(full);
   if (!values && hidden === full) return err;
   if (!(err instanceof Error)) return hidden;
-  const copy = new Error(redactSecrets(messageWithoutParams(err.message)));
-  copy.name = redactSecrets(err.name);
+  const copy = new Error(redactSecrets(messageWithoutParams(messageOf(err))));
+  copy.name = redactSecrets(nameOf(err));
   copy.stack = hidden;
   return copy;
 }

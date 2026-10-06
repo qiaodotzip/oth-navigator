@@ -171,6 +171,41 @@ describe("the values a failed query was given", () => {
     expect(printed).toContain("redact.test.ts");
   });
 
+  /**
+   * This runs on the error path, and one caller logs from a promise nobody
+   * awaits (tokens/live.ts), where a rejection would end the process. So
+   * reading the error must not be what fails, however the error is made.
+   */
+  describe("and an error that cannot be read as usual", () => {
+    it("is still logged, without the values, when one of its properties throws", () => {
+      const err = Object.assign(
+        new Error(`Failed query: insert into "rooms" ("id") values ($1)\nparams: ${CANARY}`),
+        { params: [CANARY] },
+      );
+      Object.defineProperty(err, "query", { enumerable: true, get() { throw new Error("unreadable"); } });
+      const out = redactError(err);
+      const printed = typeof out === "string" ? out : inspect(out, { depth: 5 });
+      expect(printed).not.toContain(CANARY);
+      expect(printed).toContain("Failed query");
+    });
+
+    it("is still logged when reading its message throws", () => {
+      const err = Object.assign(new Error("replaced below"), { params: [CANARY] });
+      Object.defineProperty(err, "message", { get() { throw new Error("unreadable"); } });
+      const out = redactError(err);
+      const printed = typeof out === "string" ? out : inspect(out, { depth: 5 });
+      expect(printed).not.toContain(CANARY);
+    });
+
+    it("is still logged when its message is not a string", () => {
+      const err = Object.assign(new Error("replaced below"), { params: [CANARY] });
+      Object.defineProperty(err, "message", { value: { not: "a string" }, writable: true });
+      const out = redactError(err);
+      const printed = typeof out === "string" ? out : inspect(out, { depth: 5 });
+      expect(printed).not.toContain(CANARY);
+    });
+  });
+
   it("are gone from the log the server writes when a request fails", async () => {
     vi.stubEnv("RAILWAY_ENVIRONMENT_NAME", "production");
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
