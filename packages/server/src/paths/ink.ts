@@ -96,7 +96,8 @@ const shut = (openM: number, runM: number, why: string): InkRun => ({ open: fals
  */
 function walk(grey: PlanGrey, image: PlanImage, a: Vec2, b: Vec2, density: boolean): InkRun {
   const runM = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  if (runM === 0) return { open: true, openM: 0, runM: 0, why: "" };
+  // Nothing to look at is not open floor: everything here fails closed (review M1).
+  if (runM === 0) return shut(0, 0, "nothing to read");
   const ux = (b[0] - a[0]) / runM;
   const uy = (b[1] - a[1]) / runM;
   const m = image.metresPerPixel;

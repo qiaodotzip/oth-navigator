@@ -63,6 +63,12 @@ describe("the ink probe (contract v6)", () => {
     expect(run.openM).toBeLessThan(4.5);
   });
 
+  it("fails closed on a run of no length: there is nothing there to read (review M1)", () => {
+    for (const read of [inkRun, inkCrossed]) {
+      expect(read(paper(), IMAGE, [5, 5], [5, 5])).toEqual({ open: false, openM: 0, runM: 0, why: "nothing to read" });
+    }
+  });
+
   it("fails closed off the plan's extent, however clear the paper is", () => {
     const run = inkRun(paper(), IMAGE, [1, 5], [12, 5]);
     expect(run.open).toBe(false);
