@@ -132,7 +132,8 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       "only where opening it would help, and frees says how many of the island's rooms a connector would then reach: " +
       'open it with update, kind "area" and walkable true. Working that out costs a pass of the floor each, so it does ' +
       "at most four a call, those with most to free first: containersLeft says how many it had no time to try, and " +
-      "their islands are named with no container at all. Open the ones it named and call it again for the rest. " +
+      "their islands are named with no container at all. Open the ones it named and call it again for the rest — but " +
+      "only when it named one, since a call that names none will name none the next time either. " +
       "The islands are measured from the connectors this call made. An island no container helps is a person's: " +
       "name it, with its rooms and gapM. preview true works it all out and makes nothing. " +
       "Every pathway made is on the setup's check step, with Undo. It counts as one change against the token's limit.",

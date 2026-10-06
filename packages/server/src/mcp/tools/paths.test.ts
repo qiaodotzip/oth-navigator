@@ -235,6 +235,9 @@ describe("connect_rooms (contract v5)", () => {
       // Contract v6: and only where opening it would help, with how much it would help, within a budget.
       "frees says how many of the island's rooms a connector would then reach",
       "containersLeft says how many it had no time to try",
+      // Review I3: the order is fixed and nothing is remembered, so a call that names no container
+      // will name none next time either — saying so is what stops draw_paths looping on it.
+      "only when it named one, since a call that names none will name none the next time either",
     ]) {
       expect(description).toContain(words);
     }
