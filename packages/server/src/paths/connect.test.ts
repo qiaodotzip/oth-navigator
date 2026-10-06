@@ -319,6 +319,30 @@ describe("connectRooms (contract v5)", () => {
         expect(islands[0]).not.toHaveProperty("inside");
       });
 
+      it("tries the containers that could free most first, stops at its budget, and says how many it never tried", () => {
+        // Five blocks along the hall's north wall, each a container round its own shops. A simulation
+        // costs about half a second on a real floor, so only MAX_CONTAINER_SIMS of them are run.
+        const blocks: TestRoom[] = [];
+        const shopsIn: TestRoom[] = [];
+        for (const [k, count] of [6, 5, 4, 3, 2].entries()) {
+          const x = k * 12;
+          blocks.push({ id: `L1-block-${k}`, nameEn: `Block ${k}`, footprint: rect(x, 20, x + 10, 40), kind: "room", walkable: false });
+          for (let s = 0; s < count; s++) shopsIn.push(shop(`L1-in-${k}-${s}`, x + 1, 22 + s * 3, x + 9, 24 + s * 3));
+        }
+        const { islands, containersLeft } = connectRooms(withGate([...blocks, ...shopsIn]), LEVEL);
+        expect(containersLeft).toBe(1);
+        // The four it tried are the four with most to free, biggest first; the two-shop block is left unnamed.
+        const tried = islands.filter(i => i.inside).map(i => [i.inside!.roomId, i.inside!.frees] as const);
+        expect(tried.map(([id]) => id)).toEqual(["L1-block-0", "L1-block-1", "L1-block-2", "L1-block-3"]);
+        expect(tried.map(([, frees]) => frees)).toEqual([...tried.map(([, frees]) => frees)].sort((a, b) => b - a));
+        expect(tried.every(([, frees]) => frees > 0)).toBe(true);
+        expect(islands.find(i => i.roomIds.includes("L1-in-4-0"))).not.toHaveProperty("inside");
+      });
+
+      it("says it tried them all when it did", () => {
+        expect(connectRooms(withGate([block, ...shops], [old]), LEVEL).containersLeft).toBe(0);
+      });
+
       it("writes nothing while it works that out: the model it was handed is untouched", () => {
         const model = withGate([block, ...shops], [old]);
         const before = JSON.parse(JSON.stringify(model));
@@ -389,7 +413,8 @@ describe("connectRooms (contract v5)", () => {
   it("reaches only the rooms check_floor lists: a shop a pathway passes within 3 m of, or one on another floor, is left alone", () => {
     const served = shop("L1-served", 25, 4.5, 31, 10);
     const upstairs: TestRoom = { ...shop("L2-shop", 25, 12, 31, 18), levelId: "oth-L2" };
-    expect(connectRooms(withGate([served, upstairs]), LEVEL)).toEqual({ connectors: [], bridges: [], islands: [], left: 0 });
+    expect(connectRooms(withGate([served, upstairs]), LEVEL))
+      .toEqual({ connectors: [], bridges: [], islands: [], left: 0, containersLeft: 0 });
   });
 
   it("refuses a floor with rooms to reach but no pathway an entrance or a stop reaches", () => {

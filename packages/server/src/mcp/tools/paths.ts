@@ -130,7 +130,10 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       `network (from) to their floor or outline (to), in metres. inside names the room of kind room an island's rooms each lie ` +
       `${CONTAINER_SHARE * 100}% or more inside, when there is one: a closed block traced round open floor. It is named ` +
       "only where opening it would help, and frees says how many of the island's rooms a connector would then reach: " +
-      'open it with update, kind "area" and walkable true. The islands are measured from the connectors this call ' +
+      'open it with update, kind "area" and walkable true. Working that out costs a pass of the floor each, so it does ' +
+      "at most four a call, those with most to free first: containersLeft says how many it had no time to try, and " +
+      "their islands are named with no container at all. Open the ones it named and call it again for the rest. " +
+      "The islands are measured from the connectors this call " +
       "made. Once left is 0 it reads the floorplan itself along each island's gap, nearest first, and bridges the ones " +
       `the drawing shows as open floor: at most ${BRIDGE_MAX_M} m of ground no room covers and ${BRIDGE_MAX_RUN_M} m of line ` +
       "end to end, never across a room. bridges " +
@@ -166,6 +169,7 @@ export function registerPathTools(server: McpServer, ctx: ToolContext): void {
       })),
       islands: found.islands,
       left: found.left,
+      containersLeft: found.containersLeft,
     });
   }));
 }

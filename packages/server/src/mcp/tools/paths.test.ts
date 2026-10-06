@@ -149,6 +149,7 @@ describe("connect_rooms (contract v5)", () => {
       bridges: [],
       islands: [],
       left: 0,
+      containersLeft: 0,
     });
     expect(reply.made).toHaveLength(3);
     const ids = reply.made.map(m => m.id).sort();
@@ -164,7 +165,7 @@ describe("connect_rooms (contract v5)", () => {
     expect(presence.list()).toContainEqual(expect.objectContaining({ displayName: "Wei (Claude)", levelId: "oth-L2" }));
     // Run again, nothing is left to connect.
     expect(JSON.parse((await call(client, "connect_rooms", { floor: "L2" })).text))
-      .toEqual({ levelId: "oth-L2", made: [], bridges: [], islands: [], left: 0 });
+      .toEqual({ levelId: "oth-L2", made: [], bridges: [], islands: [], left: 0, containersLeft: 0 });
   });
 
   it("works it all out in a preview, and makes nothing", async () => {
@@ -231,8 +232,9 @@ describe("connect_rooms (contract v5)", () => {
     const description = tools.find(t => t.name === "connect_rooms")?.description ?? "";
     for (const words of [
       "inside names the room of kind room", "90% or more inside", 'kind "area" and walkable true', "preview true",
-      // Contract v6: and only where opening it would help, with how much it would help.
+      // Contract v6: and only where opening it would help, with how much it would help, within a budget.
       "frees says how many of the island's rooms a connector would then reach",
+      "containersLeft says how many it had no time to try",
     ]) {
       expect(description).toContain(words);
     }

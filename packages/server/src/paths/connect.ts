@@ -220,6 +220,16 @@ export const CONTAINER_SHARE = 0.9;
  * the model doesn't export; the renderer keeps a copy too.
  */
 export const ACCESS_M = 3;
+/**
+ * How many containers one call simulates (contract v6, fix round). A simulation
+ * is a raster and a search over the whole floor — about half a second on real
+ * L1 — and a floor's containers are not bounded, so the budget is: four of
+ * them, and no more started once this long has gone on them. The rest are
+ * counted in `containersLeft` and their islands named without a container,
+ * rather than quietly reported as freeing nothing.
+ */
+export const MAX_CONTAINER_SIMS = 4;
+export const CONTAINER_BUDGET_MS = 1200;
 
 /** One pathway to make: from the network to the first of roomIds; the others it reaches on the way. */
 export type Connector = { polyline: Vec2[]; widthM: number; roomIds: string[]; lengthM: number };
@@ -241,7 +251,14 @@ export type Island = {
    */
   inside?: { roomId: string; name: string; frees: number };
 };
-export type RoomConnectors = { connectors: Connector[]; bridges: Bridge[]; islands: Island[]; left: number };
+export type RoomConnectors = {
+  connectors: Connector[];
+  bridges: Bridge[];
+  islands: Island[];
+  left: number;
+  /** Containers this call had no budget to try (contract v6, fix round): their islands are named without one. */
+  containersLeft: number;
+};
 
 /** An island as the grouping leaves it: its container named, before the simulation says whether opening it helps. */
 type Grouped = Omit<Island, "inside"> & { inside?: { roomId: string; name: string } };
@@ -817,7 +834,7 @@ export function connectRooms(
   for (const i of issues) {
     if (UNREACHED.has(i.code) && rooms.has(i.entityId)) codes.set(i.entityId, (codes.get(i.entityId) ?? new Set()).add(i.code));
   }
-  if (codes.size === 0) return { connectors: [], bridges: [], islands: [], left: 0 };
+  if (codes.size === 0) return { connectors: [], bridges: [], islands: [], left: 0, containersLeft: 0 };
 
   const cut = new Set(issues.filter(i => i.code === "pathway.disconnected").map(i => i.entityId));
   const reached = live(model.entrances).length === 0
@@ -867,19 +884,35 @@ export function connectRooms(
   }
 
   const bridged = new Set(bridges.flatMap(b => b.roomIds));
+  const left = standing().filter(i => !i.roomIds.every(id => bridged.has(id)));
+
   // Contract v6: a container is named only with how many of the island's rooms
   // opening it would free, and not at all when that is none. One simulation per
-  // container, however many islands lie in it.
+  // container, however many islands lie in it, the ones that could free most
+  // first, and only as many as the budget allows (MAX_CONTAINER_SIMS).
+  const could = new Map<string, number>();
+  for (const island of left) {
+    if (island.inside) could.set(island.inside.roomId, (could.get(island.inside.roomId) ?? 0) + island.roomIds.length);
+  }
+  const order = [...could.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const freed = new Map<string, Set<string>>();
-  const islands = standing()
-    .filter(i => !i.roomIds.every(id => bridged.has(id)))
-    .map(({ inside, ...island }): Island => {
-      if (!inside) return island;
-      if (!freed.has(inside.roomId)) {
-        freed.set(inside.roomId, freesOf(rooms.get(inside.roomId)!, model, levelId, rooms, codes, drawn()));
-      }
-      const frees = island.roomIds.filter(id => freed.get(inside.roomId)!.has(id)).length;
-      return frees > 0 ? { ...island, inside: { ...inside, frees } } : island;
-    });
-  return { connectors: connectors.slice(0, max), bridges, islands, left: Math.max(0, connectors.length - max) };
+  const started = Date.now();
+  for (const [roomId] of order) {
+    if (freed.size >= MAX_CONTAINER_SIMS || (freed.size > 0 && Date.now() - started > CONTAINER_BUDGET_MS)) break;
+    freed.set(roomId, freesOf(rooms.get(roomId)!, model, levelId, rooms, codes, drawn()));
+  }
+
+  const islands = left.map(({ inside, ...island }): Island => {
+    const reaches = inside && freed.get(inside.roomId);
+    if (!reaches) return island;
+    const frees = island.roomIds.filter(id => reaches.has(id)).length;
+    return frees > 0 ? { ...island, inside: { ...inside, frees } } : island;
+  });
+  return {
+    connectors: connectors.slice(0, max),
+    bridges,
+    islands,
+    left: Math.max(0, connectors.length - max),
+    containersLeft: order.length - freed.size,
+  };
 }
