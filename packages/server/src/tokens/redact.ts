@@ -95,11 +95,32 @@ function detailsOf(err: object): Record<string, unknown> {
   return details;
 }
 
-/** A stack's frames alone, which name files and not values, so they are kept. */
+/**
+ * A stack's frames alone, which name files and not values, so they are kept.
+ *
+ * Taken as whatever follows the header V8 writes — the name, then the message
+ * — rather than as the lines that read like a frame. A value may hold a
+ * newline and "    at …" of its own, so a pasted room name can read as a
+ * frame, and it sits in the message, ahead of every frame that is real. A
+ * stack whose message cannot be found in it is not one this understands, and
+ * no frames are taken from it.
+ */
 function framesOf(err: unknown): string {
   const stack = (err as { stack?: unknown } | null)?.stack;
   if (typeof stack !== "string") return "";
-  return stack.split("\n").filter(line => /^\s+at /.test(line)).join("\n");
+  const message = messageOf(err);
+  let header: number;
+  if (message) {
+    const at = stack.indexOf(message);
+    if (at < 0) return "";
+    header = at + message.length;
+  } else {
+    // No message: V8 writes the name alone, then the frames.
+    header = stack.indexOf("\n");
+    if (header < 0) return "";
+  }
+  const rest = stack.slice(header);
+  return rest.startsWith("\n") ? rest.slice(1) : "";
 }
 
 /**

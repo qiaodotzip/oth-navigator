@@ -156,6 +156,21 @@ describe("the values a failed query was given", () => {
     expect(printed).toContain("insert into \"sessions\"");
   });
 
+  it("keep no line from a value that was pasted to look like a stack frame", () => {
+    // A room name can be pasted with newlines in it, so a value can read as a
+    // frame, and it sits in the message before the frames that are real.
+    const pasted = `Lobby\n    at ${CANARY} (fake.ts:1:1)`;
+    const err = Object.assign(
+      new Error(`Failed query: update "rooms" set "name_en" = $1\nparams: ${pasted}`),
+      { query: 'update "rooms" set "name_en" = $1', params: [pasted] },
+    );
+    const printed = inspect(redactError(err), { depth: 5 });
+    expect(printed).not.toContain(CANARY);
+    expect(printed).not.toContain("fake.ts");
+    // The frames that are real are still there.
+    expect(printed).toContain("redact.test.ts");
+  });
+
   it("are gone from the log the server writes when a request fails", async () => {
     vi.stubEnv("RAILWAY_ENVIRONMENT_NAME", "production");
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
