@@ -338,28 +338,22 @@ describe("what rehearsal 4 taught draw_paths (Task 13): the server connects the 
   it("calls connect_rooms after the lines and entrances, again while left is above 0, then check_floor once", () => {
     expect(drawPaths.tools).toContain("connect_rooms");
     expect(text).toContain(
-      '7. Rooms no route reaches: call `connect_rooms` with floor "L1". It makes their pathways itself, nearest first, ' +
-      "and gives islands: rooms it can't reach, each with gapM, the gap from the network (from) to their floor (to). " +
-      'Call it again while left is above 0. Then call `check_floor` once with floor "L1" and codes ["area.unreachable", "room.noAccess"].',
+      '7. Rooms no route reaches: call `connect_rooms` with floor "L1". It makes their pathways itself, nearest first; it reads the drawing ' +
+      "and bridges the islands it shows open floor to; and it gives the islands left: rooms no route reaches, each with gapM, the gap from the " +
+      "network (from) to their floor (to). Call it again while left is above 0.",
     );
+    expect(text).toContain('Then call `connect_rooms` once more, and `check_floor` once with floor "L1" and codes ["area.unreachable", "room.noAccess"].');
     expect(text.indexOf("call `connect_rooms`")).toBeGreaterThan(text.indexOf("5. Check them over the drawing"));
-  });
-
-  it("bridges an island only where view_plan shows open floor, and names the rest for a person with their gap", () => {
-    expect(text).toContain(
-      "For another island, look with `view_plan` at a box round its from and to: only where it shows open floor between them, " +
-      "`create` a bridge, a pathway with polyline [from, to]. After either, call `connect_rooms` again. " +
-      "Name each island left for a person, with its rooms and gapM.",
-    );
   });
 
   it("makes the closed room an island lies inside an area, walkable, names it in the report, then connects again (contract v5 amendment)", () => {
     expect(text).toContain(
-      'An island with inside lies in a room traced closed round open floor: `update` that room to kind "area" and walkable true, ' +
-      'and name each in your report: "made Commercial & F&B North an area so routes reach the 14 rooms inside it". ',
+      'An island with inside lies in a room traced closed round open floor, and frees says how many of its rooms opening that room reaches: ' +
+      '`update` it to kind "area" and walkable true, and name each in your report: ' +
+      '"made Commercial & F&B North an area so routes reach the 14 rooms inside it". ',
     );
-    // Before the bridges: a container made an area needs no bridge over its own floor.
-    expect(text.indexOf("An island with inside")).toBeLessThan(text.indexOf("For another island"));
+    // The containers come before the last connect_rooms call, which connects what opening them opened.
+    expect(text.indexOf("An island with inside")).toBeLessThan(text.indexOf("Then call `connect_rooms` once more"));
     expect(text).not.toContain("`inside`");
   });
 
@@ -388,18 +382,38 @@ describe("what rehearsal 5 taught draw_paths (Task 13, fix round 2)", () => {
 
   it("checks the floor again after the last connect_rooms, since step 7 checks it before the containers and bridges", () => {
     expect(text).toContain(
-      "Call it again after your last `connect_rooms` call, not only at step 7: opening a container or drawing a bridge " +
-      "changes the counts.",
+      "Call it again after your last `connect_rooms` call, not only at step 7: opening a container, and the bridges " +
+      "`connect_rooms` lays, change the counts.",
     );
     expect(text.indexOf("Call it again after your last `connect_rooms` call")).toBeGreaterThan(text.indexOf("\nStop when "));
   });
 
-  it("says the islands come nearest gap first, so the round it does attempt starts with the nearest", () => {
-    expect(text).toContain("The islands come nearest gap first, so work through them in that order.");
+  it("says the islands come nearest gap first, so the ones nearest being joined are named first", () => {
+    expect(text).toContain("The islands come nearest gap first, so name them in that order.");
   });
 
   it("leaves the steps alone: both lines are in the stop rule, which the length pin doesn't cover", () => {
     expect(drawPaths.steps("L1").join("\n")).not.toContain("nearest gap first");
+    expect(drawPaths.steps("L1").join("\n").length).toBeLessThan(3356 * 1.15);
+  });
+});
+
+describe("what rehearsal 5 taught draw_paths (Task 14): the server does the looking", () => {
+  const text = promptText(drawPaths, "L1");
+
+  it("asks for no looking at an island and no bridge drawn by hand: three rehearsals running, that step was skipped", () => {
+    expect(text).not.toContain("For another island");
+    expect(text).not.toContain("`create` a bridge");
+    expect(text).not.toContain("a pathway with polyline [from, to]");
+    expect(text).not.toContain("box round its from and to");
+  });
+
+  it("says connect_rooms reads the drawing and bridges, and leaves the rest to be named for a person", () => {
+    expect(text).toContain("it reads the drawing and bridges the islands it shows open floor to");
+    expect(text).toContain("Name every island still left for a person, with its rooms and gapM.");
+  });
+
+  it("still fits its length pin", () => {
     expect(drawPaths.steps("L1").join("\n").length).toBeLessThan(3356 * 1.15);
   });
 });

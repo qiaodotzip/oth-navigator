@@ -24,20 +24,20 @@ export const drawPaths: SetupPrompt = {
       `Then call \`suggest_paths\` with floor "${floor}" again, and \`create\` each link whose ontoDrawn is true as a short pathway, unless \`get_floor\`'s pathways already has one between the same two points.`,
     `6. Call \`check_floor\` with floor "${floor}". Fix any entrance.offFloor error first: move that entrance off the wall, into the open part of its room. ` +
       "`check_floor` lists at most 100 problems and says the total; pass codes to see just those.",
-    `7. Rooms no route reaches: call \`connect_rooms\` with floor "${floor}". It makes their pathways itself, nearest first, ` +
-      "and gives islands: rooms it can't reach, each with gapM, the gap from the network (from) to their floor (to). " +
-      `Call it again while left is above 0. Then call \`check_floor\` once with floor "${floor}" and codes ["area.unreachable", "room.noAccess"]. ` +
-      'An island with inside lies in a room traced closed round open floor: `update` that room to kind "area" and walkable true, and name each in your report: ' +
-      '"made Commercial & F&B North an area so routes reach the 14 rooms inside it". ' +
-      "For another island, look with `view_plan` at a box round its from and to: only where it shows open floor between them, " +
-      "`create` a bridge, a pathway with polyline [from, to]. After either, call `connect_rooms` again. Name each island left for a person, with its rooms and gapM. " +
+    `7. Rooms no route reaches: call \`connect_rooms\` with floor "${floor}". It makes their pathways itself, nearest first; it reads the drawing ` +
+      "and bridges the islands it shows open floor to; and it gives the islands left: rooms no route reaches, each with gapM, the gap from the " +
+      "network (from) to their floor (to). Call it again while left is above 0. " +
+      'An island with inside lies in a room traced closed round open floor, and frees says how many of its rooms opening that room reaches: `update` it to kind "area" ' +
+      'and walkable true, and name each in your report: "made Commercial & F&B North an area so routes reach the 14 rooms inside it". ' +
+      `Then call \`connect_rooms\` once more, and \`check_floor\` once with floor "${floor}" and codes ["area.unreachable", "room.noAccess"]. ` +
+      "Name every island still left for a person, with its rooms and gapM. " +
       "`update` a polyline to extend it, or `delete` one you created in this run that is wrong.",
     "Name for a person what `suggest_paths` couldn't connect, such as a doorway with no floor beyond it.",
     "Draw the whole first pass in this run. If you do have to stop, running this again carries on: `suggest_paths` marks drawn the lines the floor has pathways along.",
   ],
   stop: floor =>
     `\`check_floor\` with floor "${floor}" and codes ["area.unreachable", "room.noAccess"] gives none, or only ones a person must fix: ` +
-    "give how many, and name up to 20. Call it again after your last `connect_rooms` call, not only at step 7: opening a container " +
-    "or drawing a bridge changes the counts. The islands come nearest gap first, so work through them in that order",
+    "give how many, and name up to 20. Call it again after your last `connect_rooms` call, not only at step 7: opening a container, " +
+    "and the bridges `connect_rooms` lays, change the counts. The islands come nearest gap first, so name them in that order",
   example: "Drew 14 pathways (the concourse, the link bridge) and 3 entrances; 2 rooms need a person",
 };
