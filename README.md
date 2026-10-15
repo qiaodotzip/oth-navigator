@@ -5,9 +5,17 @@
 > in a stylised 2.5D model, with an AI guide that adapts the route to mobility needs
 > and live counter crowding.
 
-This repo is **tamp** — the map / navigation half of the project. It pairs with a
-separate AI chatbot ("JOM") that does the natural-language service lookup, but it
-**also runs fully standalone**: clone, install, run, and you get the whole map
+This repo is **my part** of Team Bolo Bao's hackathon solution: **tamp**, the map /
+navigation half. The other half is the **JOM** AI chatbot, which does the
+natural-language service lookup. My teammates built it, and it lives in its own repo,
+[eliqiaa/JOM-AI-Hackathon](https://github.com/eliqiaa/JOM-AI-Hackathon).
+
+| Part | What it does | Repo |
+|---|---|---|
+| **tamp** (my part) | 2.5D map, routing, guide character, narration | this repo |
+| **JOM** (teammates) | Chatbot UI, service retrieval, voice | [eliqiaa/JOM-AI-Hackathon](https://github.com/eliqiaa/JOM-AI-Hackathon) |
+
+tamp **also runs fully standalone**: clone, install, run, and you get the whole map
 experience with no API keys and no second server.
 
 ---
@@ -72,7 +80,8 @@ npm run dev:full           # runs Vite (:5173) + the Hono API server (:3000) tog
 
 ### Optional: the JOM chatbot integration
 
-In the full two-app demo, you type into the **JOM** chatbot (a separate repo, runs on
+In the full two-app demo, you type into the **JOM** chatbot
+([eliqiaa/JOM-AI-Hackathon](https://github.com/eliqiaa/JOM-AI-Hackathon), runs on
 `:8000`) and this map *receives* the resulting journey. tamp polls JOM's
 `GET /api/current-journey` and draws the route. To wire it up, set
 `VITE_RETRIEVAL_API=<your JOM base URL>` in `.env` and start JOM first. If JOM isn't
@@ -254,6 +263,7 @@ The full paper trail is browsable:
 
 ## Credits
 
-Built for the **Tampines AI JOM Hackathon (2026)** — placed 5th. tamp (this repo) is the
-2.5D map / navigation layer; the JOM chatbot (service retrieval) is a companion repo by
-the team.
+Built by **Team Bolo Bao** for the **Tampines AI JOM Hackathon (2026)**, where we placed
+5th. This repo, the 2.5D map / navigation layer, is my contribution. The JOM chatbot
+(chat UI, service retrieval, voice) is my teammates' work:
+[eliqiaa/JOM-AI-Hackathon](https://github.com/eliqiaa/JOM-AI-Hackathon).
